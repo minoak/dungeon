@@ -203,6 +203,70 @@ class Dungeon:
         x = ((x ^ (x >> 16)) * 0x45D9F3B) & 0xFFFFFFFF
         return (x ^ (x >> 16)) & 0x7FFFFFFF
 
+    @classmethod
+    def from_ascii(cls, rows, seed=7, depth=1, monsters=None, traps=None):
+        """디버깅/시나리오 모드(장면 저작, scenario.py 소비): 생성기 대신 손으로 그린
+        문자 맵으로 층을 짓는다. 판정·시야·자동보행·스트림은 생성 층과 완전 동일(같은 코드) —
+        조립되는 건 세계가 아니라 '장면'이다.
+        기호: '#'/공백=벽 · '.'=바닥 · '>'=출구(필수) · '$'보물 · '='상자 · '~'샘 ·
+        '^'=함정(traps 리스트를 (y,x) 순서로 적용, 기본 spike·hidden) ·
+        소문자=몬스터 슬롯(monsters[문자] 템플릿: kind/hp/atk/dmg/ac/state/concealed/target —
+        state HUNTING 이면 호출측이 봇 배치 후 last_seen 을 채울 것) ·
+        숫자 1~9=봇 출발 자리(맵에선 바닥 — 배치는 호출측, 반환 starts 로 알려줌).
+        반환: (dungeon, starts) — starts = {char: (x, y)}."""
+        rows = [str(r) for r in rows]
+        w, h = max(len(r) for r in rows), len(rows)
+        d = cls.__new__(cls)
+        d.master_seed, d.depth = seed, depth
+        d.rng = random.Random(cls._derive_seed(seed, depth))
+        d.w, d.h = w, h
+        d.grid = [[WALL] * w for _ in range(h)]
+        d.features, d.lore = {}, {}
+        d._next_fid, d._exit_fid = 0, None
+        d.monsters, d.traps = [], []
+        d.visited = set()
+        d.rooms = [Room(0, 1, 1, w - 2, h - 2)]   # 단일 방(장면=한 무대) — 그래프 불요
+        d.rooms[0].neighbours = []
+        starts, mslots, tslots = {}, [], []
+        for y, row in enumerate(rows):
+            for x, ch in enumerate(row):
+                if ch in (WALL, ' '):
+                    continue
+                d.grid[y][x] = FLOOR
+                if ch == EXIT:
+                    d._exit_fid = d._add_feature('exit', '출구', x, y)
+                elif ch == TREASURE:
+                    d._add_feature('treasure', '보물', x, y)
+                elif ch == '=':
+                    d._add_feature('chest', '상자', x, y)
+                elif ch == '~':
+                    d._add_feature('fountain', '샘', x, y)
+                elif ch == TRAP:
+                    tslots.append((x, y))
+                elif ch.isdigit():
+                    starts[ch] = (x, y)
+                elif ch.islower():
+                    mslots.append((ch, x, y))
+        if d._exit_fid is None:
+            raise ValueError("장면 맵에 출구('>')가 없다 — 층의 필수 피처")
+        for i, (sym, x, y) in enumerate(mslots):
+            t = dict((monsters or {}).get(sym) or {})
+            m = Monster(x, y, kind=t.get('kind', '고블린'), hp=t.get('hp', 6),
+                        atk=t.get('atk', 2), dmg=t.get('dmg', 2),
+                        ac=t.get('ac', 12), mid=i)
+            m.state = t.get('state', 'SLEEPING')
+            m.concealed = bool(t.get('concealed'))
+            m.target = t.get('target')
+            d.monsters.append(m)
+        tspecs = list(traps or [])
+        for i, (x, y) in enumerate(sorted(tslots, key=lambda c: (c[1], c[0]))):
+            t = tspecs[i] if i < len(tspecs) else {}
+            tr = Trap(x, y, kind=t.get('kind', 'spike'))
+            tr.hidden = bool(t.get('hidden', True))
+            d.traps.append(tr)
+        d._classify_tiles()
+        return d, starts
+
     # ── 맵 생성 (로그라이크식 방+통로 — 기존 검증된 로직 그대로) ──
     def _carve_rooms(self, n=5):
         rooms = []

@@ -1,0 +1,15 @@
+{
+  "name": "작정파기",
+  "about": "작정(계단으로→하강) 프리셋 + 길목의 숨은 함정 — 세계가 계획을 찢는 순간의 물리 데모(LLM 불요, --brain dummy)",
+  "seed": 7,
+  "turns": 10,
+  "map": [
+    "#########",
+    "#1..^..>#",
+    "#.......#",
+    "#########"
+  ],
+  "traps": [{"kind": "spike", "hidden": true}],
+  "bots": {"1": {"plan": [{"type": "goto", "target": "exit"},
+                          {"type": "interact", "target": "exit"}]}}
+}
