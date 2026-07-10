@@ -159,6 +159,43 @@ def _pick(obj, obs):
     return out
 
 
+def _then(obj, obs):
+    """작정(D16): 응답의 선택 필드 "then" = 이번 행동에 이어질 행동, 최대 PLAN_MAX수.
+    항목 = 메뉴 번호(리모컨 어휘 그대로) 또는 행동 객체 {type, target}.
+    저작 시점 검증(시야-온리): goto/attack/interact 의 target 은 지금 보이는 id 만 —
+    못 본 것을 향한 작정은 열린 동사(explore/search)로만 표현된다(D16).
+    불량 항목을 만나면 그 항목부터 뒤 전부 버림(사슬 중간이 끊기면 뒷수는 근거를 잃는다).
+    본 행동은 건드리지 않는다 — then 은 보너스(관용 원칙)."""
+    raw = obj.get("then")
+    if not isinstance(raw, list):
+        return []
+    out, valid = [], None
+    for item in raw[:G.PLAN_MAX]:
+        step = None
+        if isinstance(item, dict):
+            typ = str(item.get("type", "")).strip().lower()
+            tgt = str(item.get("target", "")).strip()
+            if typ == "search":
+                step = {"type": "search"}
+            elif typ == "explore":
+                step = {"type": "explore"}
+                if tgt.upper() in _BEARINGS:
+                    step["target"] = tgt.upper()
+            elif typ in ("goto", "attack", "interact"):
+                if valid is None:
+                    valid = _valid_targets(obs)
+                if tgt in valid:
+                    step = {"type": typ, "target": tgt}
+        else:
+            pick = _pick({"choice": item}, obs)   # 메뉴 번호 관용 — 엔진 열거 행동이라 환각 무해
+            if pick:
+                step = {k: pick[k] for k in ("type", "target") if k in pick}
+        if not step:
+            break
+        out.append(step)
+    return out
+
+
 def _fallback(obs, char, why="파싱 실패"):
     """엔진 규칙두뇌(dict 반환)에 say/reason/src 옷을 입혀 돌려준다.
     why = 실패 종류 라벨(타임아웃/빈 응답/JSON 불량/행동 해석 실패…) — 스트림·봇로그 계측."""
@@ -191,10 +228,12 @@ def claude_brain(obs, char="?", bot=None, roster=None):
     obj, jwhy = _extract(raw)
     why = why or jwhy
     if obj:
+        then = _then(obj, obs)                      # 작정(D16) — 유효 수만 남긴 이어질 계획(없으면 [])
         if MENU:
             act = _pick(obj, obs)
             if act:
                 return {**act,
+                        **({"then": then} if then else {}),
                         "say": str(obj.get("say", ""))[:160],
                         "reason": str(obj.get("reason", ""))[:160],
                         "src": "haiku"}
@@ -208,6 +247,7 @@ def claude_brain(obs, char="?", bot=None, roster=None):
             typ = "explore"                         # 목표 없는 goto = 탐색으로 강등(폴백行 방지)
         if typ in _TYPES:
             out = {"type": typ,
+                   **({"then": then} if then else {}),
                    "say": str(obj.get("say", ""))[:160],
                    "reason": str(obj.get("reason", ""))[:160],
                    "src": "haiku"}
@@ -227,32 +267,48 @@ def claude_brain(obs, char="?", bot=None, roster=None):
 
 def think_all(d, bots, inbox=None):
     """order 없는(=재결정 필요한) 살아있는 봇만 '같은 틱-시작 스냅샷'에서 동시 사고.
-    order 있는 봇은 엔진 자동보행 중이라 LLM 호출 안 함(콜 절약). inbox→obs.messages 주입."""
+    order 있는 봇은 엔진 자동보행 중이라 LLM 호출 안 함(콜 절약). inbox→obs.messages 주입.
+    작정(D16): 남은 계획이 있는 봇은 LLM 대신 다음 수를 집행(src='plan', 콜 0) —
+    엔진 착수 재검증(plan_step)이 깨지면 그 자리에서 계획이 찢기고 **같은 틱에** LLM 재결정으로
+    넘어간다(틱 손실 없음, obs.last=plan_broken 이 사유를 보고). 작정 집행 틱엔 view() 미호출 —
+    inbox 는 다음 결정점까지 못 읽는다(D16 문서화된 트레이드오프, PLAN_MAX 로 억제)."""
     live = [b for b in bots if b["alive"] and not b["won"] and not b.get("order")]
     if not live:
         return {}
     inbox = inbox or {}
-    obss = {}
+    out = {}
+    thinkers = []
     for b in live:
+        step = d.plan_step(b, bots)       # 작정 다음 수(착수 재검증 포함) — 없거나 깨지면 None
+        if step:
+            out[b["char"]] = {**step, "say": "",
+                              "reason": "[작정] 미리 정한 다음 수", "src": "plan"}
+        else:
+            thinkers.append(b)
+    obss = {}
+    for b in thinkers:
         o = d.view(b, bots)
         o["messages"] = inbox.get(b["char"], [])
         if b.get("intent"):
             o["intent"] = b["intent"]   # 판단 되먹임(D15①): 자기 직전 판단의 기억 — inbox와 같은
         obss[b["char"]] = o             # 주입 솔기. 세계 정보가 아니라 자기 것이라 시야-온리 무관.
-    with ThreadPoolExecutor(max_workers=len(live)) as ex:
-        futs = {b["char"]: ex.submit(claude_brain, obss[b["char"]], b["char"], b, bots)
-                for b in live}               # bot=시트 포함 봇 dict, roster=파티(관계 이름 풀이)
-        out = {c: f.result() for c, f in futs.items()}
+    if thinkers:
+        with ThreadPoolExecutor(max_workers=len(thinkers)) as ex:
+            futs = {b["char"]: ex.submit(claude_brain, obss[b["char"]], b["char"], b, bots)
+                    for b in thinkers}       # bot=시트 포함 봇 dict, roster=파티(관계 이름 풀이)
+            out.update({c: f.result() for c, f in futs.items()})
     by = {b["char"]: b for b in live}
     for c, dec in out.items():          # 이번 판단을 자기 기억으로 저장 → 다음 결정의 obs.intent.
         it = {"type": dec.get("type", "")}   # bot_snapshot 화이트리스트 밖 = 스트림 계약 불변
         for k in ("target", "say", "reason", "src"):   # (직전 decisions에서 파생 가능한 값).
-            if dec.get(k):
+            if dec.get(k):                   # 작정 수(src='plan')도 자기 판단의 연속이라 intent 갱신
                 it[k] = dec[k]
         by[c]["intent"] = it
     if os.environ.get("DUNGEON_STREAM_OBS") == "1":
         # 스트림 opt-in: 결정에 '그때 그 봇이 본 것'(obs)을 병합 — think 시점 캡처.
         # 사후 d.view() 재호출로 얻으면 안 된다(시점 오염 + _perceive 부수효과).
-        for c in out:
-            out[c] = {**out[c], "obs": obss[c]}
+        # 작정 수(src='plan')는 obs 미동봉 — view() 자체가 안 불렸다(그게 작정의 경제).
+        for c in obss:
+            if c in out:
+                out[c] = {**out[c], "obs": obss[c]}
     return out

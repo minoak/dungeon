@@ -53,6 +53,8 @@ FLEE_STAMINA = 8         # 봇에게 보이며 도주한 턴 누적이 이만큼
                          #   영구 술래잡기 livelock(도주몹이 봇 결정 틱마다 비껴가며 미방문 칸을 막아
                          #   explore 재시도 무한) 차단 — 어떤 두뇌가 와도 엔진이 종결을 보장한다.
 EXIT_GATHER = 3          # 하강 조율: 살아있는 파티 전원이 계단 반경(체비셰프) 이내여야 내려간다(솔로탈출 방지)
+PLAN_MAX = 2             # 작정(D16): 현재 행동에 이어 미리 정해둘 수 있는 수의 상한 —
+                         # 귀머거리 창(작정 집행 중엔 inbox 를 다음 결정점까지 못 읽음) 억제
 
 # ── 캐릭터 시트 (영웅) ───────────────────────────────────────────
 # d20 + 능력보정 vs 목표(AC/DC). 전사=힘·HP, 도적=민첩(함정 회피·기습).
@@ -755,11 +757,16 @@ class Dungeon:
 
     # ── 행동 판정 = 심판 (핑 + 자동보행) ────────────────────────
     def act(self, bot, action, bots):
-        """action(dict): {'type':'goto'|'attack'|'interact'|'search', 'target': id}
+        """action(dict): {'type':'goto'|'attack'|'interact'|'search', 'target': id, ['then': [...]]}
         goto = 핑(보이는 오브젝트 id) → order+path 세팅(이동은 step_order가 틱마다 한 칸씩).
-        attack/interact/search = 즉시 판정. 반환: 결과 dict — GM 서사·로그가 읽을 '진실'."""
+        attack/interact/search = 즉시 판정. 반환: 결과 dict — GM 서사·로그가 읽을 '진실'.
+        then(D16 작정) = 이어질 행동 최대 PLAN_MAX수 — 에이전트가 품는 계획이지 세계에 거는
+        예약이 아니다: 인터럽트(피격·새 발견·길막힘·lost)가 남은 작정을 찢는다."""
         typ = (action or {}).get('type', 'goto')
         tgt = (action or {}).get('target')
+        if 'then' in (action or {}):              # 작정 접수 — 저작 검증(시야-온리)은 brains 소관,
+            bot['plan'] = [dict(s) for s in (action.get('then') or [])
+                           if isinstance(s, dict) and s.get('type')][:PLAN_MAX]
         if typ == 'attack':
             res = self._attack(bot, tgt, bots)
         elif typ == 'interact':
@@ -778,6 +785,53 @@ class Dungeon:
         """봇 자기 행동의 최신 결과 메모 — 원칙 "봇은 자기 행동의 결과를 관측할 수 있어야 한다".
         view()가 obs['last']로 노출. 자기 경험만 담으므로 시야-온리 무위반(세계 정보 아님)."""
         bot['last'] = {k: v for k, v in res.items() if k != 'char'}
+
+    def plan_step(self, bot, bots):
+        """작정(D16)의 다음 수 활성화 — **착수 시점 재검증**(D16 유일한 신규 규칙).
+        유효하면 그 수(action dict)를 반환 = 두뇌 호출 없이 집행될 결정(src='plan').
+        깨졌으면 계획 파기 + last=plan_broken(사유) + None 반환 → 호출측(think_all)이 같은 틱에
+        LLM 재결정으로 넘어가고, 봇은 obs.last 로 '왜 깨졌는지'를 본다(조용한 건너뛰기 금지 —
+        "봇은 자기 행동의 결과를 관측할 수 있어야 한다").
+        검증은 '그 순간의 세계'로: goto=대상 실재 / attack=직교 인접 / interact=인접·발밑.
+        explore·search 는 열린 동사 — 발동 시점 자리에서 해석되므로 언제나 유효(시야-온리 정합:
+        못 본 것을 향한 작정은 좌표가 아니라 이 동사들로 표현된다)."""
+        plan = bot.get('plan') or []
+        if not plan:
+            return None
+        step = plan.pop(0)
+        typ = str(step.get('type') or '')
+        tgt = step.get('target')
+        why = None
+        if typ in ('search', 'explore'):
+            pass
+        elif typ == 'goto':
+            if self._resolve_target(tgt, bots) is None:
+                why = '대상 소멸'                 # 작정의 goto 는 explore 폴백 안 탄다 —
+        elif typ == 'attack':                     #   대상이 사라졌으면 그건 새 정보다(재결정)
+            res = self._resolve_target(tgt, bots)
+            if res is None or res[0] != 'monster':
+                why = '대상 소멸'
+            elif abs(bot['x'] - res[1][0]) + abs(bot['y'] - res[1][1]) != 1:
+                why = '인접 아님'
+        elif typ == 'interact':
+            res = self._resolve_target(tgt, bots)
+            if res is None:
+                why = '대상 소멸'
+            elif abs(bot['x'] - res[1][0]) + abs(bot['y'] - res[1][1]) > 1:
+                why = '인접 아님'
+        else:
+            why = '알 수 없는 동사'
+        if why:
+            bot['plan'] = []
+            self._note_last(bot, {'char': bot['char'], 'type': 'plan_broken',
+                                  'step': {'type': typ,
+                                           **({'target': tgt} if tgt is not None else {})},
+                                  'why': why})
+            return None
+        out = {'type': typ}
+        if tgt is not None:
+            out['target'] = tgt
+        return out
 
     def _resolve_target(self, target_id, bots=None):
         """핑 id → (kind, (x,y)). 'exit' / 'f<n>' 피처 / 'm<n>' 몹 / '@x,y' 셀(explore) / 'b<char>' 동료.
@@ -853,7 +907,7 @@ class Dungeon:
             tx, ty = path[-1]
             bot['order'], bot['path'] = '@%d,%d' % (tx, ty), path
             return {**base, 'result': 'pathed', 'len': len(path), 'to_exit': True}
-        bot['order'], bot['path'] = None, []
+        bot['order'], bot['path'], bot['plan'] = None, [], []   # 발 디딜 곳 없음 — 작정 진행 불가(D16)
         return {**base, 'result': 'no_path'}
 
     def step_order(self, bot, bots):
@@ -893,7 +947,7 @@ class Dungeon:
                 # 정한다(싸울지 돌아갈지). 구식 '조용한 재경로'는 정보 은폐(D1-4 위반)였고, 춤추는
                 # 몹과의 재경로 술래잡기 livelock 실측(seed4: 그림자거미 문간 댄스 — 봇이 못 멈추면
                 # 몹도 못 문다). concealed 몹 점거는 아래 재경로로 폴스루(멈추면 존재 누설).
-                bot['order'], bot['path'] = None, []
+                bot['order'], bot['path'], bot['plan'] = None, [], []   # 경로 경합=새 정보 — 작정 파기
                 self._perceive(bot)           # 길을 막은 몹을 봤다 — 거짓 매복 방지
                 return {**base, 'result': 'blocked',
                         'monsters': [{'id': 'm%d' % blocker.id, 'kind': blocker.kind,
@@ -901,7 +955,7 @@ class Dungeon:
             res = self._resolve_target(bot['order'], bots)     # 동료·은닉몹 점거 → 재경로 1회
             bot['path'] = self.path_to(bot['x'], bot['y'], res[1][0], res[1][1], bots) if res else []
             if not bot['path'] or not self.walkable(*bot['path'][0], bots):
-                bot['order'], bot['path'] = None, []
+                bot['order'], bot['path'], bot['plan'] = None, [], []   # 막힘=새 정보 — 작정 파기
                 self._perceive(bot)           # blocked 정지도 눈은 뜨고 — 거짓 매복 방지(위와 동일)
                 return {**base, 'result': 'blocked'}
             nx, ny = bot['path'][0]
@@ -909,7 +963,8 @@ class Dungeon:
         enter = self._enter_cell(bot, nx, ny)         # 이동 + 보물/계단/함정 처리
         base.update(to=[nx, ny])
         if not bot['alive']:                          # 함정 즉사 — 시체는 지각하지 않는다(사후 인지굴림 금지:
-            bot['order'], bot['path'] = None, []      #   죽은 자의 주사위가 숨은 것을 드러내 산 자 경로를 바꿈)
+            bot['order'], bot['path'], bot['plan'] = None, [], []   # 죽은 자의 주사위가 숨은 것을 드러내
+                                                      #   산 자 경로를 바꿈. 작정도 죽음과 함께 소멸
             res = {**base, 'result': 'encounter', 'trap': enter['trap']}
             if enter.get('treasure'):                 # 죽으며 주운 보물도 진실(원장)에 남긴다 — 지금은 보물·함정
                 res['treasure'] = True                #   동칸 배치가 없어 dormant이나, 배치 규칙 변경 즉시 발화
@@ -921,7 +976,8 @@ class Dungeon:
         newly = self._perceive(bot)                   # 이동으로 새로 보인 몹 = aware_of 등록(처음 본 것만)
         found = self._passive_search(bot)             # 직업 인지 스윕(수동 search-on-move) — 숨은 것 발견
         if enter.get('trap') or newly or found:       # 인카운터 = *새 정보*만(에지) — 알던 몹 인접은
-            bot['order'], bot['path'] = None, []      #   정지 사유 아님(D1 개정: 물리면 그때 묻는다)
+            bot['order'], bot['path'], bot['plan'] = None, [], []   # 정지 사유 아님(D1 개정: 물리면
+                                                      #   그때 묻는다). 새 정보 = 남은 작정 파기(D16)
             res = {**base, 'result': 'encounter'}
             if enter.get('trap'):
                 res['trap'] = enter['trap']
@@ -956,11 +1012,13 @@ class Dungeon:
         if s[:1] in ('m', 'b') and s[1:]:
             res = self._resolve_target(base['target'], bots)
             if not (res and abs(bot['x'] - res[1][0]) + abs(bot['y'] - res[1][1]) <= 1):
+                bot['plan'] = []                      # 허탕 = 세계가 변했다 — 남은 작정도 근거 상실(D16)
                 return {**base, 'result': 'lost'}
         elif s[:1] == 'f' and s[1:].isdigit():
             if self._resolve_target(base['target'], bots) is None:   # 삭제(동료 소비) = 빈 자리
+                bot['plan'] = []
                 return {**base, 'result': 'lost'}
-        return {**base, 'result': 'arrived'}
+        return {**base, 'result': 'arrived'}          # arrived 는 작정 존속 — 다음 수가 이어진다
 
     def _enter_cell(self, bot, nx, ny):
         """한 칸 진입 = 좌표 갱신 + (보이는) 보물 줍기 + 계단 도착 + 숨은 함정 DEX 판정. 플래그 dict 반환.
@@ -1072,9 +1130,9 @@ class Dungeon:
                 return {**base, 'result': 'wait_allies',
                         'missing': sorted(o['char'] for o in far)}
             group = [bot] + others
-            for o in group:                      # 모인 전원이 함께 하강/탈출
+            for o in group:                      # 모인 전원이 함께 하강/탈출 — 이 층의 작정도 끝
                 o['won'] = True
-                o['order'], o['path'] = None, []
+                o['order'], o['path'], o['plan'] = None, [], []
             return {**base, 'result': 'exit', 'party': sorted(o['char'] for o in group)}
         f = self.feature_at(tx, ty)
         if f and f.concealed:                    # 숨은 건 아직 '없는' 것 — 드러나야 만질 수 있다
@@ -1216,7 +1274,7 @@ class Dungeon:
             b['hp'] -= dmg; ev['dmg'] = dmg; ev['hp'] = b['hp']
             # 피격 = 인터럽트(D1 대개정): 하던 일(자동보행 order)을 멈추고 다음 틱 에이전트에게 묻는다.
             # 세계가 봇을 세우는 유일한 '접촉' 채널 — 정지 규칙(레벨 트리거) 삭제의 반대급부.
-            b['order'], b['path'] = None, []
+            b['order'], b['path'], b['plan'] = None, [], []   # 남은 작정(D16)도 찢는다
             b['last'] = {'type': 'hurt', 'by': m.kind, 'by_id': 'm%d' % m.id,
                          'dmg': dmg, 'hp': b['hp'],
                          **({'surprise': True} if ambush else {})}
@@ -1440,8 +1498,10 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None):
             'known': None,                  # 도감(D9): 아는 종키 set — None=게이팅 끔(하위호환).
                                             #   러너가 발급기(bestiary)의 set 을 꽂는다(획득 즉시 obs 반영)
             'last': None,                   # 직전 행동/피격 결과 메모(D1 개정) — view 가 obs.last 로 노출
-            'searched': set()}              # 이 봇이 능동 수색으로 살핀 칸(자기 행동 기억 — 세계 정보
+            'searched': set(),              # 이 봇이 능동 수색으로 살핀 칸(자기 행동 기억 — 세계 정보
                                             # 아님. 리모컨 수색 라벨의 '이미 살폈다' 사실 주석 근거)
+            'plan': []}                     # 작정(D16) 남은 수 — 층 전이는 재스폰(새 dict)이라 자동
+                                            # 리셋(target id 가 층-로컬. intent 와 같은 논리)
 
 
 def bot_snapshot(b):

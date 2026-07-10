@@ -384,7 +384,7 @@ def main():
                     event('   봇%s \U0001f4ac "%s"' % (b["char"], dec["say"]))
             res["job"] = b["job"]
             turn_events.append(res)
-            mark = " [규칙]" if src == "fallback" else ""
+            mark = {"fallback": " [규칙]", "plan": " [작정]"}.get(src, "")
             event("   봇%s  %s%s" % (b["char"], act_summary(res), mark))
             if not b["alive"]:
                 event("   봇%s 쓰러졌다!" % b["char"])

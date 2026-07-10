@@ -79,7 +79,7 @@ def parse_stream(path):
     if end is None:
         raise ValueError("end 레코드 없음(판이 완주 못함)")
     ticks = [r for r in recs if r["kind"] == "tick"]
-    dec_n = fb = says = delivered = 0
+    dec_n = fb = says = delivered = plan_n = 0
     pairs = switches = search_rep = 0
     last = {}
     chars = {}                           # 몸 슬롯별 행동 프로파일(검증②의 계측 대상)
@@ -97,6 +97,8 @@ def parse_stream(path):
             p = prof(c)
             dec_n += 1
             p["decisions"] += 1
+            if d.get("src") == "plan":       # 작정 집행(D16) — 결정점이되 LLM 콜 아님
+                plan_n += 1
             if d.get("src") == "fallback":
                 fb += 1
                 p["fallback"] += 1
@@ -119,7 +121,8 @@ def parse_stream(path):
             "survivors": len(end["survivors"]), "deaths": len(end["fallen"]),
             "treasure": sum(b["bag"] for b in end["bots"]),
             "decisions": dec_n, "fallback": fb,
-            "fallback_rate": (fb / dec_n) if dec_n else 0.0,
+            "llm_calls": dec_n - plan_n, "plan_steps": plan_n,   # 작정(D16) 분리 — 구판은 plan 0
+            "fallback_rate": (fb / (dec_n - plan_n)) if dec_n - plan_n else 0.0,
             "says": says, "delivered": delivered,
             "switch_pairs": pairs, "switches": switches,
             "churn": (switches / pairs) if pairs else 0.0,
@@ -182,7 +185,8 @@ def main():
     print("%-22s %10s %10s" % ("지표", "base", "cross"))
     print("%-22s %10s %10s" % ("탈출 판 수", esc(rows["base"]), esc(rows["cross"])))
     for k, label in [("end_turn", "종료 틱"), ("survivors", "생존자"), ("deaths", "사망"),
-                     ("treasure", "보물"), ("decisions", "LLM 재결정 수"),
+                     ("treasure", "보물"), ("decisions", "재결정 수(작정 포함)"),
+                     ("llm_calls", "LLM 콜 수"), ("plan_steps", "작정 집행 수"),
                      ("fallback_rate", "폴백률"), ("churn", "타겟 스위치율"),
                      ("search_repeat", "수색 연속반복"), ("says", "say 수"),
                      ("delivered", "배달된 말")]:

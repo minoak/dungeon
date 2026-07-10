@@ -56,7 +56,7 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 |---|---|
 | `turn` | 틱 번호 |
 | `inbox` | 이번 틱 **사고에 주입된** 받은편지함 `{char: [{from,text},…]}` — 현재 파티 전원이 키(빈 리스트 포함). 지난 틱 say 중 시야/근접 조건을 통과해 배달된 것. **층 전이(descend) 틱의 say 는 배달되지 않는다**(새 층에서 리셋) |
-| `decisions` | 이번 틱 재결정한 봇들의 **결정 원본** `{char: {type, target?, choice?, say, reason, src, skipped?}}`. src ∈ haiku/fallback. 자동보행 중인 봇은 키 없음(LLM 0콜). `choice` = 리모컨 모드(run_meta.menu)에서 고른 옵션 번호 — 표시/분석용이며 판정·리플레이는 type/target 만 쓴다. `skipped:true` = 접수됐지만 **미실행**(같은 틱 동료의 exit 하강이 이 봇의 won 을 선점 — say 도 발화 안 됨). `DUNGEON_STREAM_OBS=1`이면 각 결정에 `obs`(그 봇이 그 순간 본 것 — `options` 리모컨 열거 포함) 동봉 — **시드+decisions = 완전 리플레이의 마지막 조각**. ⚠️ obs 는 엔진 view() 원본이라 menu=false 실행에서도 `options` 가 실린다(그 판의 LLM 프롬프트에서는 brains 가 제거해 비노출 — 스트림 obs ≠ 프롬프트 원문). obs 에는 `last`(그 봇 직전 행동/피격 결과 — D1 개정 additive)와 `intent`(그 봇의 **직전 결정** `{type, target?, say?, reason?, src?}` — 판단 되먹임, 2026-07-05 D15① additive. brains.think_all 이 inbox 처럼 주입하는 자기 기억이라 **그 캐릭터의 직전 decisions 항목에서 파생 가능** = 스트림에 새 원천 없음. 층 전이 시 재스폰으로 리셋)도 실릴 수 있다 |
+| `decisions` | 이번 틱 재결정한 봇들의 **결정 원본** `{char: {type, target?, choice?, then?, say, reason, src, skipped?}}`. src ∈ haiku/fallback/**plan**. 자동보행 중인 봇은 키 없음(LLM 0콜). `choice` = 리모컨 모드(run_meta.menu)에서 고른 옵션 번호 — 표시/분석용이며 판정·리플레이는 type/target 만 쓴다. `skipped:true` = 접수됐지만 **미실행**(같은 틱 동료의 exit 하강이 이 봇의 won 을 선점 — say 도 발화 안 됨). **`then`(작정, 2026-07-10 D16 additive)** = 이 결정에 딸린 이어질 행동 최대 2수 `[{type, target?},…]` — 엔진이 봇에 계획으로 보관했다가 order 완결마다 한 수씩 집행한다. 집행된 수는 **별도 decisions 항목(src='plan', reason='[작정] …', say='')** 으로 기록된다(LLM 0콜·view() 미호출 — obs 미동봉). 인터럽트(피격·encounter·blocked·lost·no_path)가 남은 작정을 파기하며, 착수 재검증 실패(대상 소멸·인접 아님)는 이벤트가 아니라 그 봇의 다음 obs.last(`type:'plan_broken'`, why)로만 보고된다. `DUNGEON_STREAM_OBS=1`이면 각 결정에 `obs`(그 봇이 그 순간 본 것 — `options` 리모컨 열거 포함) 동봉 — **시드+decisions = 완전 리플레이의 마지막 조각**. ⚠️ obs 는 엔진 view() 원본이라 menu=false 실행에서도 `options` 가 실린다(그 판의 LLM 프롬프트에서는 brains 가 제거해 비노출 — 스트림 obs ≠ 프롬프트 원문). obs 에는 `last`(그 봇 직전 행동/피격 결과 — D1 개정 additive)와 `intent`(그 봇의 **직전 결정** `{type, target?, say?, reason?, src?}` — 판단 되먹임, 2026-07-05 D15① additive. brains.think_all 이 inbox 처럼 주입하는 자기 기억이라 **그 캐릭터의 직전 decisions 항목에서 파생 가능** = 스트림에 새 원천 없음. 층 전이 시 재스폰으로 리셋)도 실릴 수 있다 |
 | `events[]` | 이 틱에 실제 일어난 일 전부, **순서 보존**(봇 행동 → 몬스터 턴). 아래 이벤트 어휘. 재결정 봇 행동엔 `reason`(속내)·`job` 부착, 자동보행 walk 엔 `reason` 없음 |
 | `bots[]` `monsters[]` `features[]` `traps[]` | 이 틱 **종료 시점 전체 스냅샷(델타 아님)** — 임의 틱 시킹 가능. `visited`(발자국)만 제외: 파생 규칙 "각 level 의 party 좌표(스폰 칸) + 이후 각 tick 의 봇 좌표 누적" |
 
@@ -136,7 +136,9 @@ decisions(+say) 뿐이다. 따라서:
    ⚠️ 이때 **decisions 에 키가 있는 봇마다, 행동 적용 전에 `d.view(bot, bots)` 를 호출해야 한다**
    (원본의 think_all 이 그랬듯). view 의 `_perceive` 부수효과(aware_of 등록)가 이후 기습 판정의
    주사위 소비 횟수를 바꾸므로, 생략하면 RNG 스트림이 원본과 영구 분기한다.
-   decisions 의 키 집합 = 그 틱에 view 가 호출된 봇 집합, 항등이다.
+   decisions 의 키 집합 중 **src='plan'(작정 집행, D16)만 예외 — view() 없이 결정됐으므로
+   리플레이에서도 view() 를 호출하면 안 된다**(호출하면 반대로 분기). 즉 view 호출 봇 집합 =
+   decisions 키 중 src≠'plan'. 나머지는 항등이다.
 3. 결과 스트림은 원본과 (started 및 실행모드 메타 gm·menu 제외 — 또는 같은 env 로 실행) 라인 단위로 동일하다.
 이것이 **BYO-agent 계약의 전신**이다: 두뇌 = `obs → action(dict)` 함수이며, 기록된 decisions 는
 '재생 가능한 두뇌'다. 외부 에이전트는 같은 계약(`{type, target?, say?, reason?}`)만 지키면 된다.
