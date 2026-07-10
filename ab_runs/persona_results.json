@@ -1,0 +1,128 @@
+{
+ "seeds": [
+  5
+ ],
+ "turns": 150,
+ "depths": 1,
+ "mind": {
+  "base": {
+   "1": "두란",
+   "2": "카야",
+   "3": "피른"
+  },
+  "cross": {
+   "1": "카야",
+   "2": "피른",
+   "3": "두란"
+  }
+ },
+ "body": {
+  "1": "전사",
+  "2": "도적",
+  "3": "바드"
+ },
+ "runs": {
+  "persona_cross_s5": {
+   "outcome": "escaped",
+   "end_turn": 67,
+   "survivors": 3,
+   "deaths": 0,
+   "treasure": 2,
+   "decisions": 70,
+   "fallback": 28,
+   "fallback_rate": 0.4,
+   "says": 37,
+   "delivered": 45,
+   "switch_pairs": 67,
+   "switches": 34,
+   "churn": 0.5074626865671642,
+   "search_repeat": 0,
+   "chars": {
+    "1": {
+     "attack": 0,
+     "search": 0,
+     "explore": 1,
+     "goto": 12,
+     "interact": 11,
+     "decisions": 24,
+     "fallback": 11,
+     "says": 11,
+     "other": 0
+    },
+    "2": {
+     "attack": 0,
+     "search": 0,
+     "explore": 5,
+     "goto": 12,
+     "interact": 13,
+     "decisions": 30,
+     "fallback": 16,
+     "says": 12,
+     "other": 0
+    },
+    "3": {
+     "attack": 2,
+     "search": 0,
+     "explore": 5,
+     "goto": 9,
+     "interact": 0,
+     "decisions": 16,
+     "fallback": 1,
+     "says": 14,
+     "other": 0
+    }
+   }
+  },
+  "persona_base_s5": {
+   "outcome": "escaped",
+   "end_turn": 53,
+   "survivors": 1,
+   "deaths": 2,
+   "treasure": 2,
+   "decisions": 40,
+   "fallback": 2,
+   "fallback_rate": 0.05,
+   "says": 30,
+   "delivered": 43,
+   "switch_pairs": 37,
+   "switches": 31,
+   "churn": 0.8378378378378378,
+   "search_repeat": 0,
+   "chars": {
+    "1": {
+     "attack": 0,
+     "search": 0,
+     "explore": 8,
+     "goto": 8,
+     "interact": 1,
+     "decisions": 17,
+     "fallback": 0,
+     "says": 11,
+     "other": 0
+    },
+    "2": {
+     "attack": 2,
+     "search": 0,
+     "explore": 1,
+     "goto": 7,
+     "interact": 0,
+     "decisions": 10,
+     "fallback": 1,
+     "says": 7,
+     "other": 0
+    },
+    "3": {
+     "attack": 1,
+     "search": 0,
+     "explore": 1,
+     "goto": 11,
+     "interact": 0,
+     "decisions": 13,
+     "fallback": 1,
+     "says": 12,
+     "other": 0
+    }
+   }
+  }
+ }
+}

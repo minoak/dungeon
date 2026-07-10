@@ -1,0 +1,44 @@
+검증② 기준선 시작: 시드 [1, 2, 3, 4, 5, 6] × 암['base', 'cross'] (turns=150 depths=1 jobs=2)
+  done persona_base_s1    outcome=escaped  tick= 33 보물=0 폴백=11%
+  done persona_cross_s1   outcome=escaped  tick=130 보물=5 폴백=7%
+  done persona_base_s2    outcome=timeout  tick=150 보물=3 폴백=8%
+  done persona_cross_s2   outcome=escaped  tick=127 보물=2 폴백=9%
+  done persona_base_s3    outcome=timeout  tick=150 보물=1 폴백=7%
+  done persona_cross_s3   outcome=timeout  tick=150 보물=0 폴백=6%
+  done persona_base_s4    outcome=timeout  tick=150 보물=2 폴백=4%
+  done persona_base_s5    outcome=escaped  tick= 53 보물=2 폴백=5%
+  done persona_cross_s4   outcome=timeout  tick=150 보물=2 폴백=5%
+검증② 기준선 시작: 시드 [5] × 암['cross'] (turns=150 depths=1 jobs=2)
+  done persona_cross_s5   outcome=escaped  tick= 67 보물=2 폴백=40%
+
+===== 전역 집계 (시드 1개 평균) =====
+지표                           base      cross
+탈출 판 수                          1          1
+종료 틱                        53.00      67.00
+생존자                          1.00       3.00
+사망                           2.00       0.00
+보물                           2.00       2.00
+LLM 재결정 수                   40.00      70.00
+폴백률                          0.05       0.40
+타겟 스위치율                      0.84       0.51
+수색 연속반복                      0.00       0.00
+say 수                       30.00      37.00
+배달된 말                       43.00      45.00
+
+===== 몸 피벗 — 같은 몸, 다른 마음 (암 간 차이 = 마음의 몫) =====
+몸              지표              attack    search   explore      goto  interact      says
+전사(base)       마음=두란             0.00      0.00      8.00      8.00      1.00     11.00
+전사(cross)      마음=카야             0.00      0.00      1.00     12.00     11.00     11.00
+도적(base)       마음=카야             2.00      0.00      1.00      7.00      0.00      7.00
+도적(cross)      마음=피른             0.00      0.00      5.00     12.00     13.00     12.00
+바드(base)       마음=피른             1.00      0.00      1.00     11.00      0.00     12.00
+바드(cross)      마음=두란             2.00      0.00      5.00      9.00      0.00     14.00
+
+===== 마음 피벗 — 같은 마음, 다른 몸 (암 간 유사 = 마음이 이월) =====
+두란(base)       몸=전사              0.00      0.00      8.00      8.00      1.00     11.00
+두란(cross)      몸=바드              2.00      0.00      5.00      9.00      0.00     14.00
+카야(base)       몸=도적              2.00      0.00      1.00      7.00      0.00      7.00
+카야(cross)      몸=전사              0.00      0.00      1.00     12.00     11.00     11.00
+피른(base)       몸=바드              1.00      0.00      1.00     11.00      0.00     12.00
+피른(cross)      몸=도적              0.00      0.00      5.00     12.00     13.00     12.00
+검증② 기준선 시작: 시드 [6] × 암['base', 'cross'] (turns=150 depths=1 jobs=2)

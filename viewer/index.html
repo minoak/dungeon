@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>원더랜드 관전 뷰어</title>
+<style>
+  /* ── 관전 창구 한 장 — stream.jsonl 의 순수 소비자 (VIEWER_DESIGN.md) ── */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: #0e0f13; color: #d8dbe2;
+    font: 14px/1.5 "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 8px 14px; background: #14161c; border-bottom: 1px solid #23262f;
+  }
+  header h1 { font-size: 15px; color: #e8c268; letter-spacing: 1px; margin-right: 4px; }
+  header .sub { color: #8a8f9c; font-size: 12px; }
+  select {
+    background: #1d2029; color: #d8dbe2; border: 1px solid #2c303c;
+    border-radius: 4px; padding: 3px 6px; font-size: 12px; max-width: 340px;
+  }
+  #liveBadge {
+    display: none; font-size: 11px; font-weight: bold; color: #fff;
+    background: #c0392b; border-radius: 3px; padding: 1px 7px; letter-spacing: 1px;
+  }
+  #liveBadge.on { display: inline-block; animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: .55; } }
+  #err { color: #ff8b7a; font-size: 12px; }
+
+  main { flex: 1; display: flex; min-height: 0; }
+  #mapWrap {
+    flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center;
+    background: #0a0b0e; padding: 12px; position: relative;
+  }
+  canvas { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+  aside {
+    width: 390px; flex: none; display: flex; flex-direction: column;
+    border-left: 1px solid #23262f; background: #12141a; min-height: 0;
+  }
+  #party { padding: 10px 12px 6px; border-bottom: 1px solid #23262f; }
+  .pc { margin-bottom: 8px; }
+  .pcHead { display: flex; align-items: baseline; gap: 6px; }
+  .pcHead .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; align-self: center; }
+  .pcHead b { font-size: 13.5px; }
+  .pcHead .job { color: #8a8f9c; font-size: 11.5px; }
+  .pcHead .stat { margin-left: auto; font-size: 11.5px; color: #b9bec9; white-space: nowrap; }
+  .hpline { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .hpbar { flex: 1; height: 7px; background: #23262f; border-radius: 3px; overflow: hidden; }
+  .hpfill { height: 100%; border-radius: 3px; transition: width .15s; }
+  .hpnum { font-size: 10.5px; color: #8a8f9c; width: 42px; text-align: right; }
+  .ord { font-size: 11.5px; color: #7d94b5; margin-top: 1px; }
+  .pc.dead .ord { color: #b06a5e; }
+  .pc.dead b, .pc.dead .job { color: #6a6f7a; }
+
+  #feed { flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 12.5px; scrollbar-width: thin; }
+  .grp { border-top: 1px solid #1c1f27; padding: 5px 0 4px; }
+  .gt { color: #565b66; font-size: 10.5px; margin-bottom: 2px; }
+  .say { margin: 2px 0; }
+  .say .bub { color: #e6e9f0; }
+  .rsn { color: #767c89; font-size: 11.5px; margin: 1px 0 2px 10px; }
+  .ev { margin: 1px 0; color: #aab0bc; }
+  .ev.dim { color: #5b606c; font-size: 11.5px; }
+  .ev.combat { color: #e88b7d; font-weight: 600; }
+  .ev.gold { color: #e8c268; font-weight: 600; }
+  .ev.notable { color: #9ecbff; font-weight: 600; }
+  .ev.fb { color: #8a8f9c; font-style: italic; }
+  .grp.lvl { color: #b9a06a; font-weight: bold; border-top: 2px solid #2c303c; padding: 8px 0; }
+  .grp.fin { color: #e8c268; font-weight: bold; font-size: 13.5px; }
+
+  footer {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px; background: #14161c; border-top: 1px solid #23262f;
+  }
+  footer button {
+    background: #1d2029; color: #d8dbe2; border: 1px solid #2c303c; border-radius: 4px;
+    min-width: 34px; padding: 4px 8px; font-size: 13px; cursor: pointer;
+  }
+  footer button:hover { background: #262a35; }
+  footer button.on { background: #3a3320; border-color: #e8c268; color: #e8c268; }
+  input[type=range] { flex: 1; accent-color: #e8c268; }
+  #tlabel { font-size: 12.5px; color: #b9bec9; white-space: nowrap; min-width: 110px; text-align: right; }
+</style>
+</head>
+<body>
+<header>
+  <h1>원더랜드</h1>
+  <select id="runSel" title="판 선택 — runs/ 보존판 또는 라이브"></select>
+  <select id="tsSel" title="타일셋"></select>
+  <span id="liveBadge">LIVE</span>
+  <span class="sub" id="runInfo"></span>
+  <span id="err"></span>
+</header>
+<main>
+  <div id="mapWrap"><canvas id="cv"></canvas></div>
+  <aside>
+    <div id="party"></div>
+    <div id="feed"></div>
+  </aside>
+</main>
+<footer>
+  <button id="bStart" title="처음으로">⏮</button>
+  <button id="bBack" title="한 틱 뒤로 (←)">◀</button>
+  <button id="bPlay" title="재생/일시정지 (Space)">▶</button>
+  <button id="bFwd" title="한 틱 앞으로 (→)">▶︎▏</button>
+  <button id="bEnd" title="끝으로">⏭</button>
+  <span id="speeds"></span>
+  <input type="range" id="slider" min="0" max="0" value="0">
+  <span id="tlabel">—</span>
+</footer>
+
+<script>
+'use strict';
+/* ════════════════════════════════════════════════════════════════
+   원더랜드 웹 타일 뷰어 v1 — stream.jsonl 순수 소비자.
+   계약(STREAM_FORMAT.md)에서 상속한 규칙:
+   - tick ↔ level 조인은 turn 이 아니라 **파일 순서** (강하 턴 = 옛 층 좌표)
+   - tick 스냅샷 = 델타 아님 → 임의 틱 시킹 공짜
+   - 발자국 = level.party 스폰 칸 + 이후 각 tick 봇 좌표 누적 (파생 규칙)
+   - say = decisions[].say (skipped 제외) / 사망 몹 hp 는 음수 가능(표시 0 클램프)
+   - 마지막 라인이 개행으로 안 끝나면 미완성 — 버린다 (tail 소비 규칙)
+   - 관전자 등급 진실: 숨은 함정·매복몹·숨은 보물을 반투명으로 **그린다**
+     (극적 아이러니의 계승 — 이 화면은 봇에게 보여주면 안 된다)
+   - 모르는 kind → 제네릭 폴백 스프라이트 (정보 소실 방지)
+   ════════════════════════════════════════════════════════════════ */
+
+const T = 16;          // 타일 원본 px
+const S = 2;           // 내부 렌더 배율 (텍스트 선명도용)
+const BASE_MS = 700;   // 1× 에서 틱 간격
+const SPEEDS = [1, 4, 16];
+const FEED_WINDOW = 90; // 피드에 유지할 최근 틱 그룹 수
+const BOT_COLORS = ['#ffd166', '#6fe3b0', '#c77dff', '#ef476f', '#38b6ff',
+                    '#ff9f1c', '#90e0ef', '#f4a0c0', '#b5e48c'];
+
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// 조사 이/가 — 받침 유무로 선택 ("고블린이" / "그림자거미가")
+function iga(word) {
+  const ch = String(word).replace(/<[^>]*>/g, '').trim().slice(-1).charCodeAt(0);
+  if (ch >= 0xAC00 && ch <= 0xD7A3) return (ch - 0xAC00) % 28 ? '이' : '가';
+  return '이(가)';
+}
+
+/* ── 전역 상태 ── */
+let meta = null, endLine = null, frames = [], feedGroups = [];
+let names = {}, colors = {}, jobs = {}, deathTurn = {};
+let curIdx = 0, playing = false, speedIdx = 0, playTimer = null;
+let curRun = null, isLive = false, liveTimer = null;
+let tilesets = { glyph: { label: '글리프 (tmux 계승)', builtin: true } };
+let curTs = 'glyph';
+let lastFeedRange = null;
+
+/* ════════════════ 1. 스트림 파싱 → 프레임 타임라인 ════════════════ */
+
+function parseStream(text) {
+  // tail 규칙: 개행으로 끝나지 않은 마지막 라인은 미완성 — 버린다
+  const rawLines = text.split('\n');
+  if (!text.endsWith('\n')) rawLines.pop();
+
+  meta = null; endLine = null; frames = [];
+  let curLevel = null, visList = null, visSet = null;
+
+  for (const raw of rawLines) {
+    if (!raw.trim()) continue;
+    let o;
+    try { o = JSON.parse(raw); } catch (e) { continue; }  // 깨진 라인은 조용히 무시
+    if (o.kind === 'run_meta') { meta = o; continue; }
+    if (o.kind === 'end') { endLine = o; continue; }
+    if (o.kind === 'descend') {
+      // 강하 자체는 프레임이 아니다 — 직후 level 라인이 새 층 개시 프레임을 만든다
+      if (frames.length) frames[frames.length - 1].descend = o;
+      continue;
+    }
+    if (o.kind === 'level') {
+      curLevel = o;
+      visList = []; visSet = new Set();
+      for (const b of o.party) {           // 파생 규칙: 스폰 칸부터 발자국
+        const k = b.x + ',' + b.y;
+        if (!visSet.has(k)) { visSet.add(k); visList.push([b.x, b.y]); }
+      }
+      frames.push({ kind: 'level', turn: o.turn, level: o, bots: o.party,
+                    monsters: o.monsters, features: o.features, traps: o.traps,
+                    visList, visCount: visList.length });
+      continue;
+    }
+    if (o.kind === 'tick') {
+      if (!curLevel) continue;             // 방어: level 없는 tick 은 못 그린다
+      for (const b of o.bots) {            // 발자국 누적 (파일 순서 = 이 층 소속)
+        const k = b.x + ',' + b.y;
+        if (!visSet.has(k)) { visSet.add(k); visList.push([b.x, b.y]); }
+      }
+      frames.push({ kind: 'tick', turn: o.turn, level: curLevel, bots: o.bots,
+                    monsters: o.monsters, features: o.features, traps: o.traps,
+                    events: o.events, decisions: o.decisions, inbox: o.inbox,
+                    visList, visCount: visList.length });
+      continue;
+    }
+    // 모르는 kind: 조용히 무시 (additive 계약)
+  }
+
+  // 명단·색·사망 시점 — meta 가 없으면(파일 머리 미도착) 스냅샷에서 유도
+  names = {}; colors = {}; jobs = {}; deathTurn = {};
+  const party = (meta && meta.party) || [];
+  party.forEach((p, i) => {
+    names[p.char] = p.name || p.job || ('봇' + p.char);
+    jobs[p.char] = p.job || '?';
+    colors[p.char] = BOT_COLORS[i % BOT_COLORS.length];
+  });
+  for (const f of frames) {
+    for (const b of f.bots) {
+      if (!(b.char in names)) {
+        names[b.char] = '봇' + b.char; jobs[b.char] = b.job || '?';
+        colors[b.char] = BOT_COLORS[Object.keys(colors).length % BOT_COLORS.length];
+      }
+      if (!b.alive && !(b.char in deathTurn)) deathTurn[b.char] = f.turn;
+    }
+  }
+  buildFeedGroups();
+}
+
+/* ════════════════ 2. 이벤트 → 한글 문장 (기계 크로니클 어휘 계승) ════════════════ */
+
+function nameSpan(c) { return `<b style="color:${colors[c] || '#fff'}">${esc(names[c] || c)}</b>`; }
+
+// order/target 원시값('m2'/'b1'/'f3'/'exit'/'@x,y') → 사람 말
+function resolveTarget(t, f) {
+  if (t == null) return '';
+  t = String(t);
+  if (t === 'exit') return '출구(계단)';
+  let m;
+  if ((m = t.match(/^b(.+)$/))) return names[m[1]] || t;
+  if ((m = t.match(/^m(\d+)$/))) {
+    const mob = f.monsters.find(x => x.id === +m[1]);
+    return mob ? mob.kind : '적';
+  }
+  if ((m = t.match(/^f(\d+)$/))) {
+    const ft = f.features.find(x => x.id === +m[1]);
+    return ft ? ft.name : '무언가';
+  }
+  if ((m = t.match(/^@(-?\d+),(-?\d+)$/))) return `(${m[1]},${m[2]}) 지점`;
+  return t;
+}
+
+// show_runner.act_summary / mon_summary 의 JS 이식 — 같은 문법, 이름 대입
+function evLine(e, f) {
+  const t = e.type;
+  const who = e.char ? nameSpan(e.char) + ' ' : '';
+  const cls = (c, h) => ({ cls: c, html: who + h });
+
+  if (t === 'goto')
+    return cls('dim', `⚑ ${esc(resolveTarget(e.target, f))}${e.result === 'arrived' ? ' — 이미 곁에' : '에게 핑'}`);
+  if (t === 'explore') {
+    if (e.result === 'pathed')
+      return cls('dim', e.to_exit ? '⚑ 더 볼 곳 없음 — 출구로 향한다'
+                                  : `⚑ ${esc(e.bearing || '?')} 방향 탐색`);
+    return cls('dim', '⚑ 탐색 — 갈 곳이 없다');
+  }
+  if (t === 'walk') {
+    const r = e.result;
+    if (r === 'encounter') {
+      const bits = [];
+      if (e.monsters) bits.push('적 출현: ' + e.monsters.map(m => esc(m.kind)).join(', '));
+      if (e.trap) {
+        const tr = e.trap;
+        if (tr.safe) bits.push(`${esc(tr.name || '함정')} 회피! (d20 ${tr.total} vs DC ${tr.dc})`);
+        else if (tr.alarm != null) bits.push(`${esc(tr.name || '경보')} 발동!! 몹 ${tr.alarm} 각성`);
+        else bits.push(`${esc(tr.name || '함정')}! ${tr.dmg || 0}피해`);
+      }
+      if (e.treasure) bits.push('보물 획득');
+      if (e.found) bits.push('발견: ' + e.found.map(x => esc(x.name)).join(', '));
+      return cls('notable', '보행 정지 — ' + (bits.join(' / ') || '조우'));
+    }
+    if (r === 'blocked' && e.monsters)
+      return cls('notable', `길 막힘 — ${e.monsters.map(m => esc(m.kind)).join(', ')}가 길목을 점거`);
+    if (r === 'treasure') return cls('gold', '◆ 길에서 보물을 주웠다');
+    if (r === 'at_exit') return cls('notable', '계단 앞에 섰다');
+    if (r === 'arrived' && !('to' in e))
+      return cls('dim', `${esc(resolveTarget(e.target, f))} 곁에 도착 — 재결정`);
+    if (r === 'lost')
+      return cls('notable', `${esc(resolveTarget(e.target, f))}를 마지막 본 자리까지 갔지만 — 곁에 없다`);
+    if (r === 'arrived') return cls('dim', '도착');
+    if (r === 'blocked') return cls('dim', '길 막힘');
+    return cls('dim', `▸ ${esc(resolveTarget(e.target, f))}${/지점$/.test(resolveTarget(e.target, f)) ? '으로' : '에게'} 이동 중`);
+  }
+  if (t === 'interact') {
+    const r = e.result;
+    if (r === 'exit')
+      return cls('gold', `▼ 다 모였다 — 함께 하강!! (${(e.party || []).map(c => esc(names[c] || c)).join('·')})`);
+    if (r === 'wait_allies')
+      return cls('notable', `계단에서 동료를 기다린다 (아직: ${(e.missing || []).map(c => esc(names[c] || c)).join('·')})`);
+    if (r === 'treasure') return cls('gold', '◆ 보물 획득');
+    if (r === 'chest_loot') return cls('gold', `상자를 열었다 — 보물 ${e.loot || 0}개! (d20 ${e.total})`);
+    if (r === 'chest_trap') return cls('combat', `상자에서 독침이! ${e.dmg || 0}피해 (d20 ${e.total})`);
+    if (r === 'fountain_heal') return cls('gold', `샘물을 마셨다 — HP ${e.heal || 0} 회복`);
+    if (r === 'fountain_harm') return cls('combat', `샘물이 오염돼 있었다 — ${e.dmg || 0}피해`);
+    const tag = { too_far: '너무 멀다', nothing: '허탕', no_target: '대상 없음' }[r] || r;
+    return cls('dim', `상호작용 ${esc(resolveTarget(e.target, f))} — ${esc(tag)}`);
+  }
+  if (t === 'attack') {
+    if (e.result === 'no_target') return cls('dim', '공격 — 인접한 적 없음(허공)');
+    if (e.result === 'too_far') return cls('dim', '공격 — 지목한 적이 너무 멀다');
+    const roll = ` (d20 ${e.roll}${e.mod >= 0 ? '+' : ''}${e.mod}=${e.total} vs AC ${e.ac})`;
+    const sneak = e.surprise ? '기습! ' : '';
+    if (!e.hit) return cls('combat', `⚔ ${sneak}${esc(e.target)} 공격 — 빗나감${roll}`);
+    const head = sneak + (e.crit ? '대성공! ' : '');
+    const tail = e.killed ? ' — 처치!' : ` (적 HP ${Math.max(0, e.monster_hp)})`;
+    return cls('combat', `⚔ ${esc(e.target)} 공격 — ${head}${e.dmg}피해${tail}${roll}`);
+  }
+  if (t === 'search') {
+    const found = e.found || [];
+    if (!found.length) return cls('dim', `샅샅이 살폈다 (반경 ${e.radius || 1}) — 아무것도 없음`);
+    return cls('notable', '샅샅이 살폈다 — 발견: ' + found.map(x => esc(x.name)).join(', '));
+  }
+  // ── 몹 이벤트 ──
+  const mon = esc(e.monster || '');
+  if (t === 'monster_notice')
+    return { cls: 'notable', html: `${mon}${iga(mon)} ${nameSpan(e.target)}를 발견 — 추적 개시!` };
+  if (t === 'monster_flee')
+    return { cls: 'ev', html: `${mon} 겁에 질려 달아나기 시작한다!` };
+  if (t === 'monster_desperate')
+    return { cls: 'combat', html: `${mon} 더는 도망칠 곳이 없다 — 이빨을 드러낸다!` };
+  if (t === 'monster_attack') {
+    const sneak = e.from_hiding ? `매복!! 어둠에서 ${mon}가 튀어나온다 — ` : (e.surprise ? '기습! ' : '');
+    const roll = ` (d20 ${e.roll}${e.mod >= 0 ? '+' : ''}${e.mod}=${e.total} vs AC ${e.ac})`;
+    if (!e.hit) return { cls: 'combat', html: `${sneak}${mon} ⚔ ${nameSpan(e.target)} — 빗나감${roll}` };
+    const tail = e.down ? ' — 쓰러졌다!' : ` (HP ${e.hp})`;
+    return { cls: 'combat', html: `${sneak}${mon} ⚔ ${nameSpan(e.target)} — ${e.dmg}피해${tail}${roll}` };
+  }
+  if (t === 'monster_move') return null;   // 지도가 보여준다 — 피드 소음 제거
+  return { cls: 'dim', html: esc(t) };     // 모르는 이벤트: 이름만 (additive 관용)
+}
+
+function buildFeedGroups() {
+  feedGroups = frames.map((f, i) => {
+    if (f.kind === 'level') {
+      const roster = f.bots.map(b => esc(names[b.char] || b.char)).join('·');
+      const head = f.level.depth === 1
+        ? `⚐ 원정 시작 — 지하 1층 (${roster})`
+        : `▼ 지하 ${f.level.depth}층 진입 (${roster})`;
+      return `<div class="grp lvl">${head}</div>`;
+    }
+    const parts = [];
+    // 결정(속내·발화) — 재결정 봇만 존재. 폴백은 페르소나로 인용하지 않는다(보고서 원칙).
+    for (const c of Object.keys(f.decisions || {})) {
+      const d = f.decisions[c];
+      if (d.skipped) continue;
+      if (d.src === 'fallback') {
+        parts.push(`<div class="ev fb">${nameSpan(c)} ⚙ 규칙 두뇌가 대신 움직였다</div>`);
+        continue;
+      }
+      if (d.say) parts.push(`<div class="say">${nameSpan(c)} <span class="bub">「${esc(d.say)}」</span></div>`);
+      if (d.reason) parts.push(`<div class="rsn">${esc(d.reason)}</div>`);
+    }
+    for (const e of (f.events || [])) {
+      const line = evLine(e, f);
+      if (line) parts.push(`<div class="ev ${line.cls}">${line.html}</div>`);
+    }
+    if (f.descend) {
+      const who = (f.descend.party || []).map(p => esc(names[p.char] || p.char)).join('·');
+      parts.push(`<div class="ev gold">▼ ${who} — 지하 ${f.descend.to_depth}층으로 내려간다</div>`);
+    }
+    if (!parts.length) return '';
+    return `<div class="grp"><div class="gt">t${f.turn}</div>${parts.join('')}</div>`;
+  });
+}
+
+function endGroupHtml() {
+  if (!endLine) return '';
+  const oc = { escaped: '던전 돌파 — 탈출!!', wiped: '전멸', timeout: '시간 종료' }[endLine.outcome] || endLine.outcome;
+  const bits = [`▣ 원정 결말 — ${oc} (t${endLine.turn})`];
+  if ((endLine.fallen || []).length)
+    bits.push(`☠ 쓰러진 자: ${endLine.fallen.map(c => esc(names[c] || c)).join(', ')}`);
+  if ((endLine.survivors || []).length)
+    bits.push(`🛡 생환: ${endLine.survivors.map(c => esc(names[c] || c)).join(', ')}`);
+  return `<div class="grp fin">${bits.join('<br>')}</div>`;
+}
+
+/* ════════════════ 3. 렌더러 — 타일 / 글리프 겸용 ════════════════ */
+
+const GLYPHS = {   // 글리프 폴백 = tmux 관전의 계승 (visited ',' 까지)
+  'floor': ['.', '#3a3f4b'], 'visited': [',', '#584f38'], 'wall': ['#', '#555c6e'],
+  'exit': ['>', '#e8c268'],
+  'bot:*': ['@', '#ffd166'],
+  'mob:고블린': ['g', '#7ec850'], 'mob:그림자거미': ['s', '#b07ee3'], 'mob:*': ['m', '#e08080'],
+  'feat:treasure': ['$', '#e8c268'], 'feat:chest': ['□', '#c8a165'],
+  'feat:fountain': ['~', '#6fc3df'], 'feat:*': ['?', '#b9bec9'],
+  'trap:spike': ['^', '#d8dbe2'], 'trap:dart': ['^', '#9ecb6a'], 'trap:alarm': ['^', '#e07f7f'],
+  'trap:*': ['^', '#d8dbe2'],
+};
+
+function glyphFor(key) {
+  if (GLYPHS[key]) return GLYPHS[key];
+  const star = key.replace(/:.*$/, ':*');
+  return GLYPHS[star] || ['?', '#fff'];
+}
+
+function sheetPos(key) {
+  const ts = tilesets[curTs];
+  if (!ts || !ts.map) return null;
+  if (ts.map[key]) return ts.map[key];
+  const star = key.replace(/:.*$/, ':*');
+  return ts.map[star] || null;
+}
+
+// 한 칸 그리기 — 타일셋이면 스프라이트, 아니면(또는 매핑 실패) 글리프.
+// tint = 글리프 색 덮어쓰기(글리프 모드에서 봇을 캐릭터 색으로)
+function drawCell(key, gx, gy, alpha = 1, rot = 0, tint = null) {
+  const ts = tilesets[curTs];
+  const px = gx * T * S, py = gy * T * S, sz = T * S;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  if (rot) { ctx.translate(px + sz / 2, py + sz / 2); ctx.rotate(rot); ctx.translate(-sz / 2, -sz / 2); }
+  else ctx.translate(px, py);
+  const pos = (!ts.builtin && ts.img && ts.img.complete) ? sheetPos(key) : null;
+  if (pos) {
+    ctx.drawImage(ts.img, pos[0] * ts.tile, pos[1] * ts.tile, ts.tile, ts.tile, 0, 0, sz, sz);
+  } else {
+    const [ch, col] = glyphFor(key);
+    ctx.fillStyle = tint || col;
+    ctx.font = `bold ${Math.round(T * S * 0.85)}px "Consolas","DejaVu Sans Mono",monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(ch, sz / 2, sz / 2 + 1);
+  }
+  ctx.restore();
+}
+
+function badge(txt, gx, gy, color, dx = 0.5, dy = -0.15) {
+  ctx.save();
+  ctx.font = `bold ${Math.round(T * S * 0.55)}px monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.8)';
+  const x = (gx + dx) * T * S, y = (gy + dy) * T * S;
+  ctx.strokeText(txt, x, y); ctx.fillStyle = color; ctx.fillText(txt, x, y);
+  ctx.restore();
+}
+
+function hpBar(gx, gy, hp, maxhp) {
+  if (hp >= maxhp) return;
+  const w = T * S - 6, x = gx * T * S + 3, y = (gy + 1) * T * S - 4;
+  const r = Math.max(0, hp / maxhp);
+  ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(x - 1, y - 1, w + 2, 4);
+  ctx.fillStyle = r > 0.5 ? '#6fe3b0' : (r > 0.25 ? '#e8c268' : '#ef476f');
+  ctx.fillRect(x, y, Math.round(w * r), 2);
+}
+
+function render() {
+  const f = frames[curIdx];
+  if (!f) return;
+  const L = f.level, ts = tilesets[curTs];
+  const W = L.w * T * S, H = L.h * T * S;
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#0a0b0e'; ctx.fillRect(0, 0, W, H);
+
+  const grid = L.grid;
+  const isFloor = (x, y) => y >= 0 && y < L.h && x >= 0 && x < L.w && grid[y][x] === '.';
+
+  // ── 지형: 바닥 + 벽(바닥에 접한 벽만 벽돌, 나머지는 어둠 = 암반) ──
+  for (let y = 0; y < L.h; y++) {
+    for (let x = 0; x < L.w; x++) {
+      if (grid[y][x] === '.') { drawCell('floor', x, y); continue; }
+      let edge = false;
+      for (let dy = -1; dy <= 1 && !edge; dy++)
+        for (let dx = -1; dx <= 1 && !edge; dx++)
+          if (isFloor(x + dx, y + dy)) edge = true;
+      if (edge) drawCell('wall', x, y, ts.builtin ? 1 : 0.92);
+    }
+  }
+  // ── 발자국(파생 규칙): 지나간 바닥을 살짝 데운다 ──
+  for (let i = 0; i < f.visCount; i++) {
+    const [x, y] = f.visList[i];
+    if (ts.builtin) { if (!f.bots.some(b => b.alive && !b.won && b.x === x && b.y === y)) drawCell('visited', x, y); }
+    else { ctx.fillStyle = 'rgba(232,194,104,0.10)'; ctx.fillRect(x * T * S, y * T * S, T * S, T * S); }
+  }
+  // ── 계단(출구): 두 모드 공통 금색 '>' — 로그라이크 관습이 가장 읽힌다 ──
+  const [ex, ey] = L.exit;
+  ctx.fillStyle = 'rgba(232,194,104,0.18)'; ctx.fillRect(ex * T * S, ey * T * S, T * S, T * S);
+  badge('>', ex, ey, '#e8c268', 0.5, 0.5);
+
+  // ── 피처: exit 는 위에서 그렸으니 제외. concealed(숨은 보물 등)=반투명 ──
+  for (const ft of f.features) {
+    if (ft.type === 'exit') continue;
+    drawCell('feat:' + ft.type, ft.x, ft.y, ft.concealed ? 0.38 : 1);
+  }
+  // ── 함정: hidden=관전자용 반투명 / sprung=발동 후 어둡게 ──
+  for (const tr of f.traps) {
+    const a = tr.hidden ? 0.35 : (tr.sprung ? 0.55 : 0.95);
+    drawCell('trap:' + tr.kind, tr.x, tr.y, a);
+  }
+  // ── 몹: 시체 먼저(깔림), 산 것 나중. concealed=반투명+? (극적 아이러니) ──
+  for (const m of f.monsters) {
+    if (m.alive) continue;
+    drawCell('mob:' + m.kind, m.x, m.y, 0.4, Math.PI / 2);
+  }
+  for (const m of f.monsters) {
+    if (!m.alive) continue;
+    const a = m.concealed ? 0.45 : 1;
+    drawCell('mob:' + m.kind, m.x, m.y, a);
+    hpBar(m.x, m.y, m.hp, m.maxhp);
+    if (m.concealed) badge('?', m.x, m.y, '#c77dff');
+    else if (m.state === 'SLEEPING') badge('z', m.x, m.y, '#8a8f9c');
+    else if (m.state === 'HUNTING') badge('!', m.x, m.y, '#ef476f');
+    else if (m.state === 'FLEEING') badge('~', m.x, m.y, '#38b6ff');
+  }
+  // ── 봇 order 목표 마커: 지금 뭘 향해 가는지 (작게, 흐리게) ──
+  for (const b of f.bots) {
+    if (!b.alive || b.won || !b.order) continue;
+    const p = orderPos(b.order, f);
+    if (!p) continue;
+    ctx.save(); ctx.globalAlpha = 0.75; ctx.strokeStyle = colors[b.char] || '#fff'; ctx.lineWidth = 2;
+    const cx2 = (p[0] + 0.5) * T * S, cy2 = (p[1] + 0.5) * T * S, r = T * S * 0.32;
+    ctx.beginPath();
+    ctx.moveTo(cx2 - r, cy2); ctx.lineTo(cx2, cy2 - r); ctx.lineTo(cx2 + r, cy2); ctx.lineTo(cx2, cy2 + r);
+    ctx.closePath(); ctx.stroke(); ctx.restore();
+  }
+  // ── 봇: 시체 먼저, 산 봇(won 제외 — 이미 층을 떠났다) 나중 ──
+  for (const b of f.bots) {
+    if (b.alive) continue;
+    ctx.fillStyle = 'rgba(160,40,40,0.35)';
+    ctx.beginPath();
+    ctx.ellipse((b.x + 0.5) * T * S, (b.y + 0.62) * T * S, T * S * 0.42, T * S * 0.28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    drawCell('bot:' + b.job, b.x, b.y, 0.55, Math.PI / 2, colors[b.char]);
+    badge('☠', b.x, b.y, '#c8ccd6');
+  }
+  for (const b of f.bots) {
+    if (!b.alive || b.won) continue;
+    ctx.save(); ctx.globalAlpha = 0.9; ctx.strokeStyle = colors[b.char] || '#fff'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse((b.x + 0.5) * T * S, (b.y + 0.85) * T * S, T * S * 0.38, T * S * 0.16, 0, 0, Math.PI * 2);
+    ctx.stroke(); ctx.restore();
+    drawCell('bot:' + b.job, b.x, b.y, 1, 0, colors[b.char]);
+    hpBar(b.x, b.y, b.hp, b.maxhp);
+    badge(b.char, b.x, b.y, colors[b.char] || '#fff', 0.16, 0.16);
+  }
+}
+
+function orderPos(order, f) {
+  let m;
+  if (order === 'exit') return f.level.exit;
+  if ((m = String(order).match(/^@(-?\d+),(-?\d+)$/))) return [+m[1], +m[2]];
+  if ((m = String(order).match(/^m(\d+)$/))) {
+    const mob = f.monsters.find(x => x.id === +m[1]); return mob && mob.alive ? [mob.x, mob.y] : null;
+  }
+  if ((m = String(order).match(/^f(\d+)$/))) {
+    const ft = f.features.find(x => x.id === +m[1]); return ft ? [ft.x, ft.y] : null;
+  }
+  if ((m = String(order).match(/^b(.+)$/))) {
+    const bt = f.bots.find(x => x.char === m[1]); return bt && bt.alive && !bt.won ? [bt.x, bt.y] : null;
+  }
+  return null;
+}
+
+/* ════════════════ 4. 사이드 패널 ════════════════ */
+
+function renderParty() {
+  const f = frames[curIdx];
+  if (!f || !meta) { $('party').innerHTML = ''; return; }
+  const rows = [];
+  for (const p of (meta.party || [])) {
+    const c = p.char, col = colors[c];
+    const b = f.bots.find(x => x.char === c);
+    let cls = 'pc', hpHtml = '', ord = '', stat = '';
+    if (b && b.alive) {
+      const r = Math.max(0, b.hp / b.maxhp);
+      const barCol = r > 0.5 ? '#6fe3b0' : (r > 0.25 ? '#e8c268' : '#ef476f');
+      hpHtml = `<div class="hpline"><div class="hpbar"><div class="hpfill" style="width:${r * 100}%;background:${barCol}"></div></div><div class="hpnum">${b.hp}/${b.maxhp}</div></div>`;
+      stat = `◆${b.bag}` + (b.aware_of && b.aware_of.length ? ` · 적 인지 ${b.aware_of.length}` : '');
+      if (b.won) ord = '▼ 계단을 내려갔다';
+      else if (b.order) ord = '→ ' + esc(resolveTarget(b.order, f)) + (String(b.order).startsWith('@') ? ' 탐색' : '');
+      else ord = '… 다음 수를 생각 중';
+    } else if (b && !b.alive) {
+      cls += ' dead';
+      hpHtml = `<div class="hpline"><div class="hpbar"><div class="hpfill" style="width:0"></div></div><div class="hpnum">0/${b.maxhp}</div></div>`;
+      ord = `☠ 전사 (t${deathTurn[c] ?? '?'})`;
+    } else {
+      // 이 층 스냅샷에 없음 — 전 층 전사자거나 이미 탈출
+      if (c in deathTurn && deathTurn[c] <= f.turn) { cls += ' dead'; ord = `☠ 전사 (t${deathTurn[c]})`; }
+      else ord = '—';
+    }
+    rows.push(`<div class="${cls}"><div class="pcHead"><span class="dot" style="background:${col}"></span>` +
+      `<b>${esc(names[c])}</b><span class="job">${esc(jobs[c])}</span><span class="stat">${stat}</span></div>` +
+      hpHtml + `<div class="ord">${ord}</div></div>`);
+  }
+  $('party').innerHTML = rows.join('');
+}
+
+function renderFeed() {
+  const feed = $('feed');
+  const lo = Math.max(0, curIdx - FEED_WINDOW), hi = curIdx;
+  // 순차 재생 중이면 증분 append, 점프면 재구축
+  if (lastFeedRange && lastFeedRange.lo === lo - (lo > 0 ? 1 : 0) - 0 && hi === lastFeedRange.hi + 1 && lo <= lastFeedRange.lo + 1) {
+    const g = feedGroups[hi];
+    if (g) feed.insertAdjacentHTML('beforeend', g);
+    while (feed.children.length > FEED_WINDOW + 4) feed.removeChild(feed.firstChild);
+  } else {
+    let html = '';
+    for (let i = lo; i <= hi; i++) html += feedGroups[i] || '';
+    feed.innerHTML = html;
+  }
+  if (hi === frames.length - 1 && endLine) {
+    if (!feed.querySelector('.fin')) feed.insertAdjacentHTML('beforeend', endGroupHtml());
+  } else {
+    const finEl = feed.querySelector('.fin');
+    if (finEl) finEl.remove();
+  }
+  lastFeedRange = { lo, hi };
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function renderInfo() {
+  if (!meta) { $('runInfo').textContent = ''; return; }
+  const bits = [`seed ${meta.seed}`, `${meta.w}×${meta.h}`, `${meta.depths}층`];
+  if (meta.menu) bits.push('리모컨');
+  if (endLine) {
+    const oc = { escaped: '탈출', wiped: '전멸', timeout: '시간종료' }[endLine.outcome] || endLine.outcome;
+    bits.push(`t${endLine.turn} ${oc}`);
+  } else if (isLive) bits.push('진행 중');
+  $('runInfo').textContent = bits.join(' · ');
+}
+
+/* ════════════════ 5. 재생 컨트롤 ════════════════ */
+
+function setIdx(i, fromPlay = false) {
+  curIdx = Math.max(0, Math.min(frames.length - 1, i));
+  $('slider').max = String(Math.max(0, frames.length - 1));
+  $('slider').value = String(curIdx);
+  const f = frames[curIdx];
+  if (f) {
+    const last = frames[frames.length - 1];
+    $('tlabel').textContent = `t${f.turn} / ${last.turn} · ${f.level.depth}층`;
+  }
+  render(); renderParty(); renderFeed();
+  if (!fromPlay && playing) schedule();   // 스크럽 중에도 재생 유지
+}
+
+function schedule() {
+  clearTimeout(playTimer);
+  if (!playing) return;
+  playTimer = setTimeout(() => {
+    if (curIdx < frames.length - 1) { setIdx(curIdx + 1, true); schedule(); }
+    else if (isLive) { schedule(); }        // 라이브: 꽁무니에서 새 틱 대기
+    else { setPlaying(false); }
+  }, BASE_MS / SPEEDS[speedIdx]);
+}
+
+function setPlaying(p) {
+  playing = p;
+  $('bPlay').textContent = p ? '⏸' : '▶';
+  if (p) schedule(); else clearTimeout(playTimer);
+}
+
+function buildSpeedButtons() {
+  $('speeds').innerHTML = SPEEDS.map((s, i) =>
+    `<button data-i="${i}" class="${i === speedIdx ? 'on' : ''}">${s}×</button>`).join('');
+  $('speeds').querySelectorAll('button').forEach(b => b.onclick = () => {
+    speedIdx = +b.dataset.i; buildSpeedButtons(); if (playing) schedule();
+  });
+}
+
+/* ════════════════ 6. 로드 — 판 선택·라이브 폴링·타일셋 ════════════════ */
+
+async function fetchText(url) {
+  const r = await fetch(url + (url.includes('?') ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' });
+  if (!r.ok) throw new Error(`${r.status} ${url}`);
+  return r.text();
+}
+
+async function loadRun(path, keepPos = false) {
+  $('err').textContent = '';
+  const prevIdx = curIdx, wasAtEnd = curIdx >= frames.length - 1;
+  try {
+    const text = await fetchText('/' + path);
+    parseStream(text);
+    if (!frames.length) { $('err').textContent = '틱이 아직 없다 (빈 판)'; return; }
+    lastFeedRange = null;
+    curRun = path;
+    isLive = path.startsWith('state/') && !endLine;
+    $('liveBadge').classList.toggle('on', isLive);
+    setIdx(keepPos ? (wasAtEnd ? frames.length - 1 : prevIdx) : (isLive ? frames.length - 1 : 0));
+    renderInfo();
+    clearInterval(liveTimer);
+    if (isLive) liveTimer = setInterval(() => loadRun(path, true), 1500);
+  } catch (e) {
+    $('err').textContent = '로드 실패: ' + e.message + ' (dungeon 루트에서 python3 -m http.server 로 띄웠나?)';
+  }
+}
+
+async function buildRunList() {
+  const sel = $('runSel');
+  const opts = [['state/stream.jsonl', '⦿ 라이브 (state/)']];
+  try {
+    const html = await fetchText('/runs/');
+    const seen = new Set();
+    for (const m of html.matchAll(/href="([^"]+)"/g)) {
+      let h = decodeURIComponent(m[1]);
+      if (h.startsWith('/')) h = h.slice(1); else h = 'runs/' + h;
+      if (h.endsWith('/')) h += 'stream.jsonl';
+      if (!h.endsWith('.jsonl') || seen.has(h)) continue;
+      seen.add(h); opts.push([h, h.replace('runs/', '').replace('/stream.jsonl', '')]);
+    }
+  } catch (e) { /* 목록 없어도 URL 파라미터·라이브로는 동작 */ }
+  sel.innerHTML = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
+  sel.onchange = () => {
+    setPlaying(false);
+    history.replaceState(null, '', '?run=' + encodeURIComponent(sel.value));
+    loadRun(sel.value);
+  };
+}
+
+async function loadTilesets() {
+  try {
+    const cfg = JSON.parse(await fetchText('tiles.json'));
+    for (const [k, ts] of Object.entries(cfg.tilesets || {})) {
+      tilesets[k] = ts;
+      const img = new Image();
+      img.src = ts.sheet;
+      img.onload = () => { if (curTs === k) render(); };
+      ts.img = img;
+    }
+    const want = localStorage.getItem('wl_tileset') || cfg.default;
+    if (tilesets[want]) curTs = want;
+  } catch (e) { /* tiles.json 없으면 글리프만 — 뷰어는 그림 없이도 죽지 않는다 */ }
+  const sel = $('tsSel');
+  sel.innerHTML = Object.entries(tilesets).map(([k, t]) =>
+    `<option value="${k}" ${k === curTs ? 'selected' : ''}>${esc(t.label || k)}</option>`).join('');
+  sel.onchange = () => {
+    curTs = sel.value; localStorage.setItem('wl_tileset', curTs); render();
+  };
+}
+
+/* ════════════════ 7. 배선 ════════════════ */
+
+$('bStart').onclick = () => setIdx(0);
+$('bEnd').onclick = () => setIdx(frames.length - 1);
+$('bBack').onclick = () => setIdx(curIdx - 1);
+$('bFwd').onclick = () => setIdx(curIdx + 1);
+$('bPlay').onclick = () => setPlaying(!playing);
+$('slider').oninput = e => setIdx(+e.target.value);
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
+  else if (e.key === 'ArrowLeft') setIdx(curIdx - (e.shiftKey ? 10 : 1));
+  else if (e.key === 'ArrowRight') setIdx(curIdx + (e.shiftKey ? 10 : 1));
+});
+
+(async function init() {
+  buildSpeedButtons();
+  await loadTilesets();
+  await buildRunList();
+  const q = new URLSearchParams(location.search);
+  const run = q.get('run') || 'state/stream.jsonl';
+  const sel = $('runSel');
+  if (![...sel.options].some(o => o.value === run)) {
+    sel.insertAdjacentHTML('beforeend', `<option value="${esc(run)}">${esc(run)}</option>`);
+  }
+  sel.value = run;
+  await loadRun(run);
+})();
+</script>
+</body>
+</html>

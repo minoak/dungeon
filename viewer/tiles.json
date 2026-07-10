@@ -1,0 +1,31 @@
+{
+  "_readme": "kind/type/job → 스프라이트 매핑. 코드가 아니라 데이터 — 새 개체·새 타일셋은 여기만 추가하면 뷰어 수정 없이 그려진다. 좌표 = [col,row] (타일 단위, 0-기준). '*' = 미지 kind 폴백(제네릭). 'glyph' 타일셋은 내장(시트 없음).",
+  "default": "tiny",
+  "tilesets": {
+    "tiny": {
+      "label": "Kenney Tiny Dungeon",
+      "license": "CC0 — assets/kenney/License.txt 실물 확인 2026-07-05",
+      "sheet": "assets/kenney/tilemap_packed.png",
+      "tile": 16,
+      "map": {
+        "floor": [0, 0],
+        "wall": [4, 3],
+        "bot:전사": [0, 8],
+        "bot:도적": [3, 8],
+        "bot:음유시인": [4, 9],
+        "bot:*": [1, 7],
+        "mob:고블린": [2, 9],
+        "mob:그림자거미": [2, 10],
+        "mob:*": [1, 9],
+        "feat:treasure": [6, 5],
+        "feat:chest": [5, 7],
+        "feat:fountain": [8, 2],
+        "feat:*": [6, 7],
+        "trap:spike": [5, 3],
+        "trap:dart": [6, 3],
+        "trap:alarm": [8, 3],
+        "trap:*": [6, 3]
+      }
+    }
+  }
+}

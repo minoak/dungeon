@@ -1,0 +1,49 @@
+{
+ "_readme": "도감 원장 — 캐릭터의 죽어도 남는 지식(D4·D9). 획득 규칙=bestiary.py(스트림 소비자), 본문=lore.json(수정해도 여기 불침).",
+ "두란": {
+  "monster:고블린": {
+   "turn": 44,
+   "depth": 1
+  },
+  "monster:그림자거미": {
+   "turn": 13,
+   "depth": 1
+  }
+ },
+ "카야": {
+  "monster:고블린": {
+   "turn": 42,
+   "depth": 1
+  },
+  "monster:그림자거미": {
+   "turn": 5,
+   "depth": 1
+  },
+  "trap:alarm": {
+   "turn": 72,
+   "depth": 1
+  },
+  "trap:dart": {
+   "turn": 10,
+   "depth": 1
+  }
+ },
+ "피른": {
+  "monster:고블린": {
+   "turn": 38,
+   "depth": 1
+  },
+  "monster:그림자거미": {
+   "turn": 55,
+   "depth": 1
+  },
+  "trap:alarm": {
+   "turn": 69,
+   "depth": 1
+  },
+  "trap:dart": {
+   "turn": 48,
+   "depth": 1
+  }
+ }
+}

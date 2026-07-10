@@ -1,0 +1,205 @@
+<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>원정 보고서 — watch-20260705-1324</title><style>
+:root{
+  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --line:#e1e0d9; --ring:rgba(11,11,11,.10);
+  --good:#0ca30c; --warn:#fab219; --crit:#d03b3b; --serious:#ec835a;
+  --good-ink:#006300; --hp:#2a78d6;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+    --line:#2c2c2a; --ring:rgba(255,255,255,.10); --good-ink:#0ca30c; --hp:#3987e5;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);
+  font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:880px;margin:0 auto;padding:28px 20px 60px}
+a{color:inherit}
+h1{font-size:22px;margin:0 0 2px}
+.sub{color:var(--ink2);font-size:13px;margin-bottom:14px}
+.banner{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:8px;
+  font-weight:600;font-size:14px;border:1px solid var(--ring);margin-bottom:18px}
+.banner .dot{width:10px;height:10px;border-radius:50%}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:14px 0 22px}
+.tile{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:12px 14px}
+.tile .v{font-size:24px;font-weight:650}
+.tile .l{font-size:12px;color:var(--ink2)}
+.tile .d{font-size:11.5px;color:var(--muted);margin-top:2px}
+h2{font-size:15px;color:var(--ink2);margin:26px 0 10px;letter-spacing:.02em}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:14px 16px}
+.card h3{margin:0;font-size:16px}
+.card .job{color:var(--ink2);font-size:12.5px;margin-bottom:8px}
+.hp{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:4px 0 2px}
+.hp i{display:block;height:100%;border-radius:4px;background:var(--hp)}
+.hp.dead i{background:var(--crit)}
+.hpl{font-size:12px;color:var(--ink2);margin-bottom:8px}
+.stats{font-size:12.5px;color:var(--ink2);display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.stats b{color:var(--ink);font-weight:650}
+.badges{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 8px}
+.badge{font-size:11.5px;padding:2px 8px;border:1px solid var(--ring);border-radius:999px;color:var(--ink2)}
+.badge b{color:var(--ink);font-weight:600}
+.quote{font-size:13px;margin:6px 0 0;padding-left:10px;border-left:2px solid var(--line)}
+.quote .t{color:var(--muted);font-size:11px;margin-right:4px}
+.mind{color:var(--ink2);font-style:italic}
+.tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--line)}
+.tl li{position:relative;padding:7px 0 7px 22px}
+.tl .ico{position:absolute;left:-11px;top:8px;width:20px;height:20px;border-radius:50%;
+  background:var(--surface);border:1px solid var(--ring);display:flex;align-items:center;
+  justify-content:center;font-size:11px}
+.tl .turn{color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums;margin-right:6px}
+.tl .title{font-weight:600;font-size:13.5px}
+.tl .det{color:var(--ink2);font-size:12.5px}
+.tl .q{font-size:12.5px;color:var(--ink2);margin-top:2px;padding-left:9px;border-left:2px solid var(--line)}
+.tl li.grave .title{color:var(--crit)}
+table{width:100%;border-collapse:collapse;font-size:12px;background:var(--surface);
+  border:1px solid var(--ring);border-radius:10px;overflow:hidden}
+th,td{padding:6px 9px;text-align:left;border-top:1px solid var(--line);vertical-align:top}
+thead th{border-top:none;color:var(--ink2);font-weight:600;background:var(--surface)}
+td.num{font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto;border-radius:10px}
+.foot{margin-top:26px;color:var(--muted);font-size:11.5px}
+.idx td a{text-decoration:none;font-weight:600}
+.idx .oc{font-weight:600}
+</style></head><body><div class='wrap'><h1>원더랜드 원정 보고서 <span style="color:var(--muted)">— watch-20260705-1324</span></h1>
+<div class="sub">시드 7 · 56×20 · 지하 2층 · 2026-07-05T13:24:58 · 리모컨 두뇌 판</div>
+<div class="banner"><span class="dot" style="background:var(--crit)"></span>☠ 전멸 — 153틱</div>
+<div class="tiles">
+<div class="tile"><div class="v">0</div><div class="l">처치</div><div class="d">⚔ 파티 합계</div></div>
+<div class="tile"><div class="v">1</div><div class="l">보물</div><div class="d">◆ 파티 합계</div></div>
+<div class="tile"><div class="v">3</div><div class="l">전사자</div><div class="d">☠</div></div>
+<div class="tile"><div class="v">108</div><div class="l">결정</div><div class="d">재결정 틱 수</div></div>
+<div class="tile"><div class="v">5%</div><div class="l">폴백률</div><div class="d">타임아웃 60s 4, 빈 응답 rc=1 1</div></div>
+<div class="tile"><div class="v">91</div><div class="l">발언</div><div class="d">say 수</div></div>
+</div>
+<h2>파티</h2><div class='cards'>
+<div class='card'><h3>두란</h3><div class='job'>전사 · 남</div>
+<div class='hp dead'><i style='width:0%'></i></div><div class='hpl'>☠ 전사 (t153, 고블린)</div>
+<div class='stats'><span>⚔ 처치 <b>0</b></span><span>◆ 보물 <b>0</b></span><span>피해 <b>12</b>/<b>14</b> <span style='color:var(--muted)'>(준/받은)</span></span></div>
+<div class='badges'><span class='badge'>전사</span><span class='badge'>피격 후 판단 <b>×5</b></span></div>
+<div class='quote'><span class='t'>t1</span>「카야! 여기 모여!」</div>
+<div class='quote'><span class='t'>t3</span>「피른! 나간다!」</div>
+<div class='quote'><span class='t'>t150</span>「좋지! 함께 가자, 피른!」</div>
+<div class='quote mind'><span class='t'>t1 속내</span>카야와 먼저 합류해야 한다. 흩어진 파티를 모우는 게 우선이고, 둘이 함께라면 피른을 찾을 때도 더 든든하다.</div>
+</div>
+<div class='card'><h3>카야</h3><div class='job'>도적 · 여</div>
+<div class='hp dead'><i style='width:0%'></i></div><div class='hpl'>☠ 전사 (t43, 그림자거미)</div>
+<div class='stats'><span>⚔ 처치 <b>0</b></span><span>◆ 보물 <b>0</b></span><span>피해 <b>0</b>/<b>12</b> <span style='color:var(--muted)'>(준/받은)</span></span></div>
+<div class='badges'><span class='badge'>전사</span><span class='badge'>피격 후 판단 <b>×3</b></span><span class='badge'>매복 간파</span></div>
+<div class='quote'><span class='t'>t3</span>「두란, 함께 이 주변을 살펴보자. 숨은 게 있을지 모르니까.」</div>
+<div class='quote'><span class='t'>t4</span>「피른 데려오고 올게. 여기서 기다려.」</div>
+<div class='quote'><span class='t'>t43</span>「두란! 거미가 왔어, 조심해!」</div>
+<div class='quote mind'><span class='t'>t1 속내</span>혼자보다 두란과 함께면 안전하다. 힘을 모아서 움직여야 한다.</div>
+</div>
+<div class='card'><h3>피른</h3><div class='job'>음유시인 · 남</div>
+<div class='hp dead'><i style='width:0%'></i></div><div class='hpl'>☠ 전사 (t152, 고블린)</div>
+<div class='stats'><span>⚔ 처치 <b>0</b></span><span>◆ 보물 <b>1</b></span><span>피해 <b>0</b>/<b>12</b> <span style='color:var(--muted)'>(준/받은)</span></span></div>
+<div class='badges'><span class='badge'>전사</span><span class='badge'>피격 후 판단 <b>×5</b></span></div>
+<div class='quote'><span class='t'>t4</span>「카야, 어디야? 먼저 만나자. 너의 생각을 들어야겠어.」</div>
+<div class='quote'><span class='t'>t8</span>「두란, 카야가 저쪽에 있네. 같이 가서 뭐 하는 건지 봐줄래?」</div>
+<div class='quote'><span class='t'>t152</span>「두란! 이리로 와 줄래? 이 녀석 좀 위험해.」</div>
+<div class='quote mind'><span class='t'>t1 속내</span>호기심 많은 성향대로 W쪽 미지의 길을 탐험하면서 동료들을 자연스레 만날 기회를 찾자</div>
+</div>
+</div>
+<h2>연대기</h2><ul class='tl'>
+<li><span class='ico'>👁</span><span class='turn'>t16·1층</span><span class='title'>카야 — 매복 간파</span> <span class='det'>그림자거미의 그림자를 알아챘다</span>
+</li>
+<li><span class='ico'>◎</span><span class='turn'>t16·1층</span><span class='title'>첫 조우 — 그림자거미</span> <span class='det'>도감에 기록되었다</span>
+</li>
+<li><span class='ico'>♥</span><span class='turn'>t36·1층</span><span class='title'>카야 — 맞고 멈춰 생각하다</span> <span class='det'>t35 피격 → 선택: 이동(핑)</span>
+<div class='q mind'>거미가 인접했고 둘이서 싸우는 게 혼자보다 낫다. 두란이 우릴 벽이 되어줄 수 있다.</div>
+<div class='q'>「가야지. 이놈 먼저는 못 본다만...」</div>
+</li>
+<li><span class='ico'>♥</span><span class='turn'>t37·1층</span><span class='title'>카야 — 맞고 멈춰 생각하다</span> <span class='det'>t36 피격 → 선택: 반격</span>
+<div class='q mind'>두란이 옆에 있으니 함께 쳐야 한다. 혼자 달아나면 둘 다 위험하다.</div>
+<div class='q'>「함께!」</div>
+</li>
+<li><span class='ico'>♥</span><span class='turn'>t38·1층</span><span class='title'>카야 — 맞고 멈춰 생각하다</span> <span class='det'>t37 피격 → 선택: 이동(핑)</span>
+<div class='q mind'>HP 1이라 거미 한 방에 죽는다. 두란이 거미를 막아주는 사이 피른을 찾아 파티를 재결집하는 게 살 길이다.</div>
+<div class='q'>「피른을 데려올게.」</div>
+</li>
+<li class='grave'><span class='ico'>☠</span><span class='turn'>t43·1층</span><span class='title'>카야 전사</span> <span class='det'>사인: 그림자거미 · d20 16+3=19 vs AC 13 · 피해 3</span>
+<div class='q mind'>HP 1이면 한두 대에 죽는다. 혼자는 못 이기니 두란과 합류해서 함께 대처해야 한다.</div>
+<div class='q'>「두란! 거미가 왔어, 조심해!」</div>
+</li>
+<li><span class='ico'>♥</span><span class='turn'>t46·1층</span><span class='title'>두란 — 맞고 멈춰 생각하다</span> <span class='det'>t45 피격 → 선택: 반격</span>
+<div class='q mind'>상처 입은 거미는 지금 내 옆에 있다. 끝내버리고 나서 피른을 찾아가자.</div>
+</li>
+<li><span class='ico'>♥</span><span class='turn'>t47·1층</span><span class='title'>두란 — 맞고 멈춰 생각하다</span> <span class='det'>t46 피격 → 선택: 반격</span>
+<div class='q mind'>거미를 끝내고 피른을 찾아가자. 이 놈부터 치운다.</div>
+<div class='q'>「이 놈부터 끝낸다!」</div>
+</li>
+<li><span class='ico'>◎</span><span class='turn'>t50·1층</span><span class='title'>첫 조우 — 고블린</span> <span class='det'>도감에 기록되었다</span>
+</li>
+<li><span class='ico'>▼</span><span class='turn'>t75·1층</span><span class='title'>파티 강하 — 지하 2층으로</span> <span class='det'>함께 내려간 자: 두란, 피른</span>
+</li>
+<li><span class='ico'>♥</span><span class='turn'>t113·2층</span><span class='title'>피른 — 맞고 멈춰 생각하다</span> <span class='det'>t112 피격 → 선택: 이동(핑)</span>
+<div class='q mind'>혼자가 아니라 두란과 함께 싸워야 이 고블린을 이길 수 있다.</div>
+<div class='q'>「두란, 따라간다! 함께 맞서자.」</div>
+</li>
+<li><span class='ico'>♥</span><span class='turn'>t114·2층</span><span class='title'>피른 — 맞고 멈춰 생각하다</span> <span class='det'>t113 피격 → 선택: 이동(핑)</span>
+<div class='q mind'>혼자 싸우기보다 두란과 함께 전력을 모으는 게 낫다. 이 직진의 심장이 오래 뛰려면 내가 옆에 서야 한다.</div>
+<div class='q'>「두란! 여기로 와줄래? 함께하는 게 훨씬 낫지 않을까?」</div>
+</li>
+<li><span class='ico'>♥</span><span class='turn'>t116·2층</span><span class='title'>두란 — 맞고 멈춰 생각하다</span> <span class='det'>t115 피격 → 선택: 이동(핑)</span>
+<div class='q mind'>HP가 부족해 혼자선 못 견딘다. 피른과 힘을 모아야 한다.</div>
+<div class='q'>「피른! 내가 간다!」</div>
+</li>
+<li><span class='ico'>♥</span><span class='turn'>t117·2층</span><span class='title'>두란 — 맞고 멈춰 생각하다</span> <span class='det'>t116 피격 → 선택: 이동(핑)</span>
+<div class='q mind'>혼자가 아니라 피른과 함께 싸워야 한다!</div>
+<div class='q'>「피른! 내가 간다! 함께 이 놈을 처리하자!」</div>
+</li>
+<li><span class='ico'>♥</span><span class='turn'>t120·2층</span><span class='title'>두란 — 맞고 멈춰 생각하다</span> <span class='det'>t119 피격 → 선택: 반격</span>
+<div class='q mind'>고블린이 인접해서 추격 중이다. 정면으로 맞서서 처리하고 동료를 지킨다.</div>
+<div class='q'>「이 놈 내가 처리한다!」</div>
+</li>
+<li><span class='ico'>◆</span><span class='turn'>t123·2층</span><span class='title'>피른 — 보물 획득</span> <span class='det'>길에서</span>
+</li>
+<li><span class='ico'>♥</span><span class='turn'>t147·2층</span><span class='title'>피른 — 맞고 멈춰 생각하다</span> <span class='det'>t146 피격 → 선택: 이동(핑)</span>
+<div class='q mind'>혼자선 위험하지만 두란과 함께라면 싸울 수 있어. 심장이 필요한 순간이야.</div>
+<div class='q'>「두란! 이쪽 합류해, 이 고블린을 함께 맞서자!」</div>
+</li>
+<li><span class='ico'>♥</span><span class='turn'>t151·2층</span><span class='title'>피른 — 맞고 멈춰 생각하다</span> <span class='det'>t150 피격 → 선택: 반격</span>
+<div class='q mind'>두란이 함께하자 했으니—높은 HP의 전사와 함께면 HP 2인 고블린을 충분히 무너뜨릴 수 있다.</div>
+<div class='q'>「함께 가자, 두란!」</div>
+</li>
+<li><span class='ico'>♥</span><span class='turn'>t152·2층</span><span class='title'>피른 — 맞고 멈춰 생각하다</span> <span class='det'>t151 피격 → 선택: 이동(핑)</span>
+<div class='q mind'>체력이 1밖에 없으니 싸우면 죽을 수 있다. 두란 쪽으로 물러나 함께 대처해야 한다.</div>
+<div class='q'>「두란! 이리로 와 줄래? 이 녀석 좀 위험해.」</div>
+</li>
+<li class='grave'><span class='ico'>☠</span><span class='turn'>t152·2층</span><span class='title'>피른 전사</span> <span class='det'>사인: 고블린 · d20 10+2=12 vs AC 12 · 피해 2</span>
+<div class='q mind'>체력이 1밖에 없으니 싸우면 죽을 수 있다. 두란 쪽으로 물러나 함께 대처해야 한다.</div>
+<div class='q'>「두란! 이리로 와 줄래? 이 녀석 좀 위험해.」</div>
+</li>
+<li class='grave'><span class='ico'>☠</span><span class='turn'>t153·2층</span><span class='title'>두란 전사</span> <span class='det'>사인: 고블린 · d20 18+2=20 vs AC 10 · 피해 2</span>
+</li>
+<li><span class='ico'>▣</span><span class='turn'>t153·2층</span><span class='title'>원정 결말 — 전멸</span> <span class='det'></span>
+</li>
+</ul>
+<h2>피격 후 판단 분포 (생존 판단 계측)</h2><div class='sub'>이동 8 · 반격 5</div>
+<h2>태그 원장 (증거 원문 — 22건)</h2><div class='scroll'><table><thead><tr><th>t</th><th>태그</th><th>축</th><th>대상</th><th>상세</th><th>원천</th></tr></thead><tbody>
+<tr><td class='num'>16</td><td>매복 간파 <span style='color:var(--muted)'>spotted_lurker</span></td><td>char</td><td>카야</td><td>{&quot;name&quot;: &quot;그림자거미&quot;, &quot;via&quot;: &quot;walk&quot;}</td><td class='num'>L18·e1</td></tr>
+<tr><td class='num'>16</td><td>첫 조우 <span style='color:var(--muted)'>first_encounter</span></td><td>party</td><td>party</td><td>{&quot;monster&quot;: &quot;그림자거미&quot;}</td><td class='num'>L18·e1</td></tr>
+<tr><td class='num'>36</td><td>피격 후 판단 <span style='color:var(--muted)'>hurt_decision</span></td><td>char</td><td>카야</td><td>{&quot;hurt_turn&quot;: 35, &quot;gap&quot;: 1, &quot;next&quot;: &quot;goto&quot;, &quot;next_target&quot;: &quot;b1&quot;, &quot;src&quot;: &quot;haiku&quot;}</td><td class='num'>L38</td></tr>
+<tr><td class='num'>37</td><td>피격 후 판단 <span style='color:var(--muted)'>hurt_decision</span></td><td>char</td><td>카야</td><td>{&quot;hurt_turn&quot;: 36, &quot;gap&quot;: 1, &quot;next&quot;: &quot;attack&quot;, &quot;next_target&quot;: &quot;m2&quot;, &quot;src&quot;: &quot;haiku&quot;}</td><td class='num'>L39</td></tr>
+<tr><td class='num'>38</td><td>피격 후 판단 <span style='color:var(--muted)'>hurt_decision</span></td><td>char</td><td>카야</td><td>{&quot;hurt_turn&quot;: 37, &quot;gap&quot;: 1, &quot;next&quot;: &quot;goto&quot;, &quot;next_target&quot;: &quot;b3&quot;, &quot;src&quot;: &quot;haiku&quot;}</td><td class='num'>L40</td></tr>
+<tr><td class='num'>43</td><td>전사 <span style='color:var(--muted)'>fallen</span></td><td>char</td><td>카야</td><td>{&quot;cause&quot;: &quot;그림자거미&quot;, &quot;by&quot;: &quot;monster_attack&quot;}</td><td class='num'>L45·e3</td></tr>
+<tr><td class='num'>46</td><td>피격 후 판단 <span style='color:var(--muted)'>hurt_decision</span></td><td>char</td><td>두란</td><td>{&quot;hurt_turn&quot;: 45, &quot;gap&quot;: 1, &quot;next&quot;: &quot;attack&quot;, &quot;next_target&quot;: &quot;m2&quot;, &quot;src&quot;: &quot;haiku&quot;}</td><td class='num'>L48</td></tr>
+<tr><td class='num'>47</td><td>피격 후 판단 <span style='color:var(--muted)'>hurt_decision</span></td><td>char</td><td>두란</td><td>{&quot;hurt_turn&quot;: 46, &quot;gap&quot;: 1, &quot;next&quot;: &quot;attack&quot;, &quot;next_target&quot;: &quot;m2&quot;, &quot;src&quot;: &quot;haiku&quot;}</td><td class='num'>L49</td></tr>
+<tr><td class='num'>50</td><td>첫 조우 <span style='color:var(--muted)'>first_encounter</span></td><td>party</td><td>party</td><td>{&quot;monster&quot;: &quot;고블린&quot;}</td><td class='num'>L52·e2</td></tr>
+<tr><td class='num'>75</td><td>강하 <span style='color:var(--muted)'>descended</span></td><td>party</td><td>party</td><td>{&quot;to_depth&quot;: 2, &quot;party&quot;: [&quot;1&quot;, &quot;3&quot;]}</td><td class='num'>L78</td></tr>
+<tr><td class='num'>113</td><td>피격 후 판단 <span style='color:var(--muted)'>hurt_decision</span></td><td>char</td><td>피른</td><td>{&quot;hurt_turn&quot;: 112, &quot;gap&quot;: 1, &quot;next&quot;: &quot;goto&quot;, &quot;next_target&quot;: &quot;b1&quot;, &quot;src&quot;: &quot;haiku&quot;}</td><td class='num'>L117</td></tr>
+<tr><td class='num'>114</td><td>피격 후 판단 <span style='color:var(--muted)'>hurt_decision</span></td><td>char</td><td>피른</td><td>{&quot;hurt_turn&quot;: 113, &quot;gap&quot;: 1, &quot;next&quot;: &quot;goto&quot;, &quot;next_target&quot;: &quot;b1&quot;, &quot;src&quot;: &quot;haiku&quot;}</td><td class='num'>L118</td></tr>
+<tr><td class='num'>116</td><td>피격 후 판단 <span style='color:var(--muted)'>hurt_decision</span></td><td>char</td><td>두란</td><td>{&quot;hurt_turn&quot;: 115, &quot;gap&quot;: 1, &quot;next&quot;: &quot;goto&quot;, &quot;next_target&quot;: &quot;b3&quot;, &quot;src&quot;: &quot;haiku&quot;}</td><td class='num'>L120</td></tr>
+<tr><td class='num'>117</td><td>피격 후 판단 <span style='color:var(--muted)'>hurt_decision</span></td><td>char</td><td>두란</td><td>{&quot;hurt_turn&quot;: 116, &quot;gap&quot;: 1, &quot;next&quot;: &quot;goto&quot;, &quot;next_target&quot;: &quot;b3&quot;, &quot;src&quot;: &quot;haiku&quot;}</td><td class='num'>L121</td></tr>
+<tr><td class='num'>120</td><td>피격 후 판단 <span style='color:var(--muted)'>hurt_decision</span></td><td>char</td><td>두란</td><td>{&quot;hurt_turn&quot;: 119, &quot;gap&quot;: 1, &quot;next&quot;: &quot;attack&quot;, &quot;next_target&quot;: &quot;m1&quot;, &quot;src&quot;: &quot;haiku&quot;}</td><td class='num'>L124</td></tr>
+<tr><td class='num'>123</td><td>보물 획득 <span style='color:var(--muted)'>treasure</span></td><td>char</td><td>피른</td><td>{&quot;src&quot;: &quot;walk&quot;}</td><td class='num'>L127·e1</td></tr>
+<tr><td class='num'>147</td><td>피격 후 판단 <span style='color:var(--muted)'>hurt_decision</span></td><td>char</td><td>피른</td><td>{&quot;hurt_turn&quot;: 146, &quot;gap&quot;: 1, &quot;next&quot;: &quot;goto&quot;, &quot;next_target&quot;: &quot;b1&quot;, &quot;src&quot;: &quot;haiku&quot;}</td><td class='num'>L151</td></tr>
+<tr><td class='num'>151</td><td>피격 후 판단 <span style='color:var(--muted)'>hurt_decision</span></td><td>char</td><td>피른</td><td>{&quot;hurt_turn&quot;: 150, &quot;gap&quot;: 1, &quot;next&quot;: &quot;attack&quot;, &quot;next_target&quot;: &quot;m1&quot;, &quot;src&quot;: &quot;haiku&quot;}</td><td class='num'>L155</td></tr>
+<tr><td class='num'>152</td><td>피격 후 판단 <span style='color:var(--muted)'>hurt_decision</span></td><td>char</td><td>피른</td><td>{&quot;hurt_turn&quot;: 151, &quot;gap&quot;: 1, &quot;next&quot;: &quot;goto&quot;, &quot;next_target&quot;: &quot;b1&quot;, &quot;src&quot;: &quot;haiku&quot;}</td><td class='num'>L156</td></tr>
+<tr><td class='num'>152</td><td>전사 <span style='color:var(--muted)'>fallen</span></td><td>char</td><td>피른</td><td>{&quot;cause&quot;: &quot;고블린&quot;, &quot;by&quot;: &quot;monster_attack&quot;}</td><td class='num'>L156·e2</td></tr>
+<tr><td class='num'>153</td><td>전사 <span style='color:var(--muted)'>fallen</span></td><td>char</td><td>두란</td><td>{&quot;cause&quot;: &quot;고블린&quot;, &quot;by&quot;: &quot;monster_attack&quot;}</td><td class='num'>L157·e1</td></tr>
+<tr><td class='num'>153</td><td>원정 결말 <span style='color:var(--muted)'>outcome</span></td><td>run</td><td>run</td><td>{&quot;outcome&quot;: &quot;wiped&quot;, &quot;depth&quot;: 2, &quot;survivors&quot;: [], &quot;fallen&quot;: [&quot;2&quot;, &quot;1&quot;, &quot;3&quot;], &quot;remaining&quot;: []}</td><td class='num'>L158</td></tr>
+</tbody></table></div>
+<div class='foot'>원더랜드 — 스트림(stream.jsonl)과 태그 원장에서 기계 생성(LLM 0콜). 기울임 = 에이전트의 자기 보고(속내·발언)이며 엔진 진실이 아니다.</div></div></body></html>

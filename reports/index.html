@@ -1,0 +1,83 @@
+<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>원더랜드 원정 기록 보관소</title><style>
+:root{
+  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --line:#e1e0d9; --ring:rgba(11,11,11,.10);
+  --good:#0ca30c; --warn:#fab219; --crit:#d03b3b; --serious:#ec835a;
+  --good-ink:#006300; --hp:#2a78d6;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+    --line:#2c2c2a; --ring:rgba(255,255,255,.10); --good-ink:#0ca30c; --hp:#3987e5;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);
+  font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:880px;margin:0 auto;padding:28px 20px 60px}
+a{color:inherit}
+h1{font-size:22px;margin:0 0 2px}
+.sub{color:var(--ink2);font-size:13px;margin-bottom:14px}
+.banner{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:8px;
+  font-weight:600;font-size:14px;border:1px solid var(--ring);margin-bottom:18px}
+.banner .dot{width:10px;height:10px;border-radius:50%}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:14px 0 22px}
+.tile{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:12px 14px}
+.tile .v{font-size:24px;font-weight:650}
+.tile .l{font-size:12px;color:var(--ink2)}
+.tile .d{font-size:11.5px;color:var(--muted);margin-top:2px}
+h2{font-size:15px;color:var(--ink2);margin:26px 0 10px;letter-spacing:.02em}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:14px 16px}
+.card h3{margin:0;font-size:16px}
+.card .job{color:var(--ink2);font-size:12.5px;margin-bottom:8px}
+.hp{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:4px 0 2px}
+.hp i{display:block;height:100%;border-radius:4px;background:var(--hp)}
+.hp.dead i{background:var(--crit)}
+.hpl{font-size:12px;color:var(--ink2);margin-bottom:8px}
+.stats{font-size:12.5px;color:var(--ink2);display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.stats b{color:var(--ink);font-weight:650}
+.badges{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 8px}
+.badge{font-size:11.5px;padding:2px 8px;border:1px solid var(--ring);border-radius:999px;color:var(--ink2)}
+.badge b{color:var(--ink);font-weight:600}
+.quote{font-size:13px;margin:6px 0 0;padding-left:10px;border-left:2px solid var(--line)}
+.quote .t{color:var(--muted);font-size:11px;margin-right:4px}
+.mind{color:var(--ink2);font-style:italic}
+.tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--line)}
+.tl li{position:relative;padding:7px 0 7px 22px}
+.tl .ico{position:absolute;left:-11px;top:8px;width:20px;height:20px;border-radius:50%;
+  background:var(--surface);border:1px solid var(--ring);display:flex;align-items:center;
+  justify-content:center;font-size:11px}
+.tl .turn{color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums;margin-right:6px}
+.tl .title{font-weight:600;font-size:13.5px}
+.tl .det{color:var(--ink2);font-size:12.5px}
+.tl .q{font-size:12.5px;color:var(--ink2);margin-top:2px;padding-left:9px;border-left:2px solid var(--line)}
+.tl li.grave .title{color:var(--crit)}
+table{width:100%;border-collapse:collapse;font-size:12px;background:var(--surface);
+  border:1px solid var(--ring);border-radius:10px;overflow:hidden}
+th,td{padding:6px 9px;text-align:left;border-top:1px solid var(--line);vertical-align:top}
+thead th{border-top:none;color:var(--ink2);font-weight:600;background:var(--surface)}
+td.num{font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto;border-radius:10px}
+.foot{margin-top:26px;color:var(--muted);font-size:11.5px}
+.idx td a{text-decoration:none;font-weight:600}
+.idx .oc{font-weight:600}
+</style></head><body><div class='wrap'><h1>원더랜드 — 원정 기록 보관소</h1>
+<div class='sub'>14개 원정 · 기계 생성 보고서</div>
+<div class='scroll'><table class='idx'><thead><tr><th>원정</th><th>결말</th><th>틱</th><th>파티</th><th>⚔</th><th>◆</th><th>☠</th><th>태그</th></tr></thead><tbody>
+<tr><td><a href='free_s1.html'>free_s1</a></td><td class='oc' style='color:var(--good)'>🛡 던전 돌파</td><td class='num'>98</td><td>두란·카야·피른</td><td class='num'>2</td><td class='num'>2</td><td class='num'>0</td><td class='num'>21</td></tr>
+<tr><td><a href='free_s2.html'>free_s2</a></td><td class='oc' style='color:var(--warn)'>⏳ 시간 종료</td><td class='num'>150</td><td>두란·카야·피른</td><td class='num'>2</td><td class='num'>4</td><td class='num'>1</td><td class='num'>24</td></tr>
+<tr><td><a href='free_s3.html'>free_s3</a></td><td class='oc' style='color:var(--warn)'>⏳ 시간 종료</td><td class='num'>150</td><td>두란·카야·피른</td><td class='num'>2</td><td class='num'>3</td><td class='num'>1</td><td class='num'>20</td></tr>
+<tr><td><a href='free_s4.html'>free_s4</a></td><td class='oc' style='color:var(--good)'>🛡 던전 돌파</td><td class='num'>149</td><td>두란·카야·피른</td><td class='num'>0</td><td class='num'>5</td><td class='num'>0</td><td class='num'>18</td></tr>
+<tr><td><a href='free_s5.html'>free_s5</a></td><td class='oc' style='color:var(--good)'>🛡 던전 돌파</td><td class='num'>96</td><td>두란·카야·피른</td><td class='num'>2</td><td class='num'>2</td><td class='num'>1</td><td class='num'>30</td></tr>
+<tr><td><a href='free_s6.html'>free_s6</a></td><td class='oc' style='color:var(--good)'>🛡 던전 돌파</td><td class='num'>72</td><td>두란·카야·피른</td><td class='num'>2</td><td class='num'>1</td><td class='num'>0</td><td class='num'>16</td></tr>
+<tr><td><a href='menu_s1.html'>menu_s1</a></td><td class='oc' style='color:var(--good)'>🛡 던전 돌파</td><td class='num'>52</td><td>두란·카야·피른</td><td class='num'>0</td><td class='num'>0</td><td class='num'>1</td><td class='num'>10</td></tr>
+<tr><td><a href='menu_s2.html'>menu_s2</a></td><td class='oc' style='color:var(--warn)'>⏳ 시간 종료</td><td class='num'>150</td><td>두란·카야·피른</td><td class='num'>1</td><td class='num'>5</td><td class='num'>0</td><td class='num'>16</td></tr>
+<tr><td><a href='menu_s3.html'>menu_s3</a></td><td class='oc' style='color:var(--warn)'>⏳ 시간 종료</td><td class='num'>150</td><td>두란·카야·피른</td><td class='num'>0</td><td class='num'>1</td><td class='num'>0</td><td class='num'>10</td></tr>
+<tr><td><a href='menu_s4.html'>menu_s4</a></td><td class='oc' style='color:var(--warn)'>⏳ 시간 종료</td><td class='num'>150</td><td>두란·카야·피른</td><td class='num'>0</td><td class='num'>2</td><td class='num'>0</td><td class='num'>10</td></tr>
+<tr><td><a href='menu_s5.html'>menu_s5</a></td><td class='oc' style='color:var(--good)'>🛡 던전 돌파</td><td class='num'>145</td><td>두란·카야·피른</td><td class='num'>1</td><td class='num'>3</td><td class='num'>0</td><td class='num'>22</td></tr>
+<tr><td><a href='menu_s6.html'>menu_s6</a></td><td class='oc' style='color:var(--good)'>🛡 던전 돌파</td><td class='num'>114</td><td>두란·카야·피른</td><td class='num'>1</td><td class='num'>3</td><td class='num'>0</td><td class='num'>16</td></tr>
+<tr><td><a href='state_d1smoke.html'>state_d1smoke</a></td><td class='oc' style='color:var(--muted)'>… 중단(진행 기록)</td><td class='num'>14</td><td>두란·카야·피른</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td><td class='num'>0</td></tr>
+<tr><td><a href='watch-20260705-1324.html'>watch-20260705-1324</a></td><td class='oc' style='color:var(--crit)'>☠ 전멸</td><td class='num'>153</td><td>두란·카야·피른</td><td class='num'>0</td><td class='num'>1</td><td class='num'>3</td><td class='num'>22</td></tr>
+</tbody></table></div>
+<div class='foot'>스트림·태그 원장 기반 기계 생성(LLM 0콜).</div></div></body></html>
