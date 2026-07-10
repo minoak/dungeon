@@ -1,6 +1,11 @@
 {
  "seeds": [
-  5
+  1,
+  2,
+  3,
+  4,
+  5,
+  6
  ],
  "turns": 150,
  "depths": 1,
@@ -22,53 +27,410 @@
   "3": "바드"
  },
  "runs": {
-  "persona_cross_s5": {
+  "persona_base_s1": {
    "outcome": "escaped",
-   "end_turn": 67,
+   "end_turn": 33,
    "survivors": 3,
    "deaths": 0,
-   "treasure": 2,
-   "decisions": 70,
-   "fallback": 28,
-   "fallback_rate": 0.4,
-   "says": 37,
-   "delivered": 45,
-   "switch_pairs": 67,
-   "switches": 34,
-   "churn": 0.5074626865671642,
+   "treasure": 0,
+   "decisions": 38,
+   "fallback": 4,
+   "fallback_rate": 0.10526315789473684,
+   "says": 29,
+   "delivered": 33,
+   "switch_pairs": 35,
+   "switches": 20,
+   "churn": 0.5714285714285714,
    "search_repeat": 0,
    "chars": {
     "1": {
      "attack": 0,
      "search": 0,
-     "explore": 1,
-     "goto": 12,
-     "interact": 11,
-     "decisions": 24,
-     "fallback": 11,
+     "explore": 0,
+     "goto": 11,
+     "interact": 1,
+     "decisions": 12,
+     "fallback": 0,
+     "says": 12,
+     "other": 0
+    },
+    "2": {
+     "attack": 1,
+     "search": 1,
+     "explore": 4,
+     "goto": 6,
+     "interact": 0,
+     "decisions": 12,
+     "fallback": 1,
+     "says": 6,
+     "other": 0
+    },
+    "3": {
+     "attack": 0,
+     "search": 0,
+     "explore": 3,
+     "goto": 11,
+     "interact": 0,
+     "decisions": 14,
+     "fallback": 3,
      "says": 11,
+     "other": 0
+    }
+   }
+  },
+  "persona_cross_s1": {
+   "outcome": "escaped",
+   "end_turn": 130,
+   "survivors": 3,
+   "deaths": 0,
+   "treasure": 5,
+   "decisions": 86,
+   "fallback": 6,
+   "fallback_rate": 0.06976744186046512,
+   "says": 57,
+   "delivered": 36,
+   "switch_pairs": 83,
+   "switches": 58,
+   "churn": 0.6987951807228916,
+   "search_repeat": 0,
+   "chars": {
+    "1": {
+     "attack": 0,
+     "search": 1,
+     "explore": 7,
+     "goto": 17,
+     "interact": 1,
+     "decisions": 26,
+     "fallback": 2,
+     "says": 12,
+     "other": 0
+    },
+    "2": {
+     "attack": 1,
+     "search": 1,
+     "explore": 3,
+     "goto": 14,
+     "interact": 2,
+     "decisions": 21,
+     "fallback": 2,
+     "says": 14,
+     "other": 0
+    },
+    "3": {
+     "attack": 1,
+     "search": 0,
+     "explore": 13,
+     "goto": 23,
+     "interact": 2,
+     "decisions": 39,
+     "fallback": 2,
+     "says": 31,
+     "other": 0
+    }
+   }
+  },
+  "persona_base_s2": {
+   "outcome": "timeout",
+   "end_turn": 150,
+   "survivors": 0,
+   "deaths": 1,
+   "treasure": 3,
+   "decisions": 85,
+   "fallback": 7,
+   "fallback_rate": 0.08235294117647059,
+   "says": 62,
+   "delivered": 82,
+   "switch_pairs": 82,
+   "switches": 63,
+   "churn": 0.7682926829268293,
+   "search_repeat": 0,
+   "chars": {
+    "1": {
+     "attack": 1,
+     "search": 0,
+     "explore": 7,
+     "goto": 22,
+     "interact": 0,
+     "decisions": 30,
+     "fallback": 0,
+     "says": 29,
+     "other": 0
+    },
+    "2": {
+     "attack": 2,
+     "search": 0,
+     "explore": 12,
+     "goto": 10,
+     "interact": 1,
+     "decisions": 25,
+     "fallback": 1,
+     "says": 9,
+     "other": 0
+    },
+    "3": {
+     "attack": 3,
+     "search": 0,
+     "explore": 10,
+     "goto": 16,
+     "interact": 1,
+     "decisions": 30,
+     "fallback": 6,
+     "says": 24,
+     "other": 0
+    }
+   }
+  },
+  "persona_cross_s2": {
+   "outcome": "escaped",
+   "end_turn": 127,
+   "survivors": 2,
+   "deaths": 1,
+   "treasure": 2,
+   "decisions": 56,
+   "fallback": 5,
+   "fallback_rate": 0.08928571428571429,
+   "says": 43,
+   "delivered": 63,
+   "switch_pairs": 53,
+   "switches": 39,
+   "churn": 0.7358490566037735,
+   "search_repeat": 0,
+   "chars": {
+    "1": {
+     "attack": 0,
+     "search": 0,
+     "explore": 5,
+     "goto": 15,
+     "interact": 0,
+     "decisions": 20,
+     "fallback": 1,
+     "says": 13,
+     "other": 0
+    },
+    "2": {
+     "attack": 2,
+     "search": 0,
+     "explore": 6,
+     "goto": 13,
+     "interact": 2,
+     "decisions": 23,
+     "fallback": 4,
+     "says": 17,
+     "other": 0
+    },
+    "3": {
+     "attack": 5,
+     "search": 0,
+     "explore": 3,
+     "goto": 5,
+     "interact": 0,
+     "decisions": 13,
+     "fallback": 0,
+     "says": 13,
+     "other": 0
+    }
+   }
+  },
+  "persona_base_s3": {
+   "outcome": "timeout",
+   "end_turn": 150,
+   "survivors": 0,
+   "deaths": 0,
+   "treasure": 1,
+   "decisions": 136,
+   "fallback": 9,
+   "fallback_rate": 0.0661764705882353,
+   "says": 113,
+   "delivered": 193,
+   "switch_pairs": 133,
+   "switches": 103,
+   "churn": 0.7744360902255639,
+   "search_repeat": 0,
+   "chars": {
+    "1": {
+     "attack": 1,
+     "search": 0,
+     "explore": 12,
+     "goto": 27,
+     "interact": 0,
+     "decisions": 40,
+     "fallback": 4,
+     "says": 35,
      "other": 0
     },
     "2": {
      "attack": 0,
      "search": 0,
-     "explore": 5,
-     "goto": 12,
-     "interact": 13,
-     "decisions": 30,
-     "fallback": 16,
-     "says": 12,
+     "explore": 10,
+     "goto": 35,
+     "interact": 0,
+     "decisions": 45,
+     "fallback": 2,
+     "says": 33,
      "other": 0
     },
     "3": {
+     "attack": 0,
+     "search": 0,
+     "explore": 9,
+     "goto": 42,
+     "interact": 0,
+     "decisions": 51,
+     "fallback": 3,
+     "says": 45,
+     "other": 0
+    }
+   }
+  },
+  "persona_cross_s3": {
+   "outcome": "timeout",
+   "end_turn": 150,
+   "survivors": 0,
+   "deaths": 1,
+   "treasure": 0,
+   "decisions": 109,
+   "fallback": 7,
+   "fallback_rate": 0.06422018348623854,
+   "says": 93,
+   "delivered": 140,
+   "switch_pairs": 106,
+   "switches": 75,
+   "churn": 0.7075471698113207,
+   "search_repeat": 0,
+   "chars": {
+    "1": {
+     "attack": 0,
+     "search": 0,
+     "explore": 9,
+     "goto": 29,
+     "interact": 0,
+     "decisions": 38,
+     "fallback": 2,
+     "says": 27,
+     "other": 0
+    },
+    "2": {
      "attack": 2,
      "search": 0,
-     "explore": 5,
-     "goto": 9,
+     "explore": 4,
+     "goto": 32,
      "interact": 0,
-     "decisions": 16,
+     "decisions": 38,
+     "fallback": 2,
+     "says": 36,
+     "other": 0
+    },
+    "3": {
+     "attack": 0,
+     "search": 0,
+     "explore": 11,
+     "goto": 21,
+     "interact": 1,
+     "decisions": 33,
+     "fallback": 3,
+     "says": 30,
+     "other": 0
+    }
+   }
+  },
+  "persona_base_s4": {
+   "outcome": "timeout",
+   "end_turn": 150,
+   "survivors": 0,
+   "deaths": 0,
+   "treasure": 2,
+   "decisions": 112,
+   "fallback": 4,
+   "fallback_rate": 0.03571428571428571,
+   "says": 100,
+   "delivered": 146,
+   "switch_pairs": 109,
+   "switches": 82,
+   "churn": 0.7522935779816514,
+   "search_repeat": 0,
+   "chars": {
+    "1": {
+     "attack": 0,
+     "search": 0,
+     "explore": 7,
+     "goto": 32,
+     "interact": 1,
+     "decisions": 40,
      "fallback": 1,
-     "says": 14,
+     "says": 39,
+     "other": 0
+    },
+    "2": {
+     "attack": 0,
+     "search": 0,
+     "explore": 16,
+     "goto": 28,
+     "interact": 0,
+     "decisions": 44,
+     "fallback": 2,
+     "says": 35,
+     "other": 0
+    },
+    "3": {
+     "attack": 0,
+     "search": 0,
+     "explore": 11,
+     "goto": 17,
+     "interact": 0,
+     "decisions": 28,
+     "fallback": 1,
+     "says": 26,
+     "other": 0
+    }
+   }
+  },
+  "persona_cross_s4": {
+   "outcome": "timeout",
+   "end_turn": 150,
+   "survivors": 0,
+   "deaths": 0,
+   "treasure": 2,
+   "decisions": 139,
+   "fallback": 7,
+   "fallback_rate": 0.050359712230215826,
+   "says": 124,
+   "delivered": 197,
+   "switch_pairs": 136,
+   "switches": 101,
+   "churn": 0.7426470588235294,
+   "search_repeat": 0,
+   "chars": {
+    "1": {
+     "attack": 0,
+     "search": 1,
+     "explore": 5,
+     "goto": 41,
+     "interact": 0,
+     "decisions": 47,
+     "fallback": 3,
+     "says": 40,
+     "other": 0
+    },
+    "2": {
+     "attack": 0,
+     "search": 0,
+     "explore": 13,
+     "goto": 34,
+     "interact": 1,
+     "decisions": 48,
+     "fallback": 1,
+     "says": 45,
+     "other": 0
+    },
+    "3": {
+     "attack": 0,
+     "search": 0,
+     "explore": 17,
+     "goto": 27,
+     "interact": 0,
+     "decisions": 44,
+     "fallback": 3,
+     "says": 39,
      "other": 0
     }
    }
@@ -120,6 +482,159 @@
      "decisions": 13,
      "fallback": 1,
      "says": 12,
+     "other": 0
+    }
+   }
+  },
+  "persona_cross_s5": {
+   "outcome": "escaped",
+   "end_turn": 67,
+   "survivors": 3,
+   "deaths": 0,
+   "treasure": 2,
+   "decisions": 70,
+   "fallback": 28,
+   "fallback_rate": 0.4,
+   "says": 37,
+   "delivered": 45,
+   "switch_pairs": 67,
+   "switches": 34,
+   "churn": 0.5074626865671642,
+   "search_repeat": 0,
+   "chars": {
+    "1": {
+     "attack": 0,
+     "search": 0,
+     "explore": 1,
+     "goto": 12,
+     "interact": 11,
+     "decisions": 24,
+     "fallback": 11,
+     "says": 11,
+     "other": 0
+    },
+    "2": {
+     "attack": 0,
+     "search": 0,
+     "explore": 5,
+     "goto": 12,
+     "interact": 13,
+     "decisions": 30,
+     "fallback": 16,
+     "says": 12,
+     "other": 0
+    },
+    "3": {
+     "attack": 2,
+     "search": 0,
+     "explore": 5,
+     "goto": 9,
+     "interact": 0,
+     "decisions": 16,
+     "fallback": 1,
+     "says": 14,
+     "other": 0
+    }
+   }
+  },
+  "persona_base_s6": {
+   "outcome": "escaped",
+   "end_turn": 73,
+   "survivors": 3,
+   "deaths": 0,
+   "treasure": 3,
+   "decisions": 75,
+   "fallback": 8,
+   "fallback_rate": 0.10666666666666667,
+   "says": 64,
+   "delivered": 107,
+   "switch_pairs": 72,
+   "switches": 53,
+   "churn": 0.7361111111111112,
+   "search_repeat": 0,
+   "chars": {
+    "1": {
+     "attack": 1,
+     "search": 0,
+     "explore": 4,
+     "goto": 19,
+     "interact": 1,
+     "decisions": 25,
+     "fallback": 3,
+     "says": 20,
+     "other": 0
+    },
+    "2": {
+     "attack": 0,
+     "search": 1,
+     "explore": 5,
+     "goto": 17,
+     "interact": 1,
+     "decisions": 24,
+     "fallback": 2,
+     "says": 21,
+     "other": 0
+    },
+    "3": {
+     "attack": 0,
+     "search": 0,
+     "explore": 4,
+     "goto": 22,
+     "interact": 0,
+     "decisions": 26,
+     "fallback": 3,
+     "says": 23,
+     "other": 0
+    }
+   }
+  },
+  "persona_cross_s6": {
+   "outcome": "escaped",
+   "end_turn": 106,
+   "survivors": 3,
+   "deaths": 0,
+   "treasure": 1,
+   "decisions": 107,
+   "fallback": 11,
+   "fallback_rate": 0.102803738317757,
+   "says": 89,
+   "delivered": 155,
+   "switch_pairs": 104,
+   "switches": 77,
+   "churn": 0.7403846153846154,
+   "search_repeat": 0,
+   "chars": {
+    "1": {
+     "attack": 2,
+     "search": 0,
+     "explore": 5,
+     "goto": 24,
+     "interact": 0,
+     "decisions": 31,
+     "fallback": 4,
+     "says": 22,
+     "other": 0
+    },
+    "2": {
+     "attack": 0,
+     "search": 0,
+     "explore": 8,
+     "goto": 20,
+     "interact": 2,
+     "decisions": 30,
+     "fallback": 4,
+     "says": 26,
+     "other": 0
+    },
+    "3": {
+     "attack": 4,
+     "search": 0,
+     "explore": 10,
+     "goto": 31,
+     "interact": 1,
+     "decisions": 46,
+     "fallback": 3,
+     "says": 41,
      "other": 0
     }
    }
