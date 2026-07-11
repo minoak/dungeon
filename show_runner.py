@@ -178,8 +178,18 @@ def act_summary(res):
     """봇 한 행동/자동보행 결과를 한 줄 요약 — 로그/이벤트 공용."""
     t = res["type"]
     if t == "goto":
+        if res["result"] == "blocked" and res.get("allies"):   # D18: 동료發 대우회 — 멈춰 보고
+            return "%s — 동료(%s)가 길목에 서 있어 크게 돌아야 함, 멈춰 보고" % (
+                res.get("target", "?"), ", ".join(a["name"] for a in res["allies"]))
         tag = {"pathed": "핑 -> 자동보행 개시", "arrived": "이미 곁에", "no_path": "길이 없다"}
         return "%s %s" % (res.get("target", "?"), tag.get(res["result"], res["result"]))
+    if t == "follow":                                          # 동행(D18 A-5)
+        r = res["result"]
+        allies = ", ".join(a["name"] for a in res.get("allies", []))
+        tag = {"pathed": "동행 개시 -> %s 곁으로" % res.get("target", "?"),
+               "following": "동행 개시 — 이미 곁, 따라 걷는다 (%s)" % res.get("target", "?"),
+               "blocked": "동행 — 동료(%s)가 길목을 막아 멈춰 보고" % allies}
+        return tag.get(r, "동행(%s)" % r)
     if t == "explore":
         r = res["result"]
         if r == "pathed":
@@ -208,6 +218,12 @@ def act_summary(res):
             return "보행 정지 — " + (" / ".join(bits) or "조우")
         if r == "blocked" and res.get("monsters"):     # D1 개정: 보이는 몹의 길목 점거 = 멈춰 보고
             return "길 막힘 — %s가 길목을 점거" % ", ".join(m["kind"] for m in res["monsters"])
+        if r == "blocked" and res.get("allies"):       # D18: 동료發 대우회 — 멈춰 보고
+            return "길 막힘 — 동료(%s)가 길목에 서 있어 크게 돌아야 함" % \
+                ", ".join(a["name"] for a in res["allies"])
+        if r == "following":                           # 동행(D18 A-5) — 지속 order, 완결 아님
+            tgt = str(res.get("target", "?")).replace("follow:", "")
+            return ("%s 곁을 따라 걷는다" if res.get("to") else "%s 곁을 지키며 따른다") % tgt
         tag = {"walking": "자동보행", "arrived": "도착", "at_exit": "계단 앞에 섰다",
                "treasure": "$ 획득", "blocked": "길 막힘"}
         if r == "arrived" and "to" not in res:         # 움직이는 목표(몹·동료) 곁 도달 = 걷기 전 완료

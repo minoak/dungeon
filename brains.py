@@ -42,7 +42,7 @@ if os.environ.get("DUNGEON_MENU", "1") != "0" and not MENU_PROMPT:
 CLAUDE_BIN = "claude.exe"
 TIMEOUT = 60   # 콜드스타트 ~8초라 넉넉
 
-_TYPES = {"goto", "attack", "interact", "search", "explore"}
+_TYPES = {"goto", "attack", "interact", "search", "explore", "follow"}
 _BEARINGS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW"}
 
 
@@ -188,7 +188,7 @@ def _then(obj, obs):
                     step = {"type": typ, "target": tgt}
         else:
             pick = _pick({"choice": item}, obs)   # 메뉴 번호 관용 — 엔진 열거 행동이라 환각 무해
-            if pick:
+            if pick and pick.get("type") != "follow":   # 동행=열린 결말 — 작정 수로 부적합(D18 A-5)
                 step = {k: pick[k] for k in ("type", "target") if k in pick}
         if not step:
             break
@@ -232,6 +232,8 @@ def claude_brain(obs, char="?", bot=None, roster=None):
         if MENU:
             act = _pick(obj, obs)
             if act:
+                if act["type"] == "follow":
+                    then = []                       # 동행=열린 결말 — then 뒤수 부적합(D18 A-5)
                 return {**act,
                         **({"then": then} if then else {}),
                         "say": str(obj.get("say", ""))[:160],
@@ -245,7 +247,11 @@ def claude_brain(obs, char="?", bot=None, roster=None):
             typ = "explore" if tgt.upper() in _BEARINGS else "goto"   # 방위만 준 응답 = 탐색 의도
         if typ == "goto" and not tgt:
             typ = "explore"                         # 목표 없는 goto = 탐색으로 강등(폴백行 방지)
+        if typ == "follow" and tgt and tgt[:1] != "b":
+            tgt = "b" + tgt                         # 동행 '2' → 'b2' 관용(자유서술 흔들림 흡수)
         if typ in _TYPES:
+            if typ == "follow":
+                then = []                           # 동행=열린 결말 — then 뒤수 부적합(D18 A-5)
             out = {"type": typ,
                    **({"then": then} if then else {}),
                    "say": str(obj.get("say", ""))[:160],

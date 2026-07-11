@@ -15,10 +15,13 @@
 - events: 이 턴에 실제로 일어난 일들의 배열. type 별로:
   · goto / explore : 목표를 정해 걷기 시작함(핑). result=pathed(출발)/arrived(이미 곁)/no_path.
                 explore 는 미지의 통로를 향한 탐색(to_exit=true 면 더 볼 곳이 없어 계단으로 향함).
+                goto 의 blocked+allies[] = 동료가 길목에 서 있어 크게 돌아야 해 멈춰 보고한 것(대치 아님 — 일행의 순간).
+  · follow    : 동행 개시 — 동료 곁을 따라 걷는 지속 명령. result=pathed(곁으로 출발)/following(이미 곁)/blocked(동료가 길목을 막음).
   · walk      : 자동보행 한 걸음. result = walking(걷는 중) / arrived(도착 — to 없이 target만 있으면
                 움직이는 상대(몹·동료) 곁에 다다라 멈춘 것) / lost(쫓던 상대·노리던 것을 마지막 본
                 자리에서 놓침 — 곁에 없다. 시야 밖이면 허탕, 비껴 보이면 대치 — 없는 조우를 지어내지
-                마라) / treasure(길에서 보물 획득)
+                마라) / following(동행 중 — 동료 곁을 지키거나 따라 걷는 한 걸음, 명령은 계속된다)
+                / treasure(길에서 보물 획득)
                 / at_exit(계단 앞에 섬) / blocked(길 막힘 — monsters[]가 붙으면 그 몹이 길목을
                 점거하고 버티는 것: 대치의 순간) / encounter(**보행 정지** — 아래 필드로 사연):
                 ※ 모험가는 이미 아는 적 곁을 제 뜻대로 지나가고 벗어난다 — 걸음을 세우는 건

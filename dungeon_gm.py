@@ -772,6 +772,10 @@ class Dungeon:
                 _add('goto', 'b%s' % p['char'],        # 안 보이는 동료 = 등급 미병기(시야-온리)
                      '찾아가기: %s(봇%s) — 지금 안 보임(파티 감각으로 접근)'
                      % (names.get(p['char'], '동료'), p['char']))
+        for a in allies:                               # 동행(D18 A-5) — 보이는 동료마다 지속 order
+            _add('follow', a['id'],
+                 '동행: %s(봇%s) 곁을 따라 걷는다 — 새 일이 생기면 멈추고 묻는다'
+                 % (names.get(a['char'], '동료'), a['char']))
         # 수색 라벨 — 지금 살필 반경이 전부 '이미 살핀 곳'이면 그 사실을 붙인다(자기 행동 기억).
         # A/B 실측에서 이 주석 없이는 같은 자리 수색 반복 평균 70회(수색 합창 루프)로 판이 죽었다.
         s_seen = self.visible_cells(cx, cy, bot.get('search_r', 1))
@@ -859,8 +863,9 @@ class Dungeon:
         typ = (action or {}).get('type', 'goto')
         tgt = (action or {}).get('target')
         if 'then' in (action or {}):              # 작정 접수 — 저작 검증(시야-온리)은 brains 소관,
-            bot['plan'] = [dict(s) for s in (action.get('then') or [])
-                           if isinstance(s, dict) and s.get('type')][:PLAN_MAX]
+            bot['plan'] = ([] if typ == 'follow'  # 동행(A-5)은 열린 결말 — then 뒤수 부적합(비움)
+                           else [dict(s) for s in (action.get('then') or [])
+                                 if isinstance(s, dict) and s.get('type')][:PLAN_MAX])
         if typ == 'attack':
             res = self._attack(bot, tgt, bots)
         elif typ == 'interact':
@@ -869,6 +874,8 @@ class Dungeon:
             res = self._search(bot)
         elif typ == 'explore':
             res = self._set_explore(bot, tgt, bots)   # 탐색(선택적 방위 tgt)
+        elif typ == 'follow':
+            res = self._set_follow(bot, tgt, bots)    # 동행(D18 A-5) — 곁 유지 지속 order
         else:
             res = self._set_order(bot, tgt, bots)     # goto(기본)
         self._note_last(bot, res)
@@ -1003,6 +1010,38 @@ class Dungeon:
                                for o in jam]}
         return {**base, 'result': 'pathed', 'len': len(path)}
 
+    def _set_follow(self, bot, target_id, bots):
+        """동행(D18 A-5) 개시: order='follow:b<char>' — 곁(체비셰프≤1)을 유지하며 따라 걷는
+        지속 order(도착 개념 없음 — 열린 결말이라 작정(then)을 못 잇는다, act 가 비운다).
+        곁이면 이 틱은 대기부터(following), 아니면 대상 현재 좌표로 경로. 매 틱 재경로는
+        _step_order 의 A-2 블록이 공유 담당. 무효/도달불가 대상은 goto 와 대칭(explore 폴백).
+        · 곁 대기 중 대상이 모퉁이 너머로 사라지면(잔여 path 없음) 즉시 lost — 정직 보고.
+          재개는 에이전트의 몫('찾아가기' goto b<char> = 파티 감각 통로가 이미 있다).
+        · 상호 동행(둘이 서로 follow)은 제자리 대기 고착 — 인터럽트(몹 출현·피격)와 max_turns 가
+          종결을 보장하나, 관찰되면 재론 카드(사회층에서 '누가 이끄나'로 풀 문제)."""
+        s = str(target_id or '')
+        tid = s if s[:1] == 'b' else 'b%s' % s           # 'b2'/'2' 관용(자유서술 흔들림 흡수)
+        resolved = self._resolve_target(tid, bots)
+        if resolved is None or resolved[0] != 'bot':
+            return self._set_explore(bot, None, bots)    # 무효 대상 → 탐색(무효 핑과 대칭)
+        tx, ty = resolved[1]
+        base = {'char': bot['char'], 'type': 'follow', 'target': tid}
+        if self._beside(bot, (tx, ty), 'bot'):
+            bot['order'], bot['path'] = 'follow:' + tid, []
+            return {**base, 'result': 'following'}
+        path = self.path_to(bot['x'], bot['y'], tx, ty, bots)
+        if not path:
+            return self._set_explore(bot, None, bots)    # 도달불가 → 탐색 폴백(재핑 livelock 차단)
+        jam = self._ally_jam(bot, tx, ty, path, bots)
+        if jam:                                          # 동료發 대우회 — A-0과 동형 blocked
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            self._perceive(bot)
+            return {**base, 'result': 'blocked',
+                    'allies': [{'char': o['char'], 'name': o.get('name') or o['job']}
+                               for o in jam]}
+        bot['order'], bot['path'] = 'follow:' + tid, path
+        return {**base, 'result': 'pathed', 'len': len(path)}
+
     def _set_explore(self, bot, direction, bots):
         """탐색 폴백(v3): 지금 보이는 '미지로 트인 출입구' 중 *도달 가능*한 걸 골라 자동보행.
         안 밟은(발자국 없는) 곳 우선 = 발자국 가지치기(왕복 방지). direction 주면 그 방위 우선.
@@ -1060,9 +1099,25 @@ class Dungeon:
         # 안 끝난다(목표가 매 턴 움직여 경로가 계속 갱신) — 봇이 못 멈추면 재결정이 없고, 재결정이
         # 없으면 공격도 없다: 구 정지 규칙 삭제 후 '전사 돌격 vs 추격몹'이 서로 한 대도 못 때리는
         # 위상잠금 궤도 실측(seed2, 39,5↔40,5 진동). 도착=목표상태변화 인터럽트의 한 형태(D2 정합).
-        res0 = self._resolve_target(bot.get('order'), bots)
+        order_s = str(bot.get('order') or '')
+        follow = order_s.startswith('follow:')            # 동행(A-5): 'follow:b<char>' 지속 order
+        tid = order_s[7:] if follow else bot.get('order')
+        res0 = self._resolve_target(tid, bots)
+        if follow and (res0 is None or res0[0] != 'bot'):
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            self._perceive(bot)               # 동행 대상 사망/하강 — 해석 실패 = lost(허탕 의미론)
+            return {**base, 'result': 'lost'}
         if (res0 and res0[0] in ('monster', 'bot')
                 and self._beside(bot, res0[1], res0[0])):
+            if follow:                        # 곁 유지 — 이 틱은 대기, order 지속(도착 개념 없음)
+                bot['path'] = []
+                newly = self._perceive(bot)   # 대기 중에도 눈은 뜨고 — 새 것이 보이면 멈춰 묻는다
+                if newly:
+                    bot['order'], bot['path'], bot['plan'] = None, [], []
+                    return {**base, 'result': 'encounter',
+                            'monsters': [{'id': 'm%d' % m.id, 'kind': m.kind, 'state': m.state}
+                                         for m in newly]}
+                return {**base, 'result': 'following'}
             bot['order'], bot['path'] = None, []
             self._perceive(bot)               # 교전/합류 거리 도달 — 눈뜨고 재결정(거짓 매복 방지)
             return {**base, 'result': 'arrived'}
@@ -1104,7 +1159,8 @@ class Dungeon:
                 return {**base, 'result': 'blocked',
                         'monsters': [{'id': 'm%d' % blocker.id, 'kind': blocker.kind,
                                       'state': blocker.state}]}
-            res = self._resolve_target(bot['order'], bots)     # 동료·은닉몹 점거 → 재경로 1회
+            res = self._resolve_target(tid, bots)              # 동료·은닉몹 점거 → 재경로 1회
+                                                               #   (동행이면 tid='b<char>' — 원 대상)
             bot['path'] = self.path_to(bot['x'], bot['y'], res[1][0], res[1][1], bots) if res else []
             jam = (self._ally_jam(bot, res[1][0], res[1][1], bot['path'], bots)
                    if res else None)          # 재경로가 동료發 대우회면 여기서도 멈춰 묻는다(D18)
@@ -1166,8 +1222,15 @@ class Dungeon:
         구판(07-05~07-10)은 동료도 직교만 곁으로 쳐서 대각 비껴섬이 lost 로 났다.
         exit·탐색 셀(@)은 자리 자체가 목표라 무조건 arrived. 자기가 주운 보물은 여기 안 온다 —
         step_order 의 treasure 분기가 path 소진 시 order 를 그 자리에서 완결한다.)"""
-        bot['order'], bot['path'] = None, []
         s = str(base.get('target') or '')
+        if s.startswith('follow:'):                   # 동행(A-5): 경로 소진은 완결이 아니다 —
+            res = self._resolve_target(s[7:], bots)
+            if res and self._beside(bot, res[1], 'bot'):
+                bot['path'] = []                      #   곁이면 지속(다음 틱 대기/재경로)
+                return {**base, 'result': 'following'}
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            return {**base, 'result': 'lost'}         #   유령 좌표 허탕/대상 소멸 — 동행 끝
+        bot['order'], bot['path'] = None, []
         if s[:1] in ('m', 'b') and s[1:]:
             res = self._resolve_target(base['target'], bots)
             if not (res and self._beside(bot, res[1], res[0])):
