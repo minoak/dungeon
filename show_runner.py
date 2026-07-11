@@ -350,6 +350,8 @@ def main():
     sw.emit("run_meta", v=1, started=time.strftime("%Y-%m-%dT%H:%M:%S"),
             seed=DUNGEON_SEED, w=DUNGEON_W, h=DUNGEON_H, depths=DEPTHS,
             monsters=N_MON, traps=N_TRAP, lurkers=N_LURK,
+            sight=G.SIGHT,             # 시야 반경(DUNGEON_SIGHT) — 굴림 수를 바꾸는 세계 물리
+                                       #   (리플레이·판 비교의 전제, seed 와 같은 급)
             max_turns=MAX_TURNS, gm=GM_ON,
             stream_obs=os.environ.get("DUNGEON_STREAM_OBS") == "1",   # decisions 에 obs 동봉 여부(스키마 판별용)
             menu=brains.MENU,          # 리모컨(번호 선택) 여부 — decisions 에 choice 가 실리는지 판별용

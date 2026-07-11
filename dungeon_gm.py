@@ -22,6 +22,7 @@
   · 시드 RNG 스트림 일원화(self.rng) — 모든 굴림 경유, 마스터→깊이별 파생 = 재현성.
 """
 
+import os
 import random
 from collections import deque
 
@@ -62,7 +63,11 @@ MOVES = {'N': (0, -1), 'S': (0, 1), 'E': (1, 0), 'W': (-1, 0),
          'NE': (1, -1), 'NW': (-1, -1), 'SE': (1, 1), 'SW': (-1, 1)}   # 8방향(대각선 포함)
 
 # ── Stage 2b 인식·기습 상수 (튜닝 가능 — 설계 검토 후 확정값) ─────────────
-MON_SIGHT = 3            # 몹 시야 반경 = 봇과 대칭(visible_cells 공유)
+# 시야 반경 = 세계의 단일 물리량(봇 관측·봇 인지·몹 시야·목격 전부 이 한 자로 잰다 — 대칭).
+# 기본 3→5 확장(2026-07-11 민옥 지시: "맵이 작아서 일부러 제한했는데 너무 좁다").
+# 반경 5(11×11)면 생성기 방(5~9×3~5)이 거의 항상 한눈에 들어온다. env 노브로 실험 가능.
+SIGHT = max(1, int(os.environ.get('DUNGEON_SIGHT', '5') or 5))
+MON_SIGHT = SIGHT        # 몹 시야 반경 = 봇과 대칭(visible_cells 공유) — SIGHT 의 별칭
 DETECT_DC_BASE = 13      # 발각굴림 기준 DC(+은신). 전사 DC13·도적 DC17. (DC10은 전사 기습 6%로 사실상 불가 → 13)
 WANDER_DETECT_BONUS = 2  # WANDERING 몹은 발각 +2(SLEEPING보다 경계). (+4는 즉시추격 → +2로 완화)
 LOSE_GRACE = 3           # HUNTING→WANDERING 강등: LOS 상실 연속 이만큼이면 추적 포기(숨바꼭질)
@@ -649,7 +654,7 @@ class Dungeon:
         v = 'S' if dy > 0 else ('N' if dy < 0 else '')
         return (v + h) or '-'
 
-    def visible_cells(self, cx, cy, r=3):
+    def visible_cells(self, cx, cy, r=SIGHT):
         """(cx,cy)이 지금 보는 칸 집합 — (2r+1)² 중 벽에 안 가린 칸(LOS). 대칭(A↔B)."""
         cells = set()
         for dy in range(-r, r + 1):
@@ -659,7 +664,7 @@ class Dungeon:
                     cells.add((x, y))
         return cells
 
-    def view(self, bot, bots, r=3):
+    def view(self, bot, bots, r=SIGHT):
         """봇 obs = '지각된 오브젝트 목록'(시야-온리). 칸 운전 어휘(frontier/directions/room_info) 폐기.
         v3: 출구도 beacon 아님 — 보일 때만 등장(안 보이면 sights['exit']=None).
         ways = 지금 보이는 '미지로 트인 출입구'(탐색 폴백 대상). ascii_view 는 관전/그라운딩용.

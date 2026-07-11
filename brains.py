@@ -301,7 +301,9 @@ def _wire(obs, names=None):
         L.append("- 진행 중이던 핑: %s" % obs["order"])
 
     if OBS_ASCII and obs.get("ascii_view"):
-        L += ["", "## 주변 그림 (7×7 — 가운데 @가 너, 빈칸은 벽 뒤라 안 보이는 곳)", "```"]
+        n = len(obs["ascii_view"])
+        L += ["", "## 주변 그림 (%d×%d — 가운데 @가 너, 빈칸은 벽 뒤라 안 보이는 곳)"
+              % (n, n), "```"]
         L += list(obs["ascii_view"])
         L += ["```",
               "기호: # 벽 · . 바닥 · , 발자국 · $ 보물 · > 계단 · M 몬스터"

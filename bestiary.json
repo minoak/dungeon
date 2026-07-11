@@ -8,6 +8,10 @@
   "monster:그림자거미": {
    "turn": 13,
    "depth": 1
+  },
+  "trap:dart": {
+   "turn": 12,
+   "depth": 1
   }
  },
  "카야": {
