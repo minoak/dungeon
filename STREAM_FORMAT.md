@@ -37,6 +37,7 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 | `bestiary` | **판 시작 시점**의 캐릭터별 도감 `{이름: [종키…]}`(2026-07-05 additive — D9 도감). 도감은 obs(`monsters[].kind` 가 미등재면 `낯선 짐승`, 등재면 원명+`lore`)를 바꿔 LLM 결정에 영향을 주므로, **같은 시드라도 시작 도감이 다르면 다른 판**이다 — 리플레이·A/B 비교는 이 필드까지 맞춰야 한다. 획득 규칙=bestiary.py(스트림 소비자). 오프라인 소급(bestiary.replay/CLI)은 **이 필드를 시작 지식으로 시드**한 뒤 증분을 재생한다 — 그래야 이월 판에서도 '같은 스트림→같은 원장'(순수 투영)이 성립 |
 | `bestiary_file` | 도감 원장 영속 여부(bool, `DUNGEON_BESTIARY_FILE`) — gm/menu 와 같은 실행모드 메타(스트림 내용엔 위 `bestiary` 초기값을 통해서만 영향) |
 | `ledger` | 공간 장부(D17-1) 여부(bool, `DUNGEON_LEDGER`, 기본 true — 2026-07-11 additive). true 면 obs 에 `known`(장부 투영: statics/last_seen/zones — **좌표 없음**, 구역·목격 turn 만)과 '돌아가기' 옵션이 실려 LLM 결정에 영향 — bestiary 처럼 **리플레이·A/B 는 이 필드까지 맞춰야 한다**. 장부 자체는 봇 스냅샷 화이트리스트 밖(직전 틱들의 스냅샷·시야에서 파생 가능 = 새 원천 없음). 층 전이 때 새 원장(층의 기억) |
+| `obs_ascii` / `obs_pos` | wire 직렬화 스위치(D17-4, 2026-07-11 additive — `DUNGEON_OBS_ASCII` 기본 0·`DUNGEON_OBS_POS` 기본 1). **obs dict 는 불변**(ascii_view·pos 는 스트림에 그대로) — LLM 프롬프트 표현에서 뺐는지의 실행모드 메타. 프롬프트 재현·프로브 비교 시 이 필드까지 맞춰야 한다 |
 
 ### `level` — 층(depth) 진입마다 (첫 층 포함. `descend` 직후엔 반드시 이 라인)
 | 필드 | 내용 |

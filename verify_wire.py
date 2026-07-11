@@ -214,20 +214,19 @@ def fresh_obs():
 
 def switch_checks():
     obs, _ = fresh_obs()
-    on = brains._wire(obs, NAMES)
-    check("④ 기본(켬): 그림 섹션+좌표 줄 존재",
-          "## 주변 그림" in on and "- 좌표:" in on)
+    base = brains._wire(obs, NAMES)
+    check("④ 기본(ascii 끔·pos 켬 — 07-11 프로브 판정): 그림 부재+좌표 존재",
+          "## 주변 그림" not in base and "```" not in base and "- 좌표:" in base)
     sa, sp = brains.OBS_ASCII, brains.OBS_POS
     try:
-        brains.OBS_ASCII = False
-        no_a = brains._wire(obs, NAMES)
-        check("④ OBS_ASCII=0: 그림 섹션 부재(좌표는 유지)",
-              "## 주변 그림" not in no_a and "```" not in no_a and "- 좌표:" in no_a)
         brains.OBS_ASCII = True
+        with_a = brains._wire(obs, NAMES)
+        check("④ OBS_ASCII=1: 그림 섹션 존재(스위치 살아있음)",
+              "## 주변 그림" in with_a and "- 좌표:" in with_a)
+        brains.OBS_ASCII = False
         brains.OBS_POS = False
         no_p = brains._wire(obs, NAMES)
-        check("④ OBS_POS=0: 좌표 줄 부재(그림은 유지)",
-              "- 좌표:" not in no_p and "## 주변 그림" in no_p)
+        check("④ OBS_POS=0: 좌표 줄 부재", "- 좌표:" not in no_p)
     finally:
         brains.OBS_ASCII, brains.OBS_POS = sa, sp
 

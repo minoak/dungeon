@@ -40,8 +40,10 @@ if os.environ.get("DUNGEON_MENU", "1") != "0" and not MENU_PROMPT:
 
 # D17-4 직렬화 스위치: LLM 에게 보내는 obs 표현(wire)에서 큰 덩어리를 한 변수씩 끄는 노브.
 # obs dict 자체(스트림·BYO·검증 계약)는 불변 — 여기는 '보여주는 방법'만 만진다(options 선례).
-OBS_ASCII = os.environ.get("DUNGEON_OBS_ASCII", "1") != "0"   # 7×7 그림+기호 줄
-OBS_POS = os.environ.get("DUNGEON_OBS_POS", "1") != "0"       # 생좌표 pos 줄
+# ascii 기본 0 = 2026-07-11 프로브 판정(조우·궁지·로어주입 ×8콜, 사전등록 "지지만 않으면
+# 채택"): 전 지표 동질 — sights 문장만으로 공간 판단 유지("7×7 그림은 인간용" §8 인사이트 실증).
+OBS_ASCII = os.environ.get("DUNGEON_OBS_ASCII", "0") != "0"   # 7×7 그림+기호 줄(기본 끔)
+OBS_POS = os.environ.get("DUNGEON_OBS_POS", "1") != "0"       # 생좌표 pos 줄(실험 전 — 기본 켬)
 
 # WSL 인터롭 네이티브 exe. npm 래퍼(claude)는 stdin 대기로 멈추므로 .exe 고정.
 CLAUDE_BIN = "claude.exe"
