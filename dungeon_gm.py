@@ -29,6 +29,18 @@ WALL, FLOOR, EXIT, TREASURE, MONSTER, TRAP = '#', '.', '>', '$', 'M', '^'
 CHEST, FOUNTAIN = '=', '~'      # 방 콘텐츠(Stage 3): 상자(도박)·샘(회복 도박)
 LURKER, HIDDEN = 'm', '*'       # 관전자 전용(극적 아이러니): 숨은 적/숨은 보물. 봇 시야(view)엔 절대 안 나간다.
 UNKNOWN_BEAST = '낯선 짐승'     # 도감(D9) 미등재 몬스터의 obs 표기 — 보이지만 정체를 모른다.
+
+
+def _wound_label(hp, maxhp):
+    """육안 부상 등급(D18 A-4) — 남의 숫자 HP는 볼 수 없다: 겉보기 어휘 4단 고정(튜닝마라).
+    빈사 경계 1/3 은 몹 도주 경계(FLEE_FRAC)와 같은 눈금 — 세계가 한 자로 잰다. 순수 파생(굴림 없음)."""
+    if hp >= maxhp:
+        return '멀쩡'
+    if hp * 3 <= maxhp:
+        return '빈사'
+    if hp * 3 <= maxhp * 2:
+        return '다침'
+    return '가벼운 상처'
 # EXIT 글리프 = '>' (구 'E'는 이동방향 East와 충돌 → '>'로 분리). 봇은 'E'를 출구로 영영 안 본다.
 VISITED = ','   # 시야에서 '이미 가본 바닥' 표시 (파티 공유 발자국). 단일폭 ASCII.
 # 바닥은 '.'(ASCII 폭1) — 가운뎃점 '·'(U+00B7)은 ambiguous-width라 한글 폰트에서
@@ -692,7 +704,9 @@ class Dungeon:
                     if (ex, ey) in seen else None)
         ways = [{k: w[k] for k in ('bearing', 'dist', 'visited')}   # 미지로 트인 출입구(셀좌표는 엔진만 보유)
                 for w in self._ways(cx, cy, seen)]
-        allies = [{'id': 'b%s' % b['char'], 'char': b['char'], **bear(b['x'], b['y'])}
+        allies = [{'id': 'b%s' % b['char'], 'char': b['char'],
+                   'condition': _wound_label(b['hp'], b['maxhp']),   # 겉보기 부상 등급(A-4) —
+                   **bear(b['x'], b['y'])}                           #   보이는 동료만(시야-온리)
                   for b in bots
                   if b['alive'] and not b['won'] and b['char'] != bot['char']
                   and (b['x'], b['y']) in seen]
@@ -750,11 +764,12 @@ class Dungeon:
         for a in allies:
             if a['adj']:
                 continue        # 이미 곁(직교 인접)의 동료 '합류'는 no-op — 다른 adj 분기와 대칭
-            _add('goto', a['id'], '합류: %s(봇%s) — %s, 거리 %d'
-                 % (names.get(a['char'], '동료'), a['char'], a['bearing'], a['dist']))
+            _add('goto', a['id'], '합류: %s(봇%s) — %s, %s, 거리 %d'
+                 % (names.get(a['char'], '동료'), a['char'], a['condition'],
+                    a['bearing'], a['dist']))          # 등급 병기(A-4) — 빈사 동료가 눈에 밟히게
         for p in party:
             if p['alive'] and not p['won'] and p['char'] not in vis_allies:
-                _add('goto', 'b%s' % p['char'],
+                _add('goto', 'b%s' % p['char'],        # 안 보이는 동료 = 등급 미병기(시야-온리)
                      '찾아가기: %s(봇%s) — 지금 안 보임(파티 감각으로 접근)'
                      % (names.get(p['char'], '동료'), p['char']))
         # 수색 라벨 — 지금 살필 반경이 전부 '이미 살핀 곳'이면 그 사실을 붙인다(자기 행동 기억).

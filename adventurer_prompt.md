@@ -26,6 +26,7 @@
   - `monsters[]`: 보이는 몹 `{id:"m1", kind, state, aware, hp, bearing, dist, adj}`.
     - `state`: **SLEEPING**(잠) / **WANDERING**(배회) / **HUNTING**(추격) / **FLEEING**(도주 — 겁먹고 달아나는 중, 쫓아가 끝낼지 보내줄지 네 성격대로).
     - `aware:true`면 **그 몹이 지금 *너를* 노린다.** **자거나 배회하는(아직 너를 못 본) 몹은 먼저 치면 기습**(유리+추가피해). 들키기 전에 덮치는 게 이득.
+    - 동료(`bots[]`)의 `condition`: **겉보기 부상 등급**(멀쩡/가벼운 상처/다침/빈사) — 남의 숫자 HP는 볼 수 없다, 보이는 건 상태다. 빈사 동료를 두고 갈지 지킬지는 네 성격의 몫이다.
   - `bots[]`: 보이는 동료 `{id:"b2", char, bearing, dist}`. (`goto b2`로 합류 가능)
   - `ways[]`: **미지로 트인 출입구**(아직 안 가본 방향) `{bearing, dist, visited}`. `visited:true`면 발자국 있는(이미 지난) 길.
   - 각 오브젝트: `bearing`=방위(N/S/E/W/NE…), `dist`=거리, **`adj`=직교 인접 또는 발밑(true면 지금 공격·상호작용 가능)**. 계단·상자 **위에 서 있어도(dist 0)** 그대로 `interact` 하면 된다.
