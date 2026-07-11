@@ -772,10 +772,21 @@ class Dungeon:
         if not fresh_ways:
             _add('explore', None, '탐색: 새 길을 찾아 나선다 (시야 밖 — 엔진에 맡긴다)')
 
+        # A-3(D18): 목격 — 내 눈으로 본 동료의 피격/전사. 1회성: 이번 결정에 한 번 전달하고 비운다.
+        # 자기 피격은 last 가 담당(중복 없음). 종 표기는 내 도감 기준(모르는 종=낯선 짐승 — D9 정합).
+        wit = bot.get('witnessed') or []
+        if wit:
+            bot['witnessed'] = []
+            wit = [{**w, 'name': names.get(w['char'], '동료'),
+                    **({'by': UNKNOWN_BEAST} if known is not None
+                       and 'monster:' + w['by'] not in known else {})}
+                   for w in wit]
+
         return {'pos': [cx, cy], 'hp': bot['hp'], 'maxhp': bot['maxhp'],
                 'job': bot['job'], 'sex': bot['sex'],
                 'str': bot['str'], 'dex': bot['dex'], 'inventory': bot['bag'],
                 'depth': self.depth,
+                **({'witnessed': wit} if wit else {}),   # 목격(A-3) — 있을 때만 실림(intent 선례)
                 'last': bot.get('last'),      # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의
                                               #   결과를 관측할 수 있어야 한다". 자기 경험=시야-온리 무위반
                 'order': ('explore' if str(bot.get('order') or '')[:1] == '@'
@@ -1386,12 +1397,14 @@ class Dungeon:
     def _cheb(ax, ay, bx, by):
         return max(abs(ax - bx), abs(ay - by))
 
-    def _monster_attack(self, m, b):
+    def _monster_attack(self, m, b, bots=()):
         """몹이 직교 인접 봇 b를 친다. 인식 매트릭스(몹쪽): 봇이 이 몹을 못 봤으면(aware_of 밖) =
         매복(they-ambush-us) → 유리굴림(2d20 max)+보너스 피해. 맞으면 봇은 그 몹을 즉시 인지(연속 매복 차단).
         ⚠️ 비은닉 몹은 봇이 시야로 늘 먼저 보므로(aware_of 등재) 실전 매복은 ~0이 정상 — '트인 곳에선 다 보인다'.
         진짜 they-ambush는 concealed(투명/매복몹·Stage3)가 생겨야 발화: concealed면 _perceive가 못 걸러
-        aware_of에 영영 없음 → 이 분기가 자동으로 매복 처리. 즉 여기는 Stage3 솔기(지금은 대부분 dormant)."""
+        aware_of에 영영 없음 → 이 분기가 자동으로 매복 처리. 즉 여기는 Stage3 솔기(지금은 대부분 dormant).
+        A-3(D18): 명중/처치는 피격 칸이 시야 내인 다른 생존 봇의 witnessed 에 목격 사실로 쌓인다
+        ("상처도 시야를 탄다" — 라이브 22틱 카야 전사 무목격 부검)."""
         ambush = m.id not in b.get('aware_of', set())
         ac = 10 + b['dex']
         r = max(self.d20(), self.d20()) if ambush else self.d20()
@@ -1413,6 +1426,14 @@ class Dungeon:
                          **({'surprise': True} if ambush else {})}
             if b['hp'] <= 0:
                 b['alive'] = False; ev['down'] = True
+            # 목격 주입(A-3): 자기 피격은 last 가 담당 — 중복 금지. 다음 view() 가 1회성 노출·소거.
+            fact = {'kind': 'ally_down' if not b['alive'] else 'ally_hurt',
+                    'char': b['char'], 'by': m.kind, 'by_id': 'm%d' % m.id}
+            for o in bots:
+                if o is b or not o['alive'] or o['won']:
+                    continue
+                if (b['x'], b['y']) in self.visible_cells(o['x'], o['y']):
+                    o.setdefault('witnessed', []).append(dict(fact))
         b.setdefault('aware_of', set()).add(m.id)        # 맞으면 안다 — 같은 몹에 연속 매복 금지
         return ev
 
@@ -1487,7 +1508,7 @@ class Dungeon:
                     m.concealed = False                   # 정체 드러남 → 이후는 보통 몹
                     m.state, m.target = 'HUNTING', b['char']
                     m.last_seen, m.lost = (b['x'], b['y']), 0
-                    ev = self._monster_attack(m, b)       # 봇 aware_of 에 없음 → they-ambush 자동 성립
+                    ev = self._monster_attack(m, b, bots)  # 봇 aware_of 에 없음 → they-ambush 자동 성립
                     ev['from_hiding'] = True
                     events.append(ev)
                 continue
@@ -1517,14 +1538,14 @@ class Dungeon:
                     adj = [b for b in near
                            if abs(m.x - b['x']) + abs(m.y - b['y']) == 1]
                     if adj:                           # 궁지 몰린 쥐 — 필사 반격
-                        events.append(self._monster_attack(m, min(adj, key=lambda b: b['char'])))
+                        events.append(self._monster_attack(m, min(adj, key=lambda b: b['char']), bots))
                 continue
             if m.state == 'HUNTING':                      # ② 추격/교전
                 adj = [b for b in live if abs(m.x - b['x']) + abs(m.y - b['y']) == 1]
                 if adj:                                   # 직교 인접 봇 = 타겟 무관 즉시 공격(face-to-face/매복)
                     b = min(adj, key=lambda b: b['char'])
                     m.target, m.last_seen, m.lost = b['char'], (b['x'], b['y']), 0
-                    events.append(self._monster_attack(m, b))
+                    events.append(self._monster_attack(m, b, bots))
                     continue
                 seen = self.visible_cells(m.x, m.y, MON_SIGHT)
                 tgt = next((b for b in live if b['char'] == m.target), None)
@@ -1631,6 +1652,8 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None):
             'known': None,                  # 도감(D9): 아는 종키 set — None=게이팅 끔(하위호환).
                                             #   러너가 발급기(bestiary)의 set 을 꽂는다(획득 즉시 obs 반영)
             'last': None,                   # 직전 행동/피격 결과 메모(D1 개정) — view 가 obs.last 로 노출
+            'witnessed': [],                # 목격(D18 A-3): 시야 내 동료 피격/전사 사실 축적 —
+                                            # view 가 1회성 노출·소거. 스냅샷 화이트리스트 밖(계약 불변)
             'searched': set(),              # 이 봇이 능동 수색으로 살핀 칸(자기 행동 기억 — 세계 정보
                                             # 아님. 리모컨 수색 라벨의 '이미 살폈다' 사실 주석 근거)
             'plan': []}                     # 작정(D16) 남은 수 — 층 전이는 재스폰(새 dict)이라 자동
