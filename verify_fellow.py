@@ -234,6 +234,31 @@ check("⑤ brains: 메뉴 번호 follow 는 작정 수로 부적합(드랍)",
 check("⑤ brains: _pick 은 follow 선택을 행동으로 해석",
       brains._pick({"choice": 1}, obs) == {"type": "follow", "target": "b2", "choice": 1})
 d = arena()
+b1, b2 = mkbot('1', 2, 2), mkbot('2', 3, 2, job='도적')
+bots = [b1, b2]
+d.act(b1, {'type': 'follow', 'target': 'b2'}, bots)
+d.act(b2, {'type': 'follow', 'target': 'b1'}, bots)       # 상호 동행 — fellowsmoke 고착 재현
+idle_n = 0
+for t in range(G.FOLLOW_IDLE + 1):
+    for b in (b1, b2):
+        if b.get('order'):
+            if d.step_order(b, bots)['result'] == 'idle':
+                idle_n += 1
+check("⑤ 상호 동행 = FOLLOW_IDLE(%d)틱 내 idle 해약(흡수 상태 제거)" % G.FOLLOW_IDLE,
+      idle_n >= 1 and b1['order'] is None and b2['order'] is None)
+d = arena()
+b1, b2 = mkbot('1', 2, 2), mkbot('2', 3, 2, job='도적')
+bots = [b1, b2]
+b2['order'] = 'follow:b1'                                 # 상대가 나를 따르는 중
+obs = d.view(b1, bots)
+fo = next(o for o in obs['options'] if o['type'] == 'follow')
+check("⑤ 상호 예고 사실 주석(그는 지금 너를 따르는 중)", '따르는 중' in fo['label'])
+b2['order'] = None
+obs = d.view(b1, bots)
+fo = next(o for o in obs['options'] if o['type'] == 'follow')
+check("⑤ 비상호면 주석 없음(사실만)", '따르는 중' not in fo['label'])
+
+d = arena()
 b1, b2 = mkbot('1', 2, 2), mkbot('2', 4, 2, job='도적')   # 시야 내(거리 2)
 bots = [b1, b2]
 obs = d.view(b1, bots)

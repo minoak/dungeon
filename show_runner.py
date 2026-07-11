@@ -224,6 +224,9 @@ def act_summary(res):
         if r == "following":                           # 동행(D18 A-5) — 지속 order, 완결 아님
             tgt = str(res.get("target", "?")).replace("follow:", "")
             return ("%s 곁을 따라 걷는다" if res.get("to") else "%s 곁을 지키며 따른다") % tgt
+        if r == "idle":                                # 동행 고착 해약(FOLLOW_IDLE) — 재결정 반환
+            tgt = str(res.get("target", "?")).replace("follow:", "")
+            return "동행을 접는다 — %s가 한동안 제자리 (같이 서 있기만 했다, 재결정)" % tgt
         tag = {"walking": "자동보행", "arrived": "도착", "at_exit": "계단 앞에 섰다",
                "treasure": "$ 획득", "blocked": "길 막힘"}
         if r == "arrived" and "to" not in res:         # 움직이는 목표(몹·동료) 곁 도달 = 걷기 전 완료

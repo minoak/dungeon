@@ -71,6 +71,11 @@ DETOUR_FACTOR = 2        # 사회적 대우회 감지(D18): 동료를 피해 깐
 DETOUR_SLACK = 2         #   FACTOR배+SLACK칸을 넘고, 그 최단길 위에 동료가 서 있으면 → 말없는 행군
                          #   대신 blocked 보고(누가 막는지 allies 로) — 라이브 22틱 두란 서쪽 행군 부검.
                          #   지형이 원래 먼 것(free 도 길다)은 정당한 지리 — 감지 대상 아님.
+FOLLOW_IDLE = 3          # 동행 고착 해약(D18): 곁 대기 중 대상이 이만큼 연속 틱 제자리면 동행 종료
+                         #   (result=idle) → 재결정. 동행은 '따라 걷기'다 — 아무도 안 걸으면 성립하지
+                         #   않는다. 상호 동행 삼각 고착(fellowsmoke 120틱 결정 5회 실측)=흡수 상태의
+                         #   물리적 제거. 파트너 판정 2026-07-11: "셋이 서서 세 턴이면 어색해질 시간"
+                         #   — K=3 고정(튜닝마라).
 
 # ── 캐릭터 시트 (영웅) ───────────────────────────────────────────
 # d20 + 능력보정 vs 목표(AC/DC). 전사=힘·HP, 도적=민첩(함정 회피·기습).
@@ -773,9 +778,14 @@ class Dungeon:
                      '찾아가기: %s(봇%s) — 지금 안 보임(파티 감각으로 접근)'
                      % (names.get(p['char'], '동료'), p['char']))
         for a in allies:                               # 동행(D18 A-5) — 보이는 동료마다 지속 order
-            _add('follow', a['id'],
-                 '동행: %s(봇%s) 곁을 따라 걷는다 — 새 일이 생기면 멈추고 묻는다'
-                 % (names.get(a['char'], '동료'), a['char']))
+            ob = next(o for o in bots if o['char'] == a['char'])
+            mutual = str(ob.get('order') or '') == 'follow:b%s' % bot['char']
+            _add('follow', a['id'],                    # ※주석=사실만(수색 '이미 살폈다' 선례).
+                 '동행: %s(봇%s) 곁을 따라 걷는다 — 새 일이 생기면 멈추고 묻는다%s'
+                 % (names.get(a['char'], '동료'), a['char'],
+                    ' ※ 그는 지금 너를 따르는 중이다 — 서로 따르면 아무도 못 움직인다'
+                    if mutual else ''))                # 곁에서 나를 계속 따르는 행동은 눈에 보인다
+                                                       # (보이는 동료 한정=allies 루프 — 시야-온리)
         # 수색 라벨 — 지금 살필 반경이 전부 '이미 살핀 곳'이면 그 사실을 붙인다(자기 행동 기억).
         # A/B 실측에서 이 주석 없이는 같은 자리 수색 반복 평균 70회(수색 합창 루프)로 판이 죽었다.
         s_seen = self.visible_cells(cx, cy, bot.get('search_r', 1))
@@ -1026,6 +1036,7 @@ class Dungeon:
             return self._set_explore(bot, None, bots)    # 무효 대상 → 탐색(무효 핑과 대칭)
         tx, ty = resolved[1]
         base = {'char': bot['char'], 'type': 'follow', 'target': tid}
+        bot['follow_idle'] = None                        # 개시 = 제자리 카운터 리셋(FOLLOW_IDLE)
         if self._beside(bot, (tx, ty), 'bot'):
             bot['order'], bot['path'] = 'follow:' + tid, []
             return {**base, 'result': 'following'}
@@ -1117,10 +1128,19 @@ class Dungeon:
                     return {**base, 'result': 'encounter',
                             'monsters': [{'id': 'm%d' % m.id, 'kind': m.kind, 'state': m.state}
                                          for m in newly]}
+                prev = bot.get('follow_idle')            # 고착 해약(FOLLOW_IDLE): 대상이 연속
+                n = (prev[2] + 1 if prev and (prev[0], prev[1]) == res0[1]
+                     else 1)                             #   제자리면 카운트, 움직이면 리셋
+                if n >= FOLLOW_IDLE:
+                    bot['order'], bot['follow_idle'] = None, None
+                    return {**base, 'result': 'idle'}    # "계속 서 있네?" — 재결정으로 반환
+                bot['follow_idle'] = (res0[1][0], res0[1][1], n)
                 return {**base, 'result': 'following'}
             bot['order'], bot['path'] = None, []
             self._perceive(bot)               # 교전/합류 거리 도달 — 눈뜨고 재결정(거짓 매복 방지)
             return {**base, 'result': 'arrived'}
+        if follow:
+            bot['follow_idle'] = None         # 곁 아님 = 걷는 틱 — 제자리 카운터 리셋(FOLLOW_IDLE)
         # A-2(D18): 시야 내 실물 재경로 — 움직이는 목표(m/b)가 지금 눈에 보이는데 경로 종점이
         # 낡았으면(현 좌표 곁이 아님) 현재 좌표로 재계산. 매 틱이어도 결정론 BFS라 비용 미미.
         # 시야 밖=마지막 본 자리 스냅샷 유지(유령 추적 정당 — 07-05 판정). 경로 소진+시야 내도
@@ -1732,6 +1752,8 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None):
             'last': None,                   # 직전 행동/피격 결과 메모(D1 개정) — view 가 obs.last 로 노출
             'witnessed': [],                # 목격(D18 A-3): 시야 내 동료 피격/전사 사실 축적 —
                                             # view 가 1회성 노출·소거. 스냅샷 화이트리스트 밖(계약 불변)
+            'follow_idle': None,            # 동행 고착 카운터(D18 FOLLOW_IDLE) — (x, y, n):
+                                            # 곁 대기 중 대상 제자리 연속 관측. 화이트리스트 밖
             'searched': set(),              # 이 봇이 능동 수색으로 살핀 칸(자기 행동 기억 — 세계 정보
                                             # 아님. 리모컨 수색 라벨의 '이미 살폈다' 사실 주석 근거)
             'plan': []}                     # 작정(D16) 남은 수 — 층 전이는 재스폰(새 dict)이라 자동
