@@ -924,6 +924,16 @@ class Dungeon:
             return ('bot', (o['x'], o['y'])) if o else None
         return None
 
+    @staticmethod
+    def _beside_xy(x, y, tx, ty, kind):
+        """'곁' 판정(D18 A-1): 동료(bot)=체비셰프≤1(대각 포함 — 식탁 모서리도 곁이다),
+        그 외(몹 등)=직교 1 유지(몹 공격창이 직교 — 대각 도착이면 못 때리는 모순 방지)."""
+        ddx, ddy = abs(x - tx), abs(y - ty)
+        return max(ddx, ddy) <= 1 if kind == 'bot' else ddx + ddy == 1
+
+    def _beside(self, bot, txy, kind):
+        return self._beside_xy(bot['x'], bot['y'], txy[0], txy[1], kind)
+
     def _ally_jam(self, bot, tx, ty, path, bots):
         """사회적 대우회 감지(D18) — 방금 깐 path 가 '동료 때문에' 폭증했는지 판정.
         동료 없다 치고의 최단(free)과 비교해 path 가 FACTOR배+SLACK 을 넘고, 그 free 길 위에
@@ -952,7 +962,8 @@ class Dungeon:
         bot['order'], bot['path'] = target_id, path
         base = {'char': bot['char'], 'type': 'goto', 'target': target_id}
         if not path:
-            arrived = (bot['x'], bot['y']) == (tx, ty) or abs(bot['x'] - tx) + abs(bot['y'] - ty) == 1
+            arrived = ((bot['x'], bot['y']) == (tx, ty)
+                       or self._beside(bot, (tx, ty), resolved[0]))   # 동료만 대각 곁 인정(A-1)
             if arrived:
                 bot['order'] = None
                 return {**base, 'result': 'arrived'}
@@ -1025,10 +1036,32 @@ class Dungeon:
         # 위상잠금 궤도 실측(seed2, 39,5↔40,5 진동). 도착=목표상태변화 인터럽트의 한 형태(D2 정합).
         res0 = self._resolve_target(bot.get('order'), bots)
         if (res0 and res0[0] in ('monster', 'bot')
-                and abs(bot['x'] - res0[1][0]) + abs(bot['y'] - res0[1][1]) == 1):
+                and self._beside(bot, res0[1], res0[0])):
             bot['order'], bot['path'] = None, []
             self._perceive(bot)               # 교전/합류 거리 도달 — 눈뜨고 재결정(거짓 매복 방지)
             return {**base, 'result': 'arrived'}
+        # A-2(D18): 시야 내 실물 재경로 — 움직이는 목표(m/b)가 지금 눈에 보이는데 경로 종점이
+        # 낡았으면(현 좌표 곁이 아님) 현재 좌표로 재계산. 매 틱이어도 결정론 BFS라 비용 미미.
+        # 시야 밖=마지막 본 자리 스냅샷 유지(유령 추적 정당 — 07-05 판정). 경로 소진+시야 내도
+        # 재경로 대상(아니면 FLEEING 추격이 한 틱 걸러 lost 나는 술래잡기). concealed 몹 좌표로는
+        # 재조준 금지(시야-온리) — 사실상 order 대상 몹은 비은닉이지만 불변식은 코드로 지킨다.
+        if res0 and res0[0] in ('monster', 'bot'):
+            tx, ty = res0[1]
+            mon = self.monster_at(tx, ty) if res0[0] == 'monster' else None
+            if ((tx, ty) in self.visible_cells(bot['x'], bot['y'])
+                    and not (mon and mon.concealed)):
+                ex, ey = bot['path'][-1] if bot.get('path') else (bot['x'], bot['y'])
+                if not self._beside_xy(ex, ey, tx, ty, res0[0]):   # 종점이 낡았다 — 실물로 재조준
+                    newp = self.path_to(bot['x'], bot['y'], tx, ty, bots)
+                    jam = self._ally_jam(bot, tx, ty, newp, bots)
+                    if jam:                   # 재조준 경로가 동료發 대우회 — 멈춰 묻는다(A-0과 동형)
+                        bot['order'], bot['path'], bot['plan'] = None, [], []
+                        self._perceive(bot)
+                        return {**base, 'result': 'blocked',
+                                'allies': [{'char': o['char'], 'name': o.get('name') or o['job']}
+                                           for o in jam]}
+                    if newp:
+                        bot['path'] = newp    # 재경로 실패(일시 봉쇄)면 낡은 경로 유지 — 다음 틱 재시도
         if not bot.get('path'):
             self._perceive(bot)               # 멈춘 자리에서도 눈은 뜨고 있다 — 곁의 몹을 못 본 채
             return self._order_done(bot, bots, base)  #   맞으면 거짓 매복(they-ambush)이 되므로
@@ -1102,15 +1135,16 @@ class Dungeon:
         자리(유령 좌표)까지 갔는데 대상이 없으면 arrived 가 아니라 **lost** 다.
         (07-05 부검 → 파트너 판정: 스냅샷 좌표 추적 자체는 사람의 추적과 같아 옳다. 결함은
         허탕을 성공처럼 보고하던 의미론뿐 — D1-4 "봇은 자기 행동의 결과를 관측할 수 있어야 한다".
-        대상이 죽었거나 층을 떠난 경우도 해석 실패 → lost. lost 의 뜻은 '직교 곁에 없다'까지다 —
-        대각 한 칸에 비껴 서 있으면 sights 에 그대로 보인다(문구도 이 이상 단정하지 않는다).
+        대상이 죽었거나 층을 떠난 경우도 해석 실패 → lost. lost 의 뜻은 '곁에 없다'까지다 —
+        곁 = 몹은 직교 1(공격창), 동료는 체비셰프 1(대각 포함 — D18 A-1, _beside).
+        구판(07-05~07-10)은 동료도 직교만 곁으로 쳐서 대각 비껴섬이 lost 로 났다.
         exit·탐색 셀(@)은 자리 자체가 목표라 무조건 arrived. 자기가 주운 보물은 여기 안 온다 —
         step_order 의 treasure 분기가 path 소진 시 order 를 그 자리에서 완결한다.)"""
         bot['order'], bot['path'] = None, []
         s = str(base.get('target') or '')
         if s[:1] in ('m', 'b') and s[1:]:
             res = self._resolve_target(base['target'], bots)
-            if not (res and abs(bot['x'] - res[1][0]) + abs(bot['y'] - res[1][1]) <= 1):
+            if not (res and self._beside(bot, res[1], res[0])):
                 bot['plan'] = []                      # 허탕 = 세계가 변했다 — 남은 작정도 근거 상실(D16)
                 return {**base, 'result': 'lost'}
         elif s[:1] == 'f' and s[1:].isdigit():
