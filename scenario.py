@@ -92,12 +92,25 @@ def build(spec):
         if "order" in ov:                      # 진행 중 order 프리셋(D18) — 동행 고착 류 장면 저작.
             b["order"] = ov["order"]           # path 는 안 깐다: follow 류는 자가 재경로로 자활,
                                                # goto 류는 다음 틱 _order_done 판정 — 장면 저작자 책임
+        led = G.new_ledger()                   # 공간 장부(D17) — 장면은 라이브 판과 같은 조건(기본 켬)
+        pre = ov.get("ledger")
+        if isinstance(pre, dict):              # 장면 전제 기억: {"statics": ["chest","exit"...], "turn": N}
+            t0 = int(pre.get("turn", 0))       #   — 피처 '종류'로 지정하면 장면의 실물 id 로 풀어 등재
+            for want in pre.get("statics", []):
+                for f in d.features.values():
+                    if f.type == want and not f.concealed:
+                        k = "exit" if f.type == "exit" else "f%d" % f.id
+                        led["statics"][k] = {"id": k, "type": f.type, "name": f.name,
+                                             "x": f.x, "y": f.y,
+                                             "zone": d._zone_label(f.x, f.y), "turn": t0}
+        b["ledger"] = led
         bots.append(b)
     for m in d.monsters:                       # HUNTING/FLEEING 템플릿 목표 좌표 채움
         if m.target:
             t = next((b for b in bots if b["char"] == m.target), None)
             if t:
                 m.last_seen, m.lost = (t["x"], t["y"]), 0
+    d.turn = int(spec.get("turn_now", 0))      # 장면의 '지금' — 장부 '몇 턴 전' 라벨의 기준
     return d, bots
 
 
@@ -137,7 +150,12 @@ def play(spec, brain, state_dir):
             monsters=len(d.monsters), traps=len(d.traps),
             lurkers=sum(1 for m in d.monsters if m.concealed),
             max_turns=turns, gm=False, stream_obs=False, menu=brains.MENU,
+            ledger=True,                       # 장면은 장부(D17) 상시 켬 — 라이브 판과 같은 조건
             scenario=spec.get("name"),         # additive — 장면 실행 표식
+            turn_now=int(spec.get("turn_now", 0)),   # 장부 시계 원점(additive) — 장부 스탬프는
+                                               #   turn_now+tick 시계를 쓴다(리플레이 조인용)
+            scenario_bots=spec.get("bots") or {},    # 장면 프리셋(지식·작정·장부 등, additive) —
+                                               #   스트림 밖 원천 없음 계약을 장면에서도 닫는다
             bestiary={}, bestiary_file=False,
             party=[{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
                                       "wdmg", "stealth", "search_r", "persona")}
@@ -149,6 +167,7 @@ def play(spec, brain, state_dir):
     inbox = {b["char"]: [] for b in bots}
     turn = 0
     for turn in range(1, turns + 1):
+        d.turn = d.turn + 1                    # 장부 스탬프 — 장면 시작점(turn_now)에서 이어 센다
         inbox_in = inbox
         if brain == "haiku":
             decisions = brains.think_all(d, bots, inbox)

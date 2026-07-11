@@ -46,9 +46,11 @@ _TYPES = {"goto", "attack", "interact", "search", "explore", "follow"}
 _BEARINGS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW"}
 
 
-def _valid_targets(obs):
+def _valid_targets(obs, verb="goto"):
     """obs 에 실제로 보이는 오브젝트 id 집합 — 환각 타겟 차단. 출구는 *보일 때만*(beacon 폐기).
-    동료(b<char>)는 안 보여도 허용(파티 감각) — 하강 조율(데리러 가기)의 통로. 좌표는 여전히 비공개."""
+    동료(b<char>)는 안 보여도 허용(파티 감각) — 하강 조율(데리러 가기)의 통로. 좌표는 여전히 비공개.
+    장부(known.statics) 귀환 id 는 **goto 전용**(D17) — interact/attack 에 허용하면 too_far vs
+    no_target 응답 차이로 '가보지 않고 소멸 여부를 아는' 누설이 생긴다(리뷰 픽스)."""
     s = obs.get("sights", {})
     ids = set()
     if s.get("exit"):                       # 출구는 sights['exit']가 있을 때(=보일 때)만 핑 허용
@@ -58,6 +60,10 @@ def _valid_targets(obs):
     for p in obs.get("party", []):          # 살아있는(안 내려간) 동료는 시야 밖이어도 핑 가능
         if p.get("alive") and not p.get("won"):
             ids.add("b%s" % p["char"])
+    if verb == "goto":
+        for e in (obs.get("known") or {}).get("statics", []):
+            if e.get("id"):                 # 공간 장부(D17-1) 귀환 핑 — 본 적 있는 제자리 물건은
+                ids.add(e["id"])            #   시야 밖이어도 지칭 가능(기억의 id. beacon 부활 아님)
     return ids
 
 
@@ -183,8 +189,10 @@ def _then(obj, obs):
                     step["target"] = tgt.upper()
             elif typ in ("goto", "attack", "interact"):
                 if valid is None:
-                    valid = _valid_targets(obs)
-                if tgt in valid:
+                    valid = {}
+                if typ not in valid:        # 동사별 유효 집합 — 장부 id 는 goto 에만(리뷰 픽스)
+                    valid[typ] = _valid_targets(obs, typ)
+                if tgt in valid[typ]:
                     step = {"type": typ, "target": tgt}
         else:
             pick = _pick({"choice": item}, obs)   # 메뉴 번호 관용 — 엔진 열거 행동이라 환각 무해
@@ -263,8 +271,8 @@ def claude_brain(obs, char="?", bot=None, roster=None):
                 if tgt.upper() in _BEARINGS:
                     out["target"] = tgt.upper()
                 return out
-            if tgt in _valid_targets(obs):          # 보이는 id만 허용(환각 타겟 차단)
-                out["target"] = tgt
+            if tgt in _valid_targets(obs, typ):     # 보이는 id만 허용(환각 타겟 차단.
+                out["target"] = tgt                 #   장부 귀환 id 는 goto 전용 — 리뷰 픽스)
                 return out
         # JSON 은 왔으나 행동으로 해석 실패(무효 choice·type·target) — 원문 머리를 계측에 남긴다
         why = "행동 해석 실패: " + _head(json.dumps(obj, ensure_ascii=False))

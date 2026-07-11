@@ -28,6 +28,8 @@
           느려도 루프는 안 멈춘다: 밀린 턴은 건너뛰고 최신 턴만 연출)
           DUNGEON_BESTIARY_FILE(도감 원장 경로 — 빈값(기본)=영속 끔: 판 안 학습만 하고 파일은
           안 남긴다. start.sh 가 라이브 판에만 bestiary.json 을 켠다 → verify/실험 자동 격리)
+          DUNGEON_LEDGER(기본1 — 공간 장부(D17): 본 것을 엔진이 캐릭터 명의로 기억,
+          시야 밖 '돌아가기' 핑 허용. 0=끔. 층 전이 때 새 원장=층의 기억)
 """
 import os
 import sys
@@ -61,6 +63,8 @@ GM_ON = os.environ.get("DUNGEON_GM", "1") != "0"
 PARTY_FILE = os.environ.get("DUNGEON_PARTY_FILE", os.path.join(HERE, "party.json"))
 BESTIARY_FILE = os.environ.get("DUNGEON_BESTIARY_FILE", "")  # 도감 원장(D9). 빈값=영속 끔(판 안 학습만)
                                                              #   — 격리 기본: verify/실험이 라이브 원장을 안 더럽힌다
+LEDGER_ON = os.environ.get("DUNGEON_LEDGER", "1") != "0"     # 공간 장부(D17) — 러너 판 기본 켬
+                                                             #   (spawn 기본은 None=끔 — 기존 게이트 무접촉)
 LORE_FILE = os.path.join(HERE, "lore.json")
 STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적용 후 맵이 보이게(헤들리스=0)
 
@@ -313,6 +317,8 @@ def main():
     for c in chars:
         b = G.spawn(d, c, bots, sheet=sheets[c])
         b['known'] = iss.known(names[c])   # 도감 주입 켬 — 발급기의 set 과 *같은 객체*(획득 즉시 다음 obs 반영)
+        if LEDGER_ON:
+            b['ledger'] = G.new_ledger()   # 공간 장부(D17) 켬 — 이 층에서 본 것의 원장
         bots.append(b)
     botlog = {c: "bot%s.log" % c for c in chars}
     gm_q = gm_thread = None
@@ -347,6 +353,7 @@ def main():
             max_turns=MAX_TURNS, gm=GM_ON,
             stream_obs=os.environ.get("DUNGEON_STREAM_OBS") == "1",   # decisions 에 obs 동봉 여부(스키마 판별용)
             menu=brains.MENU,          # 리모컨(번호 선택) 여부 — decisions 에 choice 가 실리는지 판별용
+            ledger=LEDGER_ON,          # 공간 장부(D17) 여부 — obs(known·돌아가기)를 바꾸는 실행모드 메타
             bestiary=iss.snapshot(),   # 판 시작 시점 지식(additive) — 도감이 obs 를 바꾸므로 리플레이·비교의 전제
             bestiary_file=bool(BESTIARY_FILE),   # 영속 여부(실행모드 메타 — gm/menu 와 같은 급)
             party=[{**{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
@@ -370,6 +377,7 @@ def main():
     turn = 0
     says = {}
     for turn in range(1, MAX_TURNS + 1):
+        d.turn = turn       # 장부(D17) 목격 스탬프 — 판정 무관여, "언제 봤나"의 단일 원천
         inbox_in = inbox    # 이번 틱 사고에 주입된 받은편지함 — 루프 끝에서 이름이 새 dict 로
                             # 재바인딩되므로(덮어씀) think_all 직전 참조를 잡아 스트림에 남긴다
         # order 없는 봇만 사고(자동보행 중인 봇은 LLM 0콜)
@@ -479,7 +487,10 @@ def main():
                 n = G.spawn(d, b["char"], nb, sheet=sheets[b["char"]])   # ⚠️ sheet 필수 — 없으면
                 n["hp"], n["bag"] = b["hp"], b["bag"]     # HP·보물 이월     외부 시트 봇('3'+)이 2층서 죽는다
                 n["known"] = iss.known(names[b["char"]])  # 도감은 층을 넘어도 그대로(지식=영속층)
+                if LEDGER_ON:
+                    n["ledger"] = G.new_ledger()          # 장부는 새 원장(층의 기억 — id 층-로컬, D17)
                 nb.append(n)
+            d.turn = turn
             bots = nb
             inbox = {b["char"]: [] for b in bots}   # 층 전이 = 대화 리셋(형태는 전 봇 키로 고정)
             lvl = {"turn": turn, **d.level_snapshot(),            # descend 직후 level 불변식

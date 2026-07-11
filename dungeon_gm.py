@@ -197,6 +197,7 @@ class Dungeon:
         self.master_seed, self.depth = seed, depth
         self.rng = random.Random(self._derive_seed(seed, depth))
         self.w, self.h = w, h
+        self.turn = 0              # 현재 틱 — 러너가 매 틱 갱신(장부 목격 시점 스탬프용. 판정 무관여)
         self.grid = [[WALL] * w for _ in range(h)]
         self.features = {}         # id -> Feature (출구·보물·… 단일 진실원천). exit/treasures 흡수.
         self.lore = {}             # 로어 DB(D9 '본문') — 러너가 lore.json 로드해 꽂는다. 판정 무접촉(obs 전용).
@@ -241,6 +242,7 @@ class Dungeon:
         d.master_seed, d.depth = seed, depth
         d.rng = random.Random(cls._derive_seed(seed, depth))
         d.w, d.h = w, h
+        d.turn = 0
         d.grid = [[WALL] * w for _ in range(h)]
         d.features, d.lore = {}, {}
         d._next_fid, d._exit_fid = 0, None
@@ -707,8 +709,12 @@ class Dungeon:
         ex, ey = self.exit                                       # v3: 출구 = beacon 아님 → 보일 때만
         exit_obj = ({'id': 'exit', 'type': 'exit', 'name': '출구', **bear(ex, ey)}
                     if (ex, ey) in seen else None)
-        ways = [{k: w[k] for k in ('bearing', 'dist', 'visited')}   # 미지로 트인 출입구(셀좌표는 엔진만 보유)
-                for w in self._ways(cx, cy, seen)]
+        led = bot.get('ledger')            # D17 스위치: 장부 켠 판만 구역 어휘·known 노출
+                                           # (끈 판 obs 는 구판과 자구까지 동일 — 게이트 무수정 통과)
+        way_keys = (('bearing', 'dist', 'visited', 'zone') if led is not None
+                    else ('bearing', 'dist', 'visited'))
+        ways = [{k: w[k] for k in way_keys}            # 미지로 트인 출입구(셀좌표는 엔진만 보유.
+                for w in self._ways(cx, cy, seen)]     #  zone=어느 구역으로 트였나, D17-2)
         allies = [{'id': 'b%s' % b['char'], 'char': b['char'],
                    'condition': _wound_label(b['hp'], b['maxhp']),   # 겉보기 부상 등급(A-4) —
                    **bear(b['x'], b['y'])}                           #   보이는 동료만(시야-온리)
@@ -720,6 +726,47 @@ class Dungeon:
         party = [{'char': o['char'], 'job': o['job'], 'alive': o['alive'],
                   'won': o['won'], 'visible': (o['x'], o['y']) in seen}
                  for o in bots if o['char'] != bot['char']]
+
+        # ── 공간 장부(D17-1) obs 투영: '네가 아는 것' — 시야(sights)와 분리. 좌표는 안 나간다:
+        # 항목은 {id?, 종류, 이름, 구역, 목격 turn} 뿐 — 봇은 id 로 지칭하고 좌표 운전은 엔진 몫.
+        # obs 키 'known' = 장부 투영(도감 bot['known'] 과는 딴 물건 — 도감은 sights 조인으로 스며든다).
+        self._ledger_note(bot, seen, bots)             # 동료 last_seen 보강(멱등 — _perceive 재부기)
+        known_obs = None
+        if led is not None:
+            vis_ids = ({m['id'] for m in mons} | {a['id'] for a in allies}
+                       | {f['id'] for f in feats} | ({'exit'} if exit_obj else set()))
+            ks, last_ms = [], []
+            for e in led['statics'].values():
+                if (e['x'], e['y']) in seen and e['type'] != 'trap':
+                    continue                           # 지금 보이는 건 sights 소관(중복 금지).
+                                                       # 함정만 예외 — sights 에 함정 어휘가 없어
+                                                       # 시야에 들면 구조화 obs 에서 증발하는
+                                                       # 비대칭 방지(리뷰 픽스): 중복이 아니다
+                ent = {'type': e['type'], 'name': e['name'],
+                       'zone': e['zone'], 'turn': e['turn']}
+                if 'id' in e:
+                    ent['id'] = e['id']                # id 있는 것만 '돌아가기' 핑 대상
+                ks.append(ent)
+            for e in led['moving'].values():
+                if e['id'] in vis_ids:
+                    continue                           # 지금 보이는 몹·동료는 sights 소관
+                if 'char' in e:                        # 죽음·하강은 party 가 이미 알려준다(파티
+                    o = next((o for o in bots if o['char'] == e['char']), None)   # 감각) — 같은
+                    if not (o and o['alive'] and not o['won']):   # obs 안 모순 신호 제거(리뷰 픽스)
+                        continue
+                ent = {'id': e['id'], 'zone': e['zone'], 'turn': e['turn']}
+                if 'kind' in e:
+                    kk = e['kind']                     # 도감 마스킹 — sights 와 같은 규칙(D9 정합)
+                    if known is not None and ('monster:' + kk) not in known:
+                        kk = UNKNOWN_BEAST
+                    ent['kind'] = kk
+                if 'char' in e:
+                    ent['char'] = e['char']
+                    ent['name'] = next((o.get('name') or o['job'] for o in bots
+                                        if o['char'] == e['char']), '동료')
+                last_ms.append(ent)
+            known_obs = {'statics': ks, 'last_seen': last_ms,
+                         'zones': [dict(z) for _, z in sorted(led['zones'].items())]}
 
         # ── 리모컨(options): 이번 턴 가능한 행동의 전수 열거 — 유효성을 아는 엔진이 곧 메뉴다 ──
         # 원칙: 유효 옵션 전부 / 고정 스키마 순서(즉시행동→이동→수색→탐색) / 주석은 사실만 —
@@ -786,6 +833,16 @@ class Dungeon:
                     ' ※ 그는 지금 너를 따르는 중이다 — 서로 따르면 아무도 못 움직인다'
                     if mutual else ''))                # 곁에서 나를 계속 따르는 행동은 눈에 보인다
                                                        # (보이는 동료 한정=allies 루프 — 시야-온리)
+        # 돌아가기(D17-1 귀환 핑) — 장부의 제자리 물건(id 있는 것)로 시야 밖 복귀. 라벨=사실만
+        # (어디서·언제 봤나). '그 사이 없어졌을 수 있다'는 세계의 진실 — 가서야 안다(lost 드라마).
+        if known_obs is not None:
+            for e in known_obs['statics']:             # 이미 '지금 안 보이는 것'만 담겨 있다
+                if 'id' not in e:
+                    continue                           # 함정 항목(정보만) — 핑 대상 아님
+                ago = self.turn - e['turn']
+                _add('goto', e['id'], '돌아가기: %s — %s에서 봄(%s), 지금은 시야 밖'
+                     % (e['name'], e['zone'],       # '안 보임'은 '사라짐'으로 오독됨(프로브 실측)
+                        ('%d턴 전' % ago) if ago > 0 else '방금'))
         # 수색 라벨 — 지금 살필 반경이 전부 '이미 살핀 곳'이면 그 사실을 붙인다(자기 행동 기억).
         # A/B 실측에서 이 주석 없이는 같은 자리 수색 반복 평균 70회(수색 합창 루프)로 판이 죽었다.
         s_seen = self.visible_cells(cx, cy, bot.get('search_r', 1))
@@ -811,10 +868,15 @@ class Dungeon:
                        and 'monster:' + w['by'] not in known else {})}
                    for w in wit]
 
+        rid_here = self._room_id_at(cx, cy)
         return {'pos': [cx, cy], 'hp': bot['hp'], 'maxhp': bot['maxhp'],
                 'job': bot['job'], 'sex': bot['sex'],
                 'str': bot['str'], 'dex': bot['dex'], 'inventory': bot['bag'],
                 'depth': self.depth,
+                **({'zone': {'id': ('r%d' % rid_here) if rid_here is not None else None,
+                             'kind': '방' if rid_here is not None else '통로'}}
+                   if led is not None else {}),        # 구역 어휘(D17-2) — 장부 스위치와 한 몸
+                **({'known': known_obs} if known_obs is not None else {}),   # 공간 장부(D17-1)
                 **({'witnessed': wit} if wit else {}),   # 목격(A-3) — 있을 때만 실림(intent 선례)
                 'last': bot.get('last'),      # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의
                                               #   결과를 관측할 수 있어야 한다". 자기 경험=시야-온리 무위반
@@ -855,7 +917,8 @@ class Dungeon:
                                             max(abs(c[0] - cx), abs(c[1] - cy)), c))
             ways.append({'bearing': b, 'cell': rep,
                          'dist': max(abs(rep[0] - cx), abs(rep[1] - cy)),
-                         'visited': rep in self.visited})
+                         'visited': rep in self.visited,
+                         'zone': self._zone_label(*rep)})   # 어느 구역으로 트였나(D17-2)
         ways.sort(key=lambda w: (w['visited'], w['dist'], w['bearing']))
         return ways
 
@@ -916,8 +979,12 @@ class Dungeon:
         if typ in ('search', 'explore'):
             pass
         elif typ == 'goto':
-            if self._resolve_target(tgt, bots) is None:
+            e = ((bot.get('ledger') or {}).get('statics') or {}).get(str(tgt))
+            if self._resolve_target(tgt, bots) is None and not (e and e.get('id')):
                 why = '대상 소멸'                 # 작정의 goto 는 explore 폴백 안 탄다 —
+                # (장부 귀환 목표(id 있는 것만 — trap@ 정보 항목 제외, 리뷰 픽스)는 통과:
+                #  '없다'는 보지 않고는 모른다 — 가서 lost 로 확인(D17).
+                #  여기서 '대상 소멸'을 알려주면 안 본 사실의 누설이다)
         elif typ == 'attack':                     #   대상이 사라졌으면 그건 새 정보다(재결정)
             res = self._resolve_target(tgt, bots)
             if res is None or res[0] != 'monster':
@@ -998,8 +1065,15 @@ class Dungeon:
         """핑 목표로 BFS 경로(path_to)를 깐다 = 자동보행 준비. 목표 무효면 explore 폴백(헤맴 방지·v3).
         D18: 동료가 길목을 막아 경로가 폭증하면 말없이 행군하지 않고 blocked 로 묻는다(_ally_jam)."""
         resolved = self._resolve_target(target_id, bots)
+        ghost = False
         if resolved is None:
-            return self._set_explore(bot, None, bots)        # 무효 핑 → 탐색(출구 떠먹이기 폐기)
+            e = ((bot.get('ledger') or {}).get('statics') or {}).get(str(target_id))
+            if e and e.get('id'):       # 장부 귀환(D17)의 소비된 대상 — '기억의 좌표'로 간다.
+                resolved = ('feature', (e['x'], e['y']))   # 갔더니 없으면 _order_done 이 lost 로
+                ghost = True            #   정직 보고(+장부 교정) — 조용한 explore 강등 금지.
+                                        #   id 없는 항목(trap@)은 핑 대상 아님(리뷰 픽스) → 아래 폴백
+            else:
+                return self._set_explore(bot, None, bots)    # 무효 핑 → 탐색(출구 떠먹이기 폐기)
         tx, ty = resolved[1]
         path = self.path_to(bot['x'], bot['y'], tx, ty, bots)
         bot['order'], bot['path'] = target_id, path
@@ -1009,6 +1083,10 @@ class Dungeon:
                        or self._beside(bot, (tx, ty), resolved[0]))   # 동료만 대각 곁 인정(A-1)
             if arrived:
                 bot['order'] = None
+                if ghost:               # 기억의 곁까지 왔는데 실물이 없다 — 빈 자리가 눈에 보이는
+                    bot['ledger']['statics'].pop(str(target_id), None)   # 거리다: lost + 교정
+                    bot['plan'] = []    #   (거짓 arrived 는 D1-4 위반 + 다음 작정의 거짓 전제 — 리뷰 픽스)
+                    return {**base, 'result': 'lost'}
                 return {**base, 'result': 'arrived'}
             return self._set_explore(bot, None, bots)    # 도달불가 핑 → 탐색 폴백(무효핑과 대칭·재핑 livelock 차단)
         jam = self._ally_jam(bot, tx, ty, path, bots)
@@ -1259,6 +1337,8 @@ class Dungeon:
         elif s[:1] == 'f' and s[1:].isdigit():
             if self._resolve_target(base['target'], bots) is None:   # 삭제(동료 소비) = 빈 자리
                 bot['plan'] = []
+                if bot.get('ledger') is not None:     # 갔더니 없다 — 장부도 경험으로 교정(D17,
+                    bot['ledger']['statics'].pop(s, None)   # 재유혹 방지. _ledger_note 교정의 앵커)
                 return {**base, 'result': 'lost'}
         return {**base, 'result': 'arrived'}          # arrived 는 작정 존속 — 다음 수가 이어진다
 
@@ -1337,6 +1417,66 @@ class Dungeon:
                                   'bearing': self._bearing(m.x - cx, m.y - cy)})
         return found
 
+    def _zone_label(self, x, y):
+        """구역 어휘(D17-2) — 좌표의 '주소'. 방=안정 id(생성 순서), 그 외 바닥=통로.
+        방 타입(entrance/exit)은 안 싣는다 — '계단 방' 라벨은 안 본 계단의 존재를 누설(시야-온리)."""
+        rid = self._room_id_at(x, y)
+        return ('방 r%d' % rid) if rid is not None else '통로'
+
+    def _ledger_note(self, bot, seen, bots=None):
+        """공간 장부(D17-1) 갱신 — 시야에 든 것을 엔진이 캐릭터 명의로 받아 적는다.
+        '본 것만' 등재(시야-온리의 기억판 — 림월드 전지적 인지 불수입). bot['ledger'] 가
+        None(기본)이면 무동작 = 하위호환 솔기(도감 known=None 선례). 굴림 없음(순수 파생)·멱등.
+        · statics: 제자리 물건(피처·계단·드러난 함정) — 최초 목격 turn 고정. **교정**: 그 자리가
+          다시 보이는데 물건이 없으면 잊는다(기억은 경험으로 고쳐진다 — 동료가 먼저 소비한 상자).
+          함정은 id 가 없어 정보 항목만(핑 불가). 계단(exit)은 소멸하지 않아 교정 제외.
+        · moving: 움직이는 것(몹·동료)의 마지막 목격 — 갱신형. 시야 밖 이동은 안 따라간다
+          (현재 좌표 추적=월핵). 낡은 기억의 허탕은 lost 정직화가 받는다("갔더니 없음=드라마").
+        · zones: 방문 구역(내가 선 방). 장부의 좌표(x,y)는 엔진만 쥔다 — obs 로는 구역·때만
+          나간다(D17 정식화: 6/29에 죽인 건 LLM 좌표 운전이지 기억이 아니다)."""
+        led = bot.get('ledger')
+        if led is None:
+            return
+        t = self.turn
+        for k, e in list(led['statics'].items()):     # 교정 먼저 — 이번 시야가 기억을 반증하면 삭제
+            if (e['x'], e['y']) not in seen or e['type'] == 'exit':
+                continue
+            if e['type'] == 'trap':
+                tr = next((x for x in self.traps if (x.x, x.y) == (e['x'], e['y'])), None)
+                if tr is None or tr.sprung:           # 발동돼 소진된 함정은 더는 위협이 아니다
+                    del led['statics'][k]
+            elif self.feature_at(e['x'], e['y']) is None:
+                del led['statics'][k]
+        for f in self.features.values():              # 정적 목격물 — 시야에 든 순간 등재
+            if not f.concealed and (f.x, f.y) in seen:
+                k = 'exit' if f.type == 'exit' else 'f%d' % f.id
+                if k not in led['statics']:
+                    led['statics'][k] = {'id': k, 'type': f.type, 'name': f.name,
+                                         'x': f.x, 'y': f.y,
+                                         'zone': self._zone_label(f.x, f.y), 'turn': t}
+        for tr in self.traps:                         # 드러난(미발동) 함정 — id 없음: 정보 항목
+            if not tr.hidden and not tr.sprung and (tr.x, tr.y) in seen:
+                k = 'trap@%d,%d' % (tr.x, tr.y)
+                if k not in led['statics']:
+                    led['statics'][k] = {'type': 'trap', 'name': tr.name,
+                                         'x': tr.x, 'y': tr.y,
+                                         'zone': self._zone_label(tr.x, tr.y), 'turn': t}
+        for m in self.monsters:                       # 마지막 목격(몹) — 봐야 적힌다(concealed 제외)
+            if m.alive and not m.concealed and (m.x, m.y) in seen:
+                led['moving']['m%d' % m.id] = {'id': 'm%d' % m.id, 'kind': m.kind,
+                                               'x': m.x, 'y': m.y,
+                                               'zone': self._zone_label(m.x, m.y), 'turn': t}
+        for o in (bots or []):                        # 마지막 목격(동료) — bots 는 view() 가 준다
+            if (o.get('char') != bot.get('char') and o.get('alive') and not o.get('won')
+                    and (o['x'], o['y']) in seen):
+                led['moving']['b%s' % o['char']] = {'id': 'b%s' % o['char'], 'char': o['char'],
+                                                    'x': o['x'], 'y': o['y'],
+                                                    'zone': self._zone_label(o['x'], o['y']),
+                                                    'turn': t}
+        rid = self._room_id_at(bot['x'], bot['y'])    # 방문 구역 — "내가 어느 방에 있(었)다" 감각
+        if rid is not None and rid not in led['zones']:
+            led['zones'][rid] = {'id': 'r%d' % rid, 'turn': t}
+
     def _perceive(self, bot, r=MON_SIGHT):
         """봇 FOV 내 *비은닉(non-concealed)* 몹을 aware_of에 등록(처음 보는 것만). 반환 = 새로 본 Monster 목록.
         인지=시야(굴림 아님 — 관전자 방향감). step_order(자동보행)·view(think-tick)가 *같은 훅*을 써
@@ -1345,6 +1485,8 @@ class Dungeon:
             매복(they-ambush)으로 처리된다. = '투명/매복몹'(Stage3) 솔기가 자동으로 매트릭스에 합류.
           · (Stage3 search-on-move 수동 인지도 이 훅에 additive로 얹힌다.)"""
         seen = self.visible_cells(bot['x'], bot['y'], r)
+        self._ledger_note(bot, seen)      # 공간 장부(D17) — 지각과 같은 훅(단일 소스): 자동보행
+                                          #   스텝에도 '지나오며 본 것'이 적힌다(동료는 view 가 보강)
         newly = [m for m in self.monsters
                  if m.alive and not m.concealed and (m.x, m.y) in seen
                  and m.id not in bot['aware_of']]
@@ -1445,6 +1587,12 @@ class Dungeon:
             res.update(crit=(r == 20), dmg=dmg, monster_hp=max(0, mon.hp))
             if mon.hp <= 0:
                 mon.alive = False; res['killed'] = True
+                for o in (bots or []):    # 목격한 죽음은 장부에서 지운다(D17 교정 — 죽는 걸 본
+                    if (o.get('alive') and not o.get('won')       # 몹이 '마지막 목격'으로 살아
+                            and o.get('ledger') is not None       # 있는 척 잔존하는 유령 방지,
+                            and (mon.x, mon.y) in self.visible_cells(o['x'], o['y'])):
+                        o['ledger']['moving'].pop('m%d' % mon.id, None)   # 리뷰 픽스.
+                        # 안 본 죽음은 안 지운다 — 지우면 그게 역누설이다
         if mon.alive:                            # 공격받음 = 완전 각성(justAlerted 우회)
             mon.waking = 0                       # 취약창 소비 — 안 끄면 기습→skip→waking 미소비 무한 스턴락
             if mon.state != 'FLEEING':           # 도주몹은 도주 지속(HUNTING 뒤집으면 flee 시계 리셋 교란)
@@ -1703,6 +1851,14 @@ class Dungeon:
                 'monsters': [m.as_dict() for m in self.monsters]}
 
 
+def new_ledger():
+    """공간 장부(D17-1) 빈 원장 — 러너가 봇에 꽂아 켠다(bot['ledger']=new_ledger()).
+    구조를 한 곳에서 소유(러너·시나리오·검증이 제각각 dict 를 빚으면 드리프트).
+    statics=제자리 목격물(id 키) / moving=마지막 목격(몹·동료) / zones=방문 구역.
+    장부=층의 기억 — 층 전이 재스폰 때 새로 꽂는다(도감=플레이어의 기억과 대비, D17)."""
+    return {'statics': {}, 'moving': {}, 'zones': {}}
+
+
 def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None):
     """캐릭터 시트를 입혀 봇을 던전에 놓는다. sheet=None 이면 내장 HEROES[char]
     (하위호환 — 기존 verify 들의 spawn(d,'1',[]) 그대로 통과). 시트 외부화(party.json)는
@@ -1756,6 +1912,9 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None):
                                             # 곁 대기 중 대상 제자리 연속 관측. 화이트리스트 밖
             'searched': set(),              # 이 봇이 능동 수색으로 살핀 칸(자기 행동 기억 — 세계 정보
                                             # 아님. 리모컨 수색 라벨의 '이미 살폈다' 사실 주석 근거)
+            'ledger': None,                 # 공간 장부(D17-1): None=끔(도감 known=None 선례 —
+                                            # 기존 verify/헤들리스 무변경 통과). 러너가 new_ledger()
+                                            # 를 꽂아 켠다. 층 전이=재스폰에서 새 원장(층의 기억)
             'plan': []}                     # 작정(D16) 남은 수 — 층 전이는 재스폰(새 dict)이라 자동
                                             # 리셋(target id 가 층-로컬. intent 와 같은 논리)
 
@@ -1818,6 +1977,7 @@ def run(max_turns=300, brain=dummy_brain, verbose=True):
     bots.append(spawn(d, '1', bots))
     bots.append(spawn(d, '2', bots))
     for tick in range(1, max_turns + 1):
+        d.turn = tick                                       # 장부 목격 스탬프(판정 무관여)
         for b in bots:
             if not b['alive'] or b['won']:
                 continue
