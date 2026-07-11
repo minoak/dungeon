@@ -38,6 +38,11 @@ if os.environ.get("DUNGEON_MENU", "1") != "0" and not MENU_PROMPT:
     import sys
     print("[경고] adventurer_prompt_menu.md 없음 — 리모컨 끄고 자유서술로 폴백", file=sys.stderr)
 
+# D17-4 직렬화 스위치: LLM 에게 보내는 obs 표현(wire)에서 큰 덩어리를 한 변수씩 끄는 노브.
+# obs dict 자체(스트림·BYO·검증 계약)는 불변 — 여기는 '보여주는 방법'만 만진다(options 선례).
+OBS_ASCII = os.environ.get("DUNGEON_OBS_ASCII", "1") != "0"   # 7×7 그림+기호 줄
+OBS_POS = os.environ.get("DUNGEON_OBS_POS", "1") != "0"       # 생좌표 pos 줄
+
 # WSL 인터롭 네이티브 exe. npm 래퍼(claude)는 stdin 대기로 멈추므로 .exe 고정.
 CLAUDE_BIN = "claude.exe"
 TIMEOUT = 60   # 콜드스타트 ~8초라 넉넉
@@ -140,6 +145,254 @@ def _sheet(bot, roster=None):
     return "\n".join(lines) + "\n"
 
 
+def _last_prose(last, names=None):
+    """직전 결과(obs.last)를 1인칭 사실 문장으로 — show_runner.act_summary(관전 3인칭)의 자매.
+    어휘 전거 = STREAM_FORMAT.md 이벤트 표. 모르는 형태는 컴팩트 JSON 폴백(정보 무소실 —
+    미래 additive 필드의 안전망, verify_wire ③이 실전 폴백 0을 감시)."""
+    t, r = last.get("type"), last.get("result")
+    tgt = str(last.get("target", "") or "")
+    if t == "hurt":
+        s = "%s(%s)에게 맞았다 — %d 피해, 남은 HP %d" % (
+            last.get("by", "?"), last.get("by_id", "?"),
+            last.get("dmg", 0), last.get("hp", 0))
+        return s + (" — 기습당했다!" if last.get("surprise") else "")
+    if t == "plan_broken":
+        st = last.get("step") or {}
+        return "작정이 깨졌다(%s) — 못 이룬 수: %s. 남은 계획은 접혔다, 새로 판단하라" % (
+            last.get("why", "?"),
+            " ".join(str(st[k]) for k in ("type", "target") if k in st) or "?")
+    if t == "walk":
+        if r == "encounter":
+            bits = []
+            if last.get("monsters"):
+                bits.append("처음 보는 적: " + ", ".join(
+                    m.get("kind", "?") for m in last["monsters"]))
+            tr = last.get("trap")
+            if tr:
+                if tr.get("safe"):
+                    bits.append("%s을(를) 알아채고 피했다" % tr.get("name", "함정"))
+                elif tr.get("alarm") is not None:
+                    bits.append("%s이(가) 울렸다!! 근방의 적들이 깼다" % tr.get("name", "경보"))
+                else:
+                    bits.append("%s에 당했다 — %d 피해" % (tr.get("name", "함정"), tr.get("dmg", 0)))
+            if last.get("treasure"):
+                bits.append("보물을 주웠다")
+            if last.get("found"):
+                bits.append("발견: " + ", ".join(f.get("name", "?") for f in last["found"]))
+            return "걷다 멈췄다 — " + (" / ".join(bits) or "새로운 것을 봤다")
+        if r == "blocked":
+            if last.get("allies"):
+                return ("가려던 길이 막혔다 — 동료(%s)가 길목에 서 있어 크게 돌아야 한다"
+                        % ", ".join(a.get("name", "?") for a in last["allies"]))
+            if last.get("monsters"):
+                return ("가려던 길이 막혔다 — %s이(가) 길목을 점거하고 있다"
+                        % ", ".join(m.get("kind", "?") for m in last["monsters"]))
+            return "가려던 길이 막혔다"
+        if r == "lost":
+            return ("%s를 마지막 본 자리까지 갔지만 — 곁에 없다"
+                    " (지금 시야에 보이면 비껴 선 것, 안 보이면 어디 갔는지 모른다)" % tgt)
+        if r == "idle":
+            return ("동행을 접었다 — %s이(가) 한동안 제자리라 같이 서 있기만 했다."
+                    " 이제 뭘 할지 네가 정하라" % tgt.replace("follow:", ""))
+        if r == "arrived":
+            return "%s 곁에 도착했다" % (tgt or "목적지")
+        if r == "at_exit":
+            return "계단 앞에 섰다"
+        if r == "treasure":
+            return "길에서 보물을 주웠다"
+    if t == "attack":
+        if r == "no_target":
+            return "공격 — 대상이 그 자리에 없었다"
+        if r == "too_far":
+            return "공격 — 너무 멀었다(붙어야 친다)"
+        if r == "attack":
+            if not last.get("hit"):
+                return "%s을(를) 쳤지만 — 빗나갔다" % (tgt or "?")
+            s = "%s을(를) 쳤다 — 명중, %d 피해" % (tgt or "?", last.get("dmg", 0))
+            if last.get("killed"):
+                s += ", 쓰러뜨렸다!"
+            return ("기습! " if last.get("surprise") else "") + s
+    if t == "interact":
+        if r == "exit":
+            return "다 모여서 — 함께 내려갔다(%s)" % "·".join(last.get("party", []))
+        if r == "wait_allies":
+            return ("계단에서 하강을 시도했지만 — 아직 안 모였다(빠진 동료: 봇%s)."
+                    " 기다리거나 데리러 가라" % "·".join(last.get("missing", [])))
+        if r == "chest_loot":
+            return "상자를 열었다 — 보물 %d개!" % last.get("loot", 0)
+        if r == "chest_trap":
+            return "상자에서 독침이 튀었다 — %d 피해" % last.get("dmg", 0)
+        if r == "fountain_heal":
+            return "샘물을 마셨다 — HP %d 회복" % last.get("heal", 0)
+        if r == "fountain_harm":
+            return "샘물이 오염돼 있었다 — %d 피해" % last.get("dmg", 0)
+        fin = {"treasure": "보물을 주웠다", "nothing": "아무것도 없었다",
+               "too_far": "너무 멀었다(붙어야 만진다)", "no_target": "대상이 그 자리에 없었다"}
+        if r in fin:
+            return "상호작용(%s) — %s" % (tgt or "?", fin[r])
+    if t == "search":
+        f = last.get("found") or []
+        if f:
+            return "수색해서 드러냈다: " + ", ".join(
+                "%s(%s쪽)" % (x.get("name", "?"), x.get("bearing", "?")) for x in f)
+        return "수색했지만 — 이 근방에 숨은 건 없었다"
+    if t in ("goto", "explore", "follow"):
+        if r == "blocked" and last.get("allies"):
+            return ("가려던 길이 막혔다 — 동료(%s)가 길목에 서 있어 크게 돌아야 한다"
+                    % ", ".join(a.get("name", "?") for a in last["allies"]))
+        if r == "arrived":
+            return "%s — 이미 곁이다" % (tgt or "?")
+        if r == "no_path":
+            return "탐색하려 했지만 — 지금 갈 수 있는 새 길이 없다"
+        if r == "following":
+            return "%s 곁에서 동행을 시작했다" % tgt
+        if r == "pathed":
+            return ("%s 쪽으로 걷기 시작했다" % tgt
+                    if tgt and tgt != "auto" else "새 길로 걷기 시작했다")
+    return json.dumps(last, ensure_ascii=False)        # 미지 형태 — 정직한 폴백(숨기지 않는다)
+
+
+# _wire 가 아는 obs 키 전부 — 밖의 키는 '그 밖의 정보' JSON 으로 정직하게 노출(조용한 누락 금지).
+_WIRE_KEYS = frozenset((
+    "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "depth", "turn",
+    "zone", "known", "witnessed", "last", "order", "ascii_view", "legend",
+    "sights", "party", "options", "messages", "intent"))
+
+
+def _wire(obs, names=None):
+    """obs(dict 계약) → 자기설명 한국어 사실 문장(D17-3). LLM 두뇌 전용 표현 층 —
+    dict 계약(스트림·BYO·검증)은 무변경, 여기는 '보여주는 방법'만 소유한다.
+    원칙: obs 에 있는 사실만 문장으로(시야-온리는 입력에서 이미 보장), 해석·추천은 싣지
+    않는다(사실 주석만 — 리모컨 라벨 문법의 확장). state 번역표 등 프롬프트의 obs
+    사용설명서를 이 문장들이 대체한다(프롬프트 다이어트의 짝)."""
+    names = names or {}
+
+    def nm(char):
+        return "%s(봇%s)" % (names.get(char, "동료"), char)
+
+    def at(o):
+        if o.get("dist") == 0:
+            return "발밑"
+        s = "%s, 거리 %d" % (o.get("bearing", "?"), o.get("dist", 0))
+        return s + (", 인접" if o.get("adj") else "")
+
+    now = obs.get("turn")
+
+    def ago(t):
+        if now is None:
+            return "턴 %s에" % t
+        d = now - t
+        return "방금" if d <= 0 else "%d턴 전에" % d
+
+    L = ["## 네 상태"]
+    L.append("- 너는 %s(%s) — HP %d/%d, 힘 +%d, 민첩 +%d, 모은 보물 %d개 — 지금 %d층"
+             % (obs.get("job", "?"), obs.get("sex", ""), obs.get("hp", 0), obs.get("maxhp", 0),
+                obs.get("str", 0), obs.get("dex", 0), obs.get("inventory", 0),
+                obs.get("depth", 1)))
+    z = obs.get("zone")
+    if z:
+        L.append("- 서 있는 곳: %s" % (("%s %s" % (z.get("kind", "방"), z["id"]))
+                                       if z.get("id") else z.get("kind", "통로")))
+    if OBS_POS and obs.get("pos"):
+        L.append("- 좌표: %s" % obs["pos"])
+    if obs.get("order"):
+        L.append("- 진행 중이던 핑: %s" % obs["order"])
+
+    if OBS_ASCII and obs.get("ascii_view"):
+        L += ["", "## 주변 그림 (7×7 — 가운데 @가 너, 빈칸은 벽 뒤라 안 보이는 곳)", "```"]
+        L += list(obs["ascii_view"])
+        L += ["```",
+              "기호: # 벽 · . 바닥 · , 발자국 · $ 보물 · > 계단 · M 몬스터"
+              " · ^ 드러난 함정 · = 상자 · ~ 샘 · 숫자=동료"]
+
+    L += ["", "## 지금 보이는 것"]
+    s = obs.get("sights") or {}
+    n0 = len(L)
+    ex = s.get("exit")
+    if ex:
+        L.append("- 계단(exit) — %s" % at(ex))
+    for m in s.get("monsters", []):
+        L.append("- %s — %s" % (G._mfact(m), at(m)))
+        if m.get("lore"):
+            L.append("  · 네가 아는 습성: %s" % m["lore"])
+    for f in s.get("features", []):
+        L.append("- %s %s — %s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
+                                     " (와 본 자리)" if f.get("visited") else ""))
+    for b in s.get("bots", []):
+        L.append("- 동료 %s — 겉보기 %s — %s" % (nm(b.get("char", "?")),
+                                                 b.get("condition", "?"), at(b)))
+    for w in s.get("ways", []):
+        L.append("- %s쪽으로 트인 길 — 거리 %d, %s%s"
+                 % (w.get("bearing", "?"), w.get("dist", 0),
+                    "발자국 있음(가 본 길)" if w.get("visited") else "안 가본 길",
+                    (", %s 방향" % w["zone"]) if w.get("zone") else ""))
+    if len(L) == n0:
+        L.append("- (아무것도 안 보인다)")
+
+    pt = obs.get("party") or []
+    if pt:
+        L += ["", "## 파티 명단"]
+        for p in pt:
+            if not p.get("alive"):
+                st = "쓰러졌다"
+            elif p.get("won"):
+                st = "먼저 내려갔다"
+            elif p.get("visible"):
+                st = "시야 안(위 목록에 있다)"
+            else:
+                st = "시야 밖 — 말은 안 닿고, 찾아갈 수는 있다(파티 감각)"
+            L.append("- %s, %s — %s" % (nm(p.get("char", "?")), p.get("job", "?"), st))
+
+    k = obs.get("known")
+    if k and (k.get("statics") or k.get("last_seen") or k.get("zones")):
+        L += ["", "## 네가 기억하는 것 (이 층에서 직접 봄 — 지금은 시야 밖)"]
+        for e in k.get("statics", []):
+            L.append("- %s%s — %s에서 %s 봄%s"
+                     % (e.get("name", "?"),
+                        (" %s" % e["id"]) if e.get("id") else "",
+                        e.get("zone", "?"), ago(e.get("turn", 0)),
+                        "" if e.get("id") else " (위치만 기억해 둔 것)"))
+        for e in k.get("last_seen", []):
+            who = nm(e["char"]) if e.get("char") else (
+                "%s %s" % (e.get("kind", "?"), e.get("id", "?")))
+            L.append("- %s — %s에서 %s 마지막으로 봄 (지금도 거기 있단 보장은 없다)"
+                     % (who, e.get("zone", "?"), ago(e.get("turn", 0))))
+        zs = k.get("zones", [])
+        if zs:
+            L.append("- 가 본 방: " + ", ".join(x.get("id", "?") for x in zs))
+
+    it, la, wit = obs.get("intent"), obs.get("last"), obs.get("witnessed")
+    if it or la or wit:
+        L += ["", "## 네 직전 판단과 그 결과 (네 자신의 기억)"]
+        if it:
+            line = "- 직전 판단: %s" % it.get("type", "?")
+            if it.get("target"):
+                line += " %s" % it["target"]
+            if it.get("reason"):
+                line += ' — 이유: "%s"' % it["reason"]
+            L.append(line)
+            if it.get("say"):
+                L.append('  그때 동료에게 한 말: "%s"' % it["say"])
+        if la:
+            L.append("- 그 결과: %s" % _last_prose(la, names))
+        for w in (wit or []):
+            L.append("- 네 눈으로 봤다: %s(봇%s)가 %s에게 %s 것을"
+                     % (w.get("name", "동료"), w.get("char", "?"), w.get("by", "?"),
+                        "쓰러지는" if w.get("kind") == "ally_down" else "맞는"))
+
+    ms = obs.get("messages")
+    if ms:
+        L += ["", "## 동료가 네게 한 말 (지난 턴)"]
+        for m in ms:
+            L.append('- %s: "%s"' % (nm(m.get("from", "?")), m.get("text", "")))
+
+    extra = {kk: v for kk, v in obs.items() if kk not in _WIRE_KEYS}
+    if extra:                       # 미래 additive 필드 — 조용한 누락 대신 정직한 노출
+        L += ["", "## 그 밖의 정보", "```json",
+              json.dumps(extra, ensure_ascii=False), "```"]
+    return "\n".join(L)
+
+
 def _pick(obj, obs):
     """리모컨 응답 {"choice": n} → obs['options'][n] 의 액션으로 해석.
     유효하면 {type, target?, choice} — choice 는 스트림 기록용(additive), 엔진 act 는 무시.
@@ -216,20 +469,20 @@ def claude_brain(obs, char="?", bot=None, roster=None):
     if bot is None:                          # 하위호환(구 시그니처): HEROES 로 유사 봇 구성
         h = G.HEROES.get(char, {})
         bot = {**h, "char": char, "maxhp": h.get("hp")}
+    # D17-3: obs 는 JSON 덤프가 아니라 자기설명 문장(_wire)으로 나간다 — dict 계약은 불변.
+    # options 는 _wire 가 렌더하지 않는다: 메뉴 모드=아래 번호 목록이 그것, 자유서술=비노출(순수성).
+    names = {o["char"]: (o.get("name") or o.get("job", "동료")) for o in (roster or [])}
     if MENU:
         menu = "\n".join("%d. %s" % (o["n"], o["label"])
                          for o in (obs.get("options") or []))
         prompt = (_sheet(bot, roster) + "\n" + MENU_PROMPT
-                  + "\n\n## 이번 턴 입력 (obs)\n```json\n"
-                  + json.dumps(obs, ensure_ascii=False)
-                  + "\n```\n\n## 이번 턴 선택지 — 이 중 번호 하나를 골라라\n" + menu
+                  + "\n\n" + _wire(obs, names)
+                  + "\n\n## 이번 턴 선택지 — 이 중 번호 하나를 골라라\n" + menu
                   + "\n\n오직 JSON 한 줄로만 답하라.")
     else:
-        wire = {k: v for k, v in obs.items() if k != "options"}  # 대조군(자유서술) 순수성 — 메뉴 미노출
         prompt = (_sheet(bot, roster) + "\n" + ADV_PROMPT
-                  + "\n\n## 이번 턴 입력 (obs)\n```json\n"
-                  + json.dumps(wire, ensure_ascii=False)
-                  + "\n```\n오직 JSON 한 줄로만 답하라.")
+                  + "\n\n" + _wire(obs, names)
+                  + "\n\n오직 JSON 한 줄로만 답하라.")
     res = _call_claude(prompt, "haiku")
     # verify/스모크가 _call_claude 를 str 반환 람다로 모킹한다 — 그 표면을 깨지 않는 하위호환.
     raw, why = res if isinstance(res, tuple) else (res, None)

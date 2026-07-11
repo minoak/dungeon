@@ -54,9 +54,16 @@ def derive(dec):
     return it
 
 
-def obs_from_prompt(prompt):
-    m = re.search(r"```json\n(.*?)\n```", prompt, re.S)
-    return json.loads(m.group(1)) if m else {}
+def wire_tap(sink):
+    """brains._wire 래핑 — 프롬프트로 나가기 직전의 obs(dict 원형)를 캡처.
+    (구판은 프롬프트의 ```json 블록을 파싱했다 — D17-3 문장형 직렬화로 JSON 블록이 사라져
+    캡처 지점을 wire 입구로 옮김. 검사 본질 'LLM 이 실제로 보는 것' 불변.)"""
+    orig = brains._wire
+
+    def tap(obs, names=None):
+        sink.append(obs)
+        return orig(obs, names)
+    return tap
 
 
 # ───────────────────── ①~④ 유닛(스텁 _call_claude, 실 claude_brain 경유) ─────────────────────
@@ -69,29 +76,31 @@ def stub_factory(sink):
 
 
 def units():
-    prompts = []
+    prompts, seen = [], []
     brains._call_claude = stub_factory(prompts)
+    orig_wire = brains._wire
+    brains._wire = wire_tap(seen)
     d = G.Dungeon(seed=7)
     bots = []
     for c in "12":
         bots.append(G.spawn(d, c, bots))
 
     dec1 = brains.think_all(d, bots, {})
-    first = [obs_from_prompt(p) for p in prompts]
+    first = list(seen)
     check("① 첫 결정 obs 에 intent 없음 (%d봇)" % len(first),
           len(first) == 2 and all("intent" not in o for o in first))
     check("① 결정 후 bot['intent'] == 파생값",
           all(b["intent"] == derive(dec1[b["char"]]) for b in bots))
 
-    prompts.clear()
+    prompts.clear(); seen.clear()
     dec2 = brains.think_all(d, bots, {})
-    second = {json.dumps(o.get("pos")): o for o in (obs_from_prompt(p) for p in prompts)}
     ok2 = 0
     for b in bots:
-        o = next((v for v in second.values() if v.get("pos") == [b["x"], b["y"]]), None)
+        o = next((v for v in seen if v.get("pos") == [b["x"], b["y"]]), None)
         if o is not None and o.get("intent") == derive(dec1[b["char"]]):
             ok2 += 1
     check("② 두 번째 결정 obs.intent == 직전 결정 (%d/2)" % ok2, ok2 == 2)
+    brains._wire = orig_wire
 
     save = bots[0].get("order")
     bots[0]["order"] = {"kind": "_verify"}          # think_all 은 truthiness 만 본다

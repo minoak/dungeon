@@ -148,7 +148,8 @@ def units():
     dec = brains.think_all(d, [b1], {})
     check("③ 파기 봇 같은 틱 LLM 재결정(src≠plan) + obs 에 plan_broken 노출",
           dec["1"].get("src") != "plan" and len(calls) == 1 and
-          '"plan_broken"' in calls[0])
+          "작정이 깨졌다" in calls[0])   # D17-3: wire 가 문장형 — plan_broken 은
+                                         #   _last_prose 어휘("작정이 깨졌다")로 노출된다
 
     # ④ 인터럽트 파기 — 피격 / 경로 경합(blocked)
     hurt_bot = G.spawn(G.Dungeon(seed=9), "1", [])

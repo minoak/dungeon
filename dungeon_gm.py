@@ -41,6 +41,19 @@ def _wound_label(hp, maxhp):
     if hp * 3 <= maxhp * 2:
         return '다침'
     return '가벼운 상처'
+
+
+def _mfact(m):
+    """몹 한 줄 사실 문장 — 리모컨 라벨과 wire 직렬화(D17-3)가 같은 문구를 쓴다(단일 소스).
+    state 코드의 한국어 번역이 여기 산다 — 프롬프트의 번역표는 폐기(obs 자기설명)."""
+    st = {'SLEEPING': '잠듦(날 못 봄)', 'WANDERING': '배회(날 못 봄)',
+          'FLEEING': '도주 중'}.get(m['state'])
+    if m['state'] == 'HUNTING':
+        # aware:false 라도 '동료를 추격'이라 단정하면 거짓이 될 수 있다(표적이 이미
+        # 죽었거나 하강한 유예 구간) + 인접 몹은 표적 무관 아무나 무는 규칙이라 오도됨.
+        st = ('나를 추격 중' if m['aware']
+              else '추격 중(표적은 내가 아님 — 단 인접하면 누구든 물린다)')
+    return '%s %s — %s, HP %d' % (m['kind'], m['id'], st, m['hp'])
 # EXIT 글리프 = '>' (구 'E'는 이동방향 East와 충돌 → '>'로 분리). 봇은 'E'를 출구로 영영 안 본다.
 VISITED = ','   # 시야에서 '이미 가본 바닥' 표시 (파티 공유 발자국). 단일폭 ASCII.
 # 바닥은 '.'(ASCII 폭1) — 가운뎃점 '·'(U+00B7)은 ambiguous-width라 한글 폰트에서
@@ -781,16 +794,7 @@ class Dungeon:
                 o['target'] = target
             options.append(o)
 
-        def _mfact(m):
-            st = {'SLEEPING': '잠듦(날 못 봄)', 'WANDERING': '배회(날 못 봄)',
-                  'FLEEING': '도주 중'}.get(m['state'])
-            if m['state'] == 'HUNTING':
-                # aware:false 라도 '동료를 추격'이라 단정하면 거짓이 될 수 있다(표적이 이미
-                # 죽었거나 하강한 유예 구간) + 인접 몹은 표적 무관 아무나 무는 규칙이라 오도됨.
-                st = ('나를 추격 중' if m['aware']
-                      else '추격 중(표적은 내가 아님 — 단 인접하면 누구든 물린다)')
-            return '%s %s — %s, HP %d' % (m['kind'], m['id'], st, m['hp'])
-
+        # _mfact = 모듈 함수(D17-3에서 승격) — 리모컨 라벨과 wire 직렬화의 문구 단일 소스.
         for m in mons:
             if m['adj']:
                 _add('attack', m['id'], '공격: %s (인접)' % _mfact(m))
@@ -876,6 +880,8 @@ class Dungeon:
                 **({'zone': {'id': ('r%d' % rid_here) if rid_here is not None else None,
                              'kind': '방' if rid_here is not None else '통로'}}
                    if led is not None else {}),        # 구역 어휘(D17-2) — 장부 스위치와 한 몸
+                **({'turn': self.turn} if led is not None else {}),   # 장부 turn 스탬프의 '지금'
+                                                       # — wire 가 'N턴 전'을 셈(D17-3). 장부와 한 몸
                 **({'known': known_obs} if known_obs is not None else {}),   # 공간 장부(D17-1)
                 **({'witnessed': wit} if wit else {}),   # 목격(A-3) — 있을 때만 실림(intent 선례)
                 'last': bot.get('last'),      # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의
