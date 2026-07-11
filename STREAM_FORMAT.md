@@ -99,10 +99,11 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 
 | type | 필드 | 의미 |
 |---|---|---|
-| `goto` | `target`, `result=pathed(len)/arrived` | 핑 → 자동보행 개시(pathed) / 이미 곁(arrived). 무효·도달불가 핑은 엔진이 explore 로 폴백하므로 **goto 의 no_path 는 나가지 않는다**(type 자체가 explore 로 바뀜) |
+| `goto` | `target`, `result=pathed(len)/arrived/blocked(allies[])` | 핑 → 자동보행 개시(pathed) / 이미 곁(arrived). 무효·도달불가 핑은 엔진이 explore 로 폴백하므로 **goto 의 no_path 는 나가지 않는다**(type 자체가 explore 로 바뀜). `blocked`(2026-07-11 D18 additive) = 동료가 길목을 점유해 경로가 대우회로 폭증(사회적 봉쇄) — 말없이 행군하지 않고 멈춰 보고, `allies[]` 에 막는 동료 명단 |
 | `explore` | `target`(방위 or `auto`), `result=pathed(len, bearing?, to_exit?)/no_path` | 탐색: 시야 내 미지의 문으로(pathed+bearing). 더 볼 곳 없으면 출구 행군(pathed+to_exit:true). 갈 곳 자체가 없으면 no_path |
 | `walk` | `target`(order), `to?=[x,y]`, `result=walking/arrived/lost/treasure/at_exit/blocked/encounter` | 자동보행 한 걸음. `to` 는 **실제로 이동한 틱에만** 있다 — blocked·경로 소진 arrived/lost(이동 없이 소진)·움직이는 목표(몹·동료) 곁 도달 arrived(target 만 있음) 엔 없다(마지막 한 걸음과 함께 소진되면 lost 에도 `to` 가 있다). `lost` = 움직이는 목표(`m<n>`/`b<char>`) 또는 소모성 피처(`f<n>` — 동료가 먼저 소비) 핑의 경로 소진 지점에 도착했으나 **대상이 그 자리에 없음**(이동·사망·하강·소비 — 2026-07-05 additive, 유령 좌표 보고 정직화. 구판 스트림은 이 경우를 arrived 로 기록. 의미는 '직교 곁에 없다'까지 — 대각 1칸 비껴섬 포함). `treasure` 는 그 칸이 order 목표(=path 소진)였다면 **그 자리에서 order 완결**(후속 arrived/lost 라인 없음 — 자기 소비와 동료 소비의 구분). treasure=길에서 보물 줍고 계속. at_exit=계단 앞 정지. **encounter = *새 정보*로 인한 보행 정지**(D1 개정 2026-07-04: 처음 보는 몹·함정·발견만 — 이미 알던 몹의 인접·지속으로는 멈추지 않는다. 구 pre_adj/adj_mon encounter 는 더 안 나간다). `blocked` 에 `monsters[]` 가 붙으면 보이는 몹이 다음 칸을 점거해 멈춰 보고한 것(경로 경합). 서브필드: |
 | | ↳ `monsters[]` | 마주친(encounter) / 길목 점거(blocked) 적 `{id,kind,state}` |
+| | ↳ `allies[]` | 길목 점거(blocked) 동료 `{char,name}` — 재경로가 동료發 대우회일 때(2026-07-11 D18 additive. goto blocked 와 동형) |
 | | ↳ `trap` | 함정 `{kind,name,roll,mod,total,dc,safe, dmg?,hp?,down?, alarm?}` — alarm=경보 함정이 깨운 몹 수 |
 | | ↳ `treasure` | true — 같은 걸음에 보물도 주움 |
 | | ↳ `found[]` | 걸으며 인지한 숨은 것 `{kind,name,bearing,id?}` |

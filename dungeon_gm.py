@@ -55,6 +55,10 @@ FLEE_STAMINA = 8         # 봇에게 보이며 도주한 턴 누적이 이만큼
 EXIT_GATHER = 3          # 하강 조율: 살아있는 파티 전원이 계단 반경(체비셰프) 이내여야 내려간다(솔로탈출 방지)
 PLAN_MAX = 2             # 작정(D16): 현재 행동에 이어 미리 정해둘 수 있는 수의 상한 —
                          # 귀머거리 창(작정 집행 중엔 inbox 를 다음 결정점까지 못 읽음) 억제
+DETOUR_FACTOR = 2        # 사회적 대우회 감지(D18): 동료를 피해 깐 경로가 '동료 없다 치고'의 최단 대비
+DETOUR_SLACK = 2         #   FACTOR배+SLACK칸을 넘고, 그 최단길 위에 동료가 서 있으면 → 말없는 행군
+                         #   대신 blocked 보고(누가 막는지 allies 로) — 라이브 22틱 두란 서쪽 행군 부검.
+                         #   지형이 원래 먼 것(free 도 길다)은 정당한 지리 — 감지 대상 아님.
 
 # ── 캐릭터 시트 (영웅) ───────────────────────────────────────────
 # d20 + 능력보정 vs 목표(AC/DC). 전사=힘·HP, 도적=민첩(함정 회피·기습).
@@ -920,8 +924,26 @@ class Dungeon:
             return ('bot', (o['x'], o['y'])) if o else None
         return None
 
+    def _ally_jam(self, bot, tx, ty, path, bots):
+        """사회적 대우회 감지(D18) — 방금 깐 path 가 '동료 때문에' 폭증했는지 판정.
+        동료 없다 치고의 최단(free)과 비교해 path 가 FACTOR배+SLACK 을 넘고, 그 free 길 위에
+        살아있는 동료가 서 있으면 막는 동료 명단 반환 — 아니면 None.
+        지형이 원래 먼 것(free 도 길다)·몹이 막는 것(경로 경합 규칙 별도)은 감지 대상 아님.
+        부검: 라이브 22틱 — 카야가 좁은 통로 거미의 유일 접근칸을 점유 → path_to 가 19칸 서쪽
+        대우회를 말없이 깔아 두란이 전장 반대편으로 행군, 그 사이 카야 사망(무목격)."""
+        if not path:
+            return None
+        free = self.path_to(bot['x'], bot['y'], tx, ty, [])
+        if not free or len(path) <= DETOUR_FACTOR * len(free) + DETOUR_SLACK:
+            return None
+        cells = set(free)
+        jam = [o for o in bots if o is not bot and o['alive'] and not o['won']
+               and (o['x'], o['y']) in cells]
+        return jam or None
+
     def _set_order(self, bot, target_id, bots):
-        """핑 목표로 BFS 경로(path_to)를 깐다 = 자동보행 준비. 목표 무효면 explore 폴백(헤맴 방지·v3)."""
+        """핑 목표로 BFS 경로(path_to)를 깐다 = 자동보행 준비. 목표 무효면 explore 폴백(헤맴 방지·v3).
+        D18: 동료가 길목을 막아 경로가 폭증하면 말없이 행군하지 않고 blocked 로 묻는다(_ally_jam)."""
         resolved = self._resolve_target(target_id, bots)
         if resolved is None:
             return self._set_explore(bot, None, bots)        # 무효 핑 → 탐색(출구 떠먹이기 폐기)
@@ -935,6 +957,13 @@ class Dungeon:
                 bot['order'] = None
                 return {**base, 'result': 'arrived'}
             return self._set_explore(bot, None, bots)    # 도달불가 핑 → 탐색 폴백(무효핑과 대칭·재핑 livelock 차단)
+        jam = self._ally_jam(bot, tx, ty, path, bots)
+        if jam:                                          # 동료가 길목 점유 = 새 정보 — 멈춰 보고, 에이전트가 정한다
+            bot['order'], bot['path'], bot['plan'] = None, [], []   # (비켜달라 말하든, 돌아가길 택하든)
+            self._perceive(bot)                          # 멈춘 자리에서도 눈은 뜨고 — 거짓 매복 방지
+            return {**base, 'result': 'blocked',
+                    'allies': [{'char': o['char'], 'name': o.get('name') or o['job']}
+                               for o in jam]}
         return {**base, 'result': 'pathed', 'len': len(path)}
 
     def _set_explore(self, bot, direction, bots):
@@ -1018,10 +1047,16 @@ class Dungeon:
                                       'state': blocker.state}]}
             res = self._resolve_target(bot['order'], bots)     # 동료·은닉몹 점거 → 재경로 1회
             bot['path'] = self.path_to(bot['x'], bot['y'], res[1][0], res[1][1], bots) if res else []
-            if not bot['path'] or not self.walkable(*bot['path'][0], bots):
+            jam = (self._ally_jam(bot, res[1][0], res[1][1], bot['path'], bots)
+                   if res else None)          # 재경로가 동료發 대우회면 여기서도 멈춰 묻는다(D18)
+            if not bot['path'] or not self.walkable(*bot['path'][0], bots) or jam:
                 bot['order'], bot['path'], bot['plan'] = None, [], []   # 막힘=새 정보 — 작정 파기
                 self._perceive(bot)           # blocked 정지도 눈은 뜨고 — 거짓 매복 방지(위와 동일)
-                return {**base, 'result': 'blocked'}
+                out = {**base, 'result': 'blocked'}
+                if jam:
+                    out['allies'] = [{'char': o['char'], 'name': o.get('name') or o['job']}
+                                     for o in jam]
+                return out
             nx, ny = bot['path'][0]
         bot['path'].pop(0)
         enter = self._enter_cell(bot, nx, ny)         # 이동 + 보물/계단/함정 처리
