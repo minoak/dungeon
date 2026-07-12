@@ -58,11 +58,14 @@ def load_sheets():
     return sheets
 
 
+SCAN_ON = os.environ.get("DUNGEON_SCAN", "0") != "0"   # 스캐너(D19) — 러너와 같은 스위치·같은 기본
+
+
 def build(spec):
     """장면 JSON → (dungeon, bots). 봇은 맵의 숫자 자리 그대로(스폰 탐색 우회)."""
     d, starts = G.Dungeon.from_ascii(spec["map"], seed=spec.get("seed", 7),
                                      monsters=spec.get("monsters"),
-                                     traps=spec.get("traps"))
+                                     traps=spec.get("traps"), scan=SCAN_ON)
     try:
         with open(os.path.join(HERE, "lore.json"), encoding="utf-8") as f:
             d.lore = json.load(f)
@@ -151,6 +154,7 @@ def play(spec, brain, state_dir):
             lurkers=sum(1 for m in d.monsters if m.concealed),
             max_turns=turns, gm=False, stream_obs=False, menu=brains.MENU,
             ledger=True,                       # 장면은 장부(D17) 상시 켬 — 라이브 판과 같은 조건
+            scan=SCAN_ON,                      # 스캐너(D19) 여부 — 정지 물리가 달라진다(비교 전제)
             scenario=spec.get("name"),         # additive — 장면 실행 표식
             turn_now=int(spec.get("turn_now", 0)),   # 장부 시계 원점(additive) — 장부 스탬프는
                                                #   turn_now+tick 시계를 쓴다(리플레이 조인용)

@@ -64,6 +64,12 @@ def _valid_targets(obs, verb="goto"):
         ids.add("exit")
     for k in ("features", "monsters", "bots"):
         ids |= {o["id"] for o in s.get(k, [])}
+    z = obs.get("zone") or {}
+    if isinstance(z.get("doors"), list):    # D19(scan): 문 = 핑 종점(안 보여도 — 구조는 훤히)
+        if verb == "goto":
+            ids |= {d["id"] for d in z["doors"]}
+            if z.get("exit"):               # 같은 공간의 계단은 구조로 안다(방 단위 조명 전통)
+                ids.add("exit")
     for p in obs.get("party", []):          # 살아있는(안 내려간) 동료는 시야 밖이어도 핑 가능
         if p.get("alive") and not p.get("won"):
             ids.add("b%s" % p["char"])
@@ -164,6 +170,19 @@ def _last_prose(last, names=None):
             last.get("why", "?"),
             " ".join(str(st[k]) for k in ("type", "target") if k in st) or "?")
     if t == "walk":
+        if r == "entered":                    # D19 처음 방 정지 — 구조가 열렸다, 보고 정하라
+            zz = last.get("zone") or {}
+            sz = zz.get("size") or []
+            return ("처음 보는 %s%s에 들어섰다 — 걸음을 멈추고 둘러본다%s"
+                    % (zz.get("kind", "공간"),
+                       (" %s" % zz["id"]) if zz.get("id") else "",
+                       ("(크기 %d×%dm)" % tuple(sz)) if len(sz) == 2 else "")
+                    + (" — 오는 길에 보물도 주웠다" if last.get("treasure") else ""))
+        if r == "sighted":                    # D19 탐색 종점 — 새 명사가 나타나면 멈춤
+            seen_l = last.get("seen") or []
+            return ("걷다 멈췄다 — 새로 눈에 든 것: "
+                    + ", ".join(x.get("name", "?") for x in seen_l)
+                    + (" — 오는 길에 보물도 주웠다" if last.get("treasure") else ""))
         if r == "encounter":
             bits = []
             if last.get("monsters"):
@@ -292,7 +311,8 @@ def _wire(obs, names=None):
                 obs.get("str", 0), obs.get("dex", 0), obs.get("inventory", 0),
                 obs.get("depth", 1)))
     z = obs.get("zone")
-    if z:
+    scan = isinstance((z or {}).get("doors"), list)   # D19 구조 조회가 실려 있으면 트리 직렬화
+    if z and not scan:
         L.append("- 서 있는 곳: %s" % (("%s %s" % (z.get("kind", "방"), z["id"]))
                                        if z.get("id") else z.get("kind", "통로")))
     if OBS_POS and obs.get("pos"):
@@ -309,29 +329,105 @@ def _wire(obs, names=None):
               "기호: # 벽 · . 바닥 · , 발자국 · $ 보물 · > 계단 · M 몬스터"
               " · ^ 드러난 함정 · = 상자 · ~ 샘 · 숫자=동료"]
 
-    L += ["", "## 지금 보이는 것"]
     s = obs.get("sights") or {}
-    n0 = len(L)
-    ex = s.get("exit")
-    if ex:
-        L.append("- 계단(exit) — %s" % at(ex))
-    for m in s.get("monsters", []):
-        L.append("- %s — %s" % (G._mfact(m), at(m)))
-        if m.get("lore"):
-            L.append("  · 네가 아는 습성: %s" % m["lore"])
-    for f in s.get("features", []):
-        L.append("- %s %s — %s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
-                                     " (와 본 자리)" if f.get("visited") else ""))
-    for b in s.get("bots", []):
-        L.append("- 동료 %s — 겉보기 %s — %s" % (nm(b.get("char", "?")),
-                                                 b.get("condition", "?"), at(b)))
-    for w in s.get("ways", []):
-        L.append("- %s쪽으로 트인 길 — 거리 %d, %s%s"
-                 % (w.get("bearing", "?"), w.get("dist", 0),
-                    "발자국 있음(가 본 길)" if w.get("visited") else "안 가본 길",
-                    (", %s 방향" % w["zone"]) if w.get("zone") else ""))
-    if len(L) == n0:
-        L.append("- (아무것도 안 보인다)")
+    if scan:
+        # ── D19 트리 직렬화: 던전 N층 > 공간 > 8방위 슬롯 — 빈 방향도 발화("서쪽: 벽" =
+        # 침묵을 정보로), 1칸=1m, 출처 딱지(구조로 앎/온 적 있음/발각됨 — 구조≠시야 구분 필수).
+        L += ["", "## 장소 (공간의 짜임은 확실히 안다 — 내용물은 눈에 보이는 것만)"]
+        head = "던전 %d층 > %s %s" % (obs.get("depth", 1), z.get("kind", "?"), z.get("id", "?"))
+        if z.get("size"):
+            head += " — 크기 %d×%dm" % tuple(z["size"])
+        if z.get("len") is not None:
+            head += " — 길이 약 %dm" % z["len"]
+        if z.get("at"):
+            head += ", 너는 %s에 있다" % z["at"]
+        L.append("- " + head)
+        KR = {"N": "북쪽", "NE": "북동쪽", "E": "동쪽", "SE": "남동쪽",
+              "S": "남쪽", "SW": "남서쪽", "W": "서쪽", "NW": "북서쪽"}
+        ck = z.get("checked") or {}
+        if ck.get("frac", 1) >= 1:
+            L.append("- 이 공간 안은 눈으로 다 확인했다")
+        else:
+            L.append("- 안을 눈으로 다 확인하진 못했다(대략 %d할)%s"
+                     % (round(ck.get("frac", 0) * 10),
+                        (" — 아직 못 본 쪽: %s" % KR.get(ck.get("todo"), ck.get("todo")))
+                        if ck.get("todo") else ""))
+        order8 = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+        slots = {b: [] for b in order8}
+        under = []                               # 발밑(거리 0)은 방위가 없다 — 따로 한 줄
+
+        def put(bearing, dist, text):
+            if dist == 0 or bearing == "-":
+                under.append(text)
+            elif bearing in slots:
+                slots[bearing].append((dist, text))
+
+        for d in z.get("doors", []):
+            tag = (" (온 적 있는 길)" if d.get("been")
+                   else ("" if d.get("seen") else " (방 구조로 앎, 아직 안 보임)"))
+            put(d.get("bearing"), d.get("dist", 0),
+                ("문 %s — 지금 선 문턱%s" % (d.get("id", "?"), tag)) if d.get("dist") == 0
+                else "문 %s %dm%s" % (d.get("id", "?"), d.get("dist", 0), tag))
+        zx = z.get("exit")
+        if zx:                                   # 같은 공간의 계단 — 안 보여도 구조로 안다
+            put(zx.get("bearing"), zx.get("dist", 0),
+                "계단(exit) %dm (방 구조로 앎, 아직 안 보임)" % zx.get("dist", 0))
+        for e in z.get("ends", []):
+            put(e.get("bearing"), e.get("dist", 0),
+                "%s %dm%s" % (e.get("kind", "?"), e.get("dist", 0),
+                              " (가 본 곳)" if e.get("been") else ""))
+        ex = s.get("exit")
+        if ex:
+            put(ex.get("bearing"), ex.get("dist", 0),
+                "계단(exit) %dm — 눈에 보인다" % ex.get("dist", 0))
+        for m in s.get("monsters", []):
+            put(m.get("bearing"), m.get("dist", 0),
+                "%s, %dm%s" % (G._mfact(m), m.get("dist", 0),
+                               " (인접 — 칠 수 있다)" if m.get("adj") else ""))
+        for f in s.get("features", []):
+            put(f.get("bearing"), f.get("dist", 0),
+                "%s %s %dm%s" % (f.get("name", "?"), f.get("id", "?"), f.get("dist", 0),
+                                 " (와 본 자리)" if f.get("visited") else ""))
+        for t in s.get("traps", []):
+            put(t.get("bearing"), t.get("dist", 0),
+                "%s %dm (발각됨 — 위치를 안다)" % (t.get("name", "함정"), t.get("dist", 0)))
+        for b in s.get("bots", []):
+            put(b.get("bearing"), b.get("dist", 0),
+                "동료 %s(겉보기 %s) %dm" % (nm(b.get("char", "?")),
+                                            b.get("condition", "?"), b.get("dist", 0)))
+        if under:
+            L.append("- 발밑: " + " / ".join(under))
+        KR = {"N": "북쪽", "NE": "북동쪽", "E": "동쪽", "SE": "남동쪽",
+              "S": "남쪽", "SW": "남서쪽", "W": "서쪽", "NW": "북서쪽"}
+        for b in order8:
+            items = sorted(slots[b], key=lambda it: (it[0], it[1]))
+            L.append("- %s: %s" % (KR[b], ", ".join(t for _, t in items) if items else "벽"))
+        for m in s.get("monsters", []):
+            if m.get("lore"):
+                L.append("  · %s 습성(네가 아는 것): %s" % (m.get("kind", "?"), m["lore"]))
+    else:
+        L += ["", "## 지금 보이는 것"]
+        n0 = len(L)
+        ex = s.get("exit")
+        if ex:
+            L.append("- 계단(exit) — %s" % at(ex))
+        for m in s.get("monsters", []):
+            L.append("- %s — %s" % (G._mfact(m), at(m)))
+            if m.get("lore"):
+                L.append("  · 네가 아는 습성: %s" % m["lore"])
+        for f in s.get("features", []):
+            L.append("- %s %s — %s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
+                                         " (와 본 자리)" if f.get("visited") else ""))
+        for b in s.get("bots", []):
+            L.append("- 동료 %s — 겉보기 %s — %s" % (nm(b.get("char", "?")),
+                                                     b.get("condition", "?"), at(b)))
+        for w in s.get("ways", []):
+            L.append("- %s쪽으로 트인 길 — 거리 %d, %s%s"
+                     % (w.get("bearing", "?"), w.get("dist", 0),
+                        "발자국 있음(가 본 길)" if w.get("visited") else "안 가본 길",
+                        (", %s 방향" % w["zone"]) if w.get("zone") else ""))
+        if len(L) == n0:
+            L.append("- (아무것도 안 보인다)")
 
     pt = obs.get("party") or []
     if pt:

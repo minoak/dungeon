@@ -207,8 +207,40 @@ class Room:
         return self.x <= x < self.x + self.w and self.y <= y < self.y + self.h
 
 
+class Zone:
+    """기하 구역(D19 델타①) — 격자에서 읽어낸 공간 단위(방/통로). 출생기록(self.rooms)과 별개:
+    rooms=생성기의 내부 골격(배치·스폰·구판 어휘용 존치), zones=스캐너가 **격자만 보고** 재구성한
+    세계의 실제 짜임 — 손그림(from_ascii)·생성·미래 UGC 맵을 동일 취급(D20 빌더의 접속면).
+    분류 규칙: 2×2 바닥 블록에 속한 칸=방, 나머지 바닥=통로(폭 1 길). 직교 연결 컴포넌트가 구역.
+    scan 스위치 켠 판만 만들어진다(기존 게이트 무수정 통과 — D17 장부 스위치 선례)."""
+    __slots__ = ('id', 'kind', 'cells', 'x', 'y', 'w', 'h', 'doors', 'junctions', 'deadends')
+
+    def __init__(self, zid, kind, cells):
+        self.id, self.kind, self.cells = zid, kind, cells
+        xs = [c[0] for c in cells]
+        ys = [c[1] for c in cells]
+        self.x, self.y = min(xs), min(ys)
+        self.w, self.h = max(xs) - self.x + 1, max(ys) - self.y + 1
+        self.doors = []       # 이 구역에 접한 문 id들
+        self.junctions = []   # 갈림길 칸(통로 전용: 직교 이웃 바닥 3+)
+        self.deadends = []    # 막다른 칸(통로 전용: 직교 이웃 바닥 1)
+
+
+class Door:
+    """문(D19) = 구역과 구역의 경계(접경 바닥 칸쌍 묶음 — 타일엔 벽·바닥뿐이라 문은 파생 구조).
+    핑 종점: 봇이 문을 핑하면 '지나 들어서는' 쪽 칸(sides[반대 구역])으로 간다 — 처음 방 정지와
+    한 걸음에 맞물려 문 하나에 결정 하나(콜 인플레 방지). 좌표는 엔진만 쥔다(obs 무노출)."""
+    __slots__ = ('id', 'zones', 'sides')
+
+    def __init__(self, did, za, zb, side_a, side_b):
+        self.id = did                    # 'd<n>'
+        self.zones = (za, zb)            # 잇는 두 구역 id
+        self.sides = {za: side_a, zb: side_b}   # 구역별 문턱 대표칸
+
+
 class Dungeon:
-    def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1):
+    def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
+                 scan=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -230,6 +262,12 @@ class Dungeon:
         self._place_targets(n_monsters, n_traps, n_lurkers)
         self._assign_room_types()  # entrance/exit/standard 타입 부여 (출구 배치 후)
         self._classify_tiles()     # 각 바닥 칸에 'room'/'corridor' 속성 부여
+        self.scan = bool(scan)     # D19 스캐너 스위치 — 기본 꺼짐(기존 게이트 무수정 통과.
+        self.zones = None          #   러너·시나리오가 DUNGEON_SCAN 으로 켠다 — 채택 판정 전 실험층)
+        self.zone_at = {}
+        self.doors = {}
+        if self.scan:
+            self._scan_zones()     # 격자→구역/문 재구성(출생기록 안 읽음 — 델타①)
 
     @staticmethod
     def _derive_seed(master_seed, depth):
@@ -244,7 +282,7 @@ class Dungeon:
         return (x ^ (x >> 16)) & 0x7FFFFFFF
 
     @classmethod
-    def from_ascii(cls, rows, seed=7, depth=1, monsters=None, traps=None):
+    def from_ascii(cls, rows, seed=7, depth=1, monsters=None, traps=None, scan=False):
         """디버깅/시나리오 모드(장면 저작, scenario.py 소비): 생성기 대신 손으로 그린
         문자 맵으로 층을 짓는다. 판정·시야·자동보행·스트림은 생성 층과 완전 동일(같은 코드) —
         조립되는 건 세계가 아니라 '장면'이다.
@@ -306,6 +344,10 @@ class Dungeon:
             tr.hidden = bool(t.get('hidden', True))
             d.traps.append(tr)
         d._classify_tiles()
+        d.scan = bool(scan)        # 스캐너(D19) — 켜면 손그림 맵도 격자에서 방/통로를 읽는다
+        d.zones, d.zone_at, d.doors = None, {}, {}   # (단일 방 r0 뭉개짐의 치료 — 델타①)
+        if d.scan:
+            d._scan_zones()
         return d, starts
 
     # ── 맵 생성 (로그라이크식 방+통로 — 기존 검증된 로직 그대로) ──
@@ -417,6 +459,103 @@ class Dungeon:
             for x in range(self.w):
                 if self.grid[y][x] == FLOOR:
                     self.tiletype[(x, y)] = 'room' if (x, y) in room_cells else 'corridor'
+
+    # ── 기하 스캐너 (D19 델타① — 격자→구역/문. 출생기록 안 읽음) ──
+    def _scan_zones(self):
+        """격자만 읽어 구역(Zone)·문(Door)을 재구성한다 — 스캐너의 토대.
+        ① 분류: 2×2 바닥 블록에 속한 칸=방 후보, 나머지 바닥=통로(폭 1 길).
+        ② 구역: 같은 분류의 직교 연결 컴포넌트. id=스캔 순서(행 우선) — 방 r0.., 통로 c0..
+        ③ 문: 서로 다른 구역의 바닥이 직교로 맞닿는 접경 칸쌍의 묶음(넓은 문턱=한 문).
+        ④ 통로 사건: 갈림길(직교 바닥 이웃 3+)·막다른 곳(이웃 1).
+        전부 결정론(굴림 없음)·읽기 전용 — 세계를 바꾸지 않는다(시야 엔진 파이프라인 ②구조 조회의 재료)."""
+        floors = [(x, y) for y in range(self.h) for x in range(self.w)
+                  if self.grid[y][x] == FLOOR]
+        fset = set(floors)
+        room_cells = set()
+        for (x, y) in floors:          # 2×2 블록 소속 검사 — 넉넉한 공간=방, 외길=통로
+            for ox, oy in ((0, 0), (-1, 0), (0, -1), (-1, -1)):
+                bx, by = x + ox, y + oy
+                if {(bx, by), (bx + 1, by), (bx, by + 1), (bx + 1, by + 1)} <= fset:
+                    room_cells.add((x, y))
+                    break
+        self.zones, self.zone_at, self.doors = {}, {}, {}
+        nr = nc = 0
+        for c in floors:               # 행 우선 스캔 → 컴포넌트 번호 결정론
+            if c in self.zone_at:
+                continue
+            kind = '방' if c in room_cells else '통로'
+            comp, queue = {c}, deque([c])
+            while queue:               # 같은 분류끼리만 잇는다(방↔통로 경계=문 후보)
+                px, py = queue.popleft()
+                for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0)):
+                    n = (px + dx, py + dy)
+                    if (n in fset and n not in comp
+                            and ((n in room_cells) == (c in room_cells))):
+                        comp.add(n)
+                        queue.append(n)
+            if kind == '방':
+                zid, nr = 'r%d' % nr, nr + 1
+            else:
+                zid, nc = 'c%d' % nc, nc + 1
+            z = Zone(zid, kind, frozenset(comp))
+            self.zones[zid] = z
+            for cc in comp:
+                self.zone_at[cc] = zid
+        # 문 = 구역 접경 칸쌍 → (구역쌍)별로 인접 묶음(넓은 문턱=한 문, 두 군데 접점=문 둘)
+        pairs = []                     # (칸A, 칸B, 구역A, 구역B) — 행 우선 발견 순서
+        for (x, y) in floors:
+            for dx, dy in ((1, 0), (0, 1)):
+                n = (x + dx, y + dy)
+                if n in fset and self.zone_at[n] != self.zone_at[(x, y)]:
+                    a, b = (x, y), n
+                    pairs.append((a, b, self.zone_at[a], self.zone_at[b]))
+        nd = 0
+        used = set()
+        for i, (a, b, za, zb) in enumerate(pairs):
+            if i in used:
+                continue
+            cluster, frontier = [i], [i]
+            while frontier:            # 같은 구역쌍 + 양쪽 다 체비셰프 인접이면 같은 문턱
+                cur = frontier.pop()
+                ca, cb = pairs[cur][0], pairs[cur][1]
+                for j, (pa, pb, pza, pzb) in enumerate(pairs):
+                    if j in used or j in cluster or {pza, pzb} != {za, zb}:
+                        continue
+                    if (max(abs(pa[0] - ca[0]), abs(pa[1] - ca[1])) <= 1
+                            and max(abs(pb[0] - cb[0]), abs(pb[1] - cb[1])) <= 1):
+                        cluster.append(j)
+                        frontier.append(j)
+            used.update(cluster)
+            side_a = min(pairs[j][0] for j in cluster)   # 구역별 문턱 대표칸(결정론)
+            side_b = min(pairs[j][1] for j in cluster)
+            door = Door('d%d' % nd, za, zb, side_a, side_b)
+            nd += 1
+            self.doors[door.id] = door
+            self.zones[za].doors.append(door.id)
+            self.zones[zb].doors.append(door.id)
+        for z in self.zones.values():  # 통로 사건: 갈림길·막다른 곳(이동 결정이 흐려지는 명사만)
+            if z.kind != '통로':
+                continue
+            for (x, y) in sorted(z.cells):
+                deg = sum(1 for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0))
+                          if (x + dx, y + dy) in fset)
+                if deg >= 3:
+                    z.junctions.append((x, y))
+                elif deg == 1:
+                    z.deadends.append((x, y))
+
+    @staticmethod
+    def _at_label(z, x, y):
+        """구역 안 상대 위치 — 사람의 공간 언어("서쪽 가장자리", 방위각 아님). bbox 3등분."""
+        bx = 1 if z.w < 3 else (0 if (x - z.x) * 3 < z.w else (2 if (x - z.x) * 3 >= 2 * z.w else 1))
+        by = 1 if z.h < 3 else (0 if (y - z.y) * 3 < z.h else (2 if (y - z.y) * 3 >= 2 * z.h else 1))
+        v = ('북', '', '남')[by]
+        h = ('서', '', '동')[bx]
+        if v and h:
+            return '%s%s 구석' % (v, h)
+        if v or h:
+            return '%s쪽 가장자리' % (v or h)
+        return '중앙'
 
     # ── 피처 / 방 그래프 헬퍼 ───────────────────────────────────
     def _add_feature(self, ftype, name, x, y, concealed=False, perception_gate=0):
@@ -673,6 +812,10 @@ class Dungeon:
         self._perceive(bot, r)
         cx, cy = bot['x'], bot['y']
         seen = self.visible_cells(cx, cy, r)
+        if self.scan:                          # D19: 결정 시점의 내 구역 = '들어와 본 곳'(스폰 방 포함)
+            zid0 = self.zone_at.get((cx, cy))  #   — 처음 방 정지(step_order)의 기준 장부
+            if zid0 is not None:
+                bot.setdefault('zones_entered', set()).add(zid0)
         rows = []
         for dy in range(-r, r + 1):
             line = ''
@@ -755,11 +898,12 @@ class Dungeon:
                        | {f['id'] for f in feats} | ({'exit'} if exit_obj else set()))
             ks, last_ms = [], []
             for e in led['statics'].values():
-                if (e['x'], e['y']) in seen and e['type'] != 'trap':
+                if (e['x'], e['y']) in seen and (e['type'] != 'trap' or self.scan):
                     continue                           # 지금 보이는 건 sights 소관(중복 금지).
                                                        # 함정만 예외 — sights 에 함정 어휘가 없어
                                                        # 시야에 들면 구조화 obs 에서 증발하는
                                                        # 비대칭 방지(리뷰 픽스): 중복이 아니다
+                                                       # (D19 scan 판은 sights.traps 가 생겨 예외 불요)
                 ent = {'type': e['type'], 'name': e['name'],
                        'zone': e['zone'], 'turn': e['turn']}
                 if 'id' in e:
@@ -785,6 +929,53 @@ class Dungeon:
                 last_ms.append(ent)
             known_obs = {'statics': ks, 'last_seen': last_ms,
                          'zones': [dict(z) for _, z in sorted(led['zones'].items())]}
+
+        # ── D19 구조 조회: "구조는 훤히, 내용물은 시야대로" — 들어선 공간의 뼈대는 시야 무관 확정 ──
+        # 좌표는 안 나간다(known 선례): 문·계단·통로 사건 전부 방위+거리(1칸=1m)+출처 딱지뿐.
+        # 계단은 가구가 아니라 건축(Rogue/NetHack 방 단위 조명 전통) — 같은 공간에 있으면 안 보여도
+        # 위치를 안다 = 공동 병목(암 A 34틱)의 직접 치료. 몹·피처·함정은 내용물 = 기존 광학 그대로.
+        zone_obs = None
+        traps_vis = None
+        if self.scan:
+            zh = self.zones[self.zone_at[(cx, cy)]]
+            entset = bot.get('zones_entered') or set()
+            zseen = (bot.get('zone_seen') or {}).get(zh.id, set())
+            zdoors = []
+            for did in zh.doors:
+                door = self.doors[did]
+                other = door.zones[1] if door.zones[0] == zh.id else door.zones[0]
+                sx, sy = door.sides[zh.id]         # 내 구역 쪽 문턱 기준 방위·거리
+                zdoors.append({'id': did,
+                               'bearing': self._bearing(sx - cx, sy - cy),
+                               'dist': max(abs(sx - cx), abs(sy - cy)),
+                               'seen': (sx, sy) in seen,      # 지금 눈에 보이나(출처 딱지 재료)
+                               'been': other in entset})      # 너머에 들어가 봤나(내 경험 — 누설 아님)
+            unseen_cells = zh.cells - zseen
+            checked = {'frac': round(1 - len(unseen_cells) / len(zh.cells), 2)}
+            if unseen_cells:                       # 아직 못 본 쪽 — 수색·경계가 죽지 않게 방위로 알림
+                ux = sum(c[0] for c in unseen_cells) / len(unseen_cells)
+                uy = sum(c[1] for c in unseen_cells) / len(unseen_cells)
+                checked['todo'] = self._bearing(int(round(ux)) - cx, int(round(uy)) - cy)
+            zone_obs = {'id': zh.id, 'kind': zh.kind, 'checked': checked, 'doors': zdoors}
+            if zh.kind == '방':
+                zone_obs['size'] = [zh.w, zh.h]
+                zone_obs['at'] = self._at_label(zh, cx, cy)
+                ex0, ey0 = self.exit
+                if self.zone_at.get((ex0, ey0)) == zh.id and (ex0, ey0) not in seen:
+                    zone_obs['exit'] = {'bearing': self._bearing(ex0 - cx, ey0 - cy),
+                                        'dist': max(abs(ex0 - cx), abs(ey0 - cy))}
+            else:                                  # 통로: 크기 대신 길이 + 사건(갈림길·막다른 곳)
+                zone_obs['len'] = len(zh.cells)
+                zone_obs['ends'] = (
+                    [{'kind': '갈림길', 'bearing': self._bearing(x - cx, y - cy),
+                      'dist': max(abs(x - cx), abs(y - cy)), 'been': (x, y) in self.visited}
+                     for (x, y) in zh.junctions]
+                    + [{'kind': '막다른 곳', 'bearing': self._bearing(x - cx, y - cy),
+                        'dist': max(abs(x - cx), abs(y - cy)), 'been': (x, y) in self.visited}
+                       for (x, y) in zh.deadends])
+            traps_vis = [{'name': t.name, 'kind': t.kind, **bear(t.x, t.y)}
+                         for t in self.traps
+                         if not t.hidden and not t.sprung and (t.x, t.y) in seen]
 
         # ── 리모컨(options): 이번 턴 가능한 행동의 전수 열거 — 유효성을 아는 엔진이 곧 메뉴다 ──
         # 원칙: 유효 옵션 전부 / 고정 스키마 순서(즉시행동→이동→수색→탐색) / 주석은 사실만 —
@@ -816,6 +1007,18 @@ class Dungeon:
             if not f['adj']:
                 _add('goto', f['id'], '이동: %s %s — %s, 거리 %d'
                      % (f['name'], f['id'], f['bearing'], f['dist']))
+        if zone_obs is not None:               # D19: 문·(구조로 아는) 계단 = 이동 종점 —
+            zx = zone_obs.get('exit')          #   안 보이는 문도 핑이 된다(공동 병목 치료)
+            if zx:
+                _add('goto', 'exit', '이동: 계단 exit — %s, %dm (방 구조로 앎, 아직 안 보임)'
+                     % (zx['bearing'], zx['dist']))
+            for dr in zone_obs['doors']:       # 출처 딱지=사실만(어디로 이어지는지는 안 준다 — 층 지도 아님)
+                tag = (' (문 너머는 가 본 곳)' if dr['been']
+                       else ('' if dr['seen'] else ' (방 구조로 앎, 아직 안 보임)'))
+                where = ('발밑(지금 선 문턱)' if dr['dist'] == 0
+                         else '%s, %dm' % (dr['bearing'], dr['dist']))
+                _add('goto', dr['id'], '이동: 문 %s — %s%s — 지나면 다음 공간'
+                     % (dr['id'], where, tag))
         for m in mons:
             if not m['adj']:
                 _add('goto', m['id'], '접근: %s — %s, 거리 %d'
@@ -860,12 +1063,19 @@ class Dungeon:
              '수색: 반경 %d 안 보이는 범위의 숨은 함정·매복·보물을 드러낸다 (벽 뒤는 못 본다 — 한 턴 소모)%s'
              % (bot.get('search_r', 1),
                 ' ※ 이 반경은 이미 샅샅이 살폈다 — 반복해도 새로 나올 게 없다' if already else ''))
-        fresh_ways = [w for w in ways if not w['visited']]
-        for w in fresh_ways:
-            _add('explore', w['bearing'], '탐색: %s쪽 안 가본 길 — 거리 %d'
-                 % (w['bearing'], w['dist']))
-        if not fresh_ways:
-            _add('explore', None, '탐색: 새 길을 찾아 나선다 (시야 밖 — 엔진에 맡긴다)')
+        if zone_obs is not None:               # D19: 탐색 종점=명사(막다른 곳) — 시야 가장자리 폐기.
+            for e in zone_obs.get('ends', []):   # 문은 위 goto 가 전담(중복 옵션 금지 — 1:1 원칙)
+                if e['kind'] == '막다른 곳' and not e['been']:
+                    _add('explore', e['bearing'], '탐색: %s쪽 막다른 곳까지 가 본다 — %dm'
+                         % (e['bearing'], e['dist']))
+            _add('explore', None, '탐색: 아직 못 본 곳/새 길을 찾아 나선다 (엔진에 맡긴다)')
+        else:
+            fresh_ways = [w for w in ways if not w['visited']]
+            for w in fresh_ways:
+                _add('explore', w['bearing'], '탐색: %s쪽 안 가본 길 — 거리 %d'
+                     % (w['bearing'], w['dist']))
+            if not fresh_ways:
+                _add('explore', None, '탐색: 새 길을 찾아 나선다 (시야 밖 — 엔진에 맡긴다)')
 
         # A-3(D18): 목격 — 내 눈으로 본 동료의 피격/전사. 1회성: 이번 결정에 한 번 전달하고 비운다.
         # 자기 피격은 last 가 담당(중복 없음). 종 표기는 내 도감 기준(모르는 종=낯선 짐승 — D9 정합).
@@ -882,9 +1092,10 @@ class Dungeon:
                 'job': bot['job'], 'sex': bot['sex'],
                 'str': bot['str'], 'dex': bot['dex'], 'inventory': bot['bag'],
                 'depth': self.depth,
-                **({'zone': {'id': ('r%d' % rid_here) if rid_here is not None else None,
-                             'kind': '방' if rid_here is not None else '통로'}}
-                   if led is not None else {}),        # 구역 어휘(D17-2) — 장부 스위치와 한 몸
+                **({'zone': zone_obs} if zone_obs is not None else
+                   ({'zone': {'id': ('r%d' % rid_here) if rid_here is not None else None,
+                              'kind': '방' if rid_here is not None else '통로'}}
+                    if led is not None else {})),      # 구역 어휘: D19 scan=구조 조회 / D17=주소만
                 **({'turn': self.turn} if led is not None else {}),   # 장부 turn 스탬프의 '지금'
                                                        # — wire 가 'N턴 전'을 셈(D17-3). 장부와 한 몸
                 **({'known': known_obs} if known_obs is not None else {}),   # 공간 장부(D17-1)
@@ -895,7 +1106,8 @@ class Dungeon:
                           else bot.get('order')),        # 진행중 핑(자동보행). '@x,y' 생좌표는 봇에 노출X
                 'ascii_view': rows,
                 'sights': {'exit': exit_obj, 'features': feats, 'monsters': mons,
-                           'ways': ways, 'bots': allies},
+                           'ways': ways, 'bots': allies,
+                           **({'traps': traps_vis} if traps_vis is not None else {})},
                 'party': party,
                 'options': options,   # 리모컨 — 엔진 열거 유효 행동(additive. BYO 계약: 번호+한마디)
                 'legend': {'@': 'you', '#': 'wall', '.': 'floor',
@@ -1022,12 +1234,22 @@ class Dungeon:
             out['target'] = tgt
         return out
 
-    def _resolve_target(self, target_id, bots=None):
-        """핑 id → (kind, (x,y)). 'exit' / 'f<n>' 피처 / 'm<n>' 몹 / '@x,y' 셀(explore) / 'b<char>' 동료.
+    def _resolve_target(self, target_id, bots=None, bot=None):
+        """핑 id → (kind, (x,y)). 'exit' / 'f<n>' 피처 / 'm<n>' 몹 / '@x,y' 셀(explore) / 'b<char>' 동료
+        / 'd<n>' 문(D19, scan). 문은 '지나 들어서는' 쪽을 고른다 — bot(선택 인자)이 문의 한쪽 구역에
+        서 있으면 반대쪽 문턱이 목표(들어서는 걸음이 처음 방 정지와 맞물려 결정 하나로 끝난다).
         엔진은 출구 위치를 늘 안다(해석은 무조건) — '보일 때만'은 obs/_valid_targets 층에서 막는다."""
         if target_id == 'exit':
             return ('exit', self.exit)
         s = str(target_id or '')
+        if self.scan and s in self.doors:
+            door = self.doors[s]
+            here = self.zone_at.get((bot['x'], bot['y'])) if bot else None
+            if here == door.zones[0]:
+                return ('door', door.sides[door.zones[1]])
+            if here == door.zones[1]:
+                return ('door', door.sides[door.zones[0]])
+            return ('door', door.sides[door.zones[0]])   # 구역 밖에서 부르면 첫쪽 문턱(결정론)
         if s[:1] == 'f' and s[1:].isdigit():
             f = self.features.get(int(s[1:]))
             return ('feature', (f.x, f.y)) if f else None
@@ -1075,7 +1297,7 @@ class Dungeon:
     def _set_order(self, bot, target_id, bots):
         """핑 목표로 BFS 경로(path_to)를 깐다 = 자동보행 준비. 목표 무효면 explore 폴백(헤맴 방지·v3).
         D18: 동료가 길목을 막아 경로가 폭증하면 말없이 행군하지 않고 blocked 로 묻는다(_ally_jam)."""
-        resolved = self._resolve_target(target_id, bots)
+        resolved = self._resolve_target(target_id, bots, bot)   # bot=문 핑의 '들어서는 쪽' 선택(D19)
         ghost = False
         if resolved is None:
             e = ((bot.get('ledger') or {}).get('statics') or {}).get(str(target_id))
@@ -1142,11 +1364,71 @@ class Dungeon:
         bot['order'], bot['path'] = 'follow:' + tid, path
         return {**base, 'result': 'pathed', 'len': len(path)}
 
+    def _content_keys(self, bot):
+        """지금 보이는 '내용물' 열쇠 집합 — D19 탐색 종점("새 명사가 나타나면 멈춤")의 재료.
+        피처·계단·드러난 함정만(몹은 기존 newly 인카운터가 담당, 구조물은 진입 시점에 훤히라
+        걷다가 '새로 등장'할 수 없다). 좌표는 열쇠 내부용 — 이벤트론 이름만 나간다."""
+        seen = self.visible_cells(bot['x'], bot['y'])
+        ks = {('f%d' % f.id) for f in self.features.values()
+              if f.type != 'exit' and not f.concealed and (f.x, f.y) in seen}
+        if self.exit in seen:
+            ks.add('exit')
+        ks |= {('t@%d,%d' % (t.x, t.y)) for t in self.traps
+               if not t.hidden and not t.sprung and (t.x, t.y) in seen}
+        return ks
+
+    def _set_explore_scan(self, bot, direction, bots, base):
+        """D19 탐색: 종점은 시야 가장자리 칸이 아니라 **명사** — 현 구역의 문(너머 안 가 본 것)과
+        막다른 곳(발자국 없는 것). 문 목표는 '지나 들어서는' 칸이라 도착이 곧 새 구역 =
+        처음 방 정지와 한 걸음(빈 복도는 끝까지 걷는다 — 콜은 갈림길당 하나).
+        후보 없으면 None 반환 → 구판 프런티어 폴백(부분 관측 방 안 훑기·종결 보장은 그쪽이 진다)."""
+        zid = self.zone_at.get((bot['x'], bot['y']))
+        if zid is None:
+            return None
+        z = self.zones[zid]
+        entset = bot.setdefault('zones_entered', set())
+        cands = []                                    # (목표칸, 내쪽 방위)
+        for did in z.doors:
+            door = self.doors[did]
+            other = door.zones[1] if door.zones[0] == zid else door.zones[0]
+            if other in entset:
+                continue                              # 너머를 아는 문은 '새 발견'이 아니다(발자국 계보)
+            mx, my = door.sides[zid]
+            cands.append((door.sides[other],
+                          self._bearing(mx - bot['x'], my - bot['y'])))
+        for (x, y) in z.deadends:
+            if (x, y) not in self.visited:
+                cands.append(((x, y), self._bearing(x - bot['x'], y - bot['y'])))
+        if not cands:
+            return None
+        if direction:
+            d = str(direction).upper()                # 방위 존중 규칙은 구판과 동일(정확 일치 우선)
+            exact = [c for c in cands if c[1] == d]
+            dirmatch = exact or [c for c in cands if set(d) & set(c[1])]
+            if dirmatch:
+                cands = dirmatch
+        routed = []
+        for (t, b) in cands:
+            p = self.path_to(bot['x'], bot['y'], t[0], t[1], bots)
+            if p:
+                routed.append((t, b, p))
+        if not routed:
+            return None
+        t, b, path = min(routed, key=lambda r: (len(r[2]), r[0]))
+        bot['order'], bot['path'] = '@%d,%d' % t, path
+        return {**base, 'result': 'pathed', 'len': len(path), 'bearing': b}
+
     def _set_explore(self, bot, direction, bots):
         """탐색 폴백(v3): 지금 보이는 '미지로 트인 출입구' 중 *도달 가능*한 걸 골라 자동보행.
         안 밟은(발자국 없는) 곳 우선 = 발자국 가지치기(왕복 방지). direction 주면 그 방위 우선.
-        도달 가능한 미지 출입구가 없으면(탐색 끝) 그때만 출구로 best-effort 행군."""
+        도달 가능한 미지 출입구가 없으면(탐색 끝) 그때만 출구로 best-effort 행군.
+        D19(scan): 명사 종점(_set_explore_scan)이 먼저 — 없을 때만 프런티어/출구 폴백."""
         base = {'char': bot['char'], 'type': 'explore', 'target': direction or 'auto'}
+        if self.scan:
+            bot['_ex_seen'] = self._content_keys(bot)   # 탐색 개시 시점의 내용물 — '새로 등장' 판정 기준
+            res = self._set_explore_scan(bot, direction, bots, base)
+            if res is not None:
+                return res
         seen = self.visible_cells(bot['x'], bot['y'])
         fresh = []
         for w in self._ways(bot['x'], bot['y'], seen):
@@ -1268,8 +1550,9 @@ class Dungeon:
                 return {**base, 'result': 'blocked',
                         'monsters': [{'id': 'm%d' % blocker.id, 'kind': blocker.kind,
                                       'state': blocker.state}]}
-            res = self._resolve_target(tid, bots)              # 동료·은닉몹 점거 → 재경로 1회
-                                                               #   (동행이면 tid='b<char>' — 원 대상)
+            res = self._resolve_target(tid, bots, bot)         # 동료·은닉몹 점거 → 재경로 1회
+                                                               #   (동행이면 tid='b<char>' — 원 대상.
+                                                               #    bot=문 핑의 들어서는 쪽 유지, D19)
             bot['path'] = self.path_to(bot['x'], bot['y'], res[1][0], res[1][1], bots) if res else []
             jam = (self._ally_jam(bot, res[1][0], res[1][1], bot['path'], bots)
                    if res else None)          # 재경로가 동료發 대우회면 여기서도 멈춰 묻는다(D18)
@@ -1298,6 +1581,15 @@ class Dungeon:
             return {**base, 'result': 'at_exit'}
         newly = self._perceive(bot)                   # 이동으로 새로 보인 몹 = aware_of 등록(처음 본 것만)
         found = self._passive_search(bot)             # 직업 인지 스윕(수동 search-on-move) — 숨은 것 발견
+        entered = None                                # D19 처음 방 정지: 이 걸음으로 처음 들어선 '방'
+        if self.scan:                                 #   = 무조건 정지·판단 요청(구조가 진입 순간 열린다
+            zid = self.zone_at.get((nx, ny))          #   — 빈 방도 출구 셋이면 갈림길). 통로는 통과.
+            entset = bot.setdefault('zones_entered', set())
+            if zid is not None and zid not in entset:
+                entset.add(zid)
+                zn = self.zones[zid]
+                if zn.kind == '방':
+                    entered = {'id': zn.id, 'kind': zn.kind, 'size': [zn.w, zn.h]}
         if enter.get('trap') or newly or found:       # 인카운터 = *새 정보*만(에지) — 알던 몹 인접은
             bot['order'], bot['path'], bot['plan'] = None, [], []   # 정지 사유 아님(D1 개정: 물리면
                                                       #   그때 묻는다). 새 정보 = 남은 작정 파기(D16)
@@ -1311,7 +1603,33 @@ class Dungeon:
             if newly:
                 res['monsters'] = [{'id': 'm%d' % m.id, 'kind': m.kind, 'state': m.state}
                                    for m in newly]
+            if entered:
+                res['entered'] = entered              # 같은 걸음이 처음 방 진입이기도 했다(부기)
             return res
+        if entered:                                   # 순수 구조 정지 — 인카운터와 동일 처리(작정 파기)
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            res = {**base, 'result': 'entered', 'zone': entered}
+            if enter.get('treasure'):
+                res['treasure'] = True
+            return res
+        if self.scan and str(bot.get('order') or '')[:1] == '@':
+            fresh = self._content_keys(bot) - (bot.get('_ex_seen') or set())
+            if fresh:                                 # 탐색 중 새 내용물이 눈에 들었다 — 종점 조항
+                bot['order'], bot['path'], bot['plan'] = None, [], []   # ("새 명사가 나타나면 멈춤")
+                stuff = []
+                for k in sorted(fresh):
+                    if k == 'exit':
+                        stuff.append({'kind': 'exit', 'name': '계단'})
+                    elif k[:1] == 'f':
+                        f = self.features.get(int(k[1:]))
+                        if f:
+                            stuff.append({'kind': f.type, 'name': f.name, 'id': k})
+                    else:
+                        stuff.append({'kind': 'trap', 'name': '함정'})
+                res = {**base, 'result': 'sighted', 'seen': stuff}
+                if enter.get('treasure'):
+                    res['treasure'] = True
+                return res
         if enter.get('treasure'):
             if not bot['path']:                       # 목표 칸의 보물을 주움 = 이 order 의 완결(자기 소비).
                 bot['order'] = None                   #   남겨두면 다음 틱 빈 자리에 lost/arrived 거짓 보고
@@ -1430,7 +1748,15 @@ class Dungeon:
 
     def _zone_label(self, x, y):
         """구역 어휘(D17-2) — 좌표의 '주소'. 방=안정 id(생성 순서), 그 외 바닥=통로.
-        방 타입(entrance/exit)은 안 싣는다 — '계단 방' 라벨은 안 본 계단의 존재를 누설(시야-온리)."""
+        방 타입(entrance/exit)은 안 싣는다 — '계단 방' 라벨은 안 본 계단의 존재를 누설(시야-온리).
+        D19(scan): 주소도 스캐너의 기하 구역으로 — 출생기록 주소(from_ascii=전부 '방 r0')의 치료.
+        통로도 id 를 얻는다('통로 c1') — 격자가 준 정체성이라 장부 지칭이 또렷해진다."""
+        if self.scan:
+            zid = self.zone_at.get((x, y))
+            if zid is None:
+                return '통로'                       # 바닥 밖(이론상 없음) — 방어적 기본
+            z = self.zones[zid]
+            return ('%s %s' % (z.kind, zid)) if z.kind == '방' else ('통로 %s' % zid)
         rid = self._room_id_at(x, y)
         return ('방 r%d' % rid) if rid is not None else '통로'
 
@@ -1484,6 +1810,11 @@ class Dungeon:
                                                     'x': o['x'], 'y': o['y'],
                                                     'zone': self._zone_label(o['x'], o['y']),
                                                     'turn': t}
+        if self.scan:                                 # D19: 방문 구역도 기하 구역 명의로
+            zid = self.zone_at.get((bot['x'], bot['y']))
+            if zid is not None and self.zones[zid].kind == '방' and zid not in led['zones']:
+                led['zones'][zid] = {'id': zid, 'turn': t}
+            return
         rid = self._room_id_at(bot['x'], bot['y'])    # 방문 구역 — "내가 어느 방에 있(었)다" 감각
         if rid is not None and rid not in led['zones']:
             led['zones'][rid] = {'id': 'r%d' % rid, 'turn': t}
@@ -1498,6 +1829,12 @@ class Dungeon:
         seen = self.visible_cells(bot['x'], bot['y'], r)
         self._ledger_note(bot, seen)      # 공간 장부(D17) — 지각과 같은 훅(단일 소스): 자동보행
                                           #   스텝에도 '지나오며 본 것'이 적힌다(동료는 view 가 보강)
+        if self.scan:                     # D19 확인 딱지 재료: 구역별 '눈으로 본 칸' 누적(봇 명의).
+            zsd = bot.setdefault('zone_seen', {})   # 구조를 아는 것 ≠ 내용물을 본 것 — 이 구분의 장부
+            for c in seen:
+                zc = self.zone_at.get(c)
+                if zc is not None:
+                    zsd.setdefault(zc, set()).add(c)
         newly = [m for m in self.monsters
                  if m.alive and not m.concealed and (m.x, m.y) in seen
                  and m.id not in bot['aware_of']]

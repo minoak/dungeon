@@ -28,6 +28,8 @@
           느려도 루프는 안 멈춘다: 밀린 턴은 건너뛰고 최신 턴만 연출)
           DUNGEON_BESTIARY_FILE(도감 원장 경로 — 빈값(기본)=영속 끔: 판 안 학습만 하고 파일은
           안 남긴다. start.sh 가 라이브 판에만 bestiary.json 을 켠다 → verify/실험 자동 격리)
+          DUNGEON_SCAN(기본0 — 스캐너(D19): 기하 구역/문/처음 방 정지/트리 wire.
+                       암 B 사전등록 판정 전 실험 스위치 — 채택 시 기본 1 승격)
           DUNGEON_LEDGER(기본1 — 공간 장부(D17): 본 것을 엔진이 캐릭터 명의로 기억,
           시야 밖 '돌아가기' 핑 허용. 0=끔. 층 전이 때 새 원장=층의 기억)
 """
@@ -64,6 +66,8 @@ PARTY_FILE = os.environ.get("DUNGEON_PARTY_FILE", os.path.join(HERE, "party.json
 BESTIARY_FILE = os.environ.get("DUNGEON_BESTIARY_FILE", "")  # 도감 원장(D9). 빈값=영속 끔(판 안 학습만)
                                                              #   — 격리 기본: verify/실험이 라이브 원장을 안 더럽힌다
 LEDGER_ON = os.environ.get("DUNGEON_LEDGER", "1") != "0"     # 공간 장부(D17) — 러너 판 기본 켬
+SCAN_ON = os.environ.get("DUNGEON_SCAN", "0") != "0"         # 스캐너(D19) — 암 B 판정 전 기본 끔
+                                                             #   (채택 시 기본 1로 승격 — 사전등록 절차)
                                                              #   (spawn 기본은 None=끔 — 기존 게이트 무접촉)
 LORE_FILE = os.path.join(HERE, "lore.json")
 STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적용 후 맵이 보이게(헤들리스=0)
@@ -219,7 +223,17 @@ def act_summary(res):
                 bits.append("$ 획득")
             if res.get("found"):
                 bits.append("발견: " + ", ".join(f["name"] for f in res["found"]))
+            if res.get("entered"):                     # D19: 같은 걸음이 처음 방 진입이기도 했다
+                bits.append("처음 온 %s %s 진입" % (res["entered"].get("kind", "공간"),
+                                                    res["entered"].get("id", "?")))
             return "보행 정지 — " + (" / ".join(bits) or "조우")
+        if r == "entered":                             # D19 처음 방 정지 — 구조가 열렸다, 재결정
+            zz = res.get("zone") or {}
+            return "처음 온 %s %s에 들어섰다 — 멈춰서 살핀다 (재결정)" % (
+                zz.get("kind", "공간"), zz.get("id", "?"))
+        if r == "sighted":                             # D19 탐색 종점 — 새 명사가 나타나면 멈춤
+            return "보행 정지 — 새로 보임: " + ", ".join(
+                x.get("name", "?") for x in res.get("seen", []))
         if r == "blocked" and res.get("monsters"):     # D1 개정: 보이는 몹의 길목 점거 = 멈춰 보고
             return "길 막힘 — %s가 길목을 점거" % ", ".join(m["kind"] for m in res["monsters"])
         if r == "blocked" and res.get("allies"):       # D18: 동료發 대우회 — 멈춰 보고
@@ -311,7 +325,7 @@ def main():
     sw = stream.StreamWriter(os.path.join(STATE, "stream.jsonl"))   # 실행당 truncate
 
     d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED,
-                  n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK)
+                  n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON)
     d.lore = lore
     bots = []
     for c in chars:
@@ -356,6 +370,8 @@ def main():
             stream_obs=os.environ.get("DUNGEON_STREAM_OBS") == "1",   # decisions 에 obs 동봉 여부(스키마 판별용)
             menu=brains.MENU,          # 리모컨(번호 선택) 여부 — decisions 에 choice 가 실리는지 판별용
             ledger=LEDGER_ON,          # 공간 장부(D17) 여부 — obs(known·돌아가기)를 바꾸는 실행모드 메타
+            scan=SCAN_ON,              # 스캐너(D19) 여부 — obs(구조)·정지 물리를 바꾸는 실행모드 메타
+                                       #   (걸음 정지 규칙이 달라지므로 리플레이·판 비교의 전제)
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             bestiary=iss.snapshot(),   # 판 시작 시점 지식(additive) — 도감이 obs 를 바꾸므로 리플레이·비교의 전제
@@ -484,7 +500,8 @@ def main():
                            for b in sorted(survivors, key=lambda b: b["char"])],
                     fallen=list(fallen))
             d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
-                          n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK)
+                          n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
+                          scan=SCAN_ON)
             d.lore = lore
             nb = []
             for b in sorted(survivors, key=lambda b: b["char"]):
