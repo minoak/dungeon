@@ -6,7 +6,8 @@ D19: "격자의 구조는 엔진이 읽고, 갈 곳의 선택은 에이전트가
   ② 사전등록 미로 정합: 방3·문5·갈림길2·막다른곳3·공동 15×17·계단→공동 (EXP_D19_MAZE.md 의 지도)
   ③ 생성 맵 스윕: 전 바닥 구역 배정 · 문의 양쪽 문턱은 서로 직교 인접 · 결정론(2회 스캔 동일)
   ④ 주소 어휘: '방 r0' 뭉개짐 치료(두 방=두 주소) · 장부(D17) 주소도 기하 구역 명의
-  ⑤ 구조는 훤히: 공동 진입 — 크기·상대위치·안 보이는 계단(구조 유래)·goto 핑 → 도착
+  ⑤ 구조는 훤히·계단은 광학: 공동 진입 — 크기·상대위치는 즉시, 계단은 눈에 들어야
+     (2026-07-12 정정 "시야 엔진은 말 그대로 시야 범위") — 수색→sighted→핑의 발견 서사
   ⑥ 문 핑 = 지나 들어서기: goto 문 → 반대쪽 칸(다음 공간) 도착
   ⑦ 처음 방 정지: 첫 진입=entered(작정 파기) · 재진입=통과 · 통로 진입=무정지 · 스폰 방=무정지
   ⑧ 탐색 종점: 빈 복도=끝까지 한 order · 새 내용물 시야 등장=sighted 정지 (개시 때 보인 건 제외)
@@ -146,20 +147,36 @@ obs5 = dm5.view(b5, [b5])
 z5 = obs5['zone']
 check("⑤ 들어선 공간의 뼈대: 종류·크기·상대 위치", z5['kind'] == '방'
       and z5['size'] == [15, 17] and z5.get('at') == '서쪽 가장자리')
-check("⑤ 계단이 안 보이는데(내용물 광학) 구조로는 안다",
-      obs5['sights']['exit'] is None and isinstance(z5.get('exit'), dict)
-      and set(z5['exit']) == {'bearing', 'dist'})
-opt5 = [o for o in obs5['options'] if o['type'] == 'goto' and o.get('target') == 'exit']
-check("⑤ 안 보이는 계단 = 이동 옵션(출처 딱지 명시)",
-      len(opt5) == 1 and '방 구조로 앎' in opt5[0]['label'])
-check("⑤ _valid_targets 도 구조 유래 exit 허용(brains 계약)",
-      'exit' in brains._valid_targets(obs5))
-r5 = dm5.act(b5, {'type': 'goto', 'target': 'exit'}, [b5])
-w5 = walk_out(dm5, b5, [b5])
-check("⑤ 핑 → 공동 관통 → 계단 앞(at_exit) — 공동 병목의 물리 치료",
-      r5['result'] == 'pathed' and w5 is not None and w5['result'] == 'at_exit')
+check("⑤ 계단=내용물: 안 보이면 obs.zone·옵션·brains 타겟 어디에도 없다(2026-07-12 정정)",
+      obs5['sights']['exit'] is None and 'exit' not in z5
+      and not any(o.get('target') == 'exit' for o in obs5['options'])
+      and 'exit' not in brains._valid_targets(obs5))
 check("⑤ 확인 딱지: 큰 방은 아직 다 못 봤다(frac<1 + 못 본 쪽 방위)",
       z5['checked']['frac'] < 1 and z5['checked'].get('todo') in KR8)
+# 공동 치료의 몸통 = 근거 있는 수색: 문은 다 아니 남는 건 안 본 쪽 훑기 — 계단이 '눈에 드는'
+# 순간 sighted 로 멈추고, 그때부터 핑이 된다(보일 때만 규칙 복원. 발견의 순간이 살아남는다).
+b5['zones_entered'].add('c1')                   # 서쪽 통로에서 걸어들어온 셈(문이 전부 '가 본 곳')
+sighted = False
+guard = 0
+while guard < 250 and not sighted:
+    guard += 1
+    if not b5.get('order'):
+        dm5.view(b5, [b5])
+        dm5.act(b5, {'type': 'explore'}, [b5])
+        if not b5.get('order'):
+            break
+    w = dm5.step_order(b5, [b5])
+    if (w and w['result'] == 'sighted'
+            and any(x.get('kind') == 'exit' for x in w.get('seen', []))):
+        sighted = True
+check("⑤ 공동 수색 중 계단이 시야에 들면 sighted 정지(발견의 순간)", sighted)
+obs5b = dm5.view(b5, [b5])
+check("⑤ 이제 보이는 계단 = sights·타겟에 등장(보일 때만 규칙 그대로)",
+      obs5b['sights']['exit'] is not None and 'exit' in brains._valid_targets(obs5b))
+r5 = dm5.act(b5, {'type': 'goto', 'target': 'exit'}, [b5])
+w5 = walk_out(dm5, b5, [b5])
+check("⑤ 발견 후 핑 → 계단 앞(at_exit)",
+      r5['result'] == 'pathed' and w5 is not None and w5['result'] == 'at_exit')
 
 # ───────────────────── ⑥ 문 핑 = 지나 들어서기 ─────────────────────
 print("── ⑥ 문 핑(지나 들어서기)")
@@ -253,8 +270,7 @@ check("⑧ 걷다 계단이 시야에 새로 들면 sighted 정지(멈춰 묻는
 
 # ───────────────────── ⑨ 시야-온리·출처 딱지 ─────────────────────
 print("── ⑨ 시야-온리·출처 딱지")
-no_xy = all('x' not in e and 'y' not in e
-            for e in z5['doors'] + [z5['exit']])
+no_xy = all('x' not in e and 'y' not in e for e in z5['doors'])
 check("⑨ 구조 obs 에 좌표 무노출(방위·거리·딱지뿐)", no_xy)
 far_doors = [dr for dr in z5['doors'] if not dr['seen']]
 check("⑨ 안 보이는 문 seen=false(출처 딱지 재료)",

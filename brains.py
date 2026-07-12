@@ -65,11 +65,9 @@ def _valid_targets(obs, verb="goto"):
     for k in ("features", "monsters", "bots"):
         ids |= {o["id"] for o in s.get(k, [])}
     z = obs.get("zone") or {}
-    if isinstance(z.get("doors"), list):    # D19(scan): 문 = 핑 종점(안 보여도 — 구조는 훤히)
-        if verb == "goto":
+    if isinstance(z.get("doors"), list):    # D19(scan): 문 = 핑 종점(안 보여도 — 구조는 훤히).
+        if verb == "goto":                  # 계단은 여기 없다 — 내용물이라 '보일 때만' 규칙 그대로
             ids |= {d["id"] for d in z["doors"]}
-            if z.get("exit"):               # 같은 공간의 계단은 구조로 안다(방 단위 조명 전통)
-                ids.add("exit")
     for p in obs.get("party", []):          # 살아있는(안 내려간) 동료는 시야 밖이어도 핑 가능
         if p.get("alive") and not p.get("won"):
             ids.add("b%s" % p["char"])
@@ -368,10 +366,6 @@ def _wire(obs, names=None):
             put(d.get("bearing"), d.get("dist", 0),
                 ("문 %s — 지금 선 문턱%s" % (d.get("id", "?"), tag)) if d.get("dist") == 0
                 else "문 %s %dm%s" % (d.get("id", "?"), d.get("dist", 0), tag))
-        zx = z.get("exit")
-        if zx:                                   # 같은 공간의 계단 — 안 보여도 구조로 안다
-            put(zx.get("bearing"), zx.get("dist", 0),
-                "계단(exit) %dm (방 구조로 앎, 아직 안 보임)" % zx.get("dist", 0))
         for e in z.get("ends", []):
             put(e.get("bearing"), e.get("dist", 0),
                 "%s %dm%s" % (e.get("kind", "?"), e.get("dist", 0),

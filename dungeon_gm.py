@@ -960,10 +960,10 @@ class Dungeon:
             if zh.kind == '방':
                 zone_obs['size'] = [zh.w, zh.h]
                 zone_obs['at'] = self._at_label(zh, cx, cy)
-                ex0, ey0 = self.exit
-                if self.zone_at.get((ex0, ey0)) == zh.id and (ex0, ey0) not in seen:
-                    zone_obs['exit'] = {'bearing': self._bearing(ex0 - cx, ey0 - cy),
-                                        'dist': max(abs(ex0 - cx), abs(ey0 - cy))}
+                # 계단은 여기 없다 — 계단=내용물(광학으로만). 2026-07-12 정정(파트너):
+                # "시야 엔진은 말 그대로 시야 범위 내에서 보이는 것". 구조가 주는 건 윤곽
+                # (종류·크기·문·상대 위치)까지 — 계단 특례를 주면 계단 있는 방이 진입 즉시
+                # 풀려 공동(넓은 방을 훑어서 발견하는 경험)의 존재 이유가 소멸한다.
             else:                                  # 통로: 크기 대신 길이 + 사건(갈림길·막다른 곳)
                 zone_obs['len'] = len(zh.cells)
                 zone_obs['ends'] = (
@@ -1007,11 +1007,7 @@ class Dungeon:
             if not f['adj']:
                 _add('goto', f['id'], '이동: %s %s — %s, 거리 %d'
                      % (f['name'], f['id'], f['bearing'], f['dist']))
-        if zone_obs is not None:               # D19: 문·(구조로 아는) 계단 = 이동 종점 —
-            zx = zone_obs.get('exit')          #   안 보이는 문도 핑이 된다(공동 병목 치료)
-            if zx:
-                _add('goto', 'exit', '이동: 계단 exit — %s, %dm (방 구조로 앎, 아직 안 보임)'
-                     % (zx['bearing'], zx['dist']))
+        if zone_obs is not None:               # D19: 문 = 이동 종점 — 안 보이는 문도 핑이 된다
             for dr in zone_obs['doors']:       # 출처 딱지=사실만(어디로 이어지는지는 안 준다 — 층 지도 아님)
                 tag = (' (문 너머는 가 본 곳)' if dr['been']
                        else ('' if dr['seen'] else ' (방 구조로 앎, 아직 안 보임)'))
