@@ -11,6 +11,7 @@ echo   [1] Live run + web viewer   (REAL run)
 echo   [2] Watch in tmux           (REAL run)
 echo   [3] Viewer only  (replays, no new run)
 echo   [4] Experiment batch status
+echo   [5] D19 demo run  (scan ON - new movement)
 echo   [Q] Quit
 echo  ==========================================
 set "pick="
@@ -19,6 +20,7 @@ if /i "%pick%"=="1" goto live
 if /i "%pick%"=="2" goto tmux
 if /i "%pick%"=="3" goto viewer
 if /i "%pick%"=="4" goto status
+if /i "%pick%"=="5" goto d19
 if /i "%pick%"=="Q" exit /b 0
 goto menu
 
@@ -26,6 +28,14 @@ goto menu
 echo Starting a REAL run (writes state/ and bestiary.json).
 echo Closing the new window stops the run. Previous run is auto-saved to runs/.
 start "Wonderland live" wsl -e bash -lc "bash ~/dungeon/live.sh"
+timeout /t 4 /nobreak >nul
+start "" http://localhost:8000/viewer/
+goto menu
+
+:d19
+echo D19 demo: REAL run with DUNGEON_SCAN=1 (doors/rooms vocabulary, stairs by sight only).
+echo Closing the new window stops the run. Previous run is auto-saved to runs/.
+start "Wonderland D19 demo" wsl -e bash -lc "DUNGEON_SCAN=1 bash ~/dungeon/live.sh"
 timeout /t 4 /nobreak >nul
 start "" http://localhost:8000/viewer/
 goto menu
