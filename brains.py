@@ -65,9 +65,9 @@ def _valid_targets(obs, verb="goto"):
     for k in ("features", "monsters", "bots"):
         ids |= {o["id"] for o in s.get(k, [])}
     z = obs.get("zone") or {}
-    if isinstance(z.get("doors"), list):    # D19(scan): 문 = 핑 종점(안 보여도 — 구조는 훤히).
-        if verb == "goto":                  # 계단은 여기 없다 — 내용물이라 '보일 때만' 규칙 그대로
-            ids |= {d["id"] for d in z["doors"]}
+    if isinstance(z.get("doors"), list):    # D19(scan): 문 = 핑 종점. 정정(07-15): obs 에 실리는
+        if verb == "goto":                  # 문 자체가 '본 적 있는 것'뿐 — 여기서 더 거를 것 없음.
+            ids |= {d["id"] for d in z["doors"]}   # 계단은 여기 없다 — 내용물('보일 때만') 규칙 그대로
     for p in obs.get("party", []):          # 살아있는(안 내려간) 동료는 시야 밖이어도 핑 가능
         if p.get("alive") and not p.get("won"):
             ids.add("b%s" % p["char"])
@@ -324,32 +324,38 @@ def _wire(obs, names=None):
               % (n, n), "```"]
         L += list(obs["ascii_view"])
         L += ["```",
-              "기호: # 벽 · . 바닥 · , 발자국 · $ 보물 · > 계단 · M 몬스터"
+              "기호: # 벽 · . 바닥 · + 문(너머 안 보임) · , 발자국 · $ 보물 · > 계단 · M 몬스터"
               " · ^ 드러난 함정 · = 상자 · ~ 샘 · 숫자=동료"]
 
     s = obs.get("sights") or {}
     if scan:
         # ── D19 트리 직렬화: 던전 N층 > 공간 > 8방위 슬롯 — 빈 방향도 발화("서쪽: 벽" =
-        # 침묵을 정보로), 1칸=1m, 출처 딱지(구조로 앎/온 적 있음/발각됨 — 구조≠시야 구분 필수).
-        L += ["", "## 장소 (공간의 짜임은 확실히 안다 — 내용물은 눈에 보이는 것만)"]
-        head = "던전 %d층 > %s %s" % (obs.get("depth", 1), z.get("kind", "?"), z.get("id", "?"))
+        # 침묵을 정보로), 1칸=1m, 출처 딱지(본 적 있음/온 적 있음/발각됨 — 기억≠시야 구분 필수).
+        # 정정(07-15): "짜임은 확실히"는 과독이었다 — 네 눈이 본 만큼이 네가 아는 만큼이다.
+        L += ["", "## 장소 (네 눈이 본 만큼이 네가 아는 만큼이다)"]
+        head = ("던전 %d층 > %s %s" % (obs.get("depth", 1), z.get("kind", "?"),
+                                       z.get("id", "") or "")).rstrip()
+        if z.get("kind") == "문턱":
+            head += " — 문 위(양쪽이 트여 보인다)"
         if z.get("size"):
             head += " — 크기 %d×%dm" % tuple(z["size"])
         if z.get("len") is not None:
             head += " — 길이 약 %dm" % z["len"]
         if z.get("at"):
             head += ", 너는 %s에 있다" % z["at"]
-        L.append("- " + head)
+        L.append("- " + head.rstrip())
         KR = {"N": "북쪽", "NE": "북동쪽", "E": "동쪽", "SE": "남동쪽",
               "S": "남쪽", "SW": "남서쪽", "W": "서쪽", "NW": "북서쪽"}
         ck = z.get("checked") or {}
-        if ck.get("frac", 1) >= 1:
+        if z.get("kind") == "문턱":
+            pass                                  # 문턱은 '공간'이 아니다 — 확인 문장 생략
+        elif ck.get("full"):
             L.append("- 이 공간 안은 눈으로 다 확인했다")
         else:
-            L.append("- 안을 눈으로 다 확인하진 못했다(대략 %d할)%s"
-                     % (round(ck.get("frac", 0) * 10),
-                        (" — 아직 못 본 쪽: %s" % KR.get(ck.get("todo"), ck.get("todo")))
-                        if ck.get("todo") else ""))
+            L.append("- 안을 다 보진 못했다%s"
+                     % ((" — %s으로 공간이 더 이어진다(끝이 안 보인다)"
+                         % KR.get(ck.get("todo"), ck.get("todo")))
+                        if ck.get("todo") else " (못 본 구석이 남았다)"))
         order8 = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
         slots = {b: [] for b in order8}
         under = []                               # 발밑(거리 0)은 방위가 없다 — 따로 한 줄
@@ -362,7 +368,7 @@ def _wire(obs, names=None):
 
         for d in z.get("doors", []):
             tag = (" (온 적 있는 길)" if d.get("been")
-                   else ("" if d.get("seen") else " (방 구조로 앎, 아직 안 보임)"))
+                   else ("" if d.get("seen") else " (본 적 있음, 지금 시야 밖)"))
             put(d.get("bearing"), d.get("dist", 0),
                 ("문 %s — 지금 선 문턱%s" % (d.get("id", "?"), tag)) if d.get("dist") == 0
                 else "문 %s %dm%s" % (d.get("id", "?"), d.get("dist", 0), tag))
@@ -395,7 +401,17 @@ def _wire(obs, names=None):
               "S": "남쪽", "SW": "남서쪽", "W": "서쪽", "NW": "북서쪽"}
         for b in order8:
             items = sorted(slots[b], key=lambda it: (it[0], it[1]))
-            L.append("- %s: %s" % (KR[b], ", ".join(t for _, t in items) if items else "벽"))
+            if items:
+                L.append("- %s: %s" % (KR[b], ", ".join(t for _, t in items)))
+                continue
+            # 빈 방향의 정직화(07-15 정정): 전지 시절엔 침묵=벽이었지만, 이제 안 본 곳은
+            # 벽이 아니라 미지다 — 시야 내 '미지로 트인' 방위(ways)는 트임으로 발화.
+            wv = next((w for w in s.get("ways", []) if w.get("bearing") == b), None)
+            if wv:
+                L.append("- %s: 트여 있다 — 너머는 안 보인다%s"
+                         % (KR[b], " (발자국 있는 길)" if wv.get("visited") else ""))
+            else:
+                L.append("- %s: 벽" % KR[b])
         for m in s.get("monsters", []):
             if m.get("lore"):
                 L.append("  · %s 습성(네가 아는 것): %s" % (m.get("kind", "?"), m["lore"]))

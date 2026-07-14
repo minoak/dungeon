@@ -165,7 +165,7 @@ def write_map(d, bots, turn):
                      % (b["char"], nm, b["job"], b["sex"], b["x"], b["y"], b["bag"], ping, state))
     alive_m = sum(1 for m in d.monsters if m.alive)
     lines.append("")
-    lines.append("  몬스터 %d/%d    범례: # 벽  . 바닥  $ 보물  > 계단  M 몬스터  ^ 함정  = 상자  ~ 샘  %s 영웅"
+    lines.append("  몬스터 %d/%d    범례: # 벽  . 바닥  + 문  $ 보물  > 계단  M 몬스터  ^ 함정  = 상자  ~ 샘  %s 영웅"
                  % (alive_m, len(d.monsters), ",".join(sorted(b["char"] for b in bots))))
     lines.append("               (관전자 전용: m 숨은 적  * 숨은 보물 — 봇들은 모른다)")
     with open(os.path.join(STATE, "gm_map.txt"), "w", encoding="utf-8") as f:
