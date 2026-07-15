@@ -214,6 +214,10 @@ def _last_prose(last, names=None):
             return ("동행을 접었다 — %s이(가) 한동안 제자리라 같이 서 있기만 했다."
                     " 이제 뭘 할지 네가 정하라" % tgt.replace("follow:", ""))
         if r == "arrived":
+            if tgt and tgt.startswith("d") and tgt[1:].isdigit():
+                # 문 핑 완결 = 이미 '지나 들어선' 상태(Door 계약) — "곁에 도착"으로 옮기면
+                # 봇이 아직 안 넘었다고 믿고 같은 문을 재핑한다(암 B 2차 문턱 셔틀 패인)
+                return "문 %s를 지나 들어섰다 — 지금 그 너머 공간 안이다" % tgt
             return "%s 곁에 도착했다" % (tgt or "목적지")
         if r == "at_exit":
             return "계단 앞에 섰다"

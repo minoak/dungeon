@@ -1124,7 +1124,7 @@ class Dungeon:
                        else ('' if dr['seen'] else ' (본 적 있음, 지금 시야 밖)'))
                 where = ('발밑(지금 선 문턱)' if dr['dist'] == 0
                          else '%s, %dm' % (dr['bearing'], dr['dist']))
-                _add('goto', dr['id'], '이동: 문 %s — %s%s — 지나면 다음 공간'
+                _add('goto', dr['id'], '이동: 문 %s — %s%s — 지나면 건너편 공간'
                      % (dr['id'], where, tag))
         for m in mons:
             if not m['adj']:
