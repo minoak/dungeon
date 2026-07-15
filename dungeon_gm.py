@@ -1547,10 +1547,20 @@ class Dungeon:
             if res is not None:
                 return res
         seen = self.visible_cells(bot['x'], bot['y'])
+        scells = bot.get('seen_cells') if self.scan else None
         fresh = []
         for w in self._ways(bot['x'], bot['y'], seen):
             if w['visited']:
                 continue                              # 발자국 있는 길은 '새 발견'이 아니다(왕복/진동 차단)
+            if scells is not None:
+                # D19 델타: '새 길'의 기준은 발자국이 아니라 기억 — 너머에 *한 번도 본 적 없는*
+                # 칸이 있어야 발견이다. 발자국 기준은 '봤지만 안 밟은' 다 본 방 구석을 영원히
+                # 새 길로 남겨 문을 나가고도 되밟으러 온다(미로 v3 육안 재론, 스폰 방 30/30 실측)
+                x, y = w['cell']
+                if not any(0 <= x + dx < self.w and 0 <= y + dy < self.h
+                           and (x + dx, y + dy) not in scells
+                           for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0))):
+                    continue
             p = self.path_to(bot['x'], bot['y'], w['cell'][0], w['cell'][1], bots)
             if p:
                 fresh.append((w, p))
@@ -1961,6 +1971,9 @@ class Dungeon:
                 zc = self.zone_at.get(c)
                 if zc is not None:
                     zsd.setdefault(zc, set()).add(c)
+            bot.setdefault('seen_cells', set()).update(seen)   # 평생 시야 장부(벽 포함, 봇 명의) —
+                                          #   explore 폴백의 '새 길' 재료. 세계 공개 아님: 눈에 든
+                                          #   칸만 한 방향으로 쌓인다(LLM 무노출 — 엔진 내부 전용)
             ds = bot.setdefault('doors_seen', set())   # D19 정정: 문도 눈에 들어야 어휘가 된다
             for did, dr in self.doors.items():         #   (전지성 제거 — 구조 지식=시야+기억)
                 if did not in ds and (
