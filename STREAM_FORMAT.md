@@ -47,7 +47,7 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 | `turn` | 이 층에 들어선 틱(첫 층=0) |
 | `depth` `w` `h` | 층 번호·크기 |
 | `master_seed` `level_seed` | 마스터 시드와 층별 파생 시드 |
-| `grid[]` | h개의 w폭 문자열, **raw 지형만**: `#`(벽) `.`(바닥). tile() 관전 글리프 아님 — 몹·피처·함정은 아래 배열로 별도(겹쳐 그리기는 소비자 몫). 웹이 엔진 없이 렌더 가능 |
+| `grid[]` | h개의 w폭 문자열, **raw 지형만**: `#`(벽) `.`(바닥) `+`(문 타일 — D19 정정 2, 2026-07-15 SCAN 기본 1 승격부터 생성 층에 등장. 벽처럼 빛을 막고 바닥처럼 지나감). tile() 관전 글리프 아님 — 몹·피처·함정은 아래 배열로 별도(겹쳐 그리기는 소비자 몫). 웹이 엔진 없이 렌더 가능 |
 | `exit` | `[x,y]` 계단 좌표 |
 | `rooms[]` | 방 전수: `id x y w h type neighbours[]` (type ∈ entrance/exit/standard) — `feature.room_id` 의 해소처 |
 | `features[]` | Feature 전수: `id type name x y room_id concealed perception_gate` (type ∈ exit/treasure/chest/fountain) |

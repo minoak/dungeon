@@ -51,7 +51,8 @@ def check(name, cond):
 
 
 TEAR_REASONS = {"hurt", "plan_broken"}          # last.type 로 오는 파기 사유
-TEAR_RESULTS = {"encounter", "blocked", "lost", "no_path"}   # last.result 로 오는 파기 사유
+TEAR_RESULTS = {"encounter", "blocked", "lost", "no_path",
+                "sighted"}   # last.result 로 오는 파기 사유(sighted=D19 목격 정지, SCAN 기본 1 승격으로 합류)
 
 
 # ───────────────────── ① then 저작 검증 (순수 함수) ─────────────────────

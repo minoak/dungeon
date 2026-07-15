@@ -58,7 +58,8 @@ def load_sheets():
     return sheets
 
 
-SCAN_ON = os.environ.get("DUNGEON_SCAN", "0") != "0"   # 스캐너(D19) — 러너와 같은 스위치·같은 기본
+SCAN_ON = os.environ.get("DUNGEON_SCAN", "1") != "0"   # 스캐너(D19) — 러너와 같은 스위치·같은 기본
+                                                        #   (기본 1 승격: 2026-07-15 미로 판정 채택 — 파트너 육안)
 
 
 def build(spec):

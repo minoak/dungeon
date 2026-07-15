@@ -201,10 +201,10 @@ check("run_meta: v=1 + 실행 파라미터 + stream_obs=false", meta.get("v") ==
 check("run_meta: party 시트 필드 전수(스폰 봇에서 파생)",
       len(meta["party"]) == 2
       and all(set(p) == SHEET_FIELDS for p in meta["party"]))
-check("level: grid = h개의 w폭 raw 지형('#'/'.')",
+check("level: grid = h개의 w폭 raw 지형('#'/'.'/'+' — 문 타일=D19)",
       all(len(lv["grid"]) == lv["h"]
           and all(len(row) == lv["w"] for row in lv["grid"])
-          and set("".join(lv["grid"])) <= {"#", "."} for lv in levels))
+          and set("".join(lv["grid"])) <= {"#", ".", "+"} for lv in levels))
 check("level: 시드 필드(master/level 파생) + exit 좌표",
       all(lv["master_seed"] == 7 and isinstance(lv["level_seed"], int)
           and len(lv["exit"]) == 2 for lv in levels))

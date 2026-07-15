@@ -66,7 +66,8 @@ PARTY_FILE = os.environ.get("DUNGEON_PARTY_FILE", os.path.join(HERE, "party.json
 BESTIARY_FILE = os.environ.get("DUNGEON_BESTIARY_FILE", "")  # 도감 원장(D9). 빈값=영속 끔(판 안 학습만)
                                                              #   — 격리 기본: verify/실험이 라이브 원장을 안 더럽힌다
 LEDGER_ON = os.environ.get("DUNGEON_LEDGER", "1") != "0"     # 공간 장부(D17) — 러너 판 기본 켬
-SCAN_ON = os.environ.get("DUNGEON_SCAN", "0") != "0"         # 스캐너(D19) — 암 B 판정 전 기본 끔
+SCAN_ON = os.environ.get("DUNGEON_SCAN", "1") != "0"         # 스캐너(D19) — 기본 1 승격
+                                                             #   (2026-07-15 미로 판정 채택 — 파트너 육안)
                                                              #   (채택 시 기본 1로 승격 — 사전등록 절차)
                                                              #   (spawn 기본은 None=끔 — 기존 게이트 무접촉)
 LORE_FILE = os.path.join(HERE, "lore.json")
