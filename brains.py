@@ -49,7 +49,7 @@ OBS_POS = os.environ.get("DUNGEON_OBS_POS", "1") != "0"       # 생좌표 pos �
 CLAUDE_BIN = "claude.exe"
 TIMEOUT = 60   # 콜드스타트 ~8초라 넉넉
 
-_TYPES = {"goto", "attack", "interact", "search", "explore", "follow"}
+_TYPES = {"goto", "attack", "interact", "search", "explore", "follow", "drink"}
 _BEARINGS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW"}
 
 
@@ -180,7 +180,8 @@ def _last_prose(last, names=None):
             seen_l = last.get("seen") or []
             return ("걷다 멈췄다 — 새로 눈에 든 것: "
                     + ", ".join(x.get("name", "?") for x in seen_l)
-                    + (" — 오는 길에 보물도 주웠다" if last.get("treasure") else ""))
+                    + (" — 오는 길에 보물도 주웠다" if last.get("treasure") else "")
+                    + (" — 오는 길에 회복 물약도 챙겼다" if last.get("potion") else ""))
         if r == "encounter":
             bits = []
             if last.get("monsters"):
@@ -196,6 +197,8 @@ def _last_prose(last, names=None):
                     bits.append("%s에 당했다 — %d 피해" % (tr.get("name", "함정"), tr.get("dmg", 0)))
             if last.get("treasure"):
                 bits.append("보물을 주웠다")
+            if last.get("potion"):
+                bits.append("회복 물약을 챙겼다")
             if last.get("found"):
                 bits.append("발견: " + ", ".join(f.get("name", "?") for f in last["found"]))
             return "걷다 멈췄다 — " + (" / ".join(bits) or "새로운 것을 봤다")
@@ -223,6 +226,8 @@ def _last_prose(last, names=None):
             return "계단 앞에 섰다"
         if r == "treasure":
             return "길에서 보물을 주웠다"
+        if r == "potion":
+            return "길에서 회복 물약을 챙겼다"
         if r == "swapped":                    # 교대(D18 개정)의 수동태 — 밀려난 쪽의 자기 관측
             return ("%s이(가) 지나가며 나와 자리를 바꿨다 — 한 칸 밀려섰다(가던 길은 그대로)"
                     % last.get("with", "동료"))
@@ -252,6 +257,8 @@ def _last_prose(last, names=None):
             return "샘물을 마셨다 — HP %d 회복" % last.get("heal", 0)
         if r == "fountain_harm":
             return "샘물이 오염돼 있었다 — %d 피해" % last.get("dmg", 0)
+        if r == "potion":
+            return "회복 물약을 집어 챙겼다 (소지 %d병)" % last.get("potions", 1)
         fin = {"treasure": "보물을 주웠다", "nothing": "아무것도 없었다",
                "too_far": "너무 멀었다(붙어야 만진다)", "no_target": "대상이 그 자리에 없었다"}
         if r in fin:
@@ -262,6 +269,12 @@ def _last_prose(last, names=None):
             return "수색해서 드러냈다: " + ", ".join(
                 "%s(%s쪽)" % (x.get("name", "?"), x.get("bearing", "?")) for x in f)
         return "수색했지만 — 이 근방에 숨은 건 없었다"
+    if t == "drink":
+        if r == "drink_heal":
+            return "회복 물약을 들이켰다 — 상처가 전부 아물었다(HP %d 회복, 남은 물약 %d병)" % (
+                last.get("heal", 0), last.get("potions", 0))
+        if r == "no_potion":
+            return "물약을 마시려 했지만 — 가진 물약이 없다"
     if t in ("goto", "explore", "follow"):
         if r == "blocked" and last.get("allies"):
             return ("가려던 길이 막혔다 — 동료(%s)가 길목에 서 있어 크게 돌아야 한다"
@@ -280,7 +293,8 @@ def _last_prose(last, names=None):
 
 # _wire 가 아는 obs 키 전부 — 밖의 키는 '그 밖의 정보' JSON 으로 정직하게 노출(조용한 누락 금지).
 _WIRE_KEYS = frozenset((
-    "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "depth", "turn",
+    "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "potions",
+    "depth", "turn",
     "zone", "known", "witnessed", "last", "order", "ascii_view", "legend",
     "sights", "party", "options", "messages", "intent"))
 
@@ -311,9 +325,10 @@ def _wire(obs, names=None):
         return "방금" if d <= 0 else "%d턴 전에" % d
 
     L = ["## 네 상태"]
-    L.append("- 너는 %s(%s) — HP %d/%d, 힘 +%d, 민첩 +%d, 모은 보물 %d개 — 지금 %d층"
+    L.append("- 너는 %s(%s) — HP %d/%d, 힘 +%d, 민첩 +%d, 모은 보물 %d개%s — 지금 %d층"
              % (obs.get("job", "?"), obs.get("sex", ""), obs.get("hp", 0), obs.get("maxhp", 0),
                 obs.get("str", 0), obs.get("dex", 0), obs.get("inventory", 0),
+                (", 회복 물약 %d병" % obs["potions"]) if obs.get("potions") else "",
                 obs.get("depth", 1)))
     z = obs.get("zone")
     scan = isinstance((z or {}).get("doors"), list)   # D19 구조 조회가 실려 있으면 트리 직렬화
@@ -332,7 +347,7 @@ def _wire(obs, names=None):
         L += list(obs["ascii_view"])
         L += ["```",
               "기호: # 벽 · . 바닥 · + 문(너머 안 보임) · , 발자국 · $ 보물 · > 계단 · M 몬스터"
-              " · ^ 드러난 함정 · = 상자 · ~ 샘 · 숫자=동료"]
+              " · ^ 드러난 함정 · = 상자 · ~ 샘 · ! 회복 물약 · 숫자=동료"]
 
     s = obs.get("sights") or {}
     if scan:
@@ -635,8 +650,8 @@ def claude_brain(obs, char="?", bot=None, roster=None):
                    "say": str(obj.get("say", ""))[:160],
                    "reason": str(obj.get("reason", ""))[:160],
                    "src": "haiku"}
-            if typ == "search":
-                return out                          # search는 target 불필요
+            if typ in ("search", "drink"):
+                return out                          # search·drink 는 target 불필요
             if typ == "explore":                    # 탐색: 방위(N/S/E/W/NE…)만 선택적으로(없으면 엔진 자동)
                 if tgt.upper() in _BEARINGS:
                     out["target"] = tgt.upper()

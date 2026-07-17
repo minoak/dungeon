@@ -41,7 +41,9 @@
   · search    : 한 턴을 들여 샅샅이 살핌. found = 드러난 숨은 것 목록(없으면 빈 배열 = 허탕).
   · interact  : result = exit(**파티가 계단에 모여 함께 하강/탈출** — party에 명단) / wait_allies(동료가 아직 안 와 계단에서 기다림 — missing에 번호)
                 / treasure(줍기) / chest_loot(상자에서 보물, loot개) / chest_trap(상자의 독침, dmg) / fountain_heal(샘물로 회복, heal)
-                / fountain_harm(오염된 샘물, dmg) / nothing(허탕) / too_far(닿지 않음) / no_target(대상 없음).
+                / fountain_harm(오염된 샘물, dmg) / potion(회복 물약을 집어 챙김) / nothing(허탕) / too_far(닿지 않음) / no_target(대상 없음).
+  · drink     : 회복 물약을 마심. result=drink_heal(상처가 전부 아묾 — heal 회복량, potions 남은 병 수) / no_potion(빈 손 — 마실 게 없다).
+                walk 이벤트의 potion=true 는 길에서 물약을 주운 것(보물 줍기와 같은 문법).
   · monster_notice : 몹이 모험가를 발견(발각) — 추적 개시. 긴장의 순간.
   · monster_flee   : 몹이 겁먹고 도주 전환.
   · monster_desperate : 도주하던 몹이 탈진 — 몰린 쥐처럼 이빨을 드러내며 돌아선다.

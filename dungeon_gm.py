@@ -31,6 +31,8 @@ DOOR = '+'                      # 문 타일(D19 정정 2026-07-15): 벽처럼 �
                                 # 개폐 상태 없음(항상 불투명 MVP — 격자 불변=결정론·리플레이 무손상,
                                 # 그 너머의 기억은 장부 몫). scan 판 전용 — 기본(scan=0) 격자엔 없다.
 CHEST, FOUNTAIN = '=', '~'      # 방 콘텐츠(Stage 3): 상자(도박)·샘(회복 도박)
+POTION = '!'                    # 회복 물약(07-17, PD 문법): 주워 들고 다니는 확정 완전 회복 —
+                                # 샘(그 자리 도박)과 대비되는 '보험'. 첫 소지 아이템(bot['potions'])
 LURKER, HIDDEN = 'm', '*'       # 관전자 전용(극적 아이러니): 숨은 적/숨은 보물. 봇 시야(view)엔 절대 안 나간다.
 UNKNOWN_BEAST = '낯선 짐승'     # 도감(D9) 미등재 몬스터의 obs 표기 — 보이지만 정체를 모른다.
 
@@ -246,7 +248,7 @@ class Door:
 
 class Dungeon:
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
-                 scan=False):
+                 scan=False, n_potions=0):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -269,7 +271,9 @@ class Dungeon:
         if self.scan:
             self._stamp_doors()    # D19 정정: 관통점에 문 타일(+) — scan 판 전용(기본 격자 무변경)
         self._build_room_graph()   # 방 인접 그래프(connect 체인) — BFS·'방 핑'의 토대
-        self._place_targets(n_monsters, n_traps, n_lurkers)   # floors=FLOOR만 → 문 위 배치 자동 회피
+        self._place_targets(n_monsters, n_traps, n_lurkers,   # floors=FLOOR만 → 문 위 배치 자동 회피
+                            n_potions)   # 물약 기본 0 = 엔진 직생성 판(기존 verify) 비트 동일.
+                                         #   러너가 DUNGEON_POTIONS(기본 1)로 켠다(scan 승격 전 선례)
         self._assign_room_types()  # entrance/exit/standard 타입 부여 (출구 배치 후)
         self._classify_tiles()     # 각 바닥 칸에 'room'/'corridor' 속성 부여
         self.zones = None
@@ -295,7 +299,7 @@ class Dungeon:
         """디버깅/시나리오 모드(장면 저작, scenario.py 소비): 생성기 대신 손으로 그린
         문자 맵으로 층을 짓는다. 판정·시야·자동보행·스트림은 생성 층과 완전 동일(같은 코드) —
         조립되는 건 세계가 아니라 '장면'이다.
-        기호: '#'/공백=벽 · '.'=바닥 · '>'=출구(필수) · '$'보물 · '='상자 · '~'샘 ·
+        기호: '#'/공백=벽 · '.'=바닥 · '>'=출구(필수) · '$'보물 · '='상자 · '~'샘 · '!'회복 물약 ·
         '^'=함정(traps 리스트를 (y,x) 순서로 적용, 기본 spike·hidden) ·
         소문자=몬스터 슬롯(monsters[문자] 템플릿: kind/hp/atk/dmg/ac/state/concealed/target —
         state HUNTING 이면 호출측이 봇 배치 후 last_seen 을 채울 것) ·
@@ -332,6 +336,8 @@ class Dungeon:
                     d._add_feature('chest', '상자', x, y)
                 elif ch == '~':
                     d._add_feature('fountain', '샘', x, y)
+                elif ch == POTION:
+                    d._add_feature('potion', '회복 물약', x, y)
                 elif ch == TRAP:
                     tslots.append((x, y))
                 elif ch.isdigit():
@@ -401,7 +407,7 @@ class Dungeon:
             if a.id not in b.neighbours:
                 b.neighbours.append(a.id)
 
-    def _place_targets(self, n_monsters, n_traps, n_lurkers=0):
+    def _place_targets(self, n_monsters, n_traps, n_lurkers=0, n_potions=0):
         """출구·보물·몬스터·함정·방콘텐츠를 겹치지 않게 흩뿌린다. 출구·보물 = Feature 로 흡수.
         출구는 가능하면 '방 안'에 둔다(ExitRoom 성립 → Stage 2 기본 핑 목표).
         Stage 3 추가: 매복몹(concealed)·함정 종류 순환(경보 포함)·상자/샘·숨은 보물(도적 인지의 보상)."""
@@ -442,6 +448,10 @@ class Dungeon:
             x, y = pool.pop()
             self._add_feature('treasure', '숨은 보물', x, y,
                               concealed=True, perception_gate=PASSIVE_DC)
+        for _ in range(n_potions):            # 회복 물약(07-17): 들고 다니는 확정 회복(PD 문법).
+            if pool:                          #   맨 마지막 배치 = 같은 시드의 기존 배치 전부 불변
+                x, y = pool.pop()             #   (pool.pop 은 RNG 무소비 — additive 재현성)
+                self._add_feature('potion', '회복 물약', x, y)
 
     def _assign_room_types(self):
         """출구 든 방 = exit, 출구에서 가장 먼 방 = entrance, 나머지 standard.
@@ -768,6 +778,8 @@ class Dungeon:
             return CHEST
         if f and f.type == 'fountain' and not f.concealed:
             return FOUNTAIN
+        if f and f.type == 'potion' and not f.concealed:
+            return POTION
         for t in self.traps:
             if (t.x, t.y) == (x, y) and not t.hidden:
                 return TRAP            # 드러난 함정만 보인다. 숨은 것은 바닥처럼.
@@ -1116,6 +1128,11 @@ class Dungeon:
         for f in feats:
             if f['adj']:
                 _add('interact', f['id'], '상호작용: %s %s (발밑/인접)' % (f['name'], f['id']))
+        if bot.get('potions'):                 # 물약(07-17): 소지 중일 때만 어휘가 된다 — 즉시행동군.
+            _add('drink', None,                #   주석=사실만(만피 낭비 경고는 '이미 살폈다' 선례)
+                 '회복 물약을 마신다 — 상처가 전부 아문다 (한 턴 소모, 소지 %d병)%s'
+                 % (bot['potions'],
+                    ' ※ 지금은 상처가 없다' if bot['hp'] >= bot['maxhp'] else ''))
         if exit_obj and not exit_obj['adj']:
             _add('goto', 'exit', '이동: 계단 exit — %s, 거리 %d'
                  % (exit_obj['bearing'], exit_obj['dist']))
@@ -1203,6 +1220,7 @@ class Dungeon:
         return {'pos': [cx, cy], 'hp': bot['hp'], 'maxhp': bot['maxhp'],
                 'job': bot['job'], 'sex': bot['sex'],
                 'str': bot['str'], 'dex': bot['dex'], 'inventory': bot['bag'],
+                'potions': bot.get('potions', 0),   # 소지 회복 물약(07-17) — 자기 몸의 사실
                 'depth': self.depth,
                 **({'zone': zone_obs} if zone_obs is not None else
                    ({'zone': {'id': ('r%d' % rid_here) if rid_here is not None else None,
@@ -1224,7 +1242,8 @@ class Dungeon:
                 'options': options,   # 리모컨 — 엔진 열거 유효 행동(additive. BYO 계약: 번호+한마디)
                 'legend': {'@': 'you', '#': 'wall', '.': 'floor', '+': 'door',
                            '$': 'treasure', '>': 'stairs/exit', 'M': 'monster',
-                           '^': 'trap', '=': 'chest', '~': 'fountain', ' ': 'unknown'}}
+                           '^': 'trap', '=': 'chest', '~': 'fountain', '!': 'potion',
+                           ' ': 'unknown'}}
 
     # ── 탐색 프런티어 (explore = 미지로 트인 출입구) ─────────────
     def _frontier_cells(self, cx, cy, seen):
@@ -1282,6 +1301,8 @@ class Dungeon:
             res = self._interact(bot, tgt, bots)
         elif typ == 'search':
             res = self._search(bot)
+        elif typ == 'drink':
+            res = self._drink(bot)                    # 회복 물약(07-17) — 무대상 즉시 동사(search 선례)
         elif typ == 'explore':
             res = self._set_explore(bot, tgt, bots)   # 탐색(선택적 방위 tgt)
         elif typ == 'follow':
@@ -1313,8 +1334,9 @@ class Dungeon:
         typ = str(step.get('type') or '')
         tgt = step.get('target')
         why = None
-        if typ in ('search', 'explore'):
-            pass
+        if typ in ('search', 'explore', 'drink'):
+            pass                                      # 열린 동사 — drink 유무는 발동 시점 판정(no_potion
+                                                      #   이 정직 보고. 시야-온리 정합: search 선례)
         elif typ == 'goto':
             e = ((bot.get('ledger') or {}).get('statics') or {}).get(str(tgt))
             if self._resolve_target(tgt, bots) is None and not (e and e.get('id')):
@@ -1620,7 +1642,7 @@ class Dungeon:
         bot['order'], bot['path'], bot['plan'] = None, [], []   # 발 디딜 곳 없음 — 작정 진행 불가(D16)
         return {**base, 'result': 'no_path'}
 
-    def _sighted_stop(self, bot, base, treasure=False):
+    def _sighted_stop(self, bot, base, treasure=False, potion=False):
         """정지 신호(D19 정정 2026-07-15, 파트너 확정): "새 오브젝트가 시야에 들어올 때 멈춰
         판단을 구한다"(벽·바닥 제외) — order 종류 무관(goto·explore·follow 전부). 기준=봇 평생
         목격 장부 seen_keys(결정 시점 view 가 미리 채움 — 개시 때 보이던 건 '새것'이 아니다).
@@ -1650,6 +1672,8 @@ class Dungeon:
         res = {**base, 'result': 'sighted', 'seen': stuff}
         if treasure:
             res['treasure'] = True
+        if potion:
+            res['potion'] = True
         return res
 
     def step_order(self, bot, bots):
@@ -1786,6 +1810,8 @@ class Dungeon:
             res = {**base, 'result': 'encounter', 'trap': enter['trap']}
             if enter.get('treasure'):                 # 죽으며 주운 보물도 진실(원장)에 남긴다 — 지금은 보물·함정
                 res['treasure'] = True                #   동칸 배치가 없어 dormant이나, 배치 규칙 변경 즉시 발화
+            if enter.get('potion'):
+                res['potion'] = True
             return res
         if enter.get('at_exit'):                      # 계단 도착 — 하강/탈출은 interact(파티 조율)로
             self._perceive(bot)                       # 계단 위에서도 눈은 뜨고 있다(생략하면 뻔히 보이는
@@ -1805,6 +1831,8 @@ class Dungeon:
                 res['trap'] = enter['trap']
             if enter.get('treasure'):
                 res['treasure'] = True                # 같은 걸음의 보물 획득도 진실에 남긴다(GM 서사용)
+            if enter.get('potion'):
+                res['potion'] = True
             if found:
                 res['found'] = found                  # 인지로 드러난 것들("잠깐, 함정이야!")
             if newly:
@@ -1813,13 +1841,18 @@ class Dungeon:
             if self.scan:                             # 같은 걸음의 목격도 장부에 — 인카운터가 삼킨
                 bot.setdefault('seen_keys', set()).update(self._content_keys(bot))   # 새것이 다음
             return res                                #   걸음에 유령 sighted 로 재발화하지 않게
-        sres = self._sighted_stop(bot, base, treasure=bool(enter.get('treasure')))
+        sres = self._sighted_stop(bot, base, treasure=bool(enter.get('treasure')),
+                                  potion=bool(enter.get('potion')))
         if sres:                                      # D19 정정: "새 오브젝트가 시야에 들면 멈춤"
             return sres                               #   (벽·바닥 제외) — order 종류 무관 단일 원칙
         if enter.get('treasure'):
             if not bot['path']:                       # 목표 칸의 보물을 주움 = 이 order 의 완결(자기 소비).
                 bot['order'] = None                   #   남겨두면 다음 틱 빈 자리에 lost/arrived 거짓 보고
             return {**base, 'result': 'treasure'}     # 보물은 줍고 계속 자동보행(안 멈춤)
+        if enter.get('potion'):                       # 물약도 보물 문법 그대로 — 줍고 계속(자기 소비 완결)
+            if not bot['path']:
+                bot['order'] = None
+            return {**base, 'result': 'potion'}
         if not bot['path']:
             return self._order_done(bot, bots, base)
         return {**base, 'result': 'walking'}
@@ -1867,6 +1900,11 @@ class Dungeon:
         tf = self.feature_at(nx, ny, 'treasure')
         if tf and not tf.concealed:               # 숨은 보물은 밟아도 모른다 — 인지로 드러나야 줍는다
             del self.features[tf.id]; bot['bag'] += 1; out['treasure'] = True
+        pf = self.feature_at(nx, ny, 'potion')
+        if pf and not pf.concealed:               # 회복 물약(07-17): 보물과 같은 줍기 문법(밟으면 소지)
+            del self.features[pf.id]
+            bot['potions'] = bot.get('potions', 0) + 1
+            out['potion'] = True
         if (nx, ny) == self.exit:
             out['at_exit'] = True
         trap = next((t for t in self.traps if t.x == nx and t.y == ny and not t.sprung), None)
@@ -2067,6 +2105,10 @@ class Dungeon:
         if f and f.type == 'treasure':
             del self.features[f.id]; bot['bag'] += 1
             return {**base, 'result': 'treasure'}
+        if f and f.type == 'potion':             # 회복 물약 — 곁에서 집기(줍기 문법, 마시는 건 drink)
+            del self.features[f.id]
+            bot['potions'] = bot.get('potions', 0) + 1
+            return {**base, 'result': 'potion', 'potions': bot['potions']}
         if f and f.type == 'chest':              # 상자 도박 — 손재주(DEX)가 좋으면 안전하게 연다
             del self.features[f.id]
             r = self.d20(); total = r + bot['dex']
@@ -2144,6 +2186,20 @@ class Dungeon:
             if surprise:
                 mon.skip_turns = 1               # 기습라운드 = 다음 몹턴 반격 1회 스킵(대상 턴 스킵)
         return res
+
+    def _drink(self, bot):
+        """회복 물약 마시기(07-17): 확정 완전 회복 — 샘(그 자리 d20 도박)과 대비되는 '들고 다니는
+        보험'(PD 문법). 굴림 없음(아이템의 약속은 확실성), 한 턴 소모. 만피에 마셔도 소모된다
+        (세계는 낭비를 말리지 않는다 — 리모컨 라벨의 사실 주석이 알려줄 뿐). 빈 손 = no_potion
+        정직 보고(plan_step 열린 동사 선례: 유무는 발동 시점 판정)."""
+        base = {'char': bot['char'], 'type': 'drink'}
+        if not bot.get('potions'):
+            return {**base, 'result': 'no_potion'}
+        bot['potions'] -= 1
+        heal = bot['maxhp'] - bot['hp']
+        bot['hp'] = bot['maxhp']
+        return {**base, 'result': 'drink_heal', 'heal': heal, 'hp': bot['hp'],
+                'potions': bot['potions']}
 
     def _search(self, bot):
         """능동 search(SPD 능동/수동 분리의 능동쪽): 턴을 통째로 써서 인지 반경(search_r) 내
@@ -2444,6 +2500,8 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None):
             'goal': sheet.get('goal'),
             'relationships': dict(sheet.get('relationships') or {}),
             'bag': 0, 'alive': True, 'won': False,
+            'potions': 0,                   # 소지 회복 물약(07-17) — 첫 소비 아이템. 층 이월은
+                                            # 러너 재스폰이 담당(bag 이월 선례)
             'order': None, 'path': [],      # 핑 목표 id + 엔진이 BFS로 깐 자동보행 경로
             'aware_of': set(),              # 인지한 몹 id (newly 판정 + 매트릭스 봇쪽 비트)
             'known': None,                  # 도감(D9): 아는 종키 set — None=게이팅 끔(하위호환).
@@ -2473,6 +2531,7 @@ def bot_snapshot(b):
     return {'char': b['char'], 'job': b['job'], 'sex': b['sex'],
             'x': b['x'], 'y': b['y'], 'hp': b['hp'], 'maxhp': b['maxhp'],
             'bag': b['bag'], 'alive': b['alive'], 'won': b['won'],
+            'potions': b.get('potions', 0),   # 회복 물약 소지(07-17 additive)
             'order': b.get('order'),
             'aware_of': sorted(b.get('aware_of', set()))}
 
@@ -2495,14 +2554,16 @@ def dummy_brain(obs, char='?'):
         # ('데리러 가기'는 일부러 안 한다 — 둘 다 데리러 나서면 서로 엇갈리는 왕복 진동(livelock).
         #  동료의 explore 폴백이 결국 계단으로 수렴하므로 기다림이 결정론적으로 안전. 데리러
         #  가는 드라마는 LLM 봇의 선택지(goto b<char>)로만 남긴다.)
-    if obs['hp'] * 2 <= obs['maxhp']:                # 많이 다쳤다 → 샘이 보이면 회복 도박
+    if obs['hp'] * 2 <= obs['maxhp']:                # 많이 다쳤다 → 물약(확정) 먼저, 없으면 샘(도박)
+        if obs.get('potions'):
+            return {'type': 'drink'}
         fts = [f for f in s['features'] if f['type'] == 'fountain']
         if fts:
             near = min(fts, key=lambda f: f['dist'])
             if near['adj']:
                 return {'type': 'interact', 'target': near['id']}
             return {'type': 'goto', 'target': near['id']}
-    treas = [f for f in s['features'] if f['type'] == 'treasure']
+    treas = [f for f in s['features'] if f['type'] in ('treasure', 'potion')]
     if treas:                                        # 보이는 보물 → 가까운 것 핑
         return {'type': 'goto', 'target': min(treas, key=lambda f: f['dist'])['id']}
     if ex:                                            # 계단이 보이면 → 계단으로
@@ -2538,7 +2599,8 @@ def run(max_turns=300, brain=dummy_brain, verbose=True):
         print(d.render(bots))
         for b in bots:
             state = '탈출' if b['won'] else ('전사(戰死)' if not b['alive'] else 'HP %d' % b['hp'])
-            print(f"  봇{b['char']}({b['job']}): pos=({b['x']},{b['y']}) 보물={b['bag']} {state}")
+            print(f"  봇{b['char']}({b['job']}): pos=({b['x']},{b['y']})"
+                  f" 보물={b['bag']} 물약={b.get('potions', 0)} {state}")
         alive_m = sum(1 for m in d.monsters if m.alive)
         print(f"  몬스터 생존 {alive_m}/{len(d.monsters)},  함정 발동 "
               f"{sum(1 for t in d.traps if t.sprung)}/{len(d.traps)}")

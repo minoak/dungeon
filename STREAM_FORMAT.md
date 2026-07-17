@@ -29,6 +29,7 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 | `w` `h` | 맵 크기 |
 | `depths` | 총 층수 |
 | `monsters` `traps` `lurkers` | 1층 기준 배치 수(몬스터는 층당 +1) |
+| `potions` | 층당 회복 물약 배치 수(`DUNGEON_POTIONS`, 러너 기본 1 — 2026-07-17 additive. 엔진 직생성 기본 0) |
 | `max_turns` | 틱 한도 (0이면 퇴화: tick 0개·end.turn=0) |
 | `gm` | GM(LLM 내레이터) 사용 여부(bool) — 이 필드 자체를 제외하면 스트림 내용에 영향 없음(GM은 tick emit 뒤에 도는 소비자, 엔진·RNG 무접촉) |
 | `stream_obs` | decisions 에 obs 동봉 여부(bool, `DUNGEON_STREAM_OBS=1`) — tick 스키마 판별용 |
@@ -69,7 +70,7 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 |---|---|
 | `turn` | 전이가 일어난 틱 |
 | `to_depth` | 내려가는 층 번호 |
-| `party[]` | 생존 이월자 `{char, hp, bag}` (char 순 정렬) |
+| `party[]` | 생존 이월자 `{char, hp, bag, potions}` (char 순 정렬. potions=2026-07-17 additive — 물약도 들고 내려간다) |
 | `fallen[]` | 지금까지 쓰러진 char 누적 |
 
 ### `end` — 마지막 라인, 실행당 1회
@@ -83,7 +84,8 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 
 ## 스냅샷 스키마
 
-- **봇**: `char job sex x y hp maxhp bag alive won order aware_of[]`
+- **봇**: `char job sex x y hp maxhp bag potions alive won order aware_of[]`
+  (`potions`=소지 회복 물약 병 수 — 2026-07-17 additive)
   — `order` = 진행 중 핑(raw: `exit`/`f<n>`/`m<n>`/`b<char>`/`@x,y`(explore 목표칸), 없으면 null).
   스트림은 관전자 데이터라 obs 와 달리 생좌표를 가리지 않는다. `aware_of` = 인지한 몹 id 정렬 리스트.
   `path`(자동보행 잔여 경로)는 제외 — 핑 시점 BFS 고정이라 order+현재 스냅샷으로 재유도가
@@ -113,12 +115,14 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 | | ↳ `allies[]` | 길목 점거(blocked) 동료 `{char,name}` — 재경로가 동료發 대우회일 때(2026-07-11 D18 additive. goto blocked 와 동형) |
 | | ↳ `trap` | 함정 `{kind,name,roll,mod,total,dc,safe, dmg?,hp?,down?, alarm?}` — alarm=경보 함정이 깨운 몹 수 |
 | | ↳ `treasure` | true — 같은 걸음에 보물도 주움 |
+| | ↳ `potion` | true — 같은 걸음에 회복 물약도 주움(2026-07-17 additive — 보물 줍기 문법. `result:'potion'`=물약 칸이 order 목표여서 그 자리 완결) |
 | | ↳ `found[]` | 걸으며 인지한 숨은 것 `{kind,name,bearing,id?}` |
 | | ↳ `swap` | (2026-07-17 D18 개정 additive) `{char,name}` — 동료 칸으로 걸어 들어가 **서로 자리를 바꿈**(PD 교대 문법. path_to 가 동료를 통과 가능으로 계산, 실행 걸음에서 맞바꿈). 밀려난 쪽은 이벤트를 안 만들고 좌표 스냅샷+자기 last(`result:'swapped'`, `with`=민 쪽 이름)로만 남는다. 그 틱의 어떤 walk result 에도 병기될 수 있다 |
 | | ↳ `paced` | (2026-07-17 D18 개정 additive) 동료 char — 같은 방향으로 행군 중인 동료에게 **한 박자 양보**(제자리, `to` 없음, `result:'walking'`). 맞교대 셔틀(밀린 쪽이 되밀어 무한 왕복 — 50시드 10판 비종결 실측)의 치료. 같은 상황이 두 틱 이어지면 교대 강행(끼인 동료 추월 보장) |
-| `interact` | `target`, `result=exit(party[])/wait_allies(missing[])/treasure/chest_loot(roll,mod,total,loot)/chest_trap(roll,mod,total,dmg,hp,down?)/fountain_heal(roll,heal,hp)/fountain_harm(roll,dmg,hp,down?)/nothing/too_far/no_target` | 계단(파티 동반 하강/대기)·줍기·상자·샘. exit 의 party=함께 내려간 char 명단 |
+| `interact` | `target`, `result=exit(party[])/wait_allies(missing[])/treasure/potion(potions — 2026-07-17 additive)/chest_loot(roll,mod,total,loot)/chest_trap(roll,mod,total,dmg,hp,down?)/fountain_heal(roll,heal,hp)/fountain_harm(roll,dmg,hp,down?)/nothing/too_far/no_target` | 계단(파티 동반 하강/대기)·줍기·상자·샘·물약 집기. exit 의 party=함께 내려간 char 명단 |
 | `attack` | `result=attack/no_target/too_far`(**항상 존재**). `attack` 일 때만 `target`(몹 종류)·`target_id`(`m<n>`)·`roll mod total ac hit`·`surprise? crit? dmg? monster_hp? killed?` 존재 — 실패 2종은 `char/type/result` 뿐 | 봇의 공격. **result 로 분기하라.** surprise=우리 기습(we-ambush) |
 | `search` | `radius`, `found[]` | 능동 수색(턴 소모, 반경 내 확정 발견). found 빈 배열=허탕 |
+| `drink` | `result=drink_heal(heal,hp,potions)/no_potion` | (2026-07-17 additive) 회복 물약 마시기 — 굴림 없는 확정 완전 회복(샘=도박과 대비되는 '들고 다니는 보험'), 한 턴 소모. `potions`=남은 병 수. `no_potion`=빈 손 정직 보고. 만피에 마셔도 소모(heal=0 — 세계는 낭비를 말리지 않는다) |
 | `monster_notice` | `id monster target` | 몹이 봇 발각(발각굴림 성공) — 추적 개시 |
 | `monster_flee` | `id monster` | 저HP 도주 전환 |
 | `monster_desperate` | `id monster` | 도주 탈진 → 필사 반전 |

@@ -271,12 +271,14 @@ function evLine(e, f) {
         else bits.push(`${esc(tr.name || '함정')}! ${tr.dmg || 0}피해`);
       }
       if (e.treasure) bits.push('보물 획득');
+      if (e.potion) bits.push('회복 물약 획득');
       if (e.found) bits.push('발견: ' + e.found.map(x => esc(x.name)).join(', '));
       return cls('notable', '보행 정지 — ' + (bits.join(' / ') || '조우'));
     }
     if (r === 'blocked' && e.monsters)
       return cls('notable', `길 막힘 — ${e.monsters.map(m => esc(m.kind)).join(', ')}가 길목을 점거`);
     if (r === 'treasure') return cls('gold', '◆ 길에서 보물을 주웠다');
+    if (r === 'potion') return cls('gold', '! 길에서 회복 물약을 챙겼다');
     if (r === 'at_exit') return cls('notable', '계단 앞에 섰다');
     if (r === 'arrived' && !('to' in e))
       return cls('dim', `${esc(resolveTarget(e.target, f))} 곁에 도착 — 재결정`);
@@ -299,8 +301,14 @@ function evLine(e, f) {
     if (r === 'chest_trap') return cls('combat', `상자에서 독침이! ${e.dmg || 0}피해 (d20 ${e.total})`);
     if (r === 'fountain_heal') return cls('gold', `샘물을 마셨다 — HP ${e.heal || 0} 회복`);
     if (r === 'fountain_harm') return cls('combat', `샘물이 오염돼 있었다 — ${e.dmg || 0}피해`);
+    if (r === 'potion') return cls('gold', '! 회복 물약을 집어 챙겼다');
     const tag = { too_far: '너무 멀다', nothing: '허탕', no_target: '대상 없음' }[r] || r;
     return cls('dim', `상호작용 ${esc(resolveTarget(e.target, f))} — ${esc(tag)}`);
+  }
+  if (t === 'drink') {
+    if (e.result === 'drink_heal')
+      return cls('gold', `회복 물약을 들이켰다 — HP ${e.heal || 0} 회복(전부), 남은 물약 ${e.potions || 0}병`);
+    return cls('dim', '물약을 마시려 했지만 — 없다');
   }
   if (t === 'attack') {
     if (e.result === 'no_target') return cls('dim', '공격 — 인접한 적 없음(허공)');
@@ -389,7 +397,8 @@ const GLYPHS = {   // 글리프 폴백 = tmux 관전의 계승 (visited ',' 까�
   'bot:*': ['@', '#ffd166'],
   'mob:고블린': ['g', '#7ec850'], 'mob:그림자거미': ['s', '#b07ee3'], 'mob:*': ['m', '#e08080'],
   'feat:treasure': ['$', '#e8c268'], 'feat:chest': ['□', '#c8a165'],
-  'feat:fountain': ['~', '#6fc3df'], 'feat:*': ['?', '#b9bec9'],
+  'feat:fountain': ['~', '#6fc3df'], 'feat:potion': ['!', '#e86ea4'],
+  'feat:*': ['?', '#b9bec9'],
   'trap:spike': ['^', '#d8dbe2'], 'trap:dart': ['^', '#9ecb6a'], 'trap:alarm': ['^', '#e07f7f'],
   'trap:*': ['^', '#d8dbe2'],
 };

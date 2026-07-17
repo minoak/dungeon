@@ -18,7 +18,7 @@
 환경변수: DUNGEON_W / DUNGEON_H / DUNGEON_SEED / DUNGEON_TURNS
           DUNGEON_GM(0이면 GM 끔) / DUNGEON_MONSTERS(기본2) / DUNGEON_TRAPS(기본3)
           DUNGEON_DEPTHS(기본2 — 층수. 계단 '>'로 파티가 함께 내려간다. 마지막 층 계단=탈출)
-          DUNGEON_LURKERS(기본1 — 층당 매복몹 수)
+          DUNGEON_LURKERS(기본1 — 층당 매복몹 수) / DUNGEON_POTIONS(기본1 — 층당 회복 물약)
           DUNGEON_STREAM_OBS(1이면 스트림 decisions 에 각 봇 obs 동봉 — 용량 커짐, 디버그/BYO용)
           DUNGEON_PARTY_FILE(기본 party.json — 캐릭터 시트. 검증 실패=내장 2인 폴백)
           DUNGEON_MENU(기본1 — 리모컨: 행동을 엔진 열거 옵션에서 번호 선택. 0=구식 자유서술)
@@ -60,6 +60,8 @@ MAX_TURNS = int(os.environ.get("DUNGEON_TURNS", "250"))   # 1틱=한 걸음(구 
 N_MON = int(os.environ.get("DUNGEON_MONSTERS", "2"))
 N_TRAP = int(os.environ.get("DUNGEON_TRAPS", "3"))
 N_LURK = int(os.environ.get("DUNGEON_LURKERS", "1"))
+N_POTION = int(os.environ.get("DUNGEON_POTIONS", "1"))   # 층당 회복 물약(07-17) — 러너 기본 1,
+                                                          # 엔진 직생성 기본 0(기존 verify 비트 동일)
 DEPTHS = int(os.environ.get("DUNGEON_DEPTHS", "2"))
 GM_ON = os.environ.get("DUNGEON_GM", "1") != "0"
 PARTY_FILE = os.environ.get("DUNGEON_PARTY_FILE", os.path.join(HERE, "party.json"))
@@ -162,11 +164,12 @@ def write_map(d, bots, turn):
         order = b.get("order")
         ping = ("탐색" if str(order or "")[:1] == "@" else order) or "-"
         nm = ("%s·" % b["name"]) if b.get("name") else ""
-        lines.append("  봇%s %s%s(%s)  pos=(%2d,%2d)  보물 %d  핑:%s  %s"
-                     % (b["char"], nm, b["job"], b["sex"], b["x"], b["y"], b["bag"], ping, state))
+        lines.append("  봇%s %s%s(%s)  pos=(%2d,%2d)  보물 %d  물약 %d  핑:%s  %s"
+                     % (b["char"], nm, b["job"], b["sex"], b["x"], b["y"], b["bag"],
+                        b.get("potions", 0), ping, state))
     alive_m = sum(1 for m in d.monsters if m.alive)
     lines.append("")
-    lines.append("  몬스터 %d/%d    범례: # 벽  . 바닥  + 문  $ 보물  > 계단  M 몬스터  ^ 함정  = 상자  ~ 샘  %s 영웅"
+    lines.append("  몬스터 %d/%d    범례: # 벽  . 바닥  + 문  $ 보물  > 계단  M 몬스터  ^ 함정  = 상자  ~ 샘  ! 물약  %s 영웅"
                  % (alive_m, len(d.monsters), ",".join(sorted(b["char"] for b in bots))))
     lines.append("               (관전자 전용: m 숨은 적  * 숨은 보물 — 봇들은 모른다)")
     with open(os.path.join(STATE, "gm_map.txt"), "w", encoding="utf-8") as f:
@@ -222,6 +225,8 @@ def act_summary(res):
                     bits.append("%s! %d피해" % (tr.get("name", "함정"), tr.get("dmg", 0)))
             if res.get("treasure"):
                 bits.append("$ 획득")
+            if res.get("potion"):
+                bits.append("! 물약 획득")
             if res.get("found"):
                 bits.append("발견: " + ", ".join(f["name"] for f in res["found"]))
             if res.get("entered"):                     # D19: 같은 걸음이 처음 방 진입이기도 했다
@@ -247,7 +252,7 @@ def act_summary(res):
             tgt = str(res.get("target", "?")).replace("follow:", "")
             return "동행을 접는다 — %s가 한동안 제자리 (같이 서 있기만 했다, 재결정)" % tgt
         tag = {"walking": "자동보행", "arrived": "도착", "at_exit": "계단 앞에 섰다",
-               "treasure": "$ 획득", "blocked": "길 막힘"}
+               "treasure": "$ 획득", "potion": "! 물약 획득", "blocked": "길 막힘"}
         if r == "arrived" and "to" not in res:         # 움직이는 목표(몹·동료) 곁 도달 = 걷기 전 완료
             return "%s 곁에 도착 — 재결정" % res.get("target", "?")
         if r == "lost":                                # 유령 좌표의 끝(07-05 부검 정직화) — 허탕 보고.
@@ -271,9 +276,14 @@ def act_summary(res):
             return "샘물을 마셨다 — HP %d 회복" % res.get("heal", 0)
         if r == "fountain_harm":
             return "샘물이 오염돼 있었다 — %d피해" % res.get("dmg", 0)
-        tag = {"treasure": "$ 획득", "too_far": "너무 멀다",
+        tag = {"treasure": "$ 획득", "potion": "! 회복 물약 획득", "too_far": "너무 멀다",
                "nothing": "허탕", "no_target": "대상 없음"}
         return "상호작용 %s — %s" % (res.get("target", "?"), tag.get(r, r))
+    if t == "drink":
+        if res.get("result") == "drink_heal":
+            return "회복 물약을 들이켰다 — HP %d 회복(전부), 남은 물약 %d병" % (
+                res.get("heal", 0), res.get("potions", 0))
+        return "물약을 마시려 했지만 — 없다"
     if t == "attack":
         if res.get("result") == "no_target":
             return "공격 — 인접한 적 없음(허공)"
@@ -328,7 +338,7 @@ def main():
         open(os.path.join(STATE, n), "w", encoding="utf-8").close()
     sw = stream.StreamWriter(os.path.join(STATE, "stream.jsonl"))   # 실행당 truncate
 
-    d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED,
+    d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION,
                   n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON)
     d.lore = lore
     bots = []
@@ -368,6 +378,7 @@ def main():
     sw.emit("run_meta", v=1, started=time.strftime("%Y-%m-%dT%H:%M:%S"),
             seed=DUNGEON_SEED, w=DUNGEON_W, h=DUNGEON_H, depths=DEPTHS,
             monsters=N_MON, traps=N_TRAP, lurkers=N_LURK,
+            potions=N_POTION,          # 층당 회복 물약(07-17 additive) — 배치를 바꾸는 판 파라미터
             sight=G.SIGHT,             # 시야 반경(DUNGEON_SIGHT) — 굴림 수를 바꾸는 세계 물리
                                        #   (리플레이·판 비교의 전제, seed 와 같은 급)
             max_turns=MAX_TURNS, gm=GM_ON,
@@ -500,17 +511,19 @@ def main():
             # ── 강하 전이(Stage 4): 다음 층 생성(마스터시드→층별 파생) + 생존 파티 이월 ──
             nd = d.depth + 1
             sw.emit("descend", turn=turn, to_depth=nd,
-                    party=[{"char": b["char"], "hp": b["hp"], "bag": b["bag"]}
+                    party=[{"char": b["char"], "hp": b["hp"], "bag": b["bag"],
+                            "potions": b.get("potions", 0)}
                            for b in sorted(survivors, key=lambda b: b["char"])],
                     fallen=list(fallen))
             d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
                           n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
-                          scan=SCAN_ON)
+                          scan=SCAN_ON, n_potions=N_POTION)
             d.lore = lore
             nb = []
             for b in sorted(survivors, key=lambda b: b["char"]):
                 n = G.spawn(d, b["char"], nb, sheet=sheets[b["char"]])   # ⚠️ sheet 필수 — 없으면
                 n["hp"], n["bag"] = b["hp"], b["bag"]     # HP·보물 이월     외부 시트 봇('3'+)이 2층서 죽는다
+                n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
                 n["known"] = iss.known(names[b["char"]])  # 도감은 층을 넘어도 그대로(지식=영속층)
                 if LEDGER_ON:
                     n["ledger"] = G.new_ledger()          # 장부는 새 원장(층의 기억 — id 층-로컬, D17)

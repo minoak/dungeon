@@ -49,7 +49,7 @@ _time.sleep = lambda s: None                             # 러너 고정 sleep �
 
 SPATH = os.path.join(show_runner.STATE, "stream.jsonl")
 KINDS = {"run_meta", "level", "tick", "descend", "end"}
-BOT_FIELDS = {"char", "job", "sex", "x", "y", "hp", "maxhp", "bag",
+BOT_FIELDS = {"char", "job", "sex", "x", "y", "hp", "maxhp", "bag", "potions",
               "alive", "won", "order", "aware_of"}
 MON_FIELDS = {"id", "kind", "x", "y", "hp", "maxhp", "ac", "atk", "dmg",
               "alive", "state", "concealed", "target", "desperate"}
@@ -72,15 +72,18 @@ def audit(recs):
     viol = 0
     cov = {"trap_dmg": 0, "chest_trap": 0, "chest_loot": 0, "fountain_heal": 0,
            "fountain_harm": 0, "mon_dmg": 0, "walk_treasure": 0, "interact_treasure": 0,
+           "potion_get": 0, "drink": 0,
            "down": 0, "killed": 0, "exit_party": 0, "skipped": 0}
     prev, mon_prev = {}, {}
     for r in recs:
         if r["kind"] == "level":
-            prev = {b["char"]: (b["hp"], b["bag"]) for b in r["party"]}
+            prev = {b["char"]: (b["hp"], b["bag"], b.get("potions", 0))
+                    for b in r["party"]}
             mon_prev = {m["id"]: m["hp"] for m in r["monsters"]}
         elif r["kind"] == "tick":
             dhp = {c: 0 for c in prev}
             dbag = {c: 0 for c in prev}
+            dpot = {c: 0 for c in prev}
             dmon = {}
             for e in r["events"]:
                 t = e.get("type")
@@ -90,6 +93,8 @@ def audit(recs):
                         dhp[e["char"]] -= tr["dmg"]; cov["trap_dmg"] += 1
                     if e.get("result") == "treasure" or e.get("treasure"):
                         dbag[e["char"]] += 1; cov["walk_treasure"] += 1
+                    if e.get("result") == "potion" or e.get("potion"):
+                        dpot[e["char"]] += 1; cov["potion_get"] += 1
                 elif t == "interact":
                     res = e.get("result")
                     if res in ("chest_trap", "fountain_harm"):
@@ -98,8 +103,13 @@ def audit(recs):
                         dhp[e["char"]] += e["heal"]; cov["fountain_heal"] += 1
                     elif res == "treasure":
                         dbag[e["char"]] += 1; cov["interact_treasure"] += 1
+                    elif res == "potion":
+                        dpot[e["char"]] += 1; cov["potion_get"] += 1
                     elif res == "chest_loot":
                         dbag[e["char"]] += e["loot"]; cov["chest_loot"] += 1
+                elif t == "drink" and e.get("result") == "drink_heal":
+                    dhp[e["char"]] += e["heal"]      # 확정 완전 회복(07-17) — heal=만피까지의 결손
+                    dpot[e["char"]] -= 1; cov["drink"] += 1
                 elif t == "monster_attack" and e.get("dmg"):
                     dhp[e["target"]] -= e["dmg"]; cov["mon_dmg"] += 1
                 elif t == "attack" and e.get("result") == "attack" and e.get("dmg"):
@@ -111,6 +121,8 @@ def audit(recs):
                 if snap[c]["hp"] != prev[c][0] + dhp[c]:
                     viol += 1
                 if snap[c]["bag"] != prev[c][1] + dbag[c]:
+                    viol += 1
+                if snap[c].get("potions", 0) != prev[c][2] + dpot[c]:
                     viol += 1
             for mid, hp0 in mon_prev.items():
                 if msnap[mid]["hp"] != hp0 + dmon.get(mid, 0):
@@ -144,7 +156,8 @@ def audit(recs):
                         viol += 1
                 elif c not in ev_chars:
                     viol += 1
-            prev = {b["char"]: (b["hp"], b["bag"]) for b in r["bots"]}
+            prev = {b["char"]: (b["hp"], b["bag"], b.get("potions", 0))
+                    for b in r["bots"]}
             mon_prev = {m["id"]: m["hp"] for m in r["monsters"]}
     return viol, cov
 
@@ -292,6 +305,7 @@ check("timeout 분기: 한도 도달 → outcome=timeout·turn=한도·remaining
 agg = dict(cov_base)
 sweep_viol, outcomes = 0, []
 show_runner.N_MON, show_runner.N_TRAP = 6, 6      # 콘텐츠 밀도 ↑ → 피해·도박·전멸이 실제로 나온다
+show_runner.N_POTION = 2                          # 물약 ↑ → 줍기·복용(다침 정책)이 실제로 나온다
 for s in range(1, 15):
     show_runner.DUNGEON_SEED = s
     recs_s = [json.loads(l) for l in run_once().splitlines()]
@@ -301,8 +315,10 @@ for s in range(1, 15):
     for k, n in cov_s.items():
         agg[k] = agg.get(k, 0) + n
 show_runner.DUNGEON_SEED, show_runner.N_MON, show_runner.N_TRAP = 7, 2, 3
+show_runner.N_POTION = 1
 REQUIRED = ["trap_dmg", "chest_trap", "chest_loot", "fountain_heal", "fountain_harm",
-            "mon_dmg", "walk_treasure", "interact_treasure", "down", "killed", "exit_party"]
+            "mon_dmg", "walk_treasure", "interact_treasure", "potion_get", "drink",
+            "down", "killed", "exit_party"]
 check("원장 스윕(시드 1..14·몹6·함정6): 위반 0", sweep_viol == 0)
 check("커버리지: 원장 델타 규칙 전부 ≥1회 실발화(죽은 규칙 없음)",
       all(agg.get(k, 0) > 0 for k in REQUIRED))

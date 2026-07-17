@@ -39,6 +39,8 @@ KINDS = {
     "spotted_lurker": ("char",  "매복 간파",   "숨은 몹을 알아챔"),
     "spotted_treasure": ("char", "숨은 보물 발견", "숨겨진 보물을 알아챔"),
     "treasure":       ("char",  "보물 획득",   "보물을 손에 넣음"),
+    "potion":         ("char",  "물약 획득",   "회복 물약을 챙김"),
+    "potion_drunk":   ("char",  "물약 복용",   "회복 물약으로 상처를 전부 아물림"),
     "chest_stung":    ("char",  "독침",       "상자의 함정에 당함"),
     "fountain_blessed": ("char", "샘의 축복",  "샘물이 몸을 치유함"),
     "fountain_cursed":  ("char", "샘의 저주",  "오염된 샘물에 당함"),
@@ -203,11 +205,20 @@ def issue(lines):
                                     cause=tr.get("name"), by="trap")
                     if e.get("result") == "treasure" or e.get("treasure"):
                         tag("treasure", ch, turn, line_no, ei, src="walk")
+                    if e.get("result") == "potion" or e.get("potion"):
+                        tag("potion", ch, turn, line_no, ei, src="walk")
+
+                elif t == "drink":
+                    if e.get("result") == "drink_heal":
+                        tag("potion_drunk", ch, turn, line_no, ei,
+                            heal=e.get("heal"), left=e.get("potions"))
 
                 elif t == "interact":
                     r = e.get("result")
                     if r == "treasure":
                         tag("treasure", ch, turn, line_no, ei, src="interact")
+                    elif r == "potion":
+                        tag("potion", ch, turn, line_no, ei, src="interact")
                     elif r == "chest_loot":
                         tag("treasure", ch, turn, line_no, ei, src="chest",
                             loot=e.get("loot"), roll=e.get("total"))
