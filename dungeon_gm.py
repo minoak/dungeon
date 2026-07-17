@@ -727,17 +727,20 @@ class Dungeon:
                 'has_treasure': has_t, 'has_exit': has_e, 'has_monster': has_m,
                 'doors': doors}
 
-    def walkable(self, x, y, bots):
+    def walkable(self, x, y, bots, ally_pass=False):
         """봇이 들어갈 수 있나. 벽·다른 봇·몬스터가 막으면 못 간다(몬스터는 공격 대상).
         탈출(won)한 봇은 던전을 떠났으므로 아무것도 막지 않는다(출구 칸 막힘 방지).
         설계 결정: concealed(매복) 몹도 막는다 — 그 칸에 뭔가 '물리적으로 실재'하므로 경로가 막히는 건
         세계의 사실이다(시야-온리는 obs 층의 계약). 외길 봉쇄는 explore→출구 best_effort가 봇을 몹
-        직전 칸까지 안내→매복 일격 발화로 자연 해소된다(verify_stage3 300시드 무교착 실측)."""
+        직전 칸까지 안내→매복 일격 발화로 자연 해소된다(verify_stage3 300시드 무교착 실측).
+        ally_pass(D18 개정 07-17, 교대): 동료는 길을 막지 않는다 — 걸어 들어가면 서로 자리를
+        바꾸므로(PD 문법, _step_order) 경로 계산에선 통과 가능. 몹 차단은 불변(교대는 파티의 예의)."""
         if not (0 <= x < self.w and 0 <= y < self.h):
             return False
         if self.grid[y][x] == WALL:
             return False
-        if any(b['x'] == x and b['y'] == y and b['alive'] and not b['won'] for b in bots):
+        if not ally_pass and any(b['x'] == x and b['y'] == y
+                                 and b['alive'] and not b['won'] for b in bots):
             return False
         if self.monster_at(x, y):
             return False
@@ -799,7 +802,9 @@ class Dungeon:
 
     def path_to(self, sx, sy, tx, ty, bots, best_effort=False, avoid_traps=True):
         """(sx,sy)→(tx,ty) 최단 경로. 이동=8연결(대각선 코너컷 금지), walkable 재사용.
-        목표가 못 들어가는 칸(몹·봇·가구)이면 → 목표의 **직교 인접** walkable 칸들을
+        동료는 장애물이 아니다(D18 개정 07-17, ally_pass): 경로가 동료 칸을 지나면 실행 때
+        서로 자리를 바꾼다(교대, _step_order) — 외길의 동료가 '이동 선택지 소멸'을 만들던 결함 치료.
+        목표가 못 들어가는 칸(몹·가구)이면 → 목표의 **직교 인접** walkable 칸들을
         목표집합으로 BFS, 그중 *도달 가능한 가장 가까운* 칸까지 길을 낸다.
           · 직교 인접만: 전투·상호작용은 맨해튼 1(직교)이라(_attack/monster_turn) 대각 접근은 무용.
           · '도달 가능한' 가장 가까운 칸: 맨해튼 최단 한 칸만 고르면 그 칸이 막혔을 때 거짓 '도달불가'.
@@ -809,9 +814,9 @@ class Dungeon:
         반환: 시작 제외, 밟을 칸 목록(목표/접근칸=마지막). 도달불가/이미도착이면 []. (Stage2 자동보행용)"""
         tblock = ({(t.x, t.y) for t in self.traps if not t.hidden and not t.sprung}
                   if avoid_traps else set())
-        if self.walkable(tx, ty, bots):
-            goals = {(tx, ty)}
-        else:                                     # 점유/가구 → 직교 인접 walkable 칸이 목표
+        if self.walkable(tx, ty, bots):           # 종점만은 ally_pass 없이 — 동료가 선 칸을 '목적지'로
+            goals = {(tx, ty)}                    #   삼지 않는다(교대는 지나가는 예의지 도착지가 아니다.
+        else:                                     #   동행 목표 칸까지 파고들면 리더와 교대하는 헛짓).
             goals = {(tx + dx, ty + dy) for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0))
                      if self.walkable(tx + dx, ty + dy, bots)}
         if not goals or (sx, sy) in goals:
@@ -825,12 +830,12 @@ class Dungeon:
                 reached = (cx, cy); break
             for dx, dy in MOVES.values():         # 결정론 순서(삽입순) → 재현 가능 경로
                 nx, ny = cx + dx, cy + dy
-                if (nx, ny) in prev or not self.walkable(nx, ny, bots):
+                if (nx, ny) in prev or not self.walkable(nx, ny, bots, ally_pass=True):
                     continue
                 if (nx, ny) in tblock and (nx, ny) not in goals:
                     continue                      # 드러난 함정은 밟지 않는 경로로(목표 자신이면 허용)
-                if dx and dy and not (self.walkable(cx + dx, cy, bots)
-                                      and self.walkable(cx, cy + dy, bots)):
+                if dx and dy and not (self.walkable(cx + dx, cy, bots, ally_pass=True)
+                                      and self.walkable(cx, cy + dy, bots, ally_pass=True)):
                     continue                      # 대각선 코너컷 금지(양 직교칸 둘 다 뚫려야)
                 prev[(nx, ny)] = (cx, cy)
                 q.append((nx, ny))
@@ -1386,8 +1391,26 @@ class Dungeon:
     def _beside(self, bot, txy, kind):
         return self._beside_xy(bot['x'], bot['y'], txy[0], txy[1], kind)
 
+    def _swap_displaced(self, ally, mover, bots):
+        """교대(D18 개정 07-17)로 밀려난 동료의 뒷정리. 좌표는 호출측(_step_order)이 이미 옮겼다.
+        경로: 종점은 그대로 두고 새 자리에서 다시 깐다 — 밀려난 건 한 걸음이지 마음(order·작정)이
+        아니다. 길이 사라졌으면 비워 두고, 다음 틱 _order_done/재결정이 정직하게 마감한다.
+        함정·보물 재판정은 없다: 서로가 방금 서 있던 칸 = 이번 판에 밟아 확인된 땅(함정은 진입
+        시점에 이미 소모(sprung), 보물은 선점됨). 자리 바뀜은 밀려난 쪽 last 에 남는다 —
+        "봇은 자기 행동의 결과를 관측할 수 있어야 한다"(D1-4)의 수동태."""
+        path = ally.get('path') or []
+        if path:
+            ex, ey = path[-1]
+            ally['path'] = self.path_to(ally['x'], ally['y'], ex, ey, bots)
+        self._note_last(ally, {'char': ally['char'], 'type': 'walk', 'result': 'swapped',
+                               'with': mover.get('name') or mover['job']})
+
     def _ally_jam(self, bot, tx, ty, path, bots):
-        """사회적 대우회 감지(D18) — 방금 깐 path 가 '동료 때문에' 폭증했는지 판정.
+        """사회적 대우회 감지(D18) — 교대(07-17 개정) 후 역할 축소: 경로 *통과*는 동료가 못 막지만
+        (ally_pass), 경로 *종점*은 동료 칸이 될 수 없어서(path_to 목표 선택) '동료가 목표의 유일
+        접근칸을 점유'한 경우만 잔존 발화한다 — 그때 blocked 보고("비켜달라 말하든, 돌아가길
+        택하든")는 여전히 옳은 대화 소재다(verify_fellow ⑥ 문간 장면이 정확히 이 잔존 사례).
+        방금 깐 path 가 '동료 때문에' 폭증했는지 판정.
         동료 없다 치고의 최단(free)과 비교해 path 가 FACTOR배+SLACK 을 넘고, 그 free 길 위에
         살아있는 동료가 서 있으면 막는 동료 명단 반환 — 아니면 None.
         지형이 원래 먼 것(free 도 길다)·몹이 막는 것(경로 경합 규칙 별도)은 감지 대상 아님.
@@ -1417,6 +1440,15 @@ class Dungeon:
             else:
                 return self._set_explore(bot, None, bots)    # 무효 핑 → 탐색(출구 떠먹이기 폐기)
         tx, ty = resolved[1]
+        if ghost and ((bot['x'], bot['y']) == (tx, ty)
+                      or self._beside(bot, (tx, ty), resolved[0])):
+            # 기억의 곁에 이미 서 있다 — 빈 자리가 눈에 보이는 거리면 걷지 않는다(lost+교정).
+            # 교대(07-17) 전엔 '도달불가' 분기가 이 장면을 받았지만, 동료 통과로가 생기며
+            # 헛걸음 경로가 잡히게 됐다 — 의미론을 경로 유무보다 앞세운다(verify_ledger ⑬ 계약).
+            bot['ledger']['statics'].pop(str(target_id), None)
+            bot['order'], bot['plan'] = None, []
+            return {'char': bot['char'], 'type': 'goto', 'target': target_id,
+                    'result': 'lost'}
         path = self.path_to(bot['x'], bot['y'], tx, ty, bots)
         bot['order'], bot['path'] = target_id, path
         base = {'char': bot['char'], 'type': 'goto', 'target': target_id}
@@ -1700,7 +1732,24 @@ class Dungeon:
             self._perceive(bot)               # 멈춘 자리에서도 눈은 뜨고 있다 — 곁의 몹을 못 본 채
             return self._order_done(bot, bots, base)  #   맞으면 거짓 매복(they-ambush)이 되므로
         nx, ny = bot['path'][0]
-        if not self.walkable(nx, ny, bots):           # 길이 막힘(몹·동료 끼어듦)
+        ally = next((o for o in bots if o is not bot and o['alive'] and not o['won']
+                     and (o['x'], o['y']) == (nx, ny)), None)
+        if ally:                                      # 교대(D18 개정 07-17): 동료 칸으로 걸어 들어가면
+            apath = ally.get('path') or []            # 서로 자리를 바꾼다(PD 문법) — 동료=장애물이던
+            marching = (ally.get('order') and apath   # 시절의 '외길 선택지 소멸' 치료.
+                        and tuple(apath[0]) != (bot['x'], bot['y']))
+            memo = (ally['char'], nx, ny)
+            if marching and bot.get('paced') != memo:
+                bot['paced'] = memo                   # 같은 방향 행군 중인 동료 — 한 박자 양보(일렬
+                return {**base, 'result': 'walking',  # 행군). 맞교대 셔틀(밀린 쪽이 되밀어 무한 왕복,
+                        'paced': ally['char']}        # 50시드 실측 10판 비종결)의 치료. 같은 상황이
+            bot['paced'] = None                       # 두 틱 이어지면 그때 교대 — 끼인 동료 추월 보장
+                                                      # (순환 대기 고리도 한 틱 뒤 반드시 풀림).
+            ally['x'], ally['y'] = bot['x'], bot['y']
+            self._swap_displaced(ally, bot, bots)     # 밀려난 쪽 경로 재계산+자기 관측(last). 아래
+            base['swap'] = {'char': ally['char'],     # _enter_cell 이 내 이동을 마저 처리.
+                            'name': ally.get('name') or ally['job']}
+        if not self.walkable(nx, ny, bots):           # 길이 막힘(몹 끼어듦 — 동료는 위 교대가 소화)
             blocker = self.monster_at(nx, ny)
             if blocker and blocker.alive and not blocker.concealed:
                 # 다음 칸을 *보이는 몹*이 점거 = 경로 경합. 새 정보이므로 멈춰 보고하고 에이전트가
@@ -1712,13 +1761,14 @@ class Dungeon:
                 return {**base, 'result': 'blocked',
                         'monsters': [{'id': 'm%d' % blocker.id, 'kind': blocker.kind,
                                       'state': blocker.state}]}
-            res = self._resolve_target(tid, bots, bot)         # 동료·은닉몹 점거 → 재경로 1회
+            res = self._resolve_target(tid, bots, bot)         # 은닉몹 점거 → 재경로 1회
                                                                #   (동행이면 tid='b<char>' — 원 대상.
                                                                #    bot=문 핑의 들어서는 쪽 유지, D19)
             bot['path'] = self.path_to(bot['x'], bot['y'], res[1][0], res[1][1], bots) if res else []
             jam = (self._ally_jam(bot, res[1][0], res[1][1], bot['path'], bots)
-                   if res else None)          # 재경로가 동료發 대우회면 여기서도 멈춰 묻는다(D18)
-            if not bot['path'] or not self.walkable(*bot['path'][0], bots) or jam:
+                   if res else None)          # 교대(07-17) 후 동료發 대우회는 발화 불능 — 은퇴 코드
+            if (not bot['path'] or jam
+                    or not self.walkable(*bot['path'][0], bots, ally_pass=True)):
                 bot['order'], bot['path'], bot['plan'] = None, [], []   # 막힘=새 정보 — 작정 파기
                 self._perceive(bot)           # blocked 정지도 눈은 뜨고 — 거짓 매복 방지(위와 동일)
                 out = {**base, 'result': 'blocked'}
@@ -2403,6 +2453,9 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None):
                                             # view 가 1회성 노출·소거. 스냅샷 화이트리스트 밖(계약 불변)
             'follow_idle': None,            # 동행 고착 카운터(D18 FOLLOW_IDLE) — (x, y, n):
                                             # 곁 대기 중 대상 제자리 연속 관측. 화이트리스트 밖
+            'paced': None,                  # 교대 양보 메모(D18 개정 07-17) — (동료char, x, y):
+                                            # 같은 방향 행군 동료에게 한 박자 양보한 상황. 같은 상황
+                                            # 재현 시 교대 강행(맞교대 셔틀·순환 대기 차단). 밖
             'searched': set(),              # 이 봇이 능동 수색으로 살핀 칸(자기 행동 기억 — 세계 정보
                                             # 아님. 리모컨 수색 라벨의 '이미 살폈다' 사실 주석 근거)
             'ledger': None,                 # 공간 장부(D17-1): None=끔(도감 known=None 선례 —

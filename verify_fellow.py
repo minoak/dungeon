@@ -8,7 +8,11 @@ D18: "상처도 시야를 탄다" — 라이브 22틱 부검(카야 전사 무�
   ④ 부상 등급(A-4): _wound_label 경계 고정 · allies condition · 합류 라벨 병기 · party 비노출 · 몹 hp 숫자
   ⑤ 동행(A-5): 유지(따라 걷기) · 대상 사망 lost · 대기 중 새 몹 encounter 파기 · then 차단(엔진·brains)
   ⑥ 사회적 대우회(A-0, _ally_jam): 문간 동료 대우회 → blocked(allies) / 지형-단독 경로는 무간섭
+     (교대 개정 후 잔존 발화 사례 = 동료가 목표의 유일 접근칸 점유 — 이 장면이 정확히 그것)
   ⑦ [50시드] 풀게임 항상 종료 + [10시드] 결정론(2회 서명 동일)
+  ⑧ 교대(D18 개정 07-17, PD 문법): 외길 동료=경로 통과(선택지 소멸 치료) · 걸어 들어가면 자리
+     맞바꿈(이벤트 swap·밀려난 쪽 last=swapped·경로 재계산 종점 보존) · 같은 방향 행군=한 박자
+     양보(paced, 맞교대 셔틀 차단) · 두 틱 같은 상황=교대 강행(끼인 동료 추월) · 맞은편 완주
 (기존 verify 12종은 별도 실행.)
 """
 import os
@@ -336,6 +340,86 @@ check("⑦ [50시드] 풀게임 항상 종료(A-0~A-5 탑재 후에도)", done_n
 check("⑦ [50시드] 목격 실발화(witnessed 누적 %d)" % wit_tot, wit_tot > 0)
 bad = sum(1 for s in range(10) if play(s, sig=True) != play(s, sig=True))
 check("⑦ [10시드] 결정론 — 같은 시드 = 같은 판", bad == 0)
+
+# ───────────────────── ⑧ 교대(D18 개정 07-17) ─────────────────────
+print("── ⑧ 교대(D18 개정)")
+# (a) 외길 통과 + 교대 실행 — 동료=장애물이던 시절의 '이동 선택지 소멸' 치료(파트너 증언 07-17)
+rows8 = ['#######',
+         '#1.2.>#',
+         '#######']
+d8, st8 = G.Dungeon.from_ascii(rows8, seed=7)
+b1 = mkbot('1', *st8['1'])
+b2 = mkbot('2', 3, 1, job='도적')
+bots8 = [b1, b2]
+d8.view(b1, bots8)                                # seen_keys 씨딩(sighted 정지 배제)
+r = d8.act(b1, {'type': 'goto', 'target': 'exit'}, bots8)
+check("⑧ 외길 동료 = 경로 통과(pathed 4칸 — 선택지 소멸 없음)",
+      r['result'] == 'pathed' and r.get('len') == 4)
+d8.step_order(b1, bots8)                          # (2,1)로 한 칸
+r = d8.step_order(b1, bots8)                      # (3,1)=한가한 동료 → 즉시 교대
+check("⑧ 교대 실행 — 자리 맞바꿈 + 이벤트 swap + 밀려난 쪽 last=swapped",
+      (b1['x'], b1['y']) == (3, 1) and (b2['x'], b2['y']) == (2, 1)
+      and (r.get('swap') or {}).get('char') == '2'
+      and (b2.get('last') or {}).get('result') == 'swapped')
+# (b) 일렬 행군 — 같은 방향으로 걷는 동료에겐 한 박자 양보(맞교대 셔틀의 치료)
+rows8b = ['#######',
+          '#12..>#',
+          '#######']
+d8b, st8b = G.Dungeon.from_ascii(rows8b, seed=7)
+b1 = mkbot('1', *st8b['1'])
+b2 = mkbot('2', *st8b['2'], job='도적')
+bots8 = [b1, b2]
+d8b.view(b2, bots8)
+d8b.view(b1, bots8)
+d8b.act(b2, {'type': 'goto', 'target': 'exit'}, bots8)   # 앞 봇 먼저 출발(같은 방향)
+d8b.act(b1, {'type': 'goto', 'target': 'exit'}, bots8)
+r = d8b.step_order(b1, bots8)
+check("⑧ 일렬 행군 = 한 박자 양보(paced·제자리·order 유지)",
+      r['result'] == 'walking' and r.get('paced') == '2'
+      and (b1['x'], b1['y']) == st8b['1'] and b1.get('order'))
+d8b.step_order(b2, bots8)                          # 앞 봇 전진 → 길 비움
+r = d8b.step_order(b1, bots8)
+check("⑧ 앞이 비면 그냥 걷는다(교대 아님)",
+      r['result'] == 'walking' and 'swap' not in r and (b1['x'], b1['y']) == (2, 1))
+# (c) 끼인 동료 — 같은 상황 두 틱이면 교대 강행(양보 대기의 흡수 상태 차단)
+d8c, st8c = G.Dungeon.from_ascii(rows8b, seed=7)
+b1 = mkbot('1', *st8c['1'])
+b2 = mkbot('2', *st8c['2'], job='도적')
+bots8 = [b1, b2]
+d8c.view(b2, bots8)
+d8c.view(b1, bots8)
+d8c.act(b2, {'type': 'goto', 'target': 'exit'}, bots8)
+d8c.act(b1, {'type': 'goto', 'target': 'exit'}, bots8)
+d8c.step_order(b1, bots8)                          # 1틱: 양보(b2는 그 틱 못 움직였다 치자)
+r = d8c.step_order(b1, bots8)                      # 2틱: 같은 상황 재현 → 교대 강행
+check("⑧ 두 틱 같은 상황 = 교대 강행(끼인 동료 추월 보장)",
+      (r.get('swap') or {}).get('char') == '2'
+      and (b1['x'], b1['y']) == (2, 1) and (b2['x'], b2['y']) == (1, 1))
+check("⑧ 밀려난 쪽 경로 재계산 — 종점 보존(새 자리에서 이어 걷는다)",
+      bool(b2['path']) and tuple(b2['path'][-1]) == (5, 1))
+# (d) 마주 오면 스치듯 한 번 교대 — 양쪽 다 완주(맞교대 셔틀 0)
+rows8d = ['########',
+          '#$.12.$#',
+          '#>.....#',
+          '########']
+d8d, st8d = G.Dungeon.from_ascii(rows8d, seed=7)
+b1 = mkbot('1', *st8d['1'])
+b2 = mkbot('2', *st8d['2'], job='도적')
+bots8 = [b1, b2]
+fw = next('f%d' % f.id for f in d8d.features.values() if f.type == 'treasure' and f.x == 1)
+fe = next('f%d' % f.id for f in d8d.features.values() if f.type == 'treasure' and f.x == 6)
+d8d.view(b1, bots8)
+d8d.view(b2, bots8)
+d8d.act(b1, {'type': 'goto', 'target': fe}, bots8)   # 서로 반대편 보물로 — 정면 통과
+d8d.act(b2, {'type': 'goto', 'target': fw}, bots8)
+swaps = 0
+for _t in range(10):
+    for b in (b1, b2):
+        if b.get('order'):
+            rr = d8d.step_order(b, bots8)
+            swaps += 1 if rr.get('swap') else 0
+check("⑧ 마주 오면 스치듯 교대 — 양쪽 다 완주(교대 %d회=1, 셔틀 0)" % swaps,
+      b1['bag'] == 1 and b2['bag'] == 1 and swaps == 1)
 
 print("=" * 44)
 if C.failed:

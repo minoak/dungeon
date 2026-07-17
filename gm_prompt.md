@@ -32,6 +32,8 @@
                   - monsters[]: 마주친 적 {kind, state}. state=SLEEPING(자고 있음)/WANDERING(어슬렁)/HUNTING(추격중)/FLEEING(도주중)
                   - trap: 함정을 밟음 {name(가시/독침/경보), safe(회피 여부), dmg, alarm(경보라면 깨어난 몹 수), down}
                   - found[]: 걸으며 **알아챈** 숨은 것들 {kind, name(함정/숨은 보물/매복한 적…), bearing} — 인지의 순간, 특히 도적의 눈썰미
+                  - swap: {char, name} — 좁은 길에서 동료와 **스치듯 자리를 바꿈**(어깨를 스치는 짧은 예의 — 대사건 아님, 한 구절이면 족하다)
+                  - paced: 동료 번호 — 같은 방향으로 걷는 동료에게 한 박자 양보(제자리, 일렬 행군)
   · attack    : 모험가가 몬스터를 침. hit(명중), dmg, monster_hp(적의 남은 HP), killed(처치), crit(대성공),
                 surprise(기습 — 눈치 못 챈 적을 덮침). target = 적의 종류.
                 result='no_target'(적이 이미 쓰러지고 없음 — 허공을 가른 헛손질로 그려라, 교전 아님) /

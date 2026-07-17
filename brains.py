@@ -223,6 +223,9 @@ def _last_prose(last, names=None):
             return "계단 앞에 섰다"
         if r == "treasure":
             return "길에서 보물을 주웠다"
+        if r == "swapped":                    # 교대(D18 개정)의 수동태 — 밀려난 쪽의 자기 관측
+            return ("%s이(가) 지나가며 나와 자리를 바꿨다 — 한 칸 밀려섰다(가던 길은 그대로)"
+                    % last.get("with", "동료"))
     if t == "attack":
         if r == "no_target":
             return "공격 — 대상이 그 자리에 없었다"

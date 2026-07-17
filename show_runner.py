@@ -253,7 +253,10 @@ def act_summary(res):
         if r == "lost":                                # 유령 좌표의 끝(07-05 부검 정직화) — 허탕 보고.
             # '곁에 없다'까지만 단정 — 대각 한 칸에 비껴 서 있을 수도 있다(그건 sights 가 보여준다)
             return "%s를 마지막 본 자리까지 갔지만 — 곁에 없다 (재결정)" % res.get("target", "?")
-        return "%s (%s)" % (res.get("to", "?"), tag.get(r, r))
+        if res.get("paced"):                           # 교대(D18 개정) 양보 — 같은 방향 행군 한 박자
+            return "동료(봇%s)가 앞서 걷는 중 — 한 박자 양보(제자리)" % res["paced"]
+        pre = ("동료(%s)와 자리 교대 — " % res["swap"]["name"]) if res.get("swap") else ""
+        return pre + "%s (%s)" % (res.get("to", "?"), tag.get(r, r))
     if t == "interact":
         r = res["result"]
         if r == "exit":

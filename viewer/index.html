@@ -284,6 +284,8 @@ function evLine(e, f) {
       return cls('notable', `${esc(resolveTarget(e.target, f))}를 마지막 본 자리까지 갔지만 — 곁에 없다`);
     if (r === 'arrived') return cls('dim', '도착');
     if (r === 'blocked') return cls('dim', '길 막힘');
+    if (e.paced) return cls('dim', `동료(${esc(names[e.paced] || e.paced)})에게 한 박자 양보 — 일렬 행군`);
+    if (e.swap) return cls('dim', `${esc(e.swap.name || '동료')}와 스치듯 자리를 바꾸며 — 이동 중`);
     return cls('dim', `▸ ${esc(resolveTarget(e.target, f))}${/지점$/.test(resolveTarget(e.target, f)) ? '으로' : '에게'} 이동 중`);
   }
   if (t === 'interact') {

@@ -114,6 +114,8 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 | | ↳ `trap` | 함정 `{kind,name,roll,mod,total,dc,safe, dmg?,hp?,down?, alarm?}` — alarm=경보 함정이 깨운 몹 수 |
 | | ↳ `treasure` | true — 같은 걸음에 보물도 주움 |
 | | ↳ `found[]` | 걸으며 인지한 숨은 것 `{kind,name,bearing,id?}` |
+| | ↳ `swap` | (2026-07-17 D18 개정 additive) `{char,name}` — 동료 칸으로 걸어 들어가 **서로 자리를 바꿈**(PD 교대 문법. path_to 가 동료를 통과 가능으로 계산, 실행 걸음에서 맞바꿈). 밀려난 쪽은 이벤트를 안 만들고 좌표 스냅샷+자기 last(`result:'swapped'`, `with`=민 쪽 이름)로만 남는다. 그 틱의 어떤 walk result 에도 병기될 수 있다 |
+| | ↳ `paced` | (2026-07-17 D18 개정 additive) 동료 char — 같은 방향으로 행군 중인 동료에게 **한 박자 양보**(제자리, `to` 없음, `result:'walking'`). 맞교대 셔틀(밀린 쪽이 되밀어 무한 왕복 — 50시드 10판 비종결 실측)의 치료. 같은 상황이 두 틱 이어지면 교대 강행(끼인 동료 추월 보장) |
 | `interact` | `target`, `result=exit(party[])/wait_allies(missing[])/treasure/chest_loot(roll,mod,total,loot)/chest_trap(roll,mod,total,dmg,hp,down?)/fountain_heal(roll,heal,hp)/fountain_harm(roll,dmg,hp,down?)/nothing/too_far/no_target` | 계단(파티 동반 하강/대기)·줍기·상자·샘. exit 의 party=함께 내려간 char 명단 |
 | `attack` | `result=attack/no_target/too_far`(**항상 존재**). `attack` 일 때만 `target`(몹 종류)·`target_id`(`m<n>`)·`roll mod total ac hit`·`surprise? crit? dmg? monster_hp? killed?` 존재 — 실패 2종은 `char/type/result` 뿐 | 봇의 공격. **result 로 분기하라.** surprise=우리 기습(we-ambush) |
 | `search` | `radius`, `found[]` | 능동 수색(턴 소모, 반경 내 확정 발견). found 빈 배열=허탕 |
