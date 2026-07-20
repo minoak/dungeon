@@ -28,8 +28,10 @@
           느려도 루프는 안 멈춘다: 밀린 턴은 건너뛰고 최신 턴만 연출)
           DUNGEON_BESTIARY_FILE(도감 원장 경로 — 빈값(기본)=영속 끔: 판 안 학습만 하고 파일은
           안 남긴다. start.sh 가 라이브 판에만 bestiary.json 을 켠다 → verify/실험 자동 격리)
-          DUNGEON_SCAN(기본0 — 스캐너(D19): 기하 구역/문/처음 방 정지/트리 wire.
-                       암 B 사전등록 판정 전 실험 스위치 — 채택 시 기본 1 승격)
+          DUNGEON_SCAN(기본1 — 스캐너(D19): 기하 구역/문/sighted 정지/트리 wire.
+                       2026-07-15 미로 판정 채택으로 기본 1 승격)
+          DUNGEON_LOOPS(기본1 — 월드 빌더(D20): 사슬(외길) 대신 주 고리+막다른 가지.
+                       0=구식 사슬. 엔진 직생성 기본은 0 — 기존 verify 비트 동일)
           DUNGEON_LEDGER(기본1 — 공간 장부(D17): 본 것을 엔진이 캐릭터 명의로 기억,
           시야 밖 '돌아가기' 핑 허용. 0=끔. 층 전이 때 새 원장=층의 기억)
 """
@@ -72,6 +74,9 @@ SCAN_ON = os.environ.get("DUNGEON_SCAN", "1") != "0"         # 스캐너(D19) �
                                                              #   (2026-07-15 미로 판정 채택 — 파트너 육안)
                                                              #   (채택 시 기본 1로 승격 — 사전등록 절차)
                                                              #   (spawn 기본은 None=끔 — 기존 게이트 무접촉)
+LOOPS_ON = os.environ.get("DUNGEON_LOOPS", "1") != "0"       # 월드 빌더(D20) — 러너 기본 1(물약 선례),
+                                                             #   엔진 직생성 기본 0(기존 verify 비트 동일).
+                                                             #   사슬(외길) 대신 주 고리+막다른 가지
 LORE_FILE = os.path.join(HERE, "lore.json")
 STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적용 후 맵이 보이게(헤들리스=0)
 
@@ -339,7 +344,8 @@ def main():
     sw = stream.StreamWriter(os.path.join(STATE, "stream.jsonl"))   # 실행당 truncate
 
     d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION,
-                  n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON)
+                  n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,
+                  loops=LOOPS_ON)
     d.lore = lore
     bots = []
     for c in chars:
@@ -517,7 +523,7 @@ def main():
                     fallen=list(fallen))
             d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
                           n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
-                          scan=SCAN_ON, n_potions=N_POTION)
+                          scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON)
             d.lore = lore
             nb = []
             for b in sorted(survivors, key=lambda b: b["char"]):

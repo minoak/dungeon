@@ -22,6 +22,7 @@
   · 시드 RNG 스트림 일원화(self.rng) — 모든 굴림 경유, 마스터→깊이별 파생 = 재현성.
 """
 
+import math
 import os
 import random
 from collections import deque
@@ -248,7 +249,7 @@ class Door:
 
 class Dungeon:
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
-                 scan=False, n_potions=0):
+                 scan=False, n_potions=0, loops=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -266,6 +267,10 @@ class Dungeon:
         self.visited = set()       # 파티가 밟은 칸 (공유 발자국 — 두 영웅 모두의 발걸음)
         self.scan = bool(scan)     # D19 스캐너 스위치 — 기본 꺼짐(기존 게이트 무수정 통과.
                                    #   러너·시나리오가 DUNGEON_SCAN 으로 켠다 — 채택 판정 전 실험층)
+        self.loops = bool(loops)   # D20 빌더 스위치 — 기본 꺼짐(기존 verify 비트 동일).
+                                   #   러너가 DUNGEON_LOOPS(기본 1)로 켠다(물약 선례) —
+                                   #   사슬(외길) 대신 주 고리+막다른 가지(SPD LoopBuilder식 재구현)
+        self._ring_target = 0      # loops 판에서 주 고리에 배속할 방 수(_carve_rooms 가 굴림)
         self.rooms = self._carve_rooms()
         self._connect(self.rooms)
         if self.scan:
@@ -319,6 +324,7 @@ class Dungeon:
         d.visited = set()
         d.rooms = [Room(0, 1, 1, w - 2, h - 2)]   # 단일 방(장면=한 무대) — 그래프 불요
         d.rooms[0].neighbours = []
+        d.loops, d._ring_target, d._edges = False, 0, []   # 손그림 맵=생성기 미경유
         starts, mslots, tslots = {}, [], []
         for y, row in enumerate(rows):
             for x, ch in enumerate(row):
@@ -368,11 +374,15 @@ class Dungeon:
             d._scan_zones()
         return d, starts
 
-    # ── 맵 생성 (로그라이크식 방+통로 — 기존 검증된 로직 그대로) ──
+    # ── 맵 생성 (로그라이크식 방+통로. loops=D20 고리+가지, 기본=기존 사슬 그대로) ──
     def _carve_rooms(self, n=5):
+        if self.loops:
+            # D20: 방 수 = 주 고리(6~8) + 가지(4~6). 작은 격자면 들어가는 만큼(고리 우선 배속).
+            self._ring_target = self.rng.randint(6, 8)
+            n = self._ring_target + self.rng.randint(4, 6)
         rooms = []
         attempts = 0
-        while len(rooms) < n and attempts < 60:
+        while len(rooms) < n and attempts < max(60, n * 15):
             attempts += 1
             rw, rh = self.rng.randint(5, 9), self.rng.randint(3, 5)
             rx = self.rng.randint(1, self.w - rw - 1)
@@ -389,19 +399,46 @@ class Dungeon:
         return rooms
 
     def _connect(self, rooms):
-        centers = [r.center for r in rooms]
-        for (x1, y1), (x2, y2) in zip(centers, centers[1:]):
+        """에지 계획(_plan_edges)을 따라 L자 통로를 조각한다. 에지 = 방 그래프의 단일 진실원천
+        (self._edges — _build_room_graph 가 이걸 읽는다. 사슬/고리 공용)."""
+        self._edges = self._plan_edges(rooms)
+        for a, b in self._edges:
+            (x1, y1), (x2, y2) = rooms[a].center, rooms[b].center
             for x in range(min(x1, x2), max(x1, x2) + 1):
                 self.grid[y1][x] = FLOOR
             for y in range(min(y1, y2), max(y1, y2) + 1):
                 self.grid[y][x2] = FLOOR
 
+    def _plan_edges(self, rooms):
+        """어느 방을 어느 방과 이을지(방 id 쌍 목록). 결정론 — rng 무소비.
+        기본(사슬): 배치 순 연속쌍 — 기존 판 비트 동일.
+        loops(D20, SPD LoopBuilder식 메커니즘 재구현 — 코드 복붙 아님): 처음 배치된
+        _ring_target 개 = 주 고리(무게중심 기준 각도 정렬 원환 — 교차 최소의 자연 순서),
+        나머지 = 가지(최근접 고리 방에 접속 = 막다른 곁방). 통로가 다른 방을 관통해 생기는
+        추가 트임은 허용 — 격자가 유일 인터페이스, 스캐너는 결과만 읽는다(D20 계약)."""
+        ring_n = min(self._ring_target, len(rooms)) if self.loops else 0
+        if ring_n < 3:                                 # 사슬(기존): 고리가 못 서는 판 포함
+            return [(a.id, b.id) for a, b in zip(rooms, rooms[1:])]
+        ring = rooms[:ring_n]
+        cx = sum(r.center[0] for r in ring) / ring_n
+        cy = sum(r.center[1] for r in ring) / ring_n
+        order = sorted(ring, key=lambda r: (math.atan2(r.center[1] - cy,
+                                                       r.center[0] - cx), r.id))
+        edges = [(order[i].id, order[(i + 1) % ring_n].id) for i in range(ring_n)]
+        for br in rooms[ring_n:]:                      # 가지: 최근접 고리 방(동률=낮은 id)
+            host = min(ring, key=lambda h: (abs(h.center[0] - br.center[0])
+                                            + abs(h.center[1] - br.center[1]), h.id))
+            edges.append((host.id, br.id))
+        return edges
+
     def _build_room_graph(self):
-        """connect 가 이은 '체인'을 그래프로 기록(버리지 말고 기억). 양방향 neighbours.
-        지금 생성기는 연속쌍을 잇는 선형 체인 → 그래프도 경로(트리)지만 모든 방 연결됨."""
+        """_connect 가 기록한 에지(self._edges)를 양방향 neighbours 로 옮긴다.
+        사슬 판=경로(트리), loops 판=고리+가지(사이클 있는 그래프) — 모든 방 연결은 공통."""
         for r in self.rooms:
             r.neighbours = []
-        for a, b in zip(self.rooms, self.rooms[1:]):   # _connect 와 동일한 연속쌍
+        byid = {r.id: r for r in self.rooms}
+        for aid, bid in self._edges:
+            a, b = byid[aid], byid[bid]
             if b.id not in a.neighbours:
                 a.neighbours.append(b.id)
             if a.id not in b.neighbours:
@@ -555,8 +592,42 @@ class Dungeon:
                 continue               # 넓은 트임 = 개방 아치(문 없음 — 빛이 지나간다)
             a, b = pairs[cluster[0]]
             cell = a if a not in room_cells else (b if b not in room_cells else None)
-            if cell is not None:
-                self.grid[cell[1]][cell[0]] = DOOR
+            if cell is None:
+                continue
+            # 문 배치 규율(D20 — 짧은 통로·삼거리가 흔한 고리 지형에서 필수가 된 규칙 2):
+            # ① 문은 문과 어깨를 맞대지 않는다 — 두 칸 통로의 양 끝을 다 찍으면 통로 바닥이
+            #    소멸해 스캐너(문=바닥 이웃 정확히 두 구역)가 연결을 못 읽는다(세계가 끊겨 보임).
+            # ② 문은 정확히 두 구역 사이에만 선다 — 세 구역이 만나는 관통점은 문이 아니라
+            #    통로 바닥으로 남긴다(접경 트임이 연결을 말한다). 스캔 결과를 미리 내다보는
+            #    같은 눈의 규칙 — 격자=유일 인터페이스 계약 유지.
+            px, py = cell
+            neigh = [(px + dx, py + dy) for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0))]
+            if any(0 <= nx < self.w and 0 <= ny < self.h
+                   and self.grid[ny][nx] == DOOR for nx, ny in neigh):
+                continue
+            comps = {comp_at[n] for n in neigh
+                     if n in comp_at and self.grid[n[1]][n[0]] == FLOOR}
+            if len(comps) != 2:
+                continue
+            self.grid[py][px] = DOOR
+        # 정착 루프(D20): 스탬프가 통로를 조각내면 구역 구성이 스탬프 시점과 달라질 수 있다
+        # (연쇄 효과 — 위 규율 2는 시점 예측이라 전부는 못 막는다). 스캔과 같은 눈으로 재검해
+        # '정확히 두 구역 사이'가 깨진 문을 바닥으로 되돌린다. 되돌리기만 하므로 수렴 보장,
+        # 종료 상태 = 남은 문 전부가 스캐너에게 유효한 문 → 존 그래프 연결성 = 지형 연결성.
+        while True:
+            comp_now, _, _ = self._zone_components()
+            reverted = False
+            for y in range(self.h):
+                for x in range(self.w):
+                    if self.grid[y][x] != DOOR:
+                        continue
+                    zs = {comp_now.get((x + dx, y + dy))
+                          for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0))} - {None}
+                    if len(zs) != 2:
+                        self.grid[y][x] = FLOOR
+                        reverted = True
+            if not reverted:
+                break
 
     def _scan_zones(self):
         """격자만 읽어 구역(Zone)·문(Door)을 재구성한다 — 스캐너의 토대.

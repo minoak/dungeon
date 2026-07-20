@@ -34,6 +34,9 @@ os.environ.update(DUNGEON_GM="0", DUNGEON_TURNS="400", DUNGEON_W="40", DUNGEON_H
                   DUNGEON_SEED="7", DUNGEON_MONSTERS="2", DUNGEON_TRAPS="3",
                   DUNGEON_LURKERS="1", DUNGEON_DEPTHS="2",
                   DUNGEON_PARTY_FILE="/nonexistent",   # 시트 외부화(Part B) 무시 → 내장 2인 고정(회귀 그물)
+                  DUNGEON_LOOPS="0",                   # 월드 빌더(D20) 무시 → 사슬 지형 고정(회귀 그물 —
+                                                       #   커버리지 스윕의 희귀사건(샘 오염 등)이 시드 셋에 물려 있다.
+                                                       #   고리 지형 계약은 verify_builder 가 따로 지킨다)
                   DUNGEON_STATE_DIR=os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                                  "state_streamverify"))
 # ⚠️ STATE 격리 필수 — 기본 state/ 로 돌리면 마지막 관전 판의 stream.jsonl 을 truncate 한다
