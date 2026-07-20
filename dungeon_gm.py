@@ -100,6 +100,12 @@ FOLLOW_IDLE = 3          # 동행 고착 해약(D18): 곁 대기 중 대상이 �
                          #   않는다. 상호 동행 삼각 고착(fellowsmoke 120틱 결정 5회 실측)=흡수 상태의
                          #   물리적 제거. 파트너 판정 2026-07-11: "셋이 서서 세 턴이면 어색해질 시간"
                          #   — K=3 고정(튜닝마라).
+WANDER_N = 10            # 맴돎 자각(D21): 결정 없이 이만큼 걸음을 이었는데 새로 본 칸이 0이고
+                         #   그 사이 밟았던 칸을 되밟고 있으면 → 정지+관찰 보고(판단은 두뇌 몫).
+                         #   되밟기 조건은 '아는 길 직행 관통'(출구 귀환·장부 goto — D19 직행 주파)을
+                         #   맴돎으로 오인하지 않기 위한 최소 분별 — 직선 역행은 재방문이 없다.
+                         #   3인 회전 셔틀(07-20 큰 판, 결정 0으로 ~50틱) 실측 t85 고착 기준 캘리브레이션.
+                         #   튜닝은 큰 판 실측 후(튜닝마라).
 
 # ── 캐릭터 시트 (영웅) ───────────────────────────────────────────
 # d20 + 능력보정 vs 목표(AC/DC). 전사=힘·HP, 도적=민첩(함정 회피·기습).
@@ -249,7 +255,7 @@ class Door:
 
 class Dungeon:
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
-                 scan=False, n_potions=0, loops=False):
+                 scan=False, n_potions=0, loops=False, selfstop=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -270,6 +276,9 @@ class Dungeon:
         self.loops = bool(loops)   # D20 빌더 스위치 — 기본 꺼짐(기존 verify 비트 동일).
                                    #   러너가 DUNGEON_LOOPS(기본 1)로 켠다(물약 선례) —
                                    #   사슬(외길) 대신 주 고리+막다른 가지(SPD LoopBuilder식 재구현)
+        self.selfstop = bool(selfstop)   # D21 자기 관찰 정지 스위치(재회·맴돎) — 기본 꺼짐(기존
+                                   #   verify 비트 동일). 러너가 DUNGEON_SELFSTOP(기본 1)로 켠다.
+                                   #   scan 장부(zone·seen_cells)가 재료라 scan 판에서만 발화.
         self._ring_target = 0      # loops 판에서 주 고리에 배속할 방 수(_carve_rooms 가 굴림)
         self.rooms = self._carve_rooms()
         self._connect(self.rooms)
@@ -325,6 +334,7 @@ class Dungeon:
         d.rooms = [Room(0, 1, 1, w - 2, h - 2)]   # 단일 방(장면=한 무대) — 그래프 불요
         d.rooms[0].neighbours = []
         d.loops, d._ring_target, d._edges = False, 0, []   # 손그림 맵=생성기 미경유
+        d.selfstop = False         # D21 스위치 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         starts, mslots, tslots = {}, [], []
         for y, row in enumerate(rows):
             for x, ch in enumerate(row):
@@ -1130,10 +1140,13 @@ class Dungeon:
                 px, py = dr.cell if dr.cell else dr.sides[home]
                 vis = (((px, py) in seen) if dr.cell
                        else any(s in seen for s in dr.sides.values()))
-                return {'id': did, 'bearing': self._bearing(px - cx, py - cy),
-                        'dist': max(abs(px - cx), abs(py - cy)),
-                        'seen': vis,                  # 지금 눈에 보이나 / False=본 적 있는 기억
-                        'been': other in entset}      # 너머에 들어가 봤나(내 경험 — 누설 아님)
+                out = {'id': did, 'bearing': self._bearing(px - cx, py - cy),
+                       'dist': max(abs(px - cx), abs(py - cy)),
+                       'seen': vis,                   # 지금 눈에 보이나 / False=본 적 있는 기억
+                       'been': other in entset}       # 너머에 들어가 봤나(내 경험 — 누설 아님)
+                if out['been'] and self.selfstop:     # D21 재회 표기: 아는 너머는 이름으로 부른다
+                    out['to'] = self._zone_name(bot, other)   # ("샘 있던 방으로 이어짐" — 하위 전개 없음)
+                return out
 
             if zid0 is None:                   # 문턱(문 타일) 위 — 문에 서면 양쪽이 다 보인다(광학)
                 d0 = next((dd for dd in self.doors.values() if dd.cell == (cx, cy)), None)
@@ -1362,6 +1375,7 @@ class Dungeon:
         예약이 아니다: 인터럽트(피격·새 발견·길막힘·lost)가 남은 작정을 찢는다."""
         typ = (action or {}).get('type', 'goto')
         tgt = (action or {}).get('target')
+        bot['wander'] = None                      # 새 결정 = '계속 이동'의 단절(D21 맴돎 창 리셋)
         if 'then' in (action or {}):              # 작정 접수 — 저작 검증(시야-온리)은 brains 소관,
             bot['plan'] = ([] if typ == 'follow'  # 동행(A-5)은 열린 결말 — then 뒤수 부적합(비움)
                            else [dict(s) for s in (action.get('then') or [])
@@ -1872,6 +1886,8 @@ class Dungeon:
                                      for o in jam]
                 return out
             nx, ny = bot['path'][0]
+        d21 = self.scan and self.selfstop             # D21 자기 관찰(재회·맴돎) — scan 장부가 재료
+        pre_seen = len(bot.get('seen_cells') or ()) if d21 else 0
         bot['path'].pop(0)
         enter = self._enter_cell(bot, nx, ny)         # 이동 + 보물/계단/함정 처리
         base.update(to=[nx, ny])
@@ -1890,10 +1906,33 @@ class Dungeon:
             return {**base, 'result': 'at_exit'}
         newly = self._perceive(bot)                   # 이동으로 새로 보인 몹 = aware_of 등록(처음 본 것만)
         found = self._passive_search(bot)             # 직업 인지 스윕(수동 search-on-move) — 숨은 것 발견
+        reunion = None
         if self.scan:                                 # 구역 발자국(been 어휘·장부 재료 — 정지와 무관.
             zid = self.zone_at.get((nx, ny))          #   D19 정정: '처음 방 무조건 정지'는 폐지 —
             if zid is not None:                       #   정지는 _sighted_stop 이 오브젝트 목격으로 판단)
-                bot.setdefault('zones_entered', set()).add(zid)
+                ent = bot.setdefault('zones_entered', set())
+                if d21:                               # 재회(D21①): 아는 구역에 *새 연결*로 들어섰다 —
+                    ctx = bot.get('zone_ctx')         #   고리의 정보 가치=연결의 발견을 사건으로 승격.
+                    if ctx is not None and ctx != zid:
+                        edge = frozenset((ctx, zid))  #   에지=무방향 구역쌍. 같은 문 왕복(정당한 재방문 —
+                        known = bot.setdefault('zone_edges', set())   #   과제약 금지)은 첫 통과 때
+                        if edge not in known:         #   적혀 다시 안 울린다. 새 에지+가 본 구역=재회.
+                            known.add(edge)
+                            if zid in ent:
+                                reunion = self._zone_name(bot, zid)
+                    bot['zone_ctx'] = zid             # 문턱(구역 없음) 체류 중엔 직전 구역이 유지된다
+                ent.add(zid)
+        wander_hit = False
+        if d21:                                       # 맴돎(D21②) 창 부기: 결정 없이 이어 걸은 걸음들.
+            run = bot.get('wander')                   #   새로 본 칸이 생기면 창이 접히고(발견=맴돎 아님),
+            if len(bot.get('seen_cells') or ()) > pre_seen:   #   act()의 새 결정도 창을 접는다.
+                bot['wander'] = None
+            else:
+                if not run:
+                    run = bot['wander'] = {'cells': set(), 'n': 0}
+                wander_hit = (nx, ny) in run['cells']  # 이 걸음이 '되밟기'인가 — 직행 관통과의 분별
+                run['cells'].add((nx, ny))
+                run['n'] += 1
         if enter.get('trap') or newly or found:       # 인카운터 = *새 정보*만(에지) — 알던 몹 인접은
             bot['order'], bot['path'], bot['plan'] = None, [], []   # 정지 사유 아님(D1 개정: 물리면
                                                       #   그때 묻는다). 새 정보 = 남은 작정 파기(D16)
@@ -1916,6 +1955,15 @@ class Dungeon:
                                   potion=bool(enter.get('potion')))
         if sres:                                      # D19 정정: "새 오브젝트가 시야에 들면 멈춤"
             return sres                               #   (벽·바닥 제외) — order 종류 무관 단일 원칙
+        if reunion:                                   # 재회 정지(D21①) — 새 오브젝트가 우선(sighted 가
+            bot['order'], bot['path'], bot['plan'] = None, [], []   # 먼저 물으면 에지만 적고 양보),
+            bot['wander'] = None                      # 정지=재결정이 온다 — 맴돎 창도 접는다
+            res = {**base, 'result': 'reunion', 'name': reunion}
+            if enter.get('treasure'):
+                res['treasure'] = True
+            if enter.get('potion'):
+                res['potion'] = True
+            return res
         if enter.get('treasure'):
             if not bot['path']:                       # 목표 칸의 보물을 주움 = 이 order 의 완결(자기 소비).
                 bot['order'] = None                   #   남겨두면 다음 틱 빈 자리에 lost/arrived 거짓 보고
@@ -1926,6 +1974,11 @@ class Dungeon:
             return {**base, 'result': 'potion'}
         if not bot['path']:
             return self._order_done(bot, bots, base)
+        run = bot.get('wander')
+        if run and wander_hit and run['n'] >= WANDER_N:   # 맴돎 정지(D21②) — 관찰 사실만 보고,
+            bot['order'], bot['path'], bot['plan'] = None, [], []   # 판단은 두뇌 몫(질문·조향 금지).
+            bot['wander'] = None                      # 3인 회전 셔틀(07-20, 결정 0 ~50틱)의 그물 —
+            return {**base, 'result': 'wander', 'steps': run['n']}   # 금지가 아니라 정지+사실 제시
         return {**base, 'result': 'walking'}
 
     def _order_done(self, bot, bots, base):
@@ -2054,6 +2107,25 @@ class Dungeon:
             return ('%s %s' % (z.kind, zid)) if z.kind == '방' else ('통로 %s' % zid)
         rid = self._room_id_at(x, y)
         return ('방 r%d' % rid) if rid is not None else '통로'
+
+    def _zone_name(self, bot, zid):
+        """구역의 사람말 이름(D21) — "샘 있던 방"처럼 *그 봇의 기억(장부)*으로 부른다.
+        내용물(내가 본 정적 목격물) 우선, 없으면 크기(다 본 공간만 — D19 정직 규율),
+        그도 없으면 종류만. 좌표·번호 id 금지(이름=사람의 공간 언어 — 정본 D21).
+        장부 없음(DUNGEON_LEDGER=0)이면 종류 폴백 — 굴림 없음, 읽기 전용."""
+        z = self.zones[zid]
+        label = ('%s %s' % (z.kind, zid)) if z.kind == '방' else ('통로 %s' % zid)
+        led = bot.get('ledger') or {}
+        for e in (led.get('statics') or {}).values():   # 가장 먼저 목격한 지물 하나로 부른다
+            if e.get('zone') == label and e.get('name'):   # ("샘 있던 방" — 목록 나열은 사람말이 아니다)
+                return '%s 있던 %s' % (e['name'], z.kind)
+        zseen = (bot.get('zone_seen') or {}).get(zid, set())
+        if z.cells <= zseen:                        # 다 본 공간만 크기를 안다("일부만 봤으면 모른다")
+            if z.kind == '방':
+                area = z.w * z.h
+                return '넓은 방' if area >= 30 else ('작은 방' if area <= 12 else '방')
+            return '긴 통로' if len(z.cells) >= 10 else '통로'
+        return z.kind
 
     def _ledger_note(self, bot, seen, bots=None):
         """공간 장부(D17-1) 갱신 — 시야에 든 것을 엔진이 캐릭터 명의로 받아 적는다.

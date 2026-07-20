@@ -32,6 +32,8 @@
                        2026-07-15 미로 판정 채택으로 기본 1 승격)
           DUNGEON_LOOPS(기본1 — 월드 빌더(D20): 사슬(외길) 대신 주 고리+막다른 가지.
                        0=구식 사슬. 엔진 직생성 기본은 0 — 기존 verify 비트 동일)
+          DUNGEON_SELFSTOP(기본1 — 자기 관찰 정지(D21): 재회("낯익은 곳") + 맴돎(걸음만 잇고
+                       새 목격 0 + 되밟기). 정지+관찰 보고만, 판단은 두뇌 몫. 엔진 기본 0)
           DUNGEON_LEDGER(기본1 — 공간 장부(D17): 본 것을 엔진이 캐릭터 명의로 기억,
           시야 밖 '돌아가기' 핑 허용. 0=끔. 층 전이 때 새 원장=층의 기억)
 """
@@ -77,6 +79,9 @@ SCAN_ON = os.environ.get("DUNGEON_SCAN", "1") != "0"         # 스캐너(D19) �
 LOOPS_ON = os.environ.get("DUNGEON_LOOPS", "1") != "0"       # 월드 빌더(D20) — 러너 기본 1(물약 선례),
                                                              #   엔진 직생성 기본 0(기존 verify 비트 동일).
                                                              #   사슬(외길) 대신 주 고리+막다른 가지
+SELF_ON = os.environ.get("DUNGEON_SELFSTOP", "1") != "0"     # 자기 관찰 정지(D21 재회·맴돎) — 러너 기본 1,
+                                                             #   엔진 직생성 기본 0(기존 verify 비트 동일).
+                                                             #   scan 장부가 재료라 scan 판에서만 발화.
 LORE_FILE = os.path.join(HERE, "lore.json")
 STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적용 후 맵이 보이게(헤들리스=0)
 
@@ -256,6 +261,10 @@ def act_summary(res):
         if r == "idle":                                # 동행 고착 해약(FOLLOW_IDLE) — 재결정 반환
             tgt = str(res.get("target", "?")).replace("follow:", "")
             return "동행을 접는다 — %s가 한동안 제자리 (같이 서 있기만 했다, 재결정)" % tgt
+        if r == "reunion":                             # 재회 정지(D21①) — 연결의 발견, 재결정
+            return "보행 정지 — 낯익은 곳 재회: %s (재결정)" % res.get("name", "?")
+        if r == "wander":                              # 맴돎 정지(D21②) — 관찰 보고, 재결정
+            return "보행 정지 — 맴돎 자각: 최근 %d걸음 새 목격 0 (재결정)" % res.get("steps", 0)
         tag = {"walking": "자동보행", "arrived": "도착", "at_exit": "계단 앞에 섰다",
                "treasure": "$ 획득", "potion": "! 물약 획득", "blocked": "길 막힘"}
         if r == "arrived" and "to" not in res:         # 움직이는 목표(몹·동료) 곁 도달 = 걷기 전 완료
@@ -345,7 +354,7 @@ def main():
 
     d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION,
                   n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,
-                  loops=LOOPS_ON)
+                  loops=LOOPS_ON, selfstop=SELF_ON)
     d.lore = lore
     bots = []
     for c in chars:
@@ -393,6 +402,7 @@ def main():
             ledger=LEDGER_ON,          # 공간 장부(D17) 여부 — obs(known·돌아가기)를 바꾸는 실행모드 메타
             scan=SCAN_ON,              # 스캐너(D19) 여부 — obs(구조)·정지 물리를 바꾸는 실행모드 메타
                                        #   (걸음 정지 규칙이 달라지므로 리플레이·판 비교의 전제)
+            selfstop=SELF_ON,          # 자기 관찰 정지(D21) 여부 — 정지 물리 메타(scan 과 같은 급)
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             bestiary=iss.snapshot(),   # 판 시작 시점 지식(additive) — 도감이 obs 를 바꾸므로 리플레이·비교의 전제
@@ -523,7 +533,7 @@ def main():
                     fallen=list(fallen))
             d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
                           n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
-                          scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON)
+                          scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON)
             d.lore = lore
             nb = []
             for b in sorted(survivors, key=lambda b: b["char"]):

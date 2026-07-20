@@ -231,6 +231,14 @@ def _last_prose(last, names=None):
         if r == "swapped":                    # 교대(D18 개정)의 수동태 — 밀려난 쪽의 자기 관측
             return ("%s이(가) 지나가며 나와 자리를 바꿨다 — 한 칸 밀려섰다(가던 길은 그대로)"
                     % last.get("with", "동료"))
+        if r == "reunion":                    # 재회 정지(D21①) — 연결의 발견. 관찰 사실만(조향 금지)
+            return ("걷다 멈췄다 — 낯익은 곳이다: %s. 지금 걸어온 길이 아는 곳으로 이어졌다"
+                    % last.get("name", "와 본 곳")
+                    + (" — 오는 길에 보물도 주웠다" if last.get("treasure") else "")
+                    + (" — 오는 길에 회복 물약도 챙겼다" if last.get("potion") else ""))
+        if r == "wander":                     # 맴돎 정지(D21②) — 질문형 금지: 관찰 사실만, 판단은 네 몫
+            return ("걸음을 멈췄다 — 최근 %d걸음 동안 새로 본 것이 없다,"
+                    " 밟았던 자리를 되밟고 있었다" % last.get("steps", 0))
     if t == "attack":
         if r == "no_target":
             return "공격 — 대상이 그 자리에 없었다"
@@ -389,7 +397,9 @@ def _wire(obs, names=None):
                 slots[bearing].append((dist, text))
 
         for d in z.get("doors", []):
-            tag = (" (온 적 있는 길)" if d.get("been")
+            tag = ((" (온 적 있는 길%s)"                     # D21 재회 표기: 아는 너머는 이름 참조,
+                    % ((" — 너머는 %s" % d["to"]) if d.get("to") else ""))   # 하위 전개 없음
+                   if d.get("been")
                    else ("" if d.get("seen") else " (본 적 있음, 지금 시야 밖)"))
             put(d.get("bearing"), d.get("dist", 0),
                 ("문 %s — 지금 선 문턱%s" % (d.get("id", "?"), tag)) if d.get("dist") == 0
