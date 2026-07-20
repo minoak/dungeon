@@ -34,6 +34,10 @@
                        0=구식 사슬. 엔진 직생성 기본은 0 — 기존 verify 비트 동일)
           DUNGEON_SELFSTOP(기본1 — 자기 관찰 정지(D21): 재회("낯익은 곳") + 맴돎(걸음만 잇고
                        새 목격 0 + 되밟기). 정지+관찰 보고만, 판단은 두뇌 몫. 엔진 기본 0)
+          DUNGEON_GRAVES(기본1 — 묘(D22): 쓰러진 자리에 '~의 묘' 피처 — 광학·조회·goto 앵커.
+                       시체가 아니라 표지판(D4 불가침). 엔진 기본 0)
+          DUNGEON_EVENTS(기본1 — 사건층(D22): 전달층=시야 내 사건 목격 주입(전투·함정·회복,
+                       휘발=다음 결정 1회)+기억층=목격한 전사 fallen 지속 재제시. 엔진 기본 0)
           DUNGEON_LEDGER(기본1 — 공간 장부(D17): 본 것을 엔진이 캐릭터 명의로 기억,
           시야 밖 '돌아가기' 핑 허용. 0=끔. 층 전이 때 새 원장=층의 기억)
 """
@@ -82,6 +86,11 @@ LOOPS_ON = os.environ.get("DUNGEON_LOOPS", "1") != "0"       # 월드 빌더(D20
 SELF_ON = os.environ.get("DUNGEON_SELFSTOP", "1") != "0"     # 자기 관찰 정지(D21 재회·맴돎) — 러너 기본 1,
                                                              #   엔진 직생성 기본 0(기존 verify 비트 동일).
                                                              #   scan 장부가 재료라 scan 판에서만 발화.
+GRAVES_ON = os.environ.get("DUNGEON_GRAVES", "1") != "0"     # 묘(D22) — 러너 기본 1, 엔진 기본 0.
+                                                             #   쓰러진 자리에 '~의 묘'(광학·조회·goto 앵커)
+EVENTS_ON = os.environ.get("DUNGEON_EVENTS", "1") != "0"     # 사건층(D22) — 러너 기본 1, 엔진 기본 0.
+                                                             #   전달층(시야 내 사건 목격, 휘발=다음 결정
+                                                             #   1회)+기억층(fallen 지속 재제시, 휘발 0)
 LORE_FILE = os.path.join(HERE, "lore.json")
 STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적용 후 맵이 보이게(헤들리스=0)
 
@@ -354,7 +363,7 @@ def main():
 
     d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION,
                   n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,
-                  loops=LOOPS_ON, selfstop=SELF_ON)
+                  loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON)
     d.lore = lore
     bots = []
     for c in chars:
@@ -403,6 +412,8 @@ def main():
             scan=SCAN_ON,              # 스캐너(D19) 여부 — obs(구조)·정지 물리를 바꾸는 실행모드 메타
                                        #   (걸음 정지 규칙이 달라지므로 리플레이·판 비교의 전제)
             selfstop=SELF_ON,          # 자기 관찰 정지(D21) 여부 — 정지 물리 메타(scan 과 같은 급)
+            graves=GRAVES_ON,          # 묘(D22) 여부 — 피처가 늘어나는 세계 물리 메타
+            events=EVENTS_ON,          # 사건층(D22) 여부 — obs(목격·기억)를 바꾸는 실행모드 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             bestiary=iss.snapshot(),   # 판 시작 시점 지식(additive) — 도감이 obs 를 바꾸므로 리플레이·비교의 전제
@@ -533,13 +544,17 @@ def main():
                     fallen=list(fallen))
             d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
                           n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
-                          scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON)
+                          scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
+                          graves=GRAVES_ON, events=EVENTS_ON)
             d.lore = lore
             nb = []
             for b in sorted(survivors, key=lambda b: b["char"]):
                 n = G.spawn(d, b["char"], nb, sheet=sheets[b["char"]])   # ⚠️ sheet 필수 — 없으면
                 n["hp"], n["bag"] = b["hp"], b["bag"]     # HP·보물 이월     외부 시트 봇('3'+)이 2층서 죽는다
                 n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
+                n["memories"] = list(b.get("memories") or [])   # 기억도 이월(D22) — 전사는 원정급
+                                                          # 사건(장부=층의 기억과 대비. 구역 이름은
+                                                          # 그 층의 것 — 층수 없인 모호하나 v0 수용)
                 n["known"] = iss.known(names[b["char"]])  # 도감은 층을 넘어도 그대로(지식=영속층)
                 if LEDGER_ON:
                     n["ledger"] = G.new_ledger()          # 장부는 새 원장(층의 기억 — id 층-로컬, D17)

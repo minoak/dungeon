@@ -32,6 +32,8 @@ DOOR = '+'                      # 문 타일(D19 정정 2026-07-15): 벽처럼 �
                                 # 개폐 상태 없음(항상 불투명 MVP — 격자 불변=결정론·리플레이 무손상,
                                 # 그 너머의 기억은 장부 몫). scan 판 전용 — 기본(scan=0) 격자엔 없다.
 CHEST, FOUNTAIN = '=', '~'      # 방 콘텐츠(Stage 3): 상자(도박)·샘(회복 도박)
+GRAVE = 'T'                     # 묘(D22): 쓰러진 자리의 표지판 — 시체가 아니다(운반·부패·부활 의미론
+                                # 없음, D4 불가침). "누가 묻었나"는 묻지 않는 게임 문법(로그라이크 묘비).
 POTION = '!'                    # 회복 물약(07-17, PD 문법): 주워 들고 다니는 확정 완전 회복 —
                                 # 샘(그 자리 도박)과 대비되는 '보험'. 첫 소지 아이템(bot['potions'])
 LURKER, HIDDEN = 'm', '*'       # 관전자 전용(극적 아이러니): 숨은 적/숨은 보물. 봇 시야(view)엔 절대 안 나간다.
@@ -255,7 +257,8 @@ class Door:
 
 class Dungeon:
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
-                 scan=False, n_potions=0, loops=False, selfstop=False):
+                 scan=False, n_potions=0, loops=False, selfstop=False,
+                 graves=False, events=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -279,6 +282,11 @@ class Dungeon:
         self.selfstop = bool(selfstop)   # D21 자기 관찰 정지 스위치(재회·맴돎) — 기본 꺼짐(기존
                                    #   verify 비트 동일). 러너가 DUNGEON_SELFSTOP(기본 1)로 켠다.
                                    #   scan 장부(zone·seen_cells)가 재료라 scan 판에서만 발화.
+        self.graves = bool(graves) # D22 묘 스위치 — 기본 꺼짐(기존 verify 비트 동일). 러너가
+                                   #   DUNGEON_GRAVES(기본 1)로 켠다. 쓰러진 자리에 '~의 묘' 피처.
+        self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
+                                   #   전달층(시야 내 사건 목격 주입, A-3 어휘 확장 — 휘발=다음 결정
+                                   #   1회)+기억층(목격한 전사=지속 기억 fallen, 휘발 0).
         self._ring_target = 0      # loops 판에서 주 고리에 배속할 방 수(_carve_rooms 가 굴림)
         self.rooms = self._carve_rooms()
         self._connect(self.rooms)
@@ -335,6 +343,7 @@ class Dungeon:
         d.rooms[0].neighbours = []
         d.loops, d._ring_target, d._edges = False, 0, []   # 손그림 맵=생성기 미경유
         d.selfstop = False         # D21 스위치 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.graves = d.events = False   # D22 스위치(묘·사건층) — 같은 규율(기존 장면 비트 동일)
         starts, mslots, tslots = {}, [], []
         for y, row in enumerate(rows):
             for x, ch in enumerate(row):
@@ -861,6 +870,8 @@ class Dungeon:
             return FOUNTAIN
         if f and f.type == 'potion' and not f.concealed:
             return POTION
+        if f and f.type == 'grave':               # 묘(D22) — 숨김 개념 없음(죽음은 공공연한 사실)
+            return GRAVE
         for t in self.traps:
             if (t.x, t.y) == (x, y) and not t.hidden:
                 return TRAP            # 드러난 함정만 보인다. 숨은 것은 바닥처럼.
@@ -1290,15 +1301,24 @@ class Dungeon:
             if not fresh_ways:
                 _add('explore', None, '탐색: 새 길을 찾아 나선다 (시야 밖 — 엔진에 맡긴다)')
 
-        # A-3(D18): 목격 — 내 눈으로 본 동료의 피격/전사. 1회성: 이번 결정에 한 번 전달하고 비운다.
-        # 자기 피격은 last 가 담당(중복 없음). 종 표기는 내 도감 기준(모르는 종=낯선 짐승 — D9 정합).
+        # A-3(D18)+D22 전달층: 목격 — 내 눈으로 본 동료의 사건(피격·전사·명중·처치·함정·회복).
+        # 1회성: 이번 결정에 한 번 전달하고 비운다(휘발=다음 결정 1회 — D22).
+        # 자기 사건은 last 가 담당(중복 없음). 종 표기는 내 도감 기준(모르는 종=낯선 짐승 — D9 정합).
+        def _mask(w):                          # 도감 게이트 — 몹 이름만 가린다(함정·샘은 by_kind 로 면제)
+            out = {**w, 'name': names.get(w['char'], '동료')}
+            if known is not None:
+                if 'by' in out and out.get('by_kind', 'monster') == 'monster' \
+                        and 'monster:' + out['by'] not in known:
+                    out['by'] = UNKNOWN_BEAST
+                if 'mon' in out and 'monster:' + out['mon'] not in known:
+                    out['mon'] = UNKNOWN_BEAST
+            return out
         wit = bot.get('witnessed') or []
         if wit:
             bot['witnessed'] = []
-            wit = [{**w, 'name': names.get(w['char'], '동료'),
-                    **({'by': UNKNOWN_BEAST} if known is not None
-                       and 'monster:' + w['by'] not in known else {})}
-                   for w in wit]
+            wit = [_mask(w) for w in wit]
+        # D22 기억층: 목격한 중대사(v0=fallen)는 휘발하지 않는다 — 매 결정 재제시(비우지 않음).
+        mem = [_mask(e) for e in (bot.get('memories') or [])]
 
         rid_here = self._room_id_at(cx, cy)
         return {'pos': [cx, cy], 'hp': bot['hp'], 'maxhp': bot['maxhp'],
@@ -1314,6 +1334,7 @@ class Dungeon:
                                                        # — wire 가 'N턴 전'을 셈(D17-3). 장부와 한 몸
                 **({'known': known_obs} if known_obs is not None else {}),   # 공간 장부(D17-1)
                 **({'witnessed': wit} if wit else {}),   # 목격(A-3) — 있을 때만 실림(intent 선례)
+                **({'memories': mem} if mem else {}),    # 기억(D22 fallen) — 휘발 0, 있을 때만 실림
                 'last': bot.get('last'),      # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의
                                               #   결과를 관측할 수 있어야 한다". 자기 경험=시야-온리 무위반
                 'order': ('explore' if str(bot.get('order') or '')[:1] == '@'
@@ -1327,7 +1348,7 @@ class Dungeon:
                 'legend': {'@': 'you', '#': 'wall', '.': 'floor', '+': 'door',
                            '$': 'treasure', '>': 'stairs/exit', 'M': 'monster',
                            '^': 'trap', '=': 'chest', '~': 'fountain', '!': 'potion',
-                           ' ': 'unknown'}}
+                           'T': 'grave', ' ': 'unknown'}}
 
     # ── 탐색 프런티어 (explore = 미지로 트인 출입구) ─────────────
     def _frontier_cells(self, cx, cy, seen):
@@ -1387,7 +1408,7 @@ class Dungeon:
         elif typ == 'search':
             res = self._search(bot)
         elif typ == 'drink':
-            res = self._drink(bot)                    # 회복 물약(07-17) — 무대상 즉시 동사(search 선례)
+            res = self._drink(bot, bots)              # 회복 물약(07-17) — 무대상 즉시 동사(search 선례)
         elif typ == 'explore':
             res = self._set_explore(bot, tgt, bots)   # 탐색(선택적 방위 tgt)
         elif typ == 'follow':
@@ -1889,7 +1910,7 @@ class Dungeon:
         d21 = self.scan and self.selfstop             # D21 자기 관찰(재회·맴돎) — scan 장부가 재료
         pre_seen = len(bot.get('seen_cells') or ()) if d21 else 0
         bot['path'].pop(0)
-        enter = self._enter_cell(bot, nx, ny)         # 이동 + 보물/계단/함정 처리
+        enter = self._enter_cell(bot, nx, ny, bots)   # 이동 + 보물/계단/함정 처리
         base.update(to=[nx, ny])
         if not bot['alive']:                          # 함정 즉사 — 시체는 지각하지 않는다(사후 인지굴림 금지:
             bot['order'], bot['path'], bot['plan'] = None, [], []   # 죽은 자의 주사위가 숨은 것을 드러내
@@ -2014,7 +2035,7 @@ class Dungeon:
                 return {**base, 'result': 'lost'}
         return {**base, 'result': 'arrived'}          # arrived 는 작정 존속 — 다음 수가 이어진다
 
-    def _enter_cell(self, bot, nx, ny):
+    def _enter_cell(self, bot, nx, ny, bots=()):
         """한 칸 진입 = 좌표 갱신 + (보이는) 보물 줍기 + 계단 도착 + 숨은 함정 DEX 판정. 플래그 dict 반환.
         Stage 4: 출구 밟기 = 즉시탈출 아님(at_exit 만) — 하강/탈출은 interact + 파티 조율(_interact)로.
         Stage 3: 드러난 함정을 알고 밟으면 조심 보너스(CAREFUL_BONUS). 경보 함정은 층의 몹을 깨운다."""
@@ -2045,6 +2066,14 @@ class Dungeon:
                     bot['hp'] -= trap.dmg; tr['dmg'] = trap.dmg; tr['hp'] = bot['hp']
                     if bot['hp'] <= 0:
                         bot['alive'] = False; tr['down'] = True
+                        g = self._on_down(bot, bots, by=trap.name, by_kind='trap')
+                        if g:
+                            tr['grave'] = g
+            if bot['alive']:                      # 전달층(D22): 함정 장면 목격 — 전사면 ally_down 이 담당
+                self._witness(bots, nx, ny,
+                              {'kind': 'ally_trap', 'char': bot['char'], 'trap': trap.name,
+                               'safe': safe, **({'dmg': trap.dmg} if not safe and trap.dmg else {})},
+                              exclude=(bot['char'],))
             out['trap'] = tr
         return out
 
@@ -2264,6 +2293,9 @@ class Dungeon:
                    'total': total, 'dmg': 2, 'hp': bot['hp']}
             if bot['hp'] <= 0:
                 bot['alive'] = False; out['down'] = True
+                g = self._on_down(bot, bots, by='함정 상자', by_kind='hazard')
+                if g:
+                    out['grave'] = g
             return out
         if f and f.type == 'fountain':           # 샘 도박 — 대체로 이득(회복), 가끔 오염
             del self.features[f.id]
@@ -2271,11 +2303,17 @@ class Dungeon:
             if r >= 8:
                 heal = min(3, bot['maxhp'] - bot['hp'])
                 bot['hp'] += heal
+                self._witness(bots, tx, ty,      # 전달층(D22): 회복 장면도 시야를 탄다
+                              {'kind': 'ally_heal', 'char': bot['char'], 'how': '샘'},
+                              exclude=(bot['char'],))
                 return {**base, 'result': 'fountain_heal', 'roll': r, 'heal': heal, 'hp': bot['hp']}
             bot['hp'] -= 1
             out = {**base, 'result': 'fountain_harm', 'roll': r, 'dmg': 1, 'hp': bot['hp']}
             if bot['hp'] <= 0:
                 bot['alive'] = False; out['down'] = True
+                g = self._on_down(bot, bots, by='오염된 샘', by_kind='hazard')
+                if g:
+                    out['grave'] = g
             return out
         return {**base, 'result': 'nothing'}
 
@@ -2321,6 +2359,11 @@ class Dungeon:
                             and (mon.x, mon.y) in self.visible_cells(o['x'], o['y'])):
                         o['ledger']['moving'].pop('m%d' % mon.id, None)   # 리뷰 픽스.
                         # 안 본 죽음은 안 지운다 — 지우면 그게 역누설이다
+            self._witness(bots, mon.x, mon.y,     # 전달층(D22): "카야가 공격했다!"/"고블린이 쓰러졌다!"
+                          {'kind': 'ally_kill' if not mon.alive else 'ally_hit',
+                           'char': bot['char'], 'mon': mon.kind,
+                           **({'crit': True} if r == 20 else {})},
+                          exclude=(bot['char'],))  # 빗나감은 안 싣는다(소음 절약 — D22 구현 재량)
         if mon.alive:                            # 공격받음 = 완전 각성(justAlerted 우회)
             mon.waking = 0                       # 취약창 소비 — 안 끄면 기습→skip→waking 미소비 무한 스턴락
             if mon.state != 'FLEEING':           # 도주몹은 도주 지속(HUNTING 뒤집으면 flee 시계 리셋 교란)
@@ -2330,7 +2373,7 @@ class Dungeon:
                 mon.skip_turns = 1               # 기습라운드 = 다음 몹턴 반격 1회 스킵(대상 턴 스킵)
         return res
 
-    def _drink(self, bot):
+    def _drink(self, bot, bots=None):
         """회복 물약 마시기(07-17): 확정 완전 회복 — 샘(그 자리 d20 도박)과 대비되는 '들고 다니는
         보험'(PD 문법). 굴림 없음(아이템의 약속은 확실성), 한 턴 소모. 만피에 마셔도 소모된다
         (세계는 낭비를 말리지 않는다 — 리모컨 라벨의 사실 주석이 알려줄 뿐). 빈 손 = no_potion
@@ -2341,6 +2384,9 @@ class Dungeon:
         bot['potions'] -= 1
         heal = bot['maxhp'] - bot['hp']
         bot['hp'] = bot['maxhp']
+        self._witness(bots, bot['x'], bot['y'],   # 전달층(D22): 회복 장면도 시야를 탄다
+                      {'kind': 'ally_heal', 'char': bot['char'], 'how': '물약'},
+                      exclude=(bot['char'],))
         return {**base, 'result': 'drink_heal', 'heal': heal, 'hp': bot['hp'],
                 'potions': bot['potions']}
 
@@ -2385,6 +2431,51 @@ class Dungeon:
     def _cheb(ax, ay, bx, by):
         return max(abs(ax - bx), abs(ay - by))
 
+    def _witness(self, bots, x, y, fact, exclude=()):
+        """D22 전달층 — (x,y)가 시야에 든 생존 봇에게 목격 사실 주입. A-3 문법 그대로:
+        witnessed 에 쌓였다가 다음 결정 obs 에 1회 실리고 소거(휘발=다음 결정 1회 — 시계 TTL 이면
+        자동보행 틱 동안 아무 두뇌도 못 읽고 증발한다). 당사자는 exclude(자기 경험은 last 소관).
+        events 스위치 뒤 — 기존 몹 피격 주입(무스위치, _monster_attack)과 별개로 어휘만 늘린다."""
+        if not self.events:
+            return
+        for o in bots or ():
+            if o['char'] in exclude or not o['alive'] or o['won']:
+                continue
+            if (x, y) in self.visible_cells(o['x'], o['y']):
+                o.setdefault('witnessed', []).append(dict(fact))
+
+    def _on_down(self, bot, bots, by, by_kind='monster', witness=True):
+        """D22 — 쓰러짐의 공통 처리(굴림 없음). 모든 사망 경로(몹·함정·상자·샘)가 부른다.
+        · 묘(graves): 쓰러진 칸에 '~의 묘' 피처 — 광학(sights)·조회·goto 앵커. 표지판이지 시체가
+          아니다(D4 불가침). 생성 정보를 반환 — 사망 이벤트에 'grave' 키로 실린다(스트림 additive).
+        · 목격(events, witness=True): 시야 내 동료에게 ally_down 주입. 몹 공격 경로는 기존 A-3
+          주입(무스위치)이 이미 담당 — witness=False 로 중복 금지(기존 비트 보존).
+        · 기억(events): 목격자마다 지속 기억 fallen {누가, 무엇에게, 어디서(그 봇의 사람말 이름),
+          언제} — view 가 매 결정 재제시(휘발 0). 좌표 금지 — 구역 이름만(D19 사람의 공간 언어)."""
+        x, y = bot['x'], bot['y']
+        g = None
+        if self.graves:
+            gname = '%s의 묘' % (bot.get('name') or bot['job'])
+            fid = self._add_feature('grave', gname, x, y)
+            g = {'id': 'f%d' % fid, 'name': gname, 'x': x, 'y': y}
+        if self.events:
+            fact = {'kind': 'ally_down', 'char': bot['char'], 'by': by,
+                    **({'by_kind': by_kind} if by_kind != 'monster' else {})}
+            zid = getattr(self, 'zone_at', {}).get((x, y)) if self.scan else None
+            for o in bots or ():
+                if o is bot or not o['alive'] or o['won']:
+                    continue
+                if (x, y) not in self.visible_cells(o['x'], o['y']):
+                    continue                          # 못 본 죽음은 모른다 — 시야-온리(전지 주입 금지)
+                if witness:
+                    o.setdefault('witnessed', []).append(dict(fact))
+                zone = self._zone_name(o, zid) if zid is not None else self._zone_label(x, y)
+                o.setdefault('memories', []).append(
+                    {'kind': 'fallen', 'char': bot['char'], 'by': by,
+                     **({'by_kind': by_kind} if by_kind != 'monster' else {}),
+                     'zone': zone, 'turn': self.turn})
+        return g
+
     def _monster_attack(self, m, b, bots=()):
         """몹이 직교 인접 봇 b를 친다. 인식 매트릭스(몹쪽): 봇이 이 몹을 못 봤으면(aware_of 밖) =
         매복(they-ambush-us) → 유리굴림(2d20 max)+보너스 피해. 맞으면 봇은 그 몹을 즉시 인지(연속 매복 차단).
@@ -2414,6 +2505,9 @@ class Dungeon:
                          **({'surprise': True} if ambush else {})}
             if b['hp'] <= 0:
                 b['alive'] = False; ev['down'] = True
+                g = self._on_down(b, bots, by=m.kind, witness=False)   # 목격은 아래 A-3 소관(중복 금지)
+                if g:
+                    ev['grave'] = g            # 사망 이벤트에 묘 정보 동봉(스트림 additive — 뷰어·태그용)
             # 목격 주입(A-3): 자기 피격은 last 가 담당 — 중복 금지. 다음 view() 가 1회성 노출·소거.
             fact = {'kind': 'ally_down' if not b['alive'] else 'ally_hurt',
                     'char': b['char'], 'by': m.kind, 'by_id': 'm%d' % m.id}
@@ -2652,6 +2746,8 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None):
             'last': None,                   # 직전 행동/피격 결과 메모(D1 개정) — view 가 obs.last 로 노출
             'witnessed': [],                # 목격(D18 A-3): 시야 내 동료 피격/전사 사실 축적 —
                                             # view 가 1회성 노출·소거. 스냅샷 화이트리스트 밖(계약 불변)
+            'memories': [],                 # 기억(D22): 목격한 중대사(v0=fallen 전사) — 휘발 0,
+                                            # view 가 매 결정 재제시. 층 이월=러너(물약 선례). 밖
             'follow_idle': None,            # 동행 고착 카운터(D18 FOLLOW_IDLE) — (x, y, n):
                                             # 곁 대기 중 대상 제자리 연속 관측. 화이트리스트 밖
             'paced': None,                  # 교대 양보 메모(D18 개정 07-17) — (동료char, x, y):

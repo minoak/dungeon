@@ -151,6 +151,28 @@ def _sheet(bot, roster=None):
     return "\n".join(lines) + "\n"
 
 
+def _witness_prose(w):
+    """목격 사실 한 줄(D22 전달층) — 어휘별 사람말. 새 kind 는 마지막 폴백이 정직하게 흘린다."""
+    who = "%s(봇%s)" % (w.get("name", "동료"), w.get("char", "?"))
+    k = w.get("kind")
+    if k == "ally_down":
+        return "%s가 %s에게 쓰러지는 것을" % (who, w.get("by", "?"))
+    if k == "ally_hurt":
+        return "%s가 %s에게 맞는 것을" % (who, w.get("by", "?"))
+    if k == "ally_kill":
+        return "%s가 %s을(를) 쓰러뜨리는 것을!" % (who, w.get("mon", "?"))
+    if k == "ally_hit":
+        return "%s가 %s을(를) 베는 것을%s" % (who, w.get("mon", "?"),
+                                              " — 회심의 일격!" if w.get("crit") else "")
+    if k == "ally_trap":
+        if w.get("safe"):
+            return "%s가 %s을(를) 밟았으나 피하는 것을" % (who, w.get("trap", "함정"))
+        return "%s가 %s에 당하는 것을" % (who, w.get("trap", "함정"))
+    if k == "ally_heal":
+        return "%s가 %s으로 기운을 차리는 것을" % (who, w.get("how", "?"))
+    return "%s의 일: %s" % (who, json.dumps(w, ensure_ascii=False))
+
+
 def _last_prose(last, names=None):
     """직전 결과(obs.last)를 1인칭 사실 문장으로 — show_runner.act_summary(관전 3인칭)의 자매.
     어휘 전거 = STREAM_FORMAT.md 이벤트 표. 모르는 형태는 컴팩트 JSON 폴백(정보 무소실 —
@@ -303,7 +325,7 @@ def _last_prose(last, names=None):
 _WIRE_KEYS = frozenset((
     "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "potions",
     "depth", "turn",
-    "zone", "known", "witnessed", "last", "order", "ascii_view", "legend",
+    "zone", "known", "witnessed", "memories", "last", "order", "ascii_view", "legend",
     "sights", "party", "options", "messages", "intent"))
 
 
@@ -518,9 +540,15 @@ def _wire(obs, names=None):
         if la:
             L.append("- 그 결과: %s" % _last_prose(la, names))
         for w in (wit or []):
-            L.append("- 네 눈으로 봤다: %s(봇%s)가 %s에게 %s 것을"
-                     % (w.get("name", "동료"), w.get("char", "?"), w.get("by", "?"),
-                        "쓰러지는" if w.get("kind") == "ally_down" else "맞는"))
+            L.append("- 네 눈으로 봤다: " + _witness_prose(w))
+
+    mem = obs.get("memories")
+    if mem:                                 # D22 기억층 — 휘발 0: 매 결정 다시 제시된다
+        L += ["", "## 잊지 못할 일 (네가 목격한 중대사)"]
+        for e in mem:
+            L.append("- %s %s(봇%s)가 %s에게 쓰러졌다 — %s에서"
+                     % (ago(e.get("turn", 0)), e.get("name", "동료"), e.get("char", "?"),
+                        e.get("by", "?"), e.get("zone", "?")))
 
     ms = obs.get("messages")
     if ms:
