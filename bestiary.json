@@ -30,9 +30,21 @@
   "trap:dart": {
    "turn": 10,
    "depth": 1
+  },
+  "trap:spike": {
+   "turn": 14,
+   "depth": 1
   }
  },
  "피른": {
+  "feature:chest": {
+   "turn": 199,
+   "depth": 1
+  },
+  "feature:fountain": {
+   "turn": 85,
+   "depth": 1
+  },
   "monster:고블린": {
    "turn": 38,
    "depth": 1

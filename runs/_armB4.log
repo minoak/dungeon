@@ -1,0 +1,277 @@
+=== v4 r1 start 22:59:26 ===
+== 장면: 미로탈출 (haiku 두뇌, 150틱) — 보고 이동(D19) 판정 미로 — 방2·갈림길2·막다른길3·시야보다 큰 공동. 몹0·함정0 순수 이동. 사전등록=design/EXP_D19_MAZE.md ==
+-- tick 1 --
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 2 --
+   봇1  type="walk" result="walking" target="@7,4" to=[3, 4]
+-- tick 3 --
+   봇1  type="walk" result="walking" target="@7,4" to=[4, 4]
+-- tick 4 --
+   봇1  type="walk" result="walking" target="@7,4" to=[5, 4]
+-- tick 5 --
+   봇1  type="walk" result="walking" target="@7,4" to=[6, 4]
+-- tick 6 --
+   봇1  type="walk" result="arrived" target="@7,4" to=[7, 4]
+-- tick 7 --
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 8 --
+   봇1  type="walk" result="walking" target="@10,4" to=[8, 4]
+-- tick 9 --
+   봇1  type="walk" result="walking" target="@10,4" to=[9, 4]
+-- tick 10 --
+   봇1  type="walk" result="arrived" target="@10,4" to=[10, 4]
+-- tick 11 --
+   봇1 💬 "이길이 계속 이어진다! 앞장서자!"
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 12 --
+   봇1  type="walk" result="walking" target="@13,4" to=[11, 4]
+-- tick 13 --
+   봇1  type="walk" result="walking" target="@13,4" to=[12, 4]
+-- tick 14 --
+   봇1  type="walk" result="arrived" target="@13,4" to=[13, 4]
+-- tick 15 --
+   봇1 💬 "이 길이 뭔가 있을 거야! 따라와!"
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 16 --
+   봇1  type="walk" result="walking" target="@13,1" to=[13, 3]
+-- tick 17 --
+   봇1  type="walk" result="walking" target="@13,1" to=[13, 2]
+-- tick 18 --
+   봇1  type="walk" result="arrived" target="@13,1" to=[13, 1]
+-- tick 19 --
+   봇1 💬 "계속 간다! 따라와!"
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 20 --
+   봇1  type="walk" result="walking" target="@44,4" to=[13, 2]
+-- tick 21 --
+   봇1  type="walk" result="walking" target="@44,4" to=[13, 3]
+-- tick 22 --
+   봇1  type="walk" result="walking" target="@44,4" to=[13, 4]
+-- tick 23 --
+   봇1  type="walk" result="walking" target="@44,4" to=[14, 4]
+-- tick 24 --
+   봇1  type="walk" result="walking" target="@44,4" to=[15, 4]
+-- tick 25 --
+   봇1  type="walk" result="walking" target="@44,4" to=[16, 4]
+-- tick 26 --
+   봇1  type="walk" result="walking" target="@44,4" to=[17, 4]
+-- tick 27 --
+   봇1  type="walk" result="walking" target="@44,4" to=[18, 4]
+-- tick 28 --
+   봇1  type="walk" result="sighted" target="@44,4" to=[19, 4]
+-- tick 29 --
+   봇1 💬 "가자! 이 문 안이 길이다!"
+   봇1  type="goto" result="pathed" target="d1"
+-- tick 30 --
+   봇1  type="walk" result="walking" target="d1" to=[19, 5]
+-- tick 31 --
+   봇1  type="walk" result="walking" target="d1" to=[19, 6]
+-- tick 32 --
+   봇1  type="walk" result="walking" target="d1" to=[19, 7]
+-- tick 33 --
+   봇1  type="walk" result="sighted" target="d1" to=[19, 8]
+-- tick 34 --
+   봇1 💬 "가자! 내가 먼저 간다!"
+   봇1  type="goto" result="pathed" target="d1"
+-- tick 35 --
+   봇1  type="walk" result="sighted" target="d1" to=[19, 9]
+-- tick 36 --
+   봇1 💬 "움직여! 아무도 진 채로 돌아가지 않는다!"
+   봇1  type="goto" result="pathed" target="d1"
+-- tick 37 --
+   봇1  type="walk" result="arrived" target="d1" to=[19, 10]
+-- tick 38 --
+   봇1 💬 "계단은 저쪽이다! 따라와!"
+   봇1  type="goto" result="pathed" target="d2"
+-- tick 39 --
+   봇1  type="walk" result="walking" target="d2" to=[20, 10]
+-- tick 40 --
+   봇1  type="walk" result="walking" target="d2" to=[21, 10]
+-- tick 41 --
+   봇1  type="walk" result="walking" target="d2" to=[22, 11]
+-- tick 42 --
+   봇1  type="walk" result="arrived" target="d2" to=[23, 11]
+-- tick 43 --
+   봇1 💬 "계단은 더 깊숙이다! 물러설 일 없다!"
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 44 --
+   봇1  type="walk" result="walking" target="@26,11" to=[24, 11]
+-- tick 45 --
+   봇1  type="walk" result="sighted" target="@26,11" to=[25, 11]
+-- tick 46 --
+   봇1 💬 "이쪽이다! 함께 가자!"
+   봇1  type="goto" result="pathed" target="d3"
+-- tick 47 --
+   봇1  type="walk" result="walking" target="d3" to=[26, 11]
+-- tick 48 --
+   봇1  type="walk" result="walking" target="d3" to=[27, 11]
+-- tick 49 --
+   봇1  type="walk" result="walking" target="d3" to=[28, 11]
+-- tick 50 --
+   봇1  type="walk" result="walking" target="d3" to=[29, 11]
+-- tick 51 --
+   봇1  type="walk" result="walking" target="d3" to=[30, 11]
+-- tick 52 --
+   봇1  type="walk" result="arrived" target="d3" to=[31, 11]
+-- tick 53 --
+   봇1 💬 "이 방만 맴돈다고 나갈 수 없다! 더 앞으로 가자, 계단은 어딘가에 있다!"
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 54 --
+   봇1  type="walk" result="walking" target="@31,9" to=[31, 10]
+-- tick 55 --
+   봇1  type="walk" result="arrived" target="@31,9" to=[31, 9]
+-- tick 56 --
+   봇1 💬 "따라와! 계단은 반드시 이 앞에 있다!"
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 57 --
+   봇1  type="walk" result="walking" target="@31,7" to=[31, 8]
+-- tick 58 --
+   봇1  type="walk" result="arrived" target="@31,7" to=[31, 7]
+-- tick 59 --
+   봇1 💬 "계단은 반드시 저 너머에 있다! 뒤따라와!"
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 60 --
+   봇1  type="walk" result="walking" target="@31,5" to=[31, 6]
+-- tick 61 --
+   봇1  type="walk" result="arrived" target="@31,5" to=[31, 5]
+-- tick 62 --
+   봇1 💬 "따라와! 계단은 반드시 앞에 있다!"
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 63 --
+   봇1  type="walk" result="walking" target="@31,3" to=[31, 4]
+-- tick 64 --
+   봇1  type="walk" result="arrived" target="@31,3" to=[31, 3]
+-- tick 65 --
+   봇1 💬 "막힌 게 아니라면, 계속 간다!"
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 66 --
+   봇1  type="walk" result="walking" target="@44,4" to=[32, 3]
+-- tick 67 --
+   봇1  type="walk" result="walking" target="@44,4" to=[33, 3]
+-- tick 68 --
+   봇1  type="walk" result="walking" target="@44,4" to=[34, 3]
+-- tick 69 --
+   봇1  type="walk" result="walking" target="@44,4" to=[35, 3]
+-- tick 70 --
+   봇1  type="walk" result="walking" target="@44,4" to=[36, 3]
+-- tick 71 --
+   봇1  type="walk" result="walking" target="@44,4" to=[37, 3]
+-- tick 72 --
+   봇1  type="walk" result="walking" target="@44,4" to=[38, 3]
+-- tick 73 --
+   봇1  type="walk" result="sighted" target="@44,4" to=[39, 3]
+-- tick 74 --
+   봇1 💬 "계단이다! 여기로 모여!"
+   봇1  type="goto" result="pathed" target="exit"
+-- tick 75 --
+   봇1  type="walk" result="walking" target="exit" to=[40, 3]
+-- tick 76 --
+   봇1  type="walk" result="walking" target="exit" to=[41, 3]
+-- tick 77 --
+   봇1  type="walk" result="walking" target="exit" to=[42, 3]
+-- tick 78 --
+   봇1  type="walk" result="walking" target="exit" to=[43, 3]
+-- tick 79 --
+   봇1  type="walk" result="at_exit" target="exit" to=[44, 4]
+-- tick 80 --
+   봇1 💬 "따라와!"
+   봇1  type="goto" result="pathed" target="d3"
+-- tick 81 --
+   봇1  type="walk" result="walking" target="d3" to=[43, 4]
+-- tick 82 --
+   봇1  type="walk" result="walking" target="d3" to=[42, 4]
+-- tick 83 --
+   봇1  type="walk" result="walking" target="d3" to=[41, 4]
+-- tick 84 --
+   봇1  type="walk" result="walking" target="d3" to=[40, 4]
+-- tick 85 --
+   봇1  type="walk" result="walking" target="d3" to=[39, 4]
+-- tick 86 --
+   봇1  type="walk" result="walking" target="d3" to=[38, 4]
+-- tick 87 --
+   봇1  type="walk" result="walking" target="d3" to=[37, 5]
+-- tick 88 --
+   봇1  type="walk" result="walking" target="d3" to=[36, 6]
+-- tick 89 --
+   봇1  type="walk" result="walking" target="d3" to=[35, 7]
+-- tick 90 --
+   봇1  type="walk" result="walking" target="d3" to=[34, 8]
+-- tick 91 --
+   봇1  type="walk" result="walking" target="d3" to=[33, 9]
+-- tick 92 --
+   봇1  type="walk" result="walking" target="d3" to=[32, 10]
+-- tick 93 --
+   봇1  type="walk" result="walking" target="d3" to=[31, 11]
+-- tick 94 --
+   봇1  type="walk" result="arrived" target="d3" to=[30, 11]
+-- tick 95 --
+   봇1 💬 "뭐하고 있어? 빨리 따라와!"
+   봇1  type="goto" result="pathed" target="d3"
+-- tick 96 --
+   봇1  type="walk" result="arrived" target="d3" to=[31, 11]
+-- tick 97 --
+   봇1 💬 "잠깐, 뭐하고 있어? 돌아가 봐야겠네."
+   봇1  type="goto" result="pathed" target="d3"
+-- tick 98 --
+   봇1  type="walk" result="arrived" target="d3" to=[30, 11]
+-- tick 99 --
+   봇1 💬 "따라와! 계단은 어딘가 있을 거야."
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 100 --
+   봇1  type="walk" result="walking" target="@44,4" to=[31, 11]
+-- tick 101 --
+   봇1  type="walk" result="walking" target="@44,4" to=[32, 11]
+-- tick 102 --
+   봇1  type="walk" result="walking" target="@44,4" to=[33, 11]
+-- tick 103 --
+   봇1  type="walk" result="walking" target="@44,4" to=[34, 11]
+-- tick 104 --
+   봇1  type="walk" result="walking" target="@44,4" to=[35, 11]
+-- tick 105 --
+   봇1  type="walk" result="walking" target="@44,4" to=[36, 11]
+-- tick 106 --
+   봇1  type="walk" result="walking" target="@44,4" to=[37, 11]
+-- tick 107 --
+   봇1  type="walk" result="walking" target="@44,4" to=[38, 10]
+-- tick 108 --
+   봇1  type="walk" result="walking" target="@44,4" to=[39, 9]
+-- tick 109 --
+   봇1  type="walk" result="walking" target="@44,4" to=[40, 8]
+-- tick 110 --
+   봇1  type="walk" result="walking" target="@44,4" to=[41, 7]
+-- tick 111 --
+   봇1  type="walk" result="walking" target="@44,4" to=[42, 6]
+-- tick 112 --
+   봇1  type="walk" result="walking" target="@44,4" to=[43, 5]
+-- tick 113 --
+   봇1  type="walk" result="at_exit" target="@44,4" to=[44, 4]
+-- tick 114 --
+   봇1 💬 "계단을 찾았다! 조심해, 주변을 먼저 살피자."
+   봇1  type="search" found=[]
+-- tick 115 --
+   봇1 💬 "계단을 찾았다! 이 층을 완전히 훑고 내려가자. 따라와!"
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 116 --
+   봇1  type="walk" result="arrived" target="@44,3" to=[44, 3]
+-- tick 117 --
+   봇1 💬 "계단은 잠깐! 아직 끝 모서리들이 있다. 전부 확인하고 가자!"
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 118 --
+   봇1  type="walk" result="at_exit" target="@44,4" to=[44, 4]
+-- tick 119 --
+   봇1 💬 "모르는 게 있으면 나가면 안 된다. 어둠 속에서 뭔가 튀어나올지 모르지. 나부터 봐 오겠다!"
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 120 --
+   봇1  type="walk" result="arrived" target="@44,3" to=[44, 3]
+-- tick 121 --
+   봇1 💬 "아직 끝이 안 보인다. 끝까지 가 봐야지!"
+   봇1  type="explore" result="pathed" target="auto"
+-- tick 122 --
+   봇1  type="walk" result="at_exit" target="@44,4" to=[44, 4]
+-- tick 123 --
+   봇1  type="interact" result="exit" target="exit"
+== 끝: escaped (생존 1 / 쓰러짐 - / 잔류 -) → ~/dungeon/state_scenario/미로탈출/stream.jsonl ==
+=== v4 r1 done 23:10:51 ===
+runs/maze-d19v4-r1-20260715.jsonl
+  결과=escaped 탈출틱=123 걸음=96 재방문=12 재방문율=0.125 공동진입=52 공동소요=72
+  결정 src: {'fallback': 2, 'haiku': 25}
