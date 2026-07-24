@@ -34,6 +34,8 @@
                        0=구식 사슬. 엔진 직생성 기본은 0 — 기존 verify 비트 동일)
           DUNGEON_SELFSTOP(기본1 — 자기 관찰 정지(D21): 재회("낯익은 곳") + 맴돎(걸음만 잇고
                        새 목격 0 + 되밟기). 정지+관찰 보고만, 판단은 두뇌 몫. 엔진 기본 0)
+          DUNGEON_WAIT(기본1 — wait 동사(D25): 제자리 대기, 깨어남=사건(말 걸림·새 존재·피격·
+                       지루함 상한 15틱). 숫자 인자 없음. 엔진 기본 0)
           DUNGEON_HAIL(기본1 — 말 걸림 정지(D24): 들리는 말=여섯 번째 정지 신호. 걷던 동료가
                        멈춰 다음 틱 결정권(강제 응답 아님). 같은 발화자 쿨다운 3턴. 엔진 기본 0)
           DUNGEON_DRY(기본1 — 무발견 신호: 마지막 새 목격 이후 25걸음 = 다음 결정 obs 한 줄
@@ -93,6 +95,9 @@ SELF_ON = os.environ.get("DUNGEON_SELFSTOP", "1") != "0"     # 자기 관찰 정
 DRY_ON = os.environ.get("DUNGEON_DRY", "1") != "0"           # 무발견 신호(07-24) — 러너 기본 1, 엔진
                                                              #   기본 0. 마지막 새 목격 이후 25걸음
                                                              #   = 다음 결정 obs 한 줄(도달 1회만)
+WAIT_ON = os.environ.get("DUNGEON_WAIT", "1") != "0"         # wait 동사(07-24 D25) — 러너 기본 1,
+                                                             #   엔진 기본 0. 제자리 대기(사건 기반) —
+                                                             #   셔틀의 고정점, 대기 중 LLM 0콜
 HAIL_ON = os.environ.get("DUNGEON_HAIL", "1") != "0"         # 말 걸림 정지(07-24 D24) — 러너 기본 1,
                                                              #   엔진 기본 0. 들리는 말=여섯 번째
                                                              #   정지 신호(걷던 동료가 멈춰 돌아본다)
@@ -231,6 +236,9 @@ def act_summary(res):
                "following": "동행 개시 — 이미 곁, 따라 걷는다 (%s)" % res.get("target", "?"),
                "blocked": "동행 — 동료(%s)가 길목을 막아 멈춰 보고" % allies}
         return tag.get(r, "동행(%s)" % r)
+    if t == "wait":                                            # 제자리 대기(D25)
+        return ("기다린다 — 이 자리에서(사건이 깨울 때까지)"
+                if res["result"] == "waiting" else "대기(%s)" % res["result"])
     if t == "explore":
         r = res["result"]
         if r == "pathed":
@@ -240,6 +248,12 @@ def act_summary(res):
         return "탐색 — 갈 곳 없음" if r == "no_path" else "탐색(%s)" % r
     if t == "walk":
         r = res["result"]
+        if r == "waiting":
+            return "대기 중"
+        if r == "wait_met":
+            return "대기 끝 — 동료(%s) 시야 진입" % ", ".join(res.get("allies", []))
+        if r == "wait_bored":
+            return "대기 끝 — 한참을 기다려도 아무도 오지 않음"
         if r == "encounter":
             bits = []
             if res.get("monsters"):
@@ -374,7 +388,7 @@ def main():
     d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION,
                   n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,
                   loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
-                  dry_signal=DRY_ON, hail=HAIL_ON)
+                  dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON)
     d.lore = lore
     bots = []
     for c in chars:
@@ -425,6 +439,7 @@ def main():
             selfstop=SELF_ON,          # 자기 관찰 정지(D21) 여부 — 정지 물리 메타(scan 과 같은 급)
             dry_signal=DRY_ON,         # 무발견 신호(07-24) 여부 — obs 한 줄이 늘어나는 실행모드 메타
             hail=HAIL_ON,              # 말 걸림 정지(D24) 여부 — 정지 물리 메타(selfstop 과 같은 급)
+            wait=WAIT_ON,              # wait 동사(D25) 여부 — 메뉴·정지 물리 메타
             graves=GRAVES_ON,          # 묘(D22) 여부 — 피처가 늘어나는 세계 물리 메타
             events=EVENTS_ON,          # 사건층(D22) 여부 — obs(목격·기억)를 바꾸는 실행모드 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
@@ -569,7 +584,8 @@ def main():
             d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
                           n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
                           scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
-                          graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON)
+                          graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
+                          wait_verb=WAIT_ON)
             d.lore = lore
             nb = []
             for b in sorted(survivors, key=lambda b: b["char"]):

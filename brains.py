@@ -49,7 +49,7 @@ OBS_POS = os.environ.get("DUNGEON_OBS_POS", "1") != "0"       # 생좌표 pos �
 CLAUDE_BIN = "claude.exe"
 TIMEOUT = 60   # 콜드스타트 ~8초라 넉넉
 
-_TYPES = {"goto", "attack", "interact", "search", "explore", "follow", "drink"}
+_TYPES = {"goto", "attack", "interact", "search", "explore", "follow", "drink", "wait"}
 _BEARINGS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW"}
 
 
@@ -253,6 +253,13 @@ def _last_prose(last, names=None):
         if r == "swapped":                    # 교대(D18 개정)의 수동태 — 밀려난 쪽의 자기 관측
             return ("%s이(가) 지나가며 나와 자리를 바꿨다 — 한 칸 밀려섰다(가던 길은 그대로)"
                     % last.get("with", "동료"))
+        if r == "waiting":                    # 대기 틱(D25 — 스트림용. 봇 재결정엔 wake 결과만 옴)
+            return "제자리에서 기다리는 중이다"
+        if r == "wait_met":                   # 기다리던 보람 — 관찰 사실만(다음은 네 몫)
+            who = ", ".join((names or {}).get(c, "동료") for c in last.get("allies", []))
+            return "기다림 끝 — %s가 시야에 들어왔다" % (who or "동료")
+        if r == "wait_bored":                 # 지루함 상한(D25) — 관찰 사실만(질문·조향 금지)
+            return "한참을 기다렸다 — 아무도 오지 않는다"
         if r == "reunion":                    # 재회 정지(D21①) — 연결의 발견. 관찰 사실만(조향 금지)
             return ("걷다 멈췄다 — 낯익은 곳이다: %s. 지금 걸어온 길이 아는 곳으로 이어졌다"
                     % last.get("name", "와 본 곳")
@@ -261,6 +268,8 @@ def _last_prose(last, names=None):
         if r == "wander":                     # 맴돎 정지(D21②) — 질문형 금지: 관찰 사실만, 판단은 네 몫
             return ("걸음을 멈췄다 — 한참을 오가는 동안 새로 본 것이 없다,"
                     " 밟았던 자리를 되밟고 있었다")
+    if t == "wait":                       # 대기 개시(D25) — 자기 행동의 결과
+        return "이 자리에서 기다리기로 했다 — 동료가 오거나 새 일이 생기면 깨어난다"
     if t == "hail":                       # 말 걸림 정지(07-24 D24) — 관찰 사실만(판단은 네 몫)
         who = ", ".join((names or {}).get(c, "동료") for c in last.get("froms", [])) or "동료"
         return "%s의 말에 걸음을 멈췄다 — 걷던 길이었다" % who

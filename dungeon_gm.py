@@ -117,6 +117,11 @@ DRY_K = 25               # 무발견 신호(층 1, 07-24 합의 — 파트너 �
                          #   자 — 제자리 틱은 탐색이 아니다). 셔틀(결정 0 구간)엔 안 닿는 보완층
                          #   (그쪽 그물=D21). 합의 초기값 25~30 중 하한 채택(1회성이라 소음 상한
                          #   이미 낮음). 튜닝은 큰 판 실측 후(튜닝마라).
+WAIT_MAX = 15            # wait(D25) 지루함 상한: 이만큼 틱을 기다려도 아무 일 없으면 "한참을
+                         #   기다렸다 — 아무도 오지 않는다" 관찰과 함께 재결정. 없으면 '기다려'
+                         #   말한 이가 죽거나 길을 잃었을 때 영원히 서 있는 봇이 남는다. 숫자
+                         #   인자는 안 둔다(사람은 틱을 세며 기다리지 않는다 — 파트너 확정안).
+                         #   합의 15~20 중 하한 채택. 튜닝은 큰 판 실측 후(튜닝마라).
 HAIL_CD = 3              # 말 걸림 정지(07-24 D24) 쿨다운: 같은 발화자는 이 턴 수 안에 다시 말해도
                          #   재정지 없음(메시지 배달은 그대로 — 다음 자연 결정에 읽음). 수다 루프
                          #   (마주 서서 무한 핑퐁) 방어는 내용 아닌 구조로. D23 회의 서랍행으로
@@ -272,7 +277,7 @@ class Door:
 class Dungeon:
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                  scan=False, n_potions=0, loops=False, selfstop=False,
-                 graves=False, events=False, dry_signal=False, hail=False):
+                 graves=False, events=False, dry_signal=False, hail=False, wait_verb=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -300,6 +305,8 @@ class Dungeon:
                                    #   동일). 러너가 DUNGEON_DRY(기본 1)로 켠다. scan 장부가 재료.
         self.hail = bool(hail)     # 말 걸림 정지(07-24 D24) — 기본 꺼짐(기존 verify 비트 동일).
                                    #   러너가 DUNGEON_HAIL(기본 1)로 켠다. 배달 규칙은 러너 소유.
+        self.wait_verb = bool(wait_verb)   # wait 동사(07-24 D25) — 기본 꺼짐(기존 verify 비트
+                                   #   동일). 러너가 DUNGEON_WAIT(기본 1)로 켠다.
         self.graves = bool(graves) # D22 묘 스위치 — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_GRAVES(기본 1)로 켠다. 쓰러진 자리에 '~의 묘' 피처.
         self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
@@ -363,6 +370,7 @@ class Dungeon:
         d.selfstop = False         # D21 스위치 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.dry_signal = False       # 무발견 신호 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.hail = False             # 말 걸림 정지(D24) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.wait_verb = False        # wait 동사(D25) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.graves = d.events = False   # D22 스위치(묘·사건층) — 같은 규율(기존 장면 비트 동일)
         starts, mslots, tslots = {}, [], []
         for y, row in enumerate(rows):
@@ -1289,6 +1297,8 @@ class Dungeon:
                     ' ※ 그는 지금 너를 따르는 중이다 — 서로 따르면 아무도 못 움직인다'
                     if mutual else ''))                # 곁에서 나를 계속 따르는 행동은 눈에 보인다
                                                        # (보이는 동료 한정=allies 루프 — 시야-온리)
+        if self.wait_verb:                             # wait(D25) — 제자리 대기(사건 기반, 숫자 없음)
+            _add('wait', None, '기다린다: 이 자리에서 — 동료가 오거나 새 일이 생기면 깨어난다')
         # 돌아가기(D17-1 귀환 핑) — 장부의 제자리 물건(id 있는 것)로 시야 밖 복귀. 라벨=사실만
         # (어디서·언제 봤나). '그 사이 없어졌을 수 있다'는 세계의 진실 — 가서야 안다(lost 드라마).
         if known_obs is not None:
@@ -1422,7 +1432,7 @@ class Dungeon:
         tgt = (action or {}).get('target')
         bot['wander'] = None                      # 새 결정 = '계속 이동'의 단절(D21 맴돎 창 리셋)
         if 'then' in (action or {}):              # 작정 접수 — 저작 검증(시야-온리)은 brains 소관,
-            bot['plan'] = ([] if typ == 'follow'  # 동행(A-5)은 열린 결말 — then 뒤수 부적합(비움)
+            bot['plan'] = ([] if typ in ('follow', 'wait')   # 동행·대기=열린 결말 — 뒤수 부적합
                            else [dict(s) for s in (action.get('then') or [])
                                  if isinstance(s, dict) and s.get('type')][:PLAN_MAX])
         if typ == 'attack':
@@ -1433,6 +1443,8 @@ class Dungeon:
             res = self._search(bot)
         elif typ == 'drink':
             res = self._drink(bot, bots)              # 회복 물약(07-17) — 무대상 즉시 동사(search 선례)
+        elif typ == 'wait':
+            res = self._set_wait(bot, bots)           # 제자리 대기(D25) — 사건 기반, 숫자 없음
         elif typ == 'explore':
             res = self._set_explore(bot, tgt, bots)   # 탐색(선택적 방위 tgt)
         elif typ == 'follow':
@@ -1464,7 +1476,7 @@ class Dungeon:
         typ = str(step.get('type') or '')
         tgt = step.get('target')
         why = None
-        if typ in ('search', 'explore', 'drink'):
+        if typ in ('search', 'explore', 'drink', 'wait'):
             pass                                      # 열린 동사 — drink 유무는 발동 시점 판정(no_potion
                                                       #   이 정직 보고. 시야-온리 정합: search 선례)
         elif typ == 'goto':
@@ -1657,6 +1669,54 @@ class Dungeon:
         bot['order'], bot['path'] = 'follow:' + tid, path
         return {**base, 'result': 'pathed', 'len': len(path)}
 
+    def _set_wait(self, bot, bots):
+        """wait(D25, 07-24 파트너 확정 "그대로 가자"): 제자리에 있는다 — 대기 중 LLM 0콜.
+        깨어남은 숫자가 아니라 사건: ①말 걸림(D24 hail 이 order 를 끊는다) ②시야에 새 존재 —
+        새 몹(인카운터 문법)·새 오브젝트(sighted 문법)·동료 시야 진입(기다리던 보람)
+        ③피격(기존 인터럽트) ④지루함 상한(WAIT_MAX — 아무도 오지 않는다).
+        의미: 회전 셔틀의 뿌리를 뽑는 고정점 — 한 명이 서면 나머지 goto 가 움직이지 않는
+        목표를 얻어 집결이 수렴한다. 숫자 인자 없음(사람은 틱을 세며 기다리지 않는다)."""
+        if not self.wait_verb:
+            return self._set_explore(bot, None, bots)   # 꺼진 판 — 미노출 동사(환각 방어=탐색 폴백)
+        bot['order'], bot['path'] = 'wait', []
+        bot['wait'] = {'n': 0,
+                       'allies': {o['char'] for o in bots if o is not bot
+                                  and o['alive'] and not o['won']
+                                  and (o['x'], o['y']) in self.visible_cells(bot['x'], bot['y'])}}
+        self._perceive(bot)                             # 서기 시작한 자리에서도 눈은 뜨고 있다
+        return {'char': bot['char'], 'type': 'wait', 'result': 'waiting'}
+
+    def _wait_tick(self, bot, bots, base):
+        """대기 틱(D25) — 제자리에서 눈만 뜨고 있는다(걸음이 아니라 사건을 본다: 맴돎 박자·
+        무발견 걸음 어느 창에도 안 쌓인다 — 자연 배타). 말 걸림·피격은 각자의 인터럽트
+        (hail_stop·몬스터 공격)가 order 를 끊어 깨운다 — 여기는 시야 사건과 지루함만."""
+        newly = self._perceive(bot)
+        if newly:                                     # 새 몹이 시야에 — 인카운터 문법 그대로
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            bot['wait'] = None
+            return {**base, 'result': 'encounter',
+                    'monsters': [{'id': 'm%d' % m.id, 'kind': m.kind, 'state': m.state}
+                                 for m in newly]}
+        sres = self._sighted_stop(bot, base)          # 새 오브젝트(드러난 함정 따위)도 새 일
+        if sres:
+            bot['wait'] = None
+            return sres
+        w = bot.setdefault('wait', {'n': 0, 'allies': set()})
+        here = {o['char'] for o in bots if o is not bot and o['alive'] and not o['won']
+                and (o['x'], o['y']) in self.visible_cells(bot['x'], bot['y'])}
+        came = here - set(w.get('allies') or ())
+        if came:                                      # 기다리던 보람 — 동료가 시야에 들어왔다
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            bot['wait'] = None
+            return {**base, 'result': 'wait_met', 'allies': sorted(came)}
+        w['allies'] = here                            # 떠난 동료는 장부에서 내림 — 재진입도 새 존재
+        w['n'] += 1
+        if w['n'] >= WAIT_MAX:                        # 지루함 상한 — 아무도 오지 않는다
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            bot['wait'] = None
+            return {**base, 'result': 'wait_bored', 'ticks': WAIT_MAX}
+        return {**base, 'result': 'waiting'}
+
     def _content_keys(self, bot):
         """지금 보이는 '오브젝트' 열쇠 집합 — D19 정정 정지 신호("새 오브젝트가 시야에 들면
         멈춤, 벽·바닥 제외" — 파트너 확정)의 재료. 피처·계단·드러난 함정·문(전지성 제거로
@@ -1827,6 +1887,8 @@ class Dungeon:
         # 없으면 공격도 없다: 구 정지 규칙 삭제 후 '전사 돌격 vs 추격몹'이 서로 한 대도 못 때리는
         # 위상잠금 궤도 실측(seed2, 39,5↔40,5 진동). 도착=목표상태변화 인터럽트의 한 형태(D2 정합).
         order_s = str(bot.get('order') or '')
+        if order_s == 'wait':                             # wait(D25): 걸음이 아니라 사건을 본다
+            return self._wait_tick(bot, bots, base)
         follow = order_s.startswith('follow:')            # 동행(A-5): 'follow:b<char>' 지속 order
         tid = order_s[7:] if follow else bot.get('order')
         res0 = self._resolve_target(tid, bots)
