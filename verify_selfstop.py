@@ -4,7 +4,9 @@
 맴돎(②)="결정 없이 걸음만 이었는데 새로 본 칸 0 + 밟았던 칸 되밟기 → 정지+관찰 보고".
 둘 다 금지·조향이 아니라 정지+사실 제시 — 판단은 두뇌 몫(처방 사다리 ③).
 '계속 이동'의 해석: 결정(act)·새 목격이 창을 접는다 — 동행의 곁 대기(비결정 무보행)는 안 접는다
-(회전 셔틀의 간헐 대기가 창을 접으면 그물이 뚫린다).
+(회전 셔틀의 간헐 대기가 창을 접으면 그물이 뚫린다). 07-24 수선: 곁 대기·paced 양보 틱은 안 접을
+뿐 아니라 **박자로 쌓인다** — 걸음만 세던 부기가 큰 판 swap 셔틀(걸음=5틱에 1개꼴)에서 48틱
+지연을 만든 것의 치료. 정지 판정(되밟기+N)은 여전히 걸음에서만.
 게이트:
   ① 스위치: 엔진 기본 0 / from_ascii 기본 0 (기존 verify 비트 동일)
   ② 재회: 고리 일주 → 아는 방 재진입에 reunion 발화 + 이름=사람말(좌표·번호 없음)
@@ -17,6 +19,7 @@
   ⑦ 어투·계약: reunion/wander 문장에 물음표 0(질문형 금지)·좌표 무노출, act()=맴돎 창 리셋,
      장부 봇의 재회 이름="샘 있던 방"(내용물 우선)
   ⑧ 결정론: 같은 시나리오 2회 = 같은 결과열
+  ⑨ 맴돎 박자 부기(07-24 수선): 곁 대기·paced 양보 틱=박자 누적, 간헐(대기 섞인) 셔틀 발화 시한
 (기존 verify 18종은 별도 실행.)
 """
 import json
@@ -215,7 +218,8 @@ p_wan = brains._last_prose({'type': 'walk', 'result': 'wander', 'steps': 12})
 check("⑦ reunion/wander 문장: 물음표 0(관찰 사실만) + JSON 폴백 아님",
       '?' not in p_reu and '?' not in p_wan
       and not p_reu.startswith('{') and not p_wan.startswith('{')
-      and '샘 있던 방' in p_reu and '12' in p_wan)
+      and '샘 있던 방' in p_reu and '되밟' in p_wan)   # 07-24: 숫자(걸음 수) 노출 제거 —
+                                                      #   박자 부기로 단위가 걸음이 아님(steps는 스트림에)
 import re
 coord = re.compile(r'@|\d+\s*,\s*\d+')        # 좌표 = '@x,y' 또는 'x,y'(한글 쉼표는 정상 문장부호)
 check("⑦ 문장에 좌표 무노출(@·숫자쌍 없음 — 한글 쉼표는 무관)",
@@ -240,6 +244,86 @@ _, _, _, legsB = explore_ring()
 sigA = [(r.get('result'), r.get('steps'), r.get('name')) for leg in legsA for r in leg]
 sigB = [(r.get('result'), r.get('steps'), r.get('name')) for leg in legsB for r in leg]
 check("⑧ 같은 시나리오 2회 = 같은 결과열", sigA == sigB)
+
+# ─────────────── ⑨ 맴돎 박자 부기(07-24 수선 — 큰 판 wander 48틱 지연 회귀) ───────────────
+# 큰 판 실전(07-23, t87~t135): swap 셔틀에서 걸음이 5틱에 1개꼴(following 공회전+paced 양보)
+# → 걸음 부기로는 N=10걸음=48틱 지연. 수선=곁 대기·양보 틱도 박자로 창에 쌓는다(정지 판정은
+# 되밟는 걸음에서만 — 의미 불변). ⑥의 빡빡한 회전(매 틱 걸음)이 못 보던 지연의 회귀 그물.
+print("── ⑨ 맴돎 박자(곁 대기·양보 틱 부기 — 간헐 셔틀 지연 회귀)")
+IDLE_ROWS = ["#####",
+             "#...#",
+             "##>##",
+             "#####"]
+d9, _ = Dungeon.from_ascii(IDLE_ROWS, scan=True)
+d9.selfstop = True
+a9, b9 = mkbot('1', 1, 1), mkbot('2', 2, 1)
+bots9 = [a9, b9]
+for b in bots9:
+    d9.view(b, bots9)
+d9.act(a9, {'type': 'follow', 'target': 'b2'}, bots9)      # 곁 개시(act=창 리셋)
+r1 = d9.step_order(a9, bots9)
+r2 = d9.step_order(a9, bots9)
+check("⑨ follow 곁 대기 틱 = 박자 누적(2틱 대기 → n=2)",
+      r1.get('result') == 'following' and r2.get('result') == 'following'
+      and (a9.get('wander') or {}).get('n') == 2)
+
+dp, _ = Dungeon.from_ascii(["######",
+                            "#....#",
+                            "###>##",
+                            "######"], scan=True)
+dp.selfstop = True
+ap, bp = mkbot('1', 1, 1), mkbot('2', 2, 1)
+botsp = [ap, bp]
+for b in botsp:
+    dp.view(b, botsp)
+dp.act(bp, {'type': 'goto', 'target': '@4,1'}, botsp)      # 동쪽 행군(경로 보유)
+dp.act(ap, {'type': 'goto', 'target': '@4,1'}, botsp)      # 같은 방향 — 다음 칸=동료 자리
+rp = dp.step_order(ap, botsp)
+check("⑨ paced 양보 틱 = 박자 누적(걸음 없음 → n=1)",
+      rp.get('result') == 'walking' and rp.get('paced') == '2'
+      and 'to' not in rp and (ap.get('wander') or {}).get('n') == 1)
+
+# 간헐 셔틀 시한: 창발 재현은 지형·순서에 과민(외길 3칸에선 유일 접근칸=동료라 follow 개시조차
+# 실패) — 여기선 큰 판 t87~135 의 텍스처(곁 대기 다수 + 간헐 추격 걸음 + 같은 칸 되밟기)를
+# 결정론 각본으로 직접 구동해 부기의 시간 함수만 회귀 고정: 몇 박자 만에 서는가.
+# 각본: B(각본상 텔레포트 — 부기 시험이라 물리 무관)를 곁↔2칸 밖으로 오가게 해 A 가
+# [추격 걸음(새 목격 0) → 곁 대기 2틱]을 반복, 추격이 같은 칸을 되밟게 배치.
+IDLE2_ROWS = ["########",
+              "#......#",
+              "#......#",
+              "###>####",
+              "########"]
+
+
+def pas_de_deux(selfstop):
+    d, _ = Dungeon.from_ascii(IDLE2_ROWS, scan=True)
+    d.selfstop = selfstop
+    a, b = mkbot('1', 1, 1), mkbot('2', 3, 1)
+    bots = [a, b]
+    for x in bots:
+        d.view(x, bots)
+    d.act(a, {'type': 'follow', 'target': 'b2'}, bots)
+    # B 이동 각본(step 호출 직전 적용). 실측 t1~t5: 추격 걸음이 새 칸을 드러내 창이 정당하게
+    # 리셋된다(발견=맴돎 아님) — 다 본 t6부터 창 생존, 이후 되밟기 2회(t14 n=9 미달, t17 n=12
+    # 발화)가 나오게 진동 연장. B 정지 연속 2틱 상한 유지(3틱이면 follow_idle 고착 해약이 먼저).
+    moves = {4: (5, 1), 8: (2, 1), 11: (5, 1), 14: (2, 1), 17: (5, 1)}
+    log = []
+    for t in range(1, 19):
+        if t in moves:
+            b['x'], b['y'] = moves[t]
+        if not a.get('order'):
+            break
+        log.append((t, d.step_order(a, bots)))
+    return log
+
+
+log9_on = pas_de_deux(True)
+wt9 = [(t, r) for t, r in log9_on if r.get('result') == 'wander']
+check("⑨ 간헐 텍스처 각본: 창 생존(t6)부터 12박자째 되밟기에 발화 — 걸음 부기였으면 4걸음뿐(침묵)",
+      bool(wt9) and wt9[0][0] == 17 and wt9[0][1].get('steps') == 12)
+log9_off = pas_de_deux(False)
+check("⑨ selfstop=0: 같은 각본 wander 전무(격리)",
+      all(r.get('result') != 'wander' for _, r in log9_off))
 
 print()
 if C.failed:

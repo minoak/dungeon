@@ -102,8 +102,11 @@ FOLLOW_IDLE = 3          # 동행 고착 해약(D18): 곁 대기 중 대상이 �
                          #   않는다. 상호 동행 삼각 고착(fellowsmoke 120틱 결정 5회 실측)=흡수 상태의
                          #   물리적 제거. 파트너 판정 2026-07-11: "셋이 서서 세 턴이면 어색해질 시간"
                          #   — K=3 고정(튜닝마라).
-WANDER_N = 10            # 맴돎 자각(D21): 결정 없이 이만큼 걸음을 이었는데 새로 본 칸이 0이고
+WANDER_N = 10            # 맴돎 자각(D21): 결정 없이 이만큼 박자를 보냈는데 새로 본 칸이 0이고
                          #   그 사이 밟았던 칸을 되밟고 있으면 → 정지+관찰 보고(판단은 두뇌 몫).
+                         #   박자=걸음+작정 대기 틱(follow 곁 대기·paced 양보 — 07-24 수선: 큰 판
+                         #   swap 셔틀은 걸음이 5틱에 1개꼴이라 10걸음=48틱 지연. 창의 의도 '한참'은
+                         #   시간이지 걸음 수가 아니다). 정지 판정은 여전히 되밟는 걸음에서만.
                          #   되밟기 조건은 '아는 길 직행 관통'(출구 귀환·장부 goto — D19 직행 주파)을
                          #   맴돎으로 오인하지 않기 위한 최소 분별 — 직선 역행은 재방문이 없다.
                          #   3인 회전 셔틀(07-20 큰 판, 결정 0으로 ~50틱) 실측 t85 고착 기준 캘리브레이션.
@@ -1830,6 +1833,7 @@ class Dungeon:
                     bot['order'], bot['follow_idle'] = None, None
                     return {**base, 'result': 'idle'}    # "계속 서 있네?" — 재결정으로 반환
                 bot['follow_idle'] = (res0[1][0], res0[1][1], n)
+                self._wander_beat(bot)                   # 곁 대기 틱도 맴돎 박자 — 회전 셔틀의 간헐 대기
                 return {**base, 'result': 'following'}
             bot['order'], bot['path'] = None, []
             self._perceive(bot)               # 교전/합류 거리 도달 — 눈뜨고 재결정(거짓 매복 방지)
@@ -1871,7 +1875,8 @@ class Dungeon:
             memo = (ally['char'], nx, ny)
             if marching and bot.get('paced') != memo:
                 bot['paced'] = memo                   # 같은 방향 행군 중인 동료 — 한 박자 양보(일렬
-                return {**base, 'result': 'walking',  # 행군). 맞교대 셔틀(밀린 쪽이 되밀어 무한 왕복,
+                self._wander_beat(bot)                #   행군). 양보 틱도 맴돎 박자(걸음 아님 — 07-24).
+                return {**base, 'result': 'walking',  # 맞교대 셔틀(밀린 쪽이 되밀어 무한 왕복,
                         'paced': ally['char']}        # 50시드 실측 10판 비종결)의 치료. 같은 상황이
             bot['paced'] = None                       # 두 틱 이어지면 그때 교대 — 끼인 동료 추월 보장
                                                       # (순환 대기 고리도 한 틱 뒤 반드시 풀림).
@@ -1993,14 +1998,34 @@ class Dungeon:
             if not bot['path']:
                 bot['order'] = None
             return {**base, 'result': 'potion'}
+        run = bot.get('wander')                       # 맴돎 정지(D21②) — 관찰 사실만 보고,
+        ripe = bool(run and wander_hit and run['n'] >= WANDER_N)   # 판단은 두뇌 몫(질문·조향 금지)
         if not bot['path']:
-            return self._order_done(bot, bots, base)
-        run = bot.get('wander')
-        if run and wander_hit and run['n'] >= WANDER_N:   # 맴돎 정지(D21②) — 관찰 사실만 보고,
-            bot['order'], bot['path'], bot['plan'] = None, [], []   # 판단은 두뇌 몫(질문·조향 금지).
-            bot['wander'] = None                      # 3인 회전 셔틀(07-20, 결정 0 ~50틱)의 그물 —
-            return {**base, 'result': 'wander', 'steps': run['n']}   # 금지가 아니라 정지+사실 제시
+            res = self._order_done(bot, bots, base)
+            if ripe and res.get('result') == 'following':   # 곁 도달로 경로가 끝나도 follow 는
+                bot['order'], bot['path'], bot['plan'] = None, [], []   # 무결정 지속 — 이 걸음이
+                steps = run['n']                      #   되밟기+N이면 맴돎이 우선(07-24 둘째 구멍:
+                bot['wander'] = None                  #   한 칸 추격의 마지막 걸음이 관문을 건너뜀).
+                return {**base, 'result': 'wander', 'steps': steps}   # arrived/lost=재결정이라 그대로
+            return res
+        if ripe:                                      # 3인 회전 셔틀(07-20, 결정 0 ~50틱)의 그물 —
+            bot['order'], bot['path'], bot['plan'] = None, [], []   # 금지가 아니라 정지+사실 제시
+            steps = run['n']
+            bot['wander'] = None
+            return {**base, 'result': 'wander', 'steps': steps}
         return {**base, 'result': 'walking'}
+
+    def _wander_beat(self, bot):
+        """맴돎 창(D21②)의 시간 부기 — 걸음 없이 지나가는 작정 틱(follow 곁 대기·paced 양보)도
+        박자로 센다(07-24 수선, 큰 판 부검: swap 셔틀=걸음이 5틱에 1개꼴 → N=10걸음이 48틱 지연).
+        제자리 틱은 이동이 없어 새 목격이 생길 수 없으므로 무조건 쌓인다 — 정지 판정
+        (되밟기 + n>=WANDER_N)은 여전히 실제 걸음에서만 일어난다."""
+        if not (self.scan and self.selfstop):
+            return
+        run = bot.get('wander')
+        if not run:
+            run = bot['wander'] = {'cells': set(), 'n': 0}
+        run['n'] += 1
 
     def _order_done(self, bot, bots, base):
         """경로 소진 마감 보고. 움직이는 목표(몹 m·동료 b)는 '지금 정말 곁에 있나'로, 소모성

@@ -259,8 +259,8 @@ def _last_prose(last, names=None):
                     + (" — 오는 길에 보물도 주웠다" if last.get("treasure") else "")
                     + (" — 오는 길에 회복 물약도 챙겼다" if last.get("potion") else ""))
         if r == "wander":                     # 맴돎 정지(D21②) — 질문형 금지: 관찰 사실만, 판단은 네 몫
-            return ("걸음을 멈췄다 — 최근 %d걸음 동안 새로 본 것이 없다,"
-                    " 밟았던 자리를 되밟고 있었다" % last.get("steps", 0))
+            return ("걸음을 멈췄다 — 한참을 오가는 동안 새로 본 것이 없다,"
+                    " 밟았던 자리를 되밟고 있었다")
     if t == "attack":
         if r == "no_target":
             return "공격 — 대상이 그 자리에 없었다"
