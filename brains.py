@@ -325,7 +325,7 @@ def _last_prose(last, names=None):
 _WIRE_KEYS = frozenset((
     "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "potions",
     "depth", "turn",
-    "zone", "known", "witnessed", "memories", "last", "order", "ascii_view", "legend",
+    "zone", "known", "witnessed", "memories", "dry", "last", "order", "ascii_view", "legend",
     "sights", "party", "options", "messages", "intent"))
 
 
@@ -526,7 +526,8 @@ def _wire(obs, names=None):
             L.append("- 가 본 방: " + ", ".join(x.get("id", "?") for x in zs))
 
     it, la, wit = obs.get("intent"), obs.get("last"), obs.get("witnessed")
-    if it or la or wit:
+    dry = obs.get("dry")
+    if it or la or wit or dry:
         L += ["", "## 네 직전 판단과 그 결과 (네 자신의 기억)"]
         if it:
             line = "- 직전 판단: %s" % it.get("type", "?")
@@ -541,6 +542,8 @@ def _wire(obs, names=None):
             L.append("- 그 결과: %s" % _last_prose(la, names))
         for w in (wit or []):
             L.append("- 네 눈으로 봤다: " + _witness_prose(w))
+        if dry:                       # 무발견 신호(07-24) — 관찰 사실만(질문·조향 금지), 도달 1회
+            L.append("- 한참을 걸었는데 새로 보이는 것이 없다 — 아는 자리만 이어진다")
 
     mem = obs.get("memories")
     if mem:                                 # D22 기억층 — 휘발 0: 매 결정 다시 제시된다

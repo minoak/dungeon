@@ -111,6 +111,12 @@ WANDER_N = 10            # 맴돎 자각(D21): 결정 없이 이만큼 박자를
                          #   맴돎으로 오인하지 않기 위한 최소 분별 — 직선 역행은 재방문이 없다.
                          #   3인 회전 셔틀(07-20 큰 판, 결정 0으로 ~50틱) 실측 t85 고착 기준 캘리브레이션.
                          #   튜닝은 큰 판 실측 후(튜닝마라).
+DRY_K = 25               # 무발견 신호(층 1, 07-24 합의 — 파트너 발제): 마지막 새 목격 이후 이만큼
+                         #   걸으면 다음 결정 obs 에 한 줄(도달 시점 1회만 — 상시 노출 금지=파트너
+                         #   확정, 소음 방지). 탐색 커버리지 문제라 걸음만 센다(맴돎의 박자와 다른
+                         #   자 — 제자리 틱은 탐색이 아니다). 셔틀(결정 0 구간)엔 안 닿는 보완층
+                         #   (그쪽 그물=D21). 합의 초기값 25~30 중 하한 채택(1회성이라 소음 상한
+                         #   이미 낮음). 튜닝은 큰 판 실측 후(튜닝마라).
 
 # ── 캐릭터 시트 (영웅) ───────────────────────────────────────────
 # d20 + 능력보정 vs 목표(AC/DC). 전사=힘·HP, 도적=민첩(함정 회피·기습).
@@ -261,7 +267,7 @@ class Door:
 class Dungeon:
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                  scan=False, n_potions=0, loops=False, selfstop=False,
-                 graves=False, events=False):
+                 graves=False, events=False, dry_signal=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -285,6 +291,8 @@ class Dungeon:
         self.selfstop = bool(selfstop)   # D21 자기 관찰 정지 스위치(재회·맴돎) — 기본 꺼짐(기존
                                    #   verify 비트 동일). 러너가 DUNGEON_SELFSTOP(기본 1)로 켠다.
                                    #   scan 장부(zone·seen_cells)가 재료라 scan 판에서만 발화.
+        self.dry_signal = bool(dry_signal)   # 무발견 신호(07-24) — 기본 꺼짐(기존 verify 비트
+                                   #   동일). 러너가 DUNGEON_DRY(기본 1)로 켠다. scan 장부가 재료.
         self.graves = bool(graves) # D22 묘 스위치 — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_GRAVES(기본 1)로 켠다. 쓰러진 자리에 '~의 묘' 피처.
         self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
@@ -346,6 +354,7 @@ class Dungeon:
         d.rooms[0].neighbours = []
         d.loops, d._ring_target, d._edges = False, 0, []   # 손그림 맵=생성기 미경유
         d.selfstop = False         # D21 스위치 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.dry_signal = False       # 무발견 신호 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.graves = d.events = False   # D22 스위치(묘·사건층) — 같은 규율(기존 장면 비트 동일)
         starts, mslots, tslots = {}, [], []
         for y, row in enumerate(rows):
@@ -1320,6 +1329,9 @@ class Dungeon:
         if wit:
             bot['witnessed'] = []
             wit = [_mask(w) for w in wit]
+        dry_out = bot.get('dry', 0) if bot.get('dry_hit') else 0
+        if dry_out:
+            bot['dry_hit'] = False    # 1회성 배달(witnessed 문법 — 이번 결정에 한 번, 비운다)
         # D22 기억층: 목격한 중대사(v0=fallen)는 휘발하지 않는다 — 매 결정 재제시(비우지 않음).
         mem = [_mask(e) for e in (bot.get('memories') or [])]
 
@@ -1337,6 +1349,7 @@ class Dungeon:
                                                        # — wire 가 'N턴 전'을 셈(D17-3). 장부와 한 몸
                 **({'known': known_obs} if known_obs is not None else {}),   # 공간 장부(D17-1)
                 **({'witnessed': wit} if wit else {}),   # 목격(A-3) — 있을 때만 실림(intent 선례)
+                **({'dry': dry_out} if dry_out else {}),   # 무발견 신호(07-24) — 도달 시점 1회
                 **({'memories': mem} if mem else {}),    # 기억(D22 fallen) — 휘발 0, 있을 때만 실림
                 'last': bot.get('last'),      # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의
                                               #   결과를 관측할 수 있어야 한다". 자기 경험=시야-온리 무위반
@@ -1913,7 +1926,8 @@ class Dungeon:
                 return out
             nx, ny = bot['path'][0]
         d21 = self.scan and self.selfstop             # D21 자기 관찰(재회·맴돎) — scan 장부가 재료
-        pre_seen = len(bot.get('seen_cells') or ()) if d21 else 0
+        dry_on = self.scan and self.dry_signal        # 무발견 신호(07-24) — 같은 장부가 재료
+        pre_seen = len(bot.get('seen_cells') or ()) if (d21 or dry_on) else 0
         bot['path'].pop(0)
         enter = self._enter_cell(bot, nx, ny, bots)   # 이동 + 보물/계단/함정 처리
         base.update(to=[nx, ny])
@@ -1959,6 +1973,15 @@ class Dungeon:
                 wander_hit = (nx, ny) in run['cells']  # 이 걸음이 '되밟기'인가 — 직행 관통과의 분별
                 run['cells'].add((nx, ny))
                 run['n'] += 1
+        if dry_on:                                    # 무발견 신호: 마지막 새 목격 이후 걸음 수 —
+            if len(bot.get('seen_cells') or ()) > pre_seen:   #   결정(act)은 리셋 안 함(맴돎과 다름,
+                bot['dry'] = 0                        #   "마지막 새 목격 이후"가 자의 전부).
+                bot['dry_hit'] = False                # 새 목격 = 리셋 + 미배달 신호 파기(그 사이
+            else:                                     #   발견이 생겼으면 낡은 사실 — 배달 금지)
+                bot['dry'] = bot.get('dry', 0) + 1
+                if bot['dry'] == DRY_K:               # 도달 '시점'만(== — 축적·연사 없음). 재무장은
+                    bot['dry_hit'] = True             #   리셋 뒤 다시 K걸음
+                    base['dry'] = bot['dry']          # 계측: 이 걸음 결과 이벤트에 실림(부검 열)
         if enter.get('trap') or newly or found:       # 인카운터 = *새 정보*만(에지) — 알던 몹 인접은
             bot['order'], bot['path'], bot['plan'] = None, [], []   # 정지 사유 아님(D1 개정: 물리면
                                                       #   그때 묻는다). 새 정보 = 남은 작정 파기(D16)
