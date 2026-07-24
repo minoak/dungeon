@@ -34,6 +34,8 @@
                        0=구식 사슬. 엔진 직생성 기본은 0 — 기존 verify 비트 동일)
           DUNGEON_SELFSTOP(기본1 — 자기 관찰 정지(D21): 재회("낯익은 곳") + 맴돎(걸음만 잇고
                        새 목격 0 + 되밟기). 정지+관찰 보고만, 판단은 두뇌 몫. 엔진 기본 0)
+          DUNGEON_HAIL(기본1 — 말 걸림 정지(D24): 들리는 말=여섯 번째 정지 신호. 걷던 동료가
+                       멈춰 다음 틱 결정권(강제 응답 아님). 같은 발화자 쿨다운 3턴. 엔진 기본 0)
           DUNGEON_DRY(기본1 — 무발견 신호: 마지막 새 목격 이후 25걸음 = 다음 결정 obs 한 줄
                        "한참을 걸었는데 새로 보이는 것이 없다". 도달 시점 1회만. 엔진 기본 0)
           DUNGEON_GRAVES(기본1 — 묘(D22): 쓰러진 자리에 '~의 묘' 피처 — 광학·조회·goto 앵커.
@@ -91,6 +93,9 @@ SELF_ON = os.environ.get("DUNGEON_SELFSTOP", "1") != "0"     # 자기 관찰 정
 DRY_ON = os.environ.get("DUNGEON_DRY", "1") != "0"           # 무발견 신호(07-24) — 러너 기본 1, 엔진
                                                              #   기본 0. 마지막 새 목격 이후 25걸음
                                                              #   = 다음 결정 obs 한 줄(도달 1회만)
+HAIL_ON = os.environ.get("DUNGEON_HAIL", "1") != "0"         # 말 걸림 정지(07-24 D24) — 러너 기본 1,
+                                                             #   엔진 기본 0. 들리는 말=여섯 번째
+                                                             #   정지 신호(걷던 동료가 멈춰 돌아본다)
 GRAVES_ON = os.environ.get("DUNGEON_GRAVES", "1") != "0"     # 묘(D22) — 러너 기본 1, 엔진 기본 0.
                                                              #   쓰러진 자리에 '~의 묘'(광학·조회·goto 앵커)
 EVENTS_ON = os.environ.get("DUNGEON_EVENTS", "1") != "0"     # 사건층(D22) — 러너 기본 1, 엔진 기본 0.
@@ -369,7 +374,7 @@ def main():
     d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION,
                   n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,
                   loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
-                  dry_signal=DRY_ON)
+                  dry_signal=DRY_ON, hail=HAIL_ON)
     d.lore = lore
     bots = []
     for c in chars:
@@ -419,6 +424,7 @@ def main():
                                        #   (걸음 정지 규칙이 달라지므로 리플레이·판 비교의 전제)
             selfstop=SELF_ON,          # 자기 관찰 정지(D21) 여부 — 정지 물리 메타(scan 과 같은 급)
             dry_signal=DRY_ON,         # 무발견 신호(07-24) 여부 — obs 한 줄이 늘어나는 실행모드 메타
+            hail=HAIL_ON,              # 말 걸림 정지(D24) 여부 — 정지 물리 메타(selfstop 과 같은 급)
             graves=GRAVES_ON,          # 묘(D22) 여부 — 피처가 늘어나는 세계 물리 메타
             events=EVENTS_ON,          # 사건층(D22) 여부 — obs(목격·기억)를 바꾸는 실행모드 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
@@ -505,10 +511,21 @@ def main():
                                 if oc != b["char"]
                                 and any(o["char"] == oc and (o["x"], o["y"]) in seen for o in bots)]
 
+        # 말 걸림 정지(07-24 D24, 여섯 번째 정지 신호): 방금 배달된 말이 있는 '걷던' 동료는
+        # 멈춰서 다음 틱 결정권을 받는다(들리는 전원 — 기존 시야 배달 규칙에 그대로 올라탐).
+        hails = {}
+        for b in bots:
+            if b["alive"] and not b["won"] and inbox.get(b["char"]):
+                got = d.hail_stop(b, [m["from"] for m in inbox[b["char"]]])
+                if got:
+                    hails[b["char"]] = got
+                    event("   봇%s 멈칫 — 말을 걸어온 동료 쪽을 돌아본다" % b["char"])
+
         # 스트림 tick — 빈 틱 포함 매 반복(turn 연속 불변식). GM 블록 *앞*에서 emit:
         # 여기서 즉시 직렬화되므로 GM 지연·이후 dict 변경과 독립(공유 오염 방어).
         # 스냅샷은 델타 아닌 전체 — 임의 틱 시킹용. visited 만 제외(파생: 스폰+틱별 봇 좌표 누적).
         tick_rec = {"turn": turn, "inbox": inbox_in, "decisions": decisions,
+                    **({"hails": hails} if hails else {}),   # 말 걸림 정지 성사(D24) — additive 계측
                     "events": turn_events,
                     "bots": [G.bot_snapshot(b) for b in bots],
                     "monsters": [m.as_dict() for m in d.monsters],
@@ -552,7 +569,7 @@ def main():
             d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
                           n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
                           scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
-                          graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON)
+                          graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON)
             d.lore = lore
             nb = []
             for b in sorted(survivors, key=lambda b: b["char"]):

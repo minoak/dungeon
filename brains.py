@@ -261,6 +261,9 @@ def _last_prose(last, names=None):
         if r == "wander":                     # 맴돎 정지(D21②) — 질문형 금지: 관찰 사실만, 판단은 네 몫
             return ("걸음을 멈췄다 — 한참을 오가는 동안 새로 본 것이 없다,"
                     " 밟았던 자리를 되밟고 있었다")
+    if t == "hail":                       # 말 걸림 정지(07-24 D24) — 관찰 사실만(판단은 네 몫)
+        who = ", ".join((names or {}).get(c, "동료") for c in last.get("froms", [])) or "동료"
+        return "%s의 말에 걸음을 멈췄다 — 걷던 길이었다" % who
     if t == "attack":
         if r == "no_target":
             return "공격 — 대상이 그 자리에 없었다"

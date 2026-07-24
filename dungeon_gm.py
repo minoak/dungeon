@@ -117,6 +117,11 @@ DRY_K = 25               # 무발견 신호(층 1, 07-24 합의 — 파트너 �
                          #   자 — 제자리 틱은 탐색이 아니다). 셔틀(결정 0 구간)엔 안 닿는 보완층
                          #   (그쪽 그물=D21). 합의 초기값 25~30 중 하한 채택(1회성이라 소음 상한
                          #   이미 낮음). 튜닝은 큰 판 실측 후(튜닝마라).
+HAIL_CD = 3              # 말 걸림 정지(07-24 D24) 쿨다운: 같은 발화자는 이 턴 수 안에 다시 말해도
+                         #   재정지 없음(메시지 배달은 그대로 — 다음 자연 결정에 읽음). 수다 루프
+                         #   (마주 서서 무한 핑퐁) 방어는 내용 아닌 구조로. D23 회의 서랍행으로
+                         #   쿨다운이 유일한 대화 조절기 — 관대하게, 즉시 재정지만 막는 몇 틱
+                         #   ("셋이 서서 세 턴이면 어색해질 시간" D14 K=3 과 같은 자). 튜닝마라.
 
 # ── 캐릭터 시트 (영웅) ───────────────────────────────────────────
 # d20 + 능력보정 vs 목표(AC/DC). 전사=힘·HP, 도적=민첩(함정 회피·기습).
@@ -267,7 +272,7 @@ class Door:
 class Dungeon:
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                  scan=False, n_potions=0, loops=False, selfstop=False,
-                 graves=False, events=False, dry_signal=False):
+                 graves=False, events=False, dry_signal=False, hail=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -293,6 +298,8 @@ class Dungeon:
                                    #   scan 장부(zone·seen_cells)가 재료라 scan 판에서만 발화.
         self.dry_signal = bool(dry_signal)   # 무발견 신호(07-24) — 기본 꺼짐(기존 verify 비트
                                    #   동일). 러너가 DUNGEON_DRY(기본 1)로 켠다. scan 장부가 재료.
+        self.hail = bool(hail)     # 말 걸림 정지(07-24 D24) — 기본 꺼짐(기존 verify 비트 동일).
+                                   #   러너가 DUNGEON_HAIL(기본 1)로 켠다. 배달 규칙은 러너 소유.
         self.graves = bool(graves) # D22 묘 스위치 — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_GRAVES(기본 1)로 켠다. 쓰러진 자리에 '~의 묘' 피처.
         self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
@@ -355,6 +362,7 @@ class Dungeon:
         d.loops, d._ring_target, d._edges = False, 0, []   # 손그림 맵=생성기 미경유
         d.selfstop = False         # D21 스위치 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.dry_signal = False       # 무발견 신호 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.hail = False             # 말 걸림 정지(D24) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.graves = d.events = False   # D22 스위치(묘·사건층) — 같은 규율(기존 장면 비트 동일)
         starts, mslots, tslots = {}, [], []
         for y, row in enumerate(rows):
@@ -2049,6 +2057,26 @@ class Dungeon:
         if not run:
             run = bot['wander'] = {'cells': set(), 'n': 0}
         run['n'] += 1
+
+    def hail_stop(self, bot, froms):
+        """말 걸림 정지(07-24 파트너 확정 — 여섯 번째 정지 신호, D24): 시야 안 동료의 말이
+        들리면 걷던 작정을 멈추고 결정권을 받는다 — 걷다가 누가 부르면 멈춰 돌아보는 것.
+        강제 응답 아님(관찰 제시+판단 위임, 처방 사다리 ③ — 답할지 무시할지는 두뇌 몫).
+        누가 듣나(배달 규칙)는 러너 inbox 가 소유 — 여기는 '들렸으니 멈춘다'의 물리만.
+        수다 루프 방어 = 같은 발화자 쿨다운(HAIL_CD, 쌍 단위·내용 아닌 구조 — 자유 텍스트를
+        엔진이 읽는 이름 파싱은 뒷문이라 기각·파트너 확정). 쿨다운 중엔 정지만 없을 뿐 메시지는
+        기존대로 배달된다. 반환 = 정지 성사 시 froms(계측·관전), 아니면 []."""
+        if not (self.hail and bot.get('order') and bot['alive'] and not bot['won']):
+            return []
+        cd = bot.setdefault('hail_cd', {})
+        fresh = [c for c in froms if self.turn >= cd.get(c, 0)]
+        if not fresh:
+            return []
+        for c in froms:                    # 정지 성사 = 이번에 들린 발화자 전원 쿨다운 갱신
+            cd[c] = self.turn + HAIL_CD
+        bot['order'], bot['path'], bot['plan'] = None, [], []   # 인터럽트 문법(D16) — 작정 파기
+        bot['last'] = {'type': 'hail', 'result': 'hailed', 'froms': list(froms)}
+        return fresh
 
     def _order_done(self, bot, bots, base):
         """경로 소진 마감 보고. 움직이는 목표(몹 m·동료 b)는 '지금 정말 곁에 있나'로, 소모성
