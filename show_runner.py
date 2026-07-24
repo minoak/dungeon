@@ -444,6 +444,7 @@ def main():
             events=EVENTS_ON,          # 사건층(D22) 여부 — obs(목격·기억)를 바꾸는 실행모드 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
+            notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
             bestiary=iss.snapshot(),   # 판 시작 시점 지식(additive) — 도감이 obs 를 바꾸므로 리플레이·비교의 전제
             bestiary_file=bool(BESTIARY_FILE),   # 영속 여부(실행모드 메타 — gm/menu 와 같은 급)
             party=[{**{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
@@ -595,6 +596,7 @@ def main():
                 n["memories"] = list(b.get("memories") or [])   # 기억도 이월(D22) — 전사는 원정급
                                                           # 사건(장부=층의 기억과 대비. 구역 이름은
                                                           # 그 층의 것 — 층수 없인 모호하나 v0 수용)
+                n["notes"] = list(b.get("notes") or [])   # 남긴 한 줄도 이월(D26) — 같은 원정의 기억
                 n["known"] = iss.known(names[b["char"]])  # 도감은 층을 넘어도 그대로(지식=영속층)
                 if LEDGER_ON:
                     n["ledger"] = G.new_ledger()          # 장부는 새 원장(층의 기억 — id 층-로컬, D17)

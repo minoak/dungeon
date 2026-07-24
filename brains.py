@@ -49,6 +49,16 @@ OBS_POS = os.environ.get("DUNGEON_OBS_POS", "1") != "0"       # 생좌표 pos �
 CLAUDE_BIN = "claude.exe"
 TIMEOUT = 60   # 콜드스타트 ~8초라 넉넉
 
+# D26 의미 기억(07-24 확정): 결정 응답에 "남길 한 줄"(note) 선택 필드 피기백 — 추가 콜 0.
+# 프레임 "사실=엔진(D22), 의미=에이전트(여기)": 엔진 판정 불가침 — 틀린 기억도 그 캐릭터의
+# 착각으로 격리(시트 관계 필드 선례), 세계의 진실은 사건층이 쥔다. 표현층이라 brains 소유
+# (obs dict 계약·엔진 코드 불변·결정론 무사 — 스트림 decisions.note 는 additive 파생).
+# 프롬프트 캐싱 구조(파트너 발제)와 수렴: 시트=불변 프리픽스 + 기억=append 로그.
+NOTES_ON = os.environ.get("DUNGEON_NOTES", "1") != "0"
+NOTE_MAX = 5             # 유지 줄 수(합의 5~7 하한) — 넘치면 오래된 것부터 바랜다(FIFO,
+                         #   사람도 옛 기억부터 바래듯). 판 간 영속은 없음(월드 러너 상 재론).
+NOTE_LEN = 80            # 한 줄 상한 — 수필 방지(say 160 의 절반: 기억은 말보다 압축된다)
+
 _TYPES = {"goto", "attack", "interact", "search", "explore", "follow", "drink", "wait"}
 _BEARINGS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW"}
 
@@ -338,7 +348,7 @@ _WIRE_KEYS = frozenset((
     "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "potions",
     "depth", "turn",
     "zone", "known", "witnessed", "memories", "dry", "last", "order", "ascii_view", "legend",
-    "sights", "party", "options", "messages", "intent"))
+    "sights", "party", "options", "messages", "intent", "notes"))
 
 
 def _wire(obs, names=None):
@@ -557,6 +567,12 @@ def _wire(obs, names=None):
         if dry:                       # 무발견 신호(07-24) — 관찰 사실만(질문·조향 금지), 도달 1회
             L.append("- 한참을 걸었는데 새로 보이는 것이 없다 — 아는 자리만 이어진다")
 
+    nts = obs.get("notes")
+    if nts:                                 # D26 의미 기억 — 스스로 남긴 한 줄들(주관, 엔진 불가침)
+        L += ["", "## 네가 기억해두기로 한 것 (스스로 남긴 한 줄 — 오래된 것부터 바랜다)"]
+        for s2 in nts:
+            L.append('- "%s"' % s2)
+
     mem = obs.get("memories")
     if mem:                                 # D22 기억층 — 휘발 0: 매 결정 다시 제시된다
         L += ["", "## 잊지 못할 일 (네가 목격한 중대사)"]
@@ -675,6 +691,8 @@ def claude_brain(obs, char="?", bot=None, roster=None):
     why = why or jwhy
     if obj:
         then = _then(obj, obs)                      # 작정(D16) — 유효 수만 남긴 이어질 계획(없으면 [])
+        note = (str(obj.get("note", "") or "").strip()[:NOTE_LEN]   # D26 남길 한 줄(선택 필드)
+                if NOTES_ON else "")
         if MENU:
             act = _pick(obj, obs)
             if act:
@@ -682,6 +700,7 @@ def claude_brain(obs, char="?", bot=None, roster=None):
                     then = []                       # 동행=열린 결말 — then 뒤수 부적합(D18 A-5)
                 return {**act,
                         **({"then": then} if then else {}),
+                        **({"note": note} if note else {}),
                         "say": str(obj.get("say", ""))[:160],
                         "reason": str(obj.get("reason", ""))[:160],
                         "src": "haiku"}
@@ -700,6 +719,7 @@ def claude_brain(obs, char="?", bot=None, roster=None):
                 then = []                           # 동행=열린 결말 — then 뒤수 부적합(D18 A-5)
             out = {"type": typ,
                    **({"then": then} if then else {}),
+                   **({"note": note} if note else {}),
                    "say": str(obj.get("say", ""))[:160],
                    "reason": str(obj.get("reason", ""))[:160],
                    "src": "haiku"}
@@ -743,6 +763,8 @@ def think_all(d, bots, inbox=None):
         o["messages"] = inbox.get(b["char"], [])
         if b.get("intent"):
             o["intent"] = b["intent"]   # 판단 되먹임(D15①): 자기 직전 판단의 기억 — inbox와 같은
+        if NOTES_ON and b.get("notes"):
+            o["notes"] = list(b["notes"])   # D26 의미 기억 — 스스로 남긴 한 줄들(자기 것=시야-온리 무관)
         obss[b["char"]] = o             # 주입 솔기. 세계 정보가 아니라 자기 것이라 시야-온리 무관.
     if thinkers:
         with ThreadPoolExecutor(max_workers=len(thinkers)) as ex:
@@ -756,6 +778,10 @@ def think_all(d, bots, inbox=None):
             if dec.get(k):                   # 작정 수(src='plan')도 자기 판단의 연속이라 intent 갱신
                 it[k] = dec[k]
         by[c]["intent"] = it
+        if dec.get("note"):              # D26 의미 기억 — 남긴 한 줄은 그 봇의 기억 로그로(FIFO)
+            ns = by[c].setdefault("notes", [])
+            ns.append(dec["note"])
+            del ns[:-NOTE_MAX]           # 넘치면 오래된 것부터 바랜다
     if os.environ.get("DUNGEON_STREAM_OBS") == "1":
         # 스트림 opt-in: 결정에 '그때 그 봇이 본 것'(obs)을 병합 — think 시점 캡처.
         # 사후 d.view() 재호출로 얻으면 안 된다(시점 오염 + _perceive 부수효과).
