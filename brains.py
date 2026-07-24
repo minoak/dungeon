@@ -469,8 +469,9 @@ def _wire(obs, names=None):
                 "%s %dm (발각됨 — 위치를 안다)" % (t.get("name", "함정"), t.get("dist", 0)))
         for b in s.get("bots", []):
             put(b.get("bearing"), b.get("dist", 0),
-                "동료 %s(겉보기 %s) %dm" % (nm(b.get("char", "?")),
-                                            b.get("condition", "?"), b.get("dist", 0)))
+                "동료 %s(겉보기 %s) %dm%s" % (nm(b.get("char", "?")),
+                                              b.get("condition", "?"), b.get("dist", 0),
+                                              " (이동중)" if b.get("moving") else ""))
         if under:
             L.append("- 발밑: " + " / ".join(under))
         KR = {"N": "북쪽", "NE": "북동쪽", "E": "동쪽", "SE": "남동쪽",
@@ -505,8 +506,9 @@ def _wire(obs, names=None):
             L.append("- %s %s — %s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
                                          " (와 본 자리)" if f.get("visited") else ""))
         for b in s.get("bots", []):
-            L.append("- 동료 %s — 겉보기 %s — %s" % (nm(b.get("char", "?")),
-                                                     b.get("condition", "?"), at(b)))
+            L.append("- 동료 %s — 겉보기 %s — %s%s" % (nm(b.get("char", "?")),
+                                                       b.get("condition", "?"), at(b),
+                                                       " (이동중)" if b.get("moving") else ""))
         for w in s.get("ways", []):
             L.append("- %s쪽으로 트인 길 — 거리 %d, %s%s"
                      % (w.get("bearing", "?"), w.get("dist", 0),

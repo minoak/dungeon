@@ -277,7 +277,8 @@ class Door:
 class Dungeon:
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                  scan=False, n_potions=0, loops=False, selfstop=False,
-                 graves=False, events=False, dry_signal=False, hail=False, wait_verb=False):
+                 graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
+                 motion=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -307,6 +308,10 @@ class Dungeon:
                                    #   러너가 DUNGEON_HAIL(기본 1)로 켠다. 배달 규칙은 러너 소유.
         self.wait_verb = bool(wait_verb)   # wait 동사(07-24 D25) — 기본 꺼짐(기존 verify 비트
                                    #   동일). 러너가 DUNGEON_WAIT(기본 1)로 켠다.
+        self.motion = bool(motion) # 이동중 표시(07-24 D27, 파트너 발제·간소화) — 기본 꺼짐.
+                                   #   러너가 DUNGEON_MOTION(기본 1)로 켠다. 보이는 동료가 걷는
+                                   #   중이면 moving 한 깃발만(방향·상태 구분 없음 — 파트너 교정
+                                   #   "간단히 (이동중) 하나만". 방향 노출은 다음 판 데이터 보고).
         self.graves = bool(graves) # D22 묘 스위치 — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_GRAVES(기본 1)로 켠다. 쓰러진 자리에 '~의 묘' 피처.
         self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
@@ -371,6 +376,7 @@ class Dungeon:
         d.dry_signal = False       # 무발견 신호 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.hail = False             # 말 걸림 정지(D24) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.wait_verb = False        # wait 동사(D25) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.motion = False           # 이동중 표시(D27) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.graves = d.events = False   # D22 스위치(묘·사건층) — 같은 규율(기존 장면 비트 동일)
         starts, mslots, tslots = {}, [], []
         for y, row in enumerate(rows):
@@ -1109,7 +1115,9 @@ class Dungeon:
                 for w in self._ways(cx, cy, seen)]     #  zone=어느 구역으로 트였나, D17-2)
         allies = [{'id': 'b%s' % b['char'], 'char': b['char'],
                    'condition': _wound_label(b['hp'], b['maxhp']),   # 겉보기 부상 등급(A-4) —
-                   **bear(b['x'], b['y'])}                           #   보이는 동료만(시야-온리)
+                   **bear(b['x'], b['y']),                           #   보이는 동료만(시야-온리)
+                   **({'moving': True} if (self.motion and b.get('order')   # 이동중(D27) — 몸짓도
+                       and b.get('path')) else {})}                  #   시야를 탄다. 깃발 하나뿐
                   for b in bots
                   if b['alive'] and not b['won'] and b['char'] != bot['char']
                   and (b['x'], b['y']) in seen]
