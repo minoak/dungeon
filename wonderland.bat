@@ -14,6 +14,7 @@ echo   [4] Experiment batch status
 echo   [5] D19 demo run  (scan ON - new movement)
 echo   [6] Big map 1F test  (80x30, many mobs)
 echo   [7] Gemini brain     (API - COSTS MONEY)
+echo   [8] Gemini + ally-sight  (door fix ON - compare with 7)
 echo   [Q] Quit
 echo  ==========================================
 set "pick="
@@ -25,6 +26,7 @@ if /i "%pick%"=="4" goto status
 if /i "%pick%"=="5" goto d19
 if /i "%pick%"=="6" goto bigmap
 if /i "%pick%"=="7" goto gemini
+if /i "%pick%"=="8" goto allysight
 if /i "%pick%"=="Q" exit /b 0
 goto menu
 
@@ -60,6 +62,18 @@ echo Model: gemini-3-flash-preview, thinkingLevel=minimal.
 echo NOTE: different model = different acting. Not comparable to Haiku runs.
 echo Closing the new window stops the run. Previous run is auto-saved to runs/.
 start "Wonderland gemini" wsl -e bash -lc "DUNGEON_BRAIN_BACKEND=gemini_api bash ~/dungeon/live.sh"
+timeout /t 4 /nobreak >nul
+start "" http://localhost:8000/viewer/
+goto menu
+
+:allysight
+echo Same as [7] but with DUNGEON_ALLY_SIGHT=1 - the door fix.
+echo Allies stay visible through walls/doors within sight radius (allies only;
+echo monsters and structure keep normal line of sight). Run [7] and [8] to compare.
+echo Watch for: "where are you" chatter, party bouncing back through doorways.
+echo *** THIS COSTS MONEY *** - paid tier, ~1400 KRW per 200-tick run.
+echo Closing the new window stops the run. Previous run is auto-saved to runs/.
+start "Wonderland ally-sight" wsl -e bash -lc "DUNGEON_BRAIN_BACKEND=gemini_api DUNGEON_ALLY_SIGHT=1 bash ~/dungeon/live.sh"
 timeout /t 4 /nobreak >nul
 start "" http://localhost:8000/viewer/
 goto menu
