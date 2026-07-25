@@ -15,6 +15,7 @@ echo   [5] D19 demo run  (scan ON - new movement)
 echo   [6] Big map 1F test  (80x30, many mobs)
 echo   [7] Gemini brain     (API - COSTS MONEY)
 echo   [8] Gemini + ally-sight  (door fix ON - compare with 7)
+echo   [9] BIG map + Gemini + ally-sight   (80x30, ~25min, ~350 KRW)
 echo   [Q] Quit
 echo  ==========================================
 set "pick="
@@ -27,6 +28,7 @@ if /i "%pick%"=="5" goto d19
 if /i "%pick%"=="6" goto bigmap
 if /i "%pick%"=="7" goto gemini
 if /i "%pick%"=="8" goto allysight
+if /i "%pick%"=="9" goto bigally
 if /i "%pick%"=="Q" exit /b 0
 goto menu
 
@@ -74,6 +76,20 @@ echo Watch for: "where are you" chatter, party bouncing back through doorways.
 echo *** THIS COSTS MONEY *** - paid tier, ~1400 KRW per 200-tick run.
 echo Closing the new window stops the run. Previous run is auto-saved to runs/.
 start "Wonderland ally-sight" wsl -e bash -lc "DUNGEON_BRAIN_BACKEND=gemini_api DUNGEON_ALLY_SIGHT=1 bash ~/dungeon/live.sh"
+timeout /t 4 /nobreak >nul
+start "" http://localhost:8000/viewer/
+goto menu
+
+:bigally
+echo BIG map verdict run: [6] scale (80x30, 7 mobs + 2 lurkers, 4 traps, 1 potion,
+echo single floor, 500 ticks) with Gemini brain AND ally-sight ON.
+echo Judging three things at once:
+echo   1. did the door/lost problem actually go away
+echo   2. how often does "cannot see but walks straight to ally" happen (D18 party sense)
+echo   3. is the 15-tick wait cap too long (D25)
+echo Time ~25 min at ~2.7s/tick. *** COSTS MONEY *** roughly 350 KRW.
+echo Closing the new window stops the run. Previous run is auto-saved to runs/.
+start "Wonderland big verdict" wsl -e bash -lc "DUNGEON_W=80 DUNGEON_H=30 DUNGEON_MONSTERS=7 DUNGEON_TRAPS=4 DUNGEON_LURKERS=2 DUNGEON_POTIONS=1 DUNGEON_DEPTHS=1 DUNGEON_TURNS=500 DUNGEON_BRAIN_BACKEND=gemini_api DUNGEON_ALLY_SIGHT=1 bash ~/dungeon/live.sh"
 timeout /t 4 /nobreak >nul
 start "" http://localhost:8000/viewer/
 goto menu
