@@ -63,7 +63,7 @@ BACKENDS = ("claude_cli", "anthropic_api", "gemini_api", "dummy")
 # 기본인자와 호출지점 중 한쪽만 바뀌는 사고가 난다.
 _MODEL_ID = {
     "anthropic_api": {"haiku": "claude-haiku-4-5", "sonnet": "claude-sonnet-4-6"},
-    "gemini_api":    {"haiku": "gemini-2.5-flash", "sonnet": "gemini-2.5-pro"},
+    "gemini_api":    {"haiku": "gemini-3-flash-preview", "sonnet": "gemini-3.1-pro"},
 }
 API_URL_ANTHROPIC = "https://api.anthropic.com/v1/messages"
 API_URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent"
@@ -299,6 +299,25 @@ def _call_anthropic(prompt, model):
     return txt, None
 
 
+def _gemini_think(mid):
+    """사고 설정 — **세대마다 파라미터가 다르다**(모델 id 로 분기).
+      · 3.x  : thinkingLevel = minimal/low/medium/high (thinkingBudget 은 폐기)
+               ⚠️ Gemini 3 Flash 의 기본은 **high** 다 — 안 낮추면 JSON 한 줄 받자고
+               최대 깊이로 사고한다(지연·비용 폭증).
+      · 2.5  : thinkingBudget = 정수, 0 이면 끔. Pro/Flash 는 기본이 동적 사고라
+               안 끄면 maxOutputTokens 를 사고에 다 쓰고 답이 잘려 온다
+               (실측 2026-07-25: out 41토큰인데 stop=MAX_TOKENS → JSON 실패 → 폴백).
+    우리는 JSON 한 줄만 받고 캐릭터의 속내는 이미 reason 필드로 받으므로 둘 다 최소가 맞다.
+    DUNGEON_GEMINI_THINK 로 덮어쓸 수 있다(3.x 는 문자열 레벨, 2.5 는 숫자)."""
+    v = (os.environ.get("DUNGEON_GEMINI_THINK") or "").strip()
+    if mid.startswith("gemini-3"):
+        return {"thinkingLevel": v or "minimal"}
+    try:
+        return {"thinkingBudget": int(v)}
+    except ValueError:
+        return {"thinkingBudget": 0}
+
+
 def _call_gemini(prompt, model):
     """Gemini generateContent 를 requests 로 직접. 키를 넣으면 실제로 동작하지만 기본값으론
     절대 안 켜진다(DUNGEON_BRAIN_BACKEND=gemini_api 를 명시해야만).
@@ -316,14 +335,7 @@ def _call_gemini(prompt, model):
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "maxOutputTokens": int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "1024")),
-            # ⚠️ 2.5 Pro/Flash 는 기본이 **동적 사고**다 — 끄지 않으면 maxOutputTokens 를
-            # 속으로 생각하는 데 거의 다 쓰고 정작 답이 잘려 온다(실측: out 41토큰인데
-            # stop=MAX_TOKENS → JSON 파싱 실패 → 폴백). 우리는 JSON 한 줄만 받고 속내는
-            # 이미 reason 필드로 받으므로 사고 예산은 0 이 맞다.
-            # (2.5 Flash-Lite 는 기본이 사고 없음. ⚠️ 3.x 계열은 thinkingBudget 대신
-            #  thinkingLevel 을 쓰므로 모델을 올릴 때 이 블록을 재론해야 한다.)
-            "thinkingConfig": {
-                "thinkingBudget": int(os.environ.get("DUNGEON_GEMINI_THINK", "0"))}}})
+            "thinkingConfig": _gemini_think(mid)}})
     if why:
         return "", why
     if st != 200:

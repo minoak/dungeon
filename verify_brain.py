@@ -253,10 +253,14 @@ brains._http_post = lambda u, h, j: (_sent.update(url=u, hdr=h, body=j), (200, {
     "candidates": [{"finishReason": "STOP",
                     "content": {"parts": [{"text": '{"choice": 1}'}]}}]}, None))[1]
 _ORIG_CALL("프롬프트", "haiku")
-check("⑨ Gemini 요청에 thinkingBudget=0 이 실린다"
-      " (2.5 Pro/Flash 는 기본이 동적 사고 — 안 끄면 출력 예산을 사고에 다 쓰고 답이"
-      " 잘려 온다. 실측: out 41토큰인데 stop=MAX_TOKENS → JSON 실패 → 폴백)",
-      _sent["body"]["generationConfig"]["thinkingConfig"]["thinkingBudget"] == 0)
+check("⑨ Gemini 3.x 요청엔 thinkingLevel=minimal (3 Flash 기본이 high — 안 낮추면"
+      " JSON 한 줄 받자고 최대 깊이로 사고한다)",
+      _sent["body"]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "minimal"})
+check("⑨ 세대별 사고 파라미터 분기 — 2.5 는 thinkingBudget 정수(0=끔),"
+      " 3.x 는 thinkingLevel 문자열(budget 은 폐기)",
+      brains._gemini_think("gemini-2.5-flash") == {"thinkingBudget": 0}
+      and brains._gemini_think("gemini-3-flash-preview") == {"thinkingLevel": "minimal"}
+      and brains._gemini_think("gemini-3.5-flash") == {"thinkingLevel": "minimal"})
 check("⑨ Gemini 인증은 x-goog-api-key 헤더(쿼리스트링 아님 — URL 에 키가 실리면"
       " 라벨·로그로 샐 표면이 생긴다)",
       _sent["hdr"].get("x-goog-api-key") == FAKE_KEY and "key=" not in _sent["url"])
