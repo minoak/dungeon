@@ -49,10 +49,16 @@ sheets = show_runner.load_party(show_runner.PARTY_FILE)
 check("load_party: 기본 party.json = 3인('1','2','3')", sorted(sheets) == ["1", "2", "3"])
 check("load_party: 필수 9필드 전원 보유",
       all(set(show_runner.SHEET_REQ) <= set(s) for s in sheets.values()))
-check("load_party: 3번 = 음유시인 피른(hp11·str1·dex2·은신2·수색1 — 계획 파라미터)",
-      sheets["3"]["job"] == "음유시인" and sheets["3"]["name"] == "피른"
-      and sheets["3"]["hp"] == 11 and sheets["3"]["str"] == 1 and sheets["3"]["dex"] == 2
-      and sheets["3"]["stealth"] == 2 and sheets["3"]["search_r"] == 1)
+# ⚠️ 아래는 **실제 party.json 내용**에 종속된 검사다 — 시트는 사용자 저작물이라 바뀔 수
+# 있고, 바뀌면 여기도 같이 고쳐야 한다(2026-07-26 음유시인→궁수 전환에서 실제로 깨졌다).
+# 값 자체보다 '3인이 각자 다른 역할로 로드된다'가 지켜야 할 계약이다.
+check("load_party: 3번 = 궁수 피른(hp11·str1·dex3·은신2·수색1·사거리2 — 2026-07-26 전환)",
+      sheets["3"]["job"] == "궁수" and sheets["3"]["name"] == "피른"
+      and sheets["3"]["hp"] == 11 and sheets["3"]["str"] == 1 and sheets["3"]["dex"] == 3
+      and sheets["3"]["stealth"] == 2 and sheets["3"]["search_r"] == 1
+      and sheets["3"]["atk_range"] == 2)
+check("load_party: atk_range 는 선택 수치 필드 — 없는 시트는 기본 1(하위호환)",
+      sheets["1"].get("atk_range") == 1 and sheets["2"].get("atk_range") == 1)
 check("load_party: 관계 3인 교차(각자 나머지 둘을 서술)",
       all(set(sheets[c].get("relationships", {})) == {o for o in sheets if o != c}
           for c in sheets))
@@ -142,7 +148,7 @@ check("하강 gather: 전원 반경 내 → 동반 하강 party=['1','2','3'] + 
 # ── ⑤ 프롬프트 층 ──
 txt3 = brains._sheet(b3, party)
 check("_sheet: 이름·직업·말투·목표·관계(동료 이름 표기) 포함",
-      "피른" in txt3 and "음유시인" in txt3 and "말투" in txt3
+      "피른" in txt3 and "궁수" in txt3 and "말투" in txt3
       and "두란(봇1)" in txt3 and "카야(봇2)" in txt3)
 bx = dict(b3)
 bx["relationships"] = {**b3["relationships"], "9": "유령과의 오랜 우정"}
@@ -173,8 +179,8 @@ raw = run_once()
 recs = [json.loads(l) for l in raw.splitlines()]
 meta, end = recs[0], recs[-1]
 ticks = [r for r in recs if r["kind"] == "tick"]
-check("러너: run_meta.party = 3인(음유시인 포함)",
-      len(meta["party"]) == 3 and any(p["job"] == "음유시인" for p in meta["party"]))
+check("러너: run_meta.party = 3인(궁수 포함)",
+      len(meta["party"]) == 3 and any(p["job"] == "궁수" for p in meta["party"]))
 check("러너: 게임 종결(end·outcome 유효)",
       end["kind"] == "end" and end["outcome"] in ("escaped", "wiped", "timeout"))
 check("러너: 스트림 무수정 — 봇 스냅샷에 name 없음(Part B 계약)",

@@ -1013,6 +1013,23 @@ class Dungeon:
         return path
 
     # ── 관측 (봇에게 줄 obs) ────────────────────────────────────
+    def _can_hit(self, bot, mon):
+        """지금 이 몹을 칠 수 있는가 — obs 의 in_range 와 _attack 판정의 **단일 진실원천**.
+        (두 곳이 갈리면 '메뉴에 떴는데 too_far' 같은 거짓말이 캐릭터에게 간다.)
+
+        · 사거리 = 시트 atk_range(맨해튼). 근접 1 = 직교 인접(종전 그대로), 궁수 2 = 직교 2칸
+          + 대각 1칸. 8방향 이동 vs 4방향 전투의 기존 비대칭은 건드리지 않는다.
+        · 인접(1)은 사선을 안 본다 — 붙어 있는데 벽이 가릴 수는 없다.
+        · 2칸 이상은 사선이 필요하다: 벽·문이 막으면 못 쏜다(문 뒤 몹 저격 금지 — D19 광학과
+          같은 눈). **동료는 사선을 막지 않는다**(파트너 확정: "동료 뒤에서 공격해도 좋다")
+          — _sight_blocked 가 원래 벽·문만 보므로 따로 할 일이 없다."""
+        d = abs(mon.x - bot['x']) + abs(mon.y - bot['y'])
+        if d < 1 or d > int(bot.get('atk_range') or 1):
+            return False
+        if d == 1:
+            return True
+        return not self._sight_blocked(bot['x'], bot['y'], mon.x, mon.y)
+
     def _ally_seen(self, bot, other, seen):
         """동료가 보이는가 — sights.bots 와 party.visible 의 **단일 판정처**(두 곳이 갈리면
         '목록엔 있는데 명단엔 안 보임' 같은 모순이 obs 에 실린다).
@@ -1125,7 +1142,10 @@ class Dungeon:
         mons = [_knowledge('monster:' + m.kind,
                            {'id': 'm%d' % m.id, 'kind': m.kind, 'state': m.state,
                             'aware': (m.state == 'HUNTING' and m.target == bot['char']),  # 이 몹이 *날* 노린다(매트릭스 신호)
-                            'hp': m.hp, **bear(m.x, m.y)})
+                            'hp': m.hp, **bear(m.x, m.y),
+                            # 지금 칠 수 있는가(2026-07-26). adj(맨해튼≤1)와 **다른 자**다 —
+                            # adj 는 계단·상자 접촉에도 쓰이는 공용 필드라 사거리를 얹으면 안 된다.
+                            **({'in_range': True} if self._can_hit(bot, m) else {})})
                 for m in self.monsters
                 if m.alive and not m.concealed and (m.x, m.y) in seen]
         feats = [_knowledge('feature:' + f.type,
@@ -1280,8 +1300,9 @@ class Dungeon:
 
         # _mfact = 모듈 함수(D17-3에서 승격) — 리모컨 라벨과 wire 직렬화의 문구 단일 소스.
         for m in mons:
-            if m['adj']:
-                _add('attack', m['id'], '공격: %s (인접)' % _mfact(m))
+            if m.get('in_range'):          # adj 아님 — 사거리(궁수 2칸)로 판정한다
+                _add('attack', m['id'], '공격: %s (%s)'
+                     % (_mfact(m), '인접' if m['adj'] else '%d칸 거리' % m['dist']))
         if exit_obj and exit_obj['adj']:
             _add('interact', 'exit',
                  '계단에서 하강 시도 (규칙: 살아있는 파티 전원이 계단 근처에 모여야 내려간다)')
@@ -2501,11 +2522,12 @@ class Dungeon:
         return {**base, 'result': 'nothing'}
 
     def _attack(self, bot, target_id=None, bots=None):
-        """인접(직교) 몬스터를 친다. target 지정되면 *그 몹만*(비인접이면 too_far — 다른 적 몰래치기 금지),
-        미지정이면 가장 약한 인접몹. d20+STR ≥ AC."""
+        """사거리 안 몬스터를 친다. target 지정되면 *그 몹만*(사거리 밖이면 too_far — 다른 적
+        몰래치기 금지), 미지정이면 가장 약한 사거리 내 몹. d20+STR(원거리는 DEX) ≥ AC.
+        사거리는 시트의 atk_range(맨해튼) — 근접 1이 기본이고 궁수만 2다."""
         adj = [m for m in self.monsters
                if m.alive and not m.concealed              # 숨은(존재 모르는) 몹은 지목·폴백 대상 아님
-               and abs(m.x - bot['x']) + abs(m.y - bot['y']) == 1]
+               and self._can_hit(bot, m)]
         base = {'char': bot['char'], 'type': 'attack'}
         if target_id:
             res = self._resolve_target(target_id, bots)
@@ -2513,9 +2535,9 @@ class Dungeon:
                 return {**base, 'result': 'no_target'}        # 지정 대상이 (살아있는) 몹이 아님
             mon = next((m for m in adj if (m.x, m.y) == res[1]), None)
             if mon is None:
-                return {**base, 'result': 'too_far'}          # 지정 몹이 인접 아님 → 폴백 금지
+                return {**base, 'result': 'too_far'}          # 지정 몹이 사거리 밖 → 폴백 금지
         else:
-            mon = min(adj, key=lambda m: m.hp) if adj else None   # 미지정 폴백: 가장 약한 인접(마무리)
+            mon = min(adj, key=lambda m: m.hp) if adj else None   # 미지정 폴백: 가장 약한 사거리 내
         if not mon:
             return {**base, 'result': 'no_target'}
         # 인식 매트릭스(봇쪽): 몹이 날 못 봄(잠·배회) → 우리 기습(we-ambush-them).
@@ -2524,10 +2546,13 @@ class Dungeon:
         # ⚠️ FLEEING 은 기습 아님 — 봇을 빤히 보며 도망치는 중(완전 인지). 등을 쳐도 정면 인지다.
         surprise = mon.state in ('SLEEPING', 'WANDERING') or mon.waking > 0
         r = max(self.d20(), self.d20()) if surprise else self.d20()
-        total = r + bot['str']
+        mod = bot['dex'] if int(bot.get('atk_range') or 1) > 1 else bot['str']
+        # 활잡이는 DEX 로 굴린다 — 힘이 아니라 겨눔이다. 스트림의 mod 키는 그대로라
+        # 소비자 무접촉(값만 어느 능력치에서 왔는지가 달라진다).
+        total = r + mod
         hit = (r == 20) or (total >= mon.ac)
         res = {**base, 'result': 'attack', 'target': mon.kind, 'target_id': 'm%d' % mon.id,
-               'roll': r, 'mod': bot['str'], 'total': total, 'ac': mon.ac, 'hit': hit}
+               'roll': r, 'mod': mod, 'total': total, 'ac': mon.ac, 'hit': hit}
         if surprise:
             res['surprise'] = True
         if hit:
@@ -2914,6 +2939,10 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None):
             'str': sheet['str'], 'dex': sheet['dex'], 'wdmg': sheet['wdmg'],
             'stealth': sheet['stealth'],    # 발각 DC 가산(은신) — 도적이 잘 안 들킴
             'search_r': sheet['search_r'],  # 인지 반경(Stage 3) — 도적 2 / 전사 1
+            'atk_range': int(sheet.get('atk_range') or 1),   # 공격 사거리(맨해튼, 2026-07-26)
+                                            # 근접 1(기본·하위호환) / 궁수 2. 2 이상이면 사선이
+                                            # 필요하고(벽·문이 막는다. 동료는 안 막는다) 명중을
+                                            # STR 대신 DEX 로 굴린다 — 활은 힘이 아니라 겨눔이다
             'job': sheet['job'], 'sex': sheet['sex'], 'persona': sheet['persona'],
             # ↓ 선택 4필드 = 프롬프트 전용(성격 연기·관계) — 엔진 판정은 절대 안 읽는다
             'name': sheet.get('name'), 'speech': sheet.get('speech'),

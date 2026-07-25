@@ -123,6 +123,9 @@ STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적�
 SHEET_REQ = {"job": str, "sex": str, "hp": int, "str": int, "dex": int,
              "wdmg": int, "stealth": int, "search_r": int, "persona": str}
 SHEET_OPT = ("name", "speech", "goal")     # + relationships(dict) 별도 취급
+# 선택 **수치** 필드: 없으면 기본값, 있으면 범위 검증. 위 SHEET_OPT(프롬프트 전용)와 달리
+# **엔진 판정이 읽는다** — 그래서 상한을 둔다(시트=UGC, 사거리 999 같은 값이 오면 안 된다).
+SHEET_OPT_NUM = {"atk_range": (1, 1, 3)}   # 공격 사거리(맨해튼): 기본 1(근접) · 궁수 2
 FREETEXT_MAX = 300                          # 자유서술 절단 — 프롬프트 폭주 방지(UGC 검증 씨앗)
 
 
@@ -164,6 +167,11 @@ def load_party(path):
                     if not isinstance(s[k], str):
                         raise ValueError("봇%s %s 는 문자열이어야 함" % (char, k))
                     out[k] = s[k][:FREETEXT_MAX]
+            for k, (dflt, lo, hi) in SHEET_OPT_NUM.items():   # 선택 수치 — 없으면 기본값
+                v = s.get(k, dflt)
+                if not isinstance(v, int) or isinstance(v, bool) or not (lo <= v <= hi):
+                    raise ValueError("봇%s %s 는 %d~%d 정수여야 함: %r" % (char, k, lo, hi, v))
+                out[k] = v
             rel = s.get("relationships")
             if rel is not None:
                 if not isinstance(rel, dict):
