@@ -426,6 +426,17 @@ def _witness_prose(w):
     return "%s의 일: %s" % (who, json.dumps(w, ensure_ascii=False))
 
 
+def _tgt_name(tgt, names=None):
+    """타겟 토큰을 사람 말로 — 'follow:b2' → '카야'.
+    ⚠️ 'follow:' 는 엔진 내부 접두다. 프롬프트에 그대로 새면 캐릭터가 자기 세계에 없는
+    기계어를 읽는다(2026-07-26 부검에서 lost 보고 6건 전부 노출 확인). 동료도 id(b2)가
+    아니라 이름으로 부른다 — 같은 파티원을 번호로 부르는 사람은 없다."""
+    s = str(tgt or "").replace("follow:", "")
+    if s.startswith("b") and (names or {}).get(s[1:]):
+        return names[s[1:]]
+    return s
+
+
 def _last_prose(last, names=None):
     """직전 결과(obs.last)를 1인칭 사실 문장으로 — show_runner.act_summary(관전 3인칭)의 자매.
     어휘 전거 = STREAM_FORMAT.md 이벤트 표. 모르는 형태는 컴팩트 JSON 폴백(정보 무소실 —
@@ -486,11 +497,12 @@ def _last_prose(last, names=None):
                         % ", ".join(m.get("kind", "?") for m in last["monsters"]))
             return "가려던 길이 막혔다"
         if r == "lost":
-            return ("%s를 마지막 본 자리까지 갔지만 — 곁에 없다"
-                    " (지금 시야에 보이면 비껴 선 것, 안 보이면 어디 갔는지 모른다)" % tgt)
+            return ("%s을(를) 마지막 본 자리까지 갔지만 곁에 없다"
+                    " (지금 시야에 보이면 비껴 선 것, 안 보이면 어디로 갔는지 모른다)"
+                    % _tgt_name(tgt, names))
         if r == "idle":
             return ("동행을 접었다 — %s이(가) 한동안 제자리라 같이 서 있기만 했다."
-                    " 이제 뭘 할지 네가 정하라" % tgt.replace("follow:", ""))
+                    " 이제 뭘 할지 네가 정하라" % _tgt_name(tgt, names))
         if r == "arrived":
             if tgt and tgt.startswith("d") and tgt[1:].isdigit():
                 # 문 핑 완결 = 이미 '지나 들어선' 상태(Door 계약) — "곁에 도착"으로 옮기면
