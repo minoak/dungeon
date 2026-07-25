@@ -315,7 +315,15 @@ def _call_gemini(prompt, model):
         "content-type": "application/json"}, {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
-            "maxOutputTokens": int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "1024"))}})
+            "maxOutputTokens": int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "1024")),
+            # ⚠️ 2.5 Pro/Flash 는 기본이 **동적 사고**다 — 끄지 않으면 maxOutputTokens 를
+            # 속으로 생각하는 데 거의 다 쓰고 정작 답이 잘려 온다(실측: out 41토큰인데
+            # stop=MAX_TOKENS → JSON 파싱 실패 → 폴백). 우리는 JSON 한 줄만 받고 속내는
+            # 이미 reason 필드로 받으므로 사고 예산은 0 이 맞다.
+            # (2.5 Flash-Lite 는 기본이 사고 없음. ⚠️ 3.x 계열은 thinkingBudget 대신
+            #  thinkingLevel 을 쓰므로 모델을 올릴 때 이 블록을 재론해야 한다.)
+            "thinkingConfig": {
+                "thinkingBudget": int(os.environ.get("DUNGEON_GEMINI_THINK", "0"))}}})
     if why:
         return "", why
     if st != 200:

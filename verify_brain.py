@@ -245,6 +245,21 @@ _ORIG_CALL("프롬프트", "haiku")
 check("⑨ DUNGEON_ANTHROPIC_MODEL 이 별칭 표를 우회한다(gm.py DUNGEON_GM_MODEL 선례)",
       _sent["body"]["model"] == "claude-sonnet-4-6")
 os.environ.pop("DUNGEON_ANTHROPIC_MODEL", None)
+
+# Gemini 사고 예산 — 실측이 잡은 함정의 회귀 그물(2026-07-25 프로브)
+os.environ["DUNGEON_BRAIN_BACKEND"] = "gemini_api"
+os.environ["GEMINI_API_KEY"] = FAKE_KEY
+brains._http_post = lambda u, h, j: (_sent.update(url=u, hdr=h, body=j), (200, {
+    "candidates": [{"finishReason": "STOP",
+                    "content": {"parts": [{"text": '{"choice": 1}'}]}}]}, None))[1]
+_ORIG_CALL("프롬프트", "haiku")
+check("⑨ Gemini 요청에 thinkingBudget=0 이 실린다"
+      " (2.5 Pro/Flash 는 기본이 동적 사고 — 안 끄면 출력 예산을 사고에 다 쓰고 답이"
+      " 잘려 온다. 실측: out 41토큰인데 stop=MAX_TOKENS → JSON 실패 → 폴백)",
+      _sent["body"]["generationConfig"]["thinkingConfig"]["thinkingBudget"] == 0)
+check("⑨ Gemini 인증은 x-goog-api-key 헤더(쿼리스트링 아님 — URL 에 키가 실리면"
+      " 라벨·로그로 샐 표면이 생긴다)",
+      _sent["hdr"].get("x-goog-api-key") == FAKE_KEY and "key=" not in _sent["url"])
 restore()
 
 # ───────────────────────── ⑩ 비밀값 위생 ─────────────────────────
