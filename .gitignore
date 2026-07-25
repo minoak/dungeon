@@ -1,3 +1,11 @@
 __pycache__/
 *.pyc
 state_*/
+
+# 비밀값(2026-07-25 두뇌 백엔드 어댑터) — 이 레포는 state/ 와 runs/*.jsonl 을 실제로
+# 커밋한다. 키가 한 번 히스토리에 박히면 git rm 으로 못 지운다(rewrite + 키 폐기가
+# 유일한 복구). 그래서 .env 를 만들기 *전에* 이 줄들이 먼저 있어야 한다.
+.env
+.env.*
+!.env.example
+*.key
