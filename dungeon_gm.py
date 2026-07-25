@@ -278,7 +278,7 @@ class Dungeon:
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                  scan=False, n_potions=0, loops=False, selfstop=False,
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
-                 motion=False, ally_sight=False):
+                 motion=False, ally_sight=False, social=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -312,6 +312,9 @@ class Dungeon:
                                    #   러너가 DUNGEON_MOTION(기본 1)로 켠다. 보이는 동료가 걷는
                                    #   중이면 moving 한 깃발만(방향·상태 구분 없음 — 파트너 교정
                                    #   "간단히 (이동중) 하나만". 방향 노출은 다음 판 데이터 보고).
+        self.social = bool(social) # 채널 분리(2026-07-26) — 기본 꺼짐. 켜면 말 걸림이 작정을
+                                   #   부수지 않고 사교 콜만 연다(걸으면서 대답). 행동 콜은
+                                   #   종전대로 '작정 없는 봇'에게만 — 두 채널이 갈린다.
         self.ally_sight = bool(ally_sight)   # 동료 시야 면제(2026-07-26 파트너 발제) — 기본 꺼짐.
                                    #   켜면 **동료만** 시야 반경 안에서 장애물(벽·문)을 무시하고 보인다.
                                    #   왜: 파티가 서로를 못 보는 시간이 44%였고 그중 압도적 다수가
@@ -389,6 +392,7 @@ class Dungeon:
         d.wait_verb = False        # wait 동사(D25) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.motion = False           # 이동중 표시(D27) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.graves = d.events = False   # D22 스위치(묘·사건층) — 같은 규율(기존 장면 비트 동일)
+        d.social = False           # 채널 분리 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.ally_sight = False       # 동료 시야 면제 — 손그림 장면도 기본 꺼짐(호출측이 켠다).
                                    #   ⚠️ from_ascii 는 __new__ 경유라 __init__ 을 안 탄다 —
                                    #   새 스위치는 여기 명시 초기화가 필수(D21·D22 때 밟은 함정)
@@ -2202,6 +2206,15 @@ class Dungeon:
             return []
         for c in froms:                    # 정지 성사 = 이번에 들린 발화자 전원 쿨다운 갱신
             cd[c] = self.turn + HAIL_CD
+        if self.social:
+            # 채널 분리(2026-07-26): **작정을 부수지 않는다.** 걷던 몸은 계속 걷고, 다음 틱에
+            # 사교 콜만 열린다 — 걸으면서 대답하는 것이 사람이다.
+            # 왜 파괴가 있었나: 콜이 '작정 없는 봇'에게만 열려서, 말을 들으려면 작정을 부수는
+            # 것 말고 길이 없었다(D24). 그 부작용이 목적 상실이었다 — 07-26 부검에서
+            # 작정 파기 직후 follow 46% vs 평상시 29%. 사교 콜이 그 결합을 푼다.
+            bot['hailed'] = list(froms)
+            bot['last'] = {'type': 'hail', 'result': 'heard', 'froms': list(froms)}
+            return fresh
         bot['order'], bot['path'], bot['plan'] = None, [], []   # 인터럽트 문법(D16) — 작정 파기
         bot['last'] = {'type': 'hail', 'result': 'hailed', 'froms': list(froms)}
         return fresh

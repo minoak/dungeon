@@ -100,6 +100,10 @@ DRY_ON = os.environ.get("DUNGEON_DRY", "1") != "0"           # 무발견 신호(
 MOTION_ON = os.environ.get("DUNGEON_MOTION", "1") != "0"     # 이동중 표시(07-24 D27) — 러너 기본 1,
                                                              #   엔진 기본 0. 보이는 동료 상태에
                                                              #   (이동중) 깃발 하나(몸짓도 시야를 탄다)
+SOCIAL_ON = os.environ.get("DUNGEON_SOCIAL", "0") != "0"      # 채널 분리(07-26) — 러너·엔진
+                                                             #   둘 다 기본 0. 켜면 말 걸림이
+                                                             #   작정을 안 부수고 사교 콜만 연다
+                                                             #   (걸으면서 대답). 판정 전 실험층
 ALLY_SIGHT_ON = os.environ.get("DUNGEON_ALLY_SIGHT", "0") != "0"   # 동료 시야 면제(07-26) —
                                                              #   ⚠️ **러너도 기본 0**: 시야 계약을
                                                              #   건드리는 실험층이라 A/B 대조가 끝날
@@ -407,7 +411,7 @@ def main():
                   n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,
                   loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
                   dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
-                  ally_sight=ALLY_SIGHT_ON)
+                  ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON)
     d.lore = lore
     bots = []
     for c in chars:
@@ -460,6 +464,8 @@ def main():
             hail=HAIL_ON,              # 말 걸림 정지(D24) 여부 — 정지 물리 메타(selfstop 과 같은 급)
             wait=WAIT_ON,              # wait 동사(D25) 여부 — 메뉴·정지 물리 메타
             motion=MOTION_ON,          # 이동중 표시(D27) 여부 — obs 동료 항목 메타
+            social=SOCIAL_ON,          # 채널 분리(07-26) 여부 — 말 걸림이 작정을 부수는지
+                                       #   여부가 달라진다(정지 물리 + 콜 구조 메타)
             ally_sight=ALLY_SIGHT_ON,  # 동료 시야 면제(07-26) 여부 — **시야 물리 메타**(scan 과 같은 급).
                                        #   켠 판은 동료가 벽·문을 통과해 보이므로 obs·결정이 근본적으로
                                        #   달라진다. A/B 비교의 전제라 리플레이·판 대조 시 필수 대조 필드.
@@ -502,10 +508,14 @@ def main():
                             # 재바인딩되므로(덮어씀) think_all 직전 참조를 잡아 스트림에 남긴다
         # order 없는 봇만 사고(자동보행 중인 봇은 LLM 0콜)
         decisions = brains.think_all(d, bots, inbox)
+        # 사교 콜(채널 분리) — 걷는 중에 말을 들은 봇만. 행동은 못 바꾸고 say 만 낸다.
+        social = brains.social_all(d, bots, inbox)
+        for b in bots:
+            b.pop("hailed", None)            # 표시 소비 — 한 번 들은 말로 두 번 열리지 않는다
         thinkers = "·".join(sorted(decisions)) if decisions else "-"
         event("-- tick %d --  (사고:%s / 나머지 자동보행)" % (turn, thinkers))
         turn_events = []
-        says = {}
+        says = dict(social)                  # 걸으면서 한 말도 같은 배달 규칙을 탄다
         for b in bots:
             if not b["alive"] or b["won"]:
                 dec = decisions.get(b["char"])
@@ -616,7 +626,7 @@ def main():
                           scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
                           graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
                           wait_verb=WAIT_ON, motion=MOTION_ON,
-                          ally_sight=ALLY_SIGHT_ON)
+                          ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON)
             d.lore = lore
             nb = []
             for b in sorted(survivors, key=lambda b: b["char"]):

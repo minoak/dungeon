@@ -32,6 +32,11 @@ try:
         MENU_PROMPT = _f.read()
 except OSError:                                  # 파일 누락 배포여도 게임은 죽지 않는다(안전망)
     MENU_PROMPT = ""
+try:                                             # 사교 콜 프롬프트(채널 분리 2026-07-26)
+    with open(os.path.join(HERE, "social_prompt.md"), encoding="utf-8") as _f:
+        SOCIAL_PROMPT = _f.read()
+except OSError:
+    SOCIAL_PROMPT = ""                           # 없으면 사교 채널이 통째로 꺼진다(안전망)
 
 # 리모컨 모드(기본 on): 행동=엔진 열거 옵션에서 번호 선택, 말·속내=자유.
 # DUNGEON_MENU=0 이면 구식 자유서술(동사+target 직접 작성) — A/B 대조군.
@@ -992,6 +997,61 @@ def claude_brain(obs, char="?", bot=None, roster=None):
         # JSON 은 왔으나 행동으로 해석 실패(무효 choice·type·target) — 원문 머리를 계측에 남긴다
         why = "행동 해석 실패: " + _head(json.dumps(obj, ensure_ascii=False))
     return _fallback(obs, char, why or "파싱 실패")
+
+
+def social_all(d, bots, inbox=None):
+    """사교 콜(채널 분리 2026-07-26) — **걷는 중에도 열리는 말의 채널**.
+
+    행동 콜(think_all)과 갈린 이유: 콜이 '작정 없는 봇'에게만 열려서, 말을 들으려면 작정을
+    부수는 것 말고 길이 없었다(D24). 그 부작용이 목적 상실이었다 — 07-26 부검에서 작정
+    파기 직후 follow 46% vs 평상시 29%. 여기서는 **행동을 못 바꾼다** — order·path·plan 을
+    건드리지 않고 say 만 낸다. '대화는 행동을 방해할 권한이 없다'가 훈계가 아니라 구조다.
+
+    대상 = 말을 들었고(hailed) 작정 수행 중인 봇. 작정 없는 봇은 어차피 행동 콜에서
+    say 칸을 함께 받으므로 여기 오지 않는다(콜 중복 금지).
+
+    ⚠️ 반드시 _call_claude 를 거친다 — 게이트 15개가 그 이름을 몽키패치해 실 LLM 을
+    차단하고, verify_brain ⑤가 '스텁이 백엔드보다 우선'을 감시한다. 새 경로를 뚫으면
+    초록불 유출이 생긴다.
+
+    프로브 판정(2026-07-26, 6콜): 판단 필드(need)를 **앞에** 두면 캐릭터가 침묵을 고를 줄
+    안다 — 카야(과묵 시트) 3/3 의도대로, 피른(수다 시트)은 3/3 발화. 즉 say 빈도는 병리가
+    아니라 시트다. 원래 프롬프트처럼 say 하나만 물으면 빈칸을 못 견뎌 100% 발화한다.
+    반환 = {char: say} (침묵은 키 자체가 없다)."""
+    if not getattr(d, 'social', False) or not SOCIAL_PROMPT:
+        return {}
+    inbox = inbox or {}
+    talkers = [b for b in bots
+               if b['alive'] and not b['won'] and b.get('order') and b.get('hailed')]
+    if not talkers:
+        return {}
+    names = {o['char']: (o.get('name') or o.get('job', '동료')) for o in bots}
+    obss = {}
+    for b in talkers:
+        o = d.view(b, bots)
+        o['messages'] = inbox.get(b['char'], [])
+        obss[b['char']] = o
+
+    def ask(b):
+        prompt = (_sheet(b, bots) + "\n" + SOCIAL_PROMPT
+                  + "\n\n" + _wire(obss[b['char']], names)
+                  + "\n\n오직 JSON 한 줄로만 답하라.")
+        raw, why = _call_claude(prompt, "haiku")
+        obj, _jwhy = _extract(raw)
+        if not obj:
+            return ""                      # 실패 = 침묵(폴백이 말을 지어내지 않는다)
+        if str(obj.get('need', '')).strip().lower() != 'yes':
+            return ""                      # 판단이 먼저다 — no 면 say 를 읽지 않는다
+        return str(obj.get('say', ''))[:160]
+
+    out = {}
+    with ThreadPoolExecutor(max_workers=len(talkers)) as ex:
+        futs = {b['char']: ex.submit(ask, b) for b in talkers}
+        for c, f in futs.items():
+            s = f.result()
+            if s:
+                out[c] = s
+    return out
 
 
 def think_all(d, bots, inbox=None):
