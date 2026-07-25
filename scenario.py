@@ -60,6 +60,8 @@ def load_sheets():
 
 SCAN_ON = os.environ.get("DUNGEON_SCAN", "1") != "0"   # 스캐너(D19) — 러너와 같은 스위치·같은 기본
                                                         #   (기본 1 승격: 2026-07-15 미로 판정 채택 — 파트너 육안)
+ALLY_SIGHT_ON = os.environ.get("DUNGEON_ALLY_SIGHT", "0") != "0"   # 동료 시야 면제(07-26) —
+                                                        #   러너와 같은 스위치·같은 기본(0). A/B 대조용
 
 
 def build(spec):
@@ -67,6 +69,7 @@ def build(spec):
     d, starts = G.Dungeon.from_ascii(spec["map"], seed=spec.get("seed", 7),
                                      monsters=spec.get("monsters"),
                                      traps=spec.get("traps"), scan=SCAN_ON)
+    d.ally_sight = ALLY_SIGHT_ON       # from_ascii 는 __new__ 경유 — 스위치는 호출측이 켠다
     try:
         with open(os.path.join(HERE, "lore.json"), encoding="utf-8") as f:
             d.lore = json.load(f)
@@ -156,6 +159,7 @@ def play(spec, brain, state_dir):
             max_turns=turns, gm=False, stream_obs=False, menu=brains.MENU,
             ledger=True,                       # 장면은 장부(D17) 상시 켬 — 라이브 판과 같은 조건
             scan=SCAN_ON,                      # 스캐너(D19) 여부 — 정지 물리가 달라진다(비교 전제)
+            ally_sight=ALLY_SIGHT_ON,          # 동료 시야 면제(07-26) — 시야 물리 메타(A/B 전제)
             backend=brains.backend_name(),     # 두뇌 백엔드(2026-07-25 additive) — show_runner 와
                                                #   같은 필드명. 프로브도 어느 배관으로 잰 건지
                                                #   사후 판독돼야 한다(속도 실측이 이 파일도 쓴다)

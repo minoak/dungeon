@@ -278,7 +278,7 @@ class Dungeon:
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                  scan=False, n_potions=0, loops=False, selfstop=False,
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
-                 motion=False):
+                 motion=False, ally_sight=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -312,6 +312,17 @@ class Dungeon:
                                    #   러너가 DUNGEON_MOTION(기본 1)로 켠다. 보이는 동료가 걷는
                                    #   중이면 moving 한 깃발만(방향·상태 구분 없음 — 파트너 교정
                                    #   "간단히 (이동중) 하나만". 방향 노출은 다음 판 데이터 보고).
+        self.ally_sight = bool(ally_sight)   # 동료 시야 면제(2026-07-26 파트너 발제) — 기본 꺼짐.
+                                   #   켜면 **동료만** 시야 반경 안에서 장애물(벽·문)을 무시하고 보인다.
+                                   #   왜: 파티가 서로를 못 보는 시간이 44%였고 그중 압도적 다수가
+                                   #   거리 2칸(=벽 모퉁이·문 하나 차이)이었다. 문을 넘는 순간 선두가
+                                   #   증발해 follow 가 유령 추적→lost→되찾기 셔틀로 굴렀다(실측:
+                                   #   문 낀 이동의 단절률 28% vs 그 외 2%, 결정의 50%가 동료 찾기).
+                                   #   사람의 인지에 맞춘 것 — 벽 하나 돌아섰다고 일행 위치를 통째로
+                                   #   잃지는 않는다(발소리·기척·직전 기억). D18 '파티 감각'(안 보여도
+                                   #   b<char> 핑 허용)의 표시층 확장이지 새 원칙이 아니다.
+                                   #   ⚠️ **동료 한정** — 몹·피처·구조는 LOS 그대로다(D19 문 광학·
+                                   #   매복·인식 매트릭스 대칭 전부 무손상). 반경 밖은 여전히 안 보인다.
         self.graves = bool(graves) # D22 묘 스위치 — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_GRAVES(기본 1)로 켠다. 쓰러진 자리에 '~의 묘' 피처.
         self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
@@ -378,6 +389,9 @@ class Dungeon:
         d.wait_verb = False        # wait 동사(D25) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.motion = False           # 이동중 표시(D27) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.graves = d.events = False   # D22 스위치(묘·사건층) — 같은 규율(기존 장면 비트 동일)
+        d.ally_sight = False       # 동료 시야 면제 — 손그림 장면도 기본 꺼짐(호출측이 켠다).
+                                   #   ⚠️ from_ascii 는 __new__ 경유라 __init__ 을 안 탄다 —
+                                   #   새 스위치는 여기 명시 초기화가 필수(D21·D22 때 밟은 함정)
         starts, mslots, tslots = {}, [], []
         for y, row in enumerate(rows):
             for x, ch in enumerate(row):
@@ -999,6 +1013,21 @@ class Dungeon:
         return path
 
     # ── 관측 (봇에게 줄 obs) ────────────────────────────────────
+    def _ally_seen(self, bot, other, seen):
+        """동료가 보이는가 — sights.bots 와 party.visible 의 **단일 판정처**(두 곳이 갈리면
+        '목록엔 있는데 명단엔 안 보임' 같은 모순이 obs 에 실린다).
+
+        기본(ally_sight=False): 시야 격자 그대로 — 벽·문이 막으면 안 보인다.
+        켜면: 시야 **반경** 안이면 장애물 무관하게 보인다. 동료 한정이며 몹·피처는 그대로다.
+        근거는 실측 — 파티가 서로 못 보는 시간이 44%였고 그 압도적 다수가 거리 2칸이었다.
+        벽 하나 돌아섰다고 일행을 통째로 잃는 건 사람의 인지가 아니다(발소리·기척·직전 기억).
+        반경 밖은 여전히 잃는다 — '흩어짐의 비용'은 거리로 남는다."""
+        if (other['x'], other['y']) in seen:
+            return True
+        if not self.ally_sight:
+            return False
+        return max(abs(other['x'] - bot['x']), abs(other['y'] - bot['y'])) <= SIGHT
+
     def _sight_blocked(self, cx, cy, tx, ty):
         """(cx,cy)↔(tx,ty) 직선 '중간'에 벽·문이 있으면 시야가 가린다. 타겟 자신이 벽/문이면 보인다(중간만 막는다).
         문(+)=벽과 같은 불투명(D19 정정 — SPD 닫힌 문 광학). 문 '위'에 서면 중간에 문이 없으므로
@@ -1120,11 +1149,11 @@ class Dungeon:
                        and b.get('path')) else {})}                  #   시야를 탄다. 깃발 하나뿐
                   for b in bots
                   if b['alive'] and not b['won'] and b['char'] != bot['char']
-                  and (b['x'], b['y']) in seen]
+                  and self._ally_seen(bot, b, seen)]
         # party = 파티 명단(좌표 없음 — 시야-온리 유지). 안 보여도 'b<char>' 핑은 허용(파티 감각):
         # TRPG에서 일행의 대략적 방향은 안다는 통념. 하강 조율(동료 데리러 가기)의 통로.
         party = [{'char': o['char'], 'job': o['job'], 'alive': o['alive'],
-                  'won': o['won'], 'visible': (o['x'], o['y']) in seen}
+                  'won': o['won'], 'visible': self._ally_seen(bot, o, seen)}
                  for o in bots if o['char'] != bot['char']]
 
         # ── 공간 장부(D17-1) obs 투영: '네가 아는 것' — 시야(sights)와 분리. 좌표는 안 나간다:
@@ -1939,8 +1968,16 @@ class Dungeon:
         if res0 and res0[0] in ('monster', 'bot'):
             tx, ty = res0[1]
             mon = self.monster_at(tx, ty) if res0[0] == 'monster' else None
-            if ((tx, ty) in self.visible_cells(bot['x'], bot['y'])
-                    and not (mon and mon.concealed)):
+            # 동료 시야 면제(07-26)를 켠 판은 **여기도 같은 눈을 써야 한다**: obs 로는 동료가
+            # 보이는데 재경로는 옛 시야를 보면, 눈에는 보이는데 발이 못 따라가서 마지막 본
+            # 자리로 걸어가 lost 가 난다(A/B 3차 실측: 켠 판도 lost 2회로 동일했던 원인).
+            _vis = self.visible_cells(bot['x'], bot['y'])
+            if res0[0] == 'bot' and self.ally_sight:
+                other = next((o for o in bots if (o['x'], o['y']) == (tx, ty)), None)
+                seen_now = self._ally_seen(bot, other, _vis) if other else (tx, ty) in _vis
+            else:
+                seen_now = (tx, ty) in _vis      # 몹은 시야 그대로(인식 매트릭스 무손상)
+            if seen_now and not (mon and mon.concealed):
                 ex, ey = bot['path'][-1] if bot.get('path') else (bot['x'], bot['y'])
                 if not self._beside_xy(ex, ey, tx, ty, res0[0]):   # 종점이 낡았다 — 실물로 재조준
                     newp = self.path_to(bot['x'], bot['y'], tx, ty, bots)
