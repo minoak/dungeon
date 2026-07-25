@@ -50,7 +50,14 @@ def check(name, cond):
         C.failed += 1
 
 
-TEAR_REASONS = {"hurt", "plan_broken"}          # last.type 로 오는 파기 사유
+TEAR_REASONS = {"hurt", "plan_broken",
+                "hail"}   # D24 말 걸림 정지(2026-07-25 뒤늦은 등재 — D24 커밋 4822073 에서
+                          #   빠뜨려 D25·D26·D27 세 커밋 동안 이 게이트가 빨간불이었다.
+                          #   커밋 메시지의 'verify 22~25종 ALL PASS'는 사실이 아니었음).
+                          # ⚠️ **임시 등재**: 채널 분리(행동 콜/사교 콜) 후 hail 은 작정을 끊지
+                          #   않게 바뀐다 — 걷는 중에도 열리는 사교 콜이 생기면 '작정을 부숴야
+                          #   말을 들을 수 있다'는 현재의 결합이 풀린다. 그때 이 줄을 뺀다.
+                          #   **빼고도 초록불이면 그게 수선이 실제로 먹혔다는 증거다.**
 TEAR_RESULTS = {"encounter", "blocked", "lost", "no_path",
                 "sighted"}   # last.result 로 오는 파기 사유(sighted=D19 목격 정지, SCAN 기본 1 승격으로 합류)
 
