@@ -156,6 +156,9 @@ def play(spec, brain, state_dir):
             max_turns=turns, gm=False, stream_obs=False, menu=brains.MENU,
             ledger=True,                       # 장면은 장부(D17) 상시 켬 — 라이브 판과 같은 조건
             scan=SCAN_ON,                      # 스캐너(D19) 여부 — 정지 물리가 달라진다(비교 전제)
+            backend=brains.backend_name(),     # 두뇌 백엔드(2026-07-25 additive) — show_runner 와
+                                               #   같은 필드명. 프로브도 어느 배관으로 잰 건지
+                                               #   사후 판독돼야 한다(속도 실측이 이 파일도 쓴다)
             scenario=spec.get("name"),         # additive — 장면 실행 표식
             turn_now=int(spec.get("turn_now", 0)),   # 장부 시계 원점(additive) — 장부 스탬프는
                                                #   turn_now+tick 시계를 쓴다(리플레이 조인용)
@@ -301,4 +304,6 @@ def main():
 
 
 if __name__ == "__main__":
+    import envload
+    envload.load()      # show_runner 와 같은 규칙 — __main__ 안에서만(게이트는 안 밟는다)
     main()

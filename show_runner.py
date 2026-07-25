@@ -451,6 +451,12 @@ def main():
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
+            backend=brains.backend_name(),   # 두뇌 백엔드(2026-07-25 additive) — claude_cli/
+                                       #   anthropic_api/gemini_api/dummy. gm·menu 와 같은 급의
+                                       #   실행모드 메타: 같은 시드라도 백엔드가 다르면 다른 판이다
+                                       #   (모델 접점이 다르다 = A/B 비교의 전제).
+                                       #   ⚠️ 지연·토큰·요청id 는 여기 넣지 않는다 — 실행마다 변하면
+                                       #   verify_stream 결정론(라인 바이트 동일)이 즉시 깨진다.
             bestiary=iss.snapshot(),   # 판 시작 시점 지식(additive) — 도감이 obs 를 바꾸므로 리플레이·비교의 전제
             bestiary_file=bool(BESTIARY_FILE),   # 영속 여부(실행모드 메타 — gm/menu 와 같은 급)
             party=[{**{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
@@ -646,4 +652,10 @@ def main():
 
 
 if __name__ == "__main__":
+    import envload
+    envload.load()      # ⚠️ 유일한 .env 로드 지점 — 모듈 최상단이 아니라 __main__ 안이다.
+                        #    게이트는 `import show_runner; show_runner.main()` 으로 부르므로
+                        #    이 줄을 밟지 않는다 → 게이트 프로세스엔 API 키가 안 들어간다.
+                        #    키 없는 프로세스에선 백엔드가 소켓을 열기 전에 끊으므로, 모킹을
+                        #    빠뜨린 게이트가 있어도 실 API 가 물리적으로 못 나간다(안전핀).
     main()

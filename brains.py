@@ -17,6 +17,8 @@ claude.exe -p --model haiku 로 (캐릭터 시트 + obs)를 주고 한 '행동'�
 import os
 import re
 import json
+import time                 # 콜별 지연 계측(사이드카 전용 — 스트림엔 절대 안 실린다)
+import threading            # think_all 이 스레드풀 — 계측 줄 섞임 방지
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 
@@ -48,6 +50,70 @@ OBS_POS = os.environ.get("DUNGEON_OBS_POS", "1") != "0"       # 생좌표 pos �
 # WSL 인터롭 네이티브 exe. npm 래퍼(claude)는 stdin 대기로 멈추므로 .exe 고정.
 CLAUDE_BIN = "claude.exe"
 TIMEOUT = 60   # 콜드스타트 ~8초라 넉넉
+
+# ── 두뇌 백엔드(2026-07-25) ────────────────────────────────────────────────────
+# 왜 가르나: claude.exe 는 콜마다 Node CLI 프로세스를 통째로 띄운다 — 20초/틱의 대부분이
+# 모델이 아니라 프로세스 기동일 수 있다는 가설을, *같은 모델·같은 프롬프트*로 HTTP 한 방과
+# 견줘야 잰다. 그래서 1단계 목적은 질감(모델) 교체가 아니라 지연 계측뿐이다.
+# 기본값 = claude_cli: 라이브 판도 게이트도 지금 그대로 돈다(새 기능은 스위치 뒤 — gm.py 선례).
+BACKENDS = ("claude_cli", "anthropic_api", "gemini_api", "dummy")
+
+# 별칭 → 백엔드별 모델 id. 별칭("haiku")은 claude.exe 어휘 그대로 둔다 — 호출부
+# `_call_claude(prompt, "haiku")` 가 계약이라 번역은 여기 한 곳에서만 한다. 두 곳에 흩으면
+# 기본인자와 호출지점 중 한쪽만 바뀌는 사고가 난다.
+_MODEL_ID = {
+    "anthropic_api": {"haiku": "claude-haiku-4-5", "sonnet": "claude-sonnet-4-6"},
+    "gemini_api":    {"haiku": "gemini-2.5-flash", "sonnet": "gemini-2.5-pro"},
+}
+API_URL_ANTHROPIC = "https://api.anthropic.com/v1/messages"
+API_URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent"
+
+_warned = set()          # 경고 1회만 — _run_gates.sh 가 `2>&1 | tail -1` 로 판정한다.
+                         #   stderr 가 stdout 에 머지되므로 경고 한 줄이 통과를 FAIL 로 뒤집는다.
+
+
+def _warn_once(msg):
+    """같은 경고는 한 번만. stdout 을 먼저 flush 해 게이트 판정줄을 보호한다."""
+    if msg in _warned:
+        return
+    _warned.add(msg)
+    import sys
+    sys.stdout.flush()
+    print(msg, file=sys.stderr)
+
+
+def backend_name():
+    """백엔드 이름을 *호출 시점에* 환경에서 읽는다.
+    ⚠️ 모듈 로드 시점 상수로 굳히면 안 된다 — 게이트의 '스텁 먼저 박고 러너 나중 import'
+    관용구(verify_stream 등)와 env 를 나중에 세팅하는 하니스(ab_menu)가 함께 깨진다.
+    잘못된 값은 claude_cli 로 퇴화한다(판을 죽이지 않는다) + 경고 1회."""
+    name = (os.environ.get("DUNGEON_BRAIN_BACKEND") or "claude_cli").strip()
+    if name not in BACKENDS:
+        _warn_once("[경고] 알 수 없는 DUNGEON_BRAIN_BACKEND=%r -> claude_cli 로 폴백" % name)
+        return "claude_cli"
+    return name
+
+
+# 콜별 계측(기본 꺼짐). ⚠️ 스트림에는 절대 안 싣는다 — verify_stream 결정론 검사가 run_meta 의
+# started 하나만 빼고 *전 라인* 바이트 동일을 요구한다(decisions 도 포함). 지연은 판마다
+# 달라지므로 스트림에 넣는 순간 결정론이 깨진다. 프롬프트·응답 원문도 안 남긴다(글자 수만).
+_LOG_LK = threading.Lock()
+_TLS = threading.local()     # 봇마다 스레드가 다르다 — 모듈 전역이면 계측이 서로 섞인다
+
+
+def _brainlog(**f):
+    """DUNGEON_BRAIN_LOG=<경로> 일 때만 JSONL 한 줄. 값이 없으면 완전 무비용."""
+    path = os.environ.get("DUNGEON_BRAIN_LOG", "")
+    if not path:
+        return
+    try:
+        line = json.dumps({"t": time.time(), **f}, ensure_ascii=False,
+                          separators=(",", ":")) + "\n"
+        with _LOG_LK:                        # think_all 이 스레드풀 — 줄 섞임 방지
+            with open(path, "a", encoding="utf-8", newline="\n") as fp:
+                fp.write(line)
+    except Exception:
+        pass                                 # 계측이 판을 죽이지 않는다(관측은 사치품)
 
 # D26 의미 기억(07-24 확정): 결정 응답에 "남길 한 줄"(note) 선택 필드 피기백 — 추가 콜 0.
 # 프레임 "사실=엔진(D22), 의미=에이전트(여기)": 엔진 판정 불가침 — 틀린 기억도 그 캐릭터의
@@ -94,9 +160,35 @@ def _head(s, n=60):
 
 
 def _call_claude(prompt, model="haiku"):
-    """프롬프트를 stdin으로 넘긴다(긴 프롬프트 argv 따옴표 문제 회피).
-    반환 = (응답텍스트, 실패라벨|None). 타임아웃/호출에러/빈응답을 구분해 라벨링 —
-    폴백 reason에 실려 스트림·봇로그에 남는 계측(한 라벨로 뭉개면 부검 불가)."""
+    """프롬프트를 두뇌 백엔드에 넘긴다. 반환 = (응답텍스트, 실패라벨|None).
+    타임아웃/호출에러/빈응답을 구분해 라벨링 — 폴백 reason 에 실려 스트림·봇로그에 남는
+    계측(한 라벨로 뭉개면 부검 불가). 라벨 문법은 계약이다: _test_fallback_labels.py 가
+    "타임아웃 %ds" / "빈 응답 rc=" / "호출 실패 " 를 부분문자열로 단정한다.
+
+    ⚠️⚠️ 이름·시그니처·반환·**호출 방식**이 전부 불가침이다.
+      · verify/스모크 15개 파일이 *이 이름을* 몽키패치해 실 LLM 을 차단한다. 이름을 바꾸거나
+        클래스 메서드로 내리면 모킹이 조용히 무시돼 게이트가 FAIL 이 아니라 **유출**을 낸다.
+      · 인자는 위치 2개 고정 — verify_notes.py 가 `lambda p, m:` 로 모킹한다(키워드 불가).
+        세 번째 인자를 붙이면 그 모킹이 TypeError 로 죽는다. 백엔드에 더 줄 정보가 생기면
+        인자가 아니라 환경변수나 프롬프트 문자열에서 유도할 것.
+      · 백엔드 분기는 **함수 안에서** 조회한다(모듈 로드 시점 바인딩 금지 — 게이트의
+        '스텁 먼저 박고 러너 나중 import' 관용구 보존)."""
+    be = backend_name()
+    fn = {"claude_cli": _call_cli, "anthropic_api": _call_anthropic,
+          "gemini_api": _call_gemini, "dummy": _call_dummy}[be]
+    t0 = time.time()
+    _TLS.usage = None                    # 백엔드가 채우는 부가 계측(토큰·stop_reason)
+    out, why = fn(prompt, model)
+    _brainlog(kind="call", backend=be, model=model,
+              ms=int((time.time() - t0) * 1000), ok=bool(out), label=why or "",
+              in_chars=len(prompt), out_chars=len(out or ""),
+              **(getattr(_TLS, "usage", None) or {}))
+    return out, why
+
+
+def _call_cli(prompt, model):
+    """현행 경로 그대로(비교 기준선 = 바이트 무변경). 프롬프트를 stdin 으로 넘긴다
+    (긴 프롬프트 argv 따옴표 문제 회피)."""
     try:
         r = subprocess.run(
             [CLAUDE_BIN, "-p", "--model", model],
@@ -114,6 +206,137 @@ def _call_claude(prompt, model="haiku"):
             why += " | " + _head(err[-1])
         return "", why
     return out, None
+
+
+def _call_dummy(prompt, model):
+    """콜 0 백엔드 — 항상 빈 응답 → claude_brain 이 규칙두뇌로 폴백.
+    쓰임: 백엔드 배선을 실 LLM 없이 검증 / 실측의 0-지연 기준선. 게이트 스텁(→'파싱 실패')과
+    달리 자기 라벨을 남긴다 — 백엔드는 스텁이 아니라 제품 경로라 부검에서 구분돼야 한다."""
+    return "", "빈 응답 rc=0"
+
+
+def _http_post(url, headers, body):
+    """바깥으로 나가는 HTTP 를 **여기 한 점**으로 모은다.
+    왜 함수로 뽑나: 게이트(verify_backend)가 이 심볼 하나만 바꿔 끼우면 '초록불인데 실 API 가
+    나갔다'를 잡을 수 있다 — 유출 감지의 단일 관문. 반환 = (status|None, obj|None, 라벨|None).
+
+    라벨에 예외 **원문(str(e)) 금지, 타입명만**: 이 레포는 state/ 와 runs/*.jsonl 을 실제로
+    커밋한다. 키나 URL 이 한 번 섞이면 그대로 히스토리에 박힌다."""
+    try:
+        import requests        # 지연 import — 최상단에 두면 미설치 환경에서 `import brains`
+    except Exception as e:     #   가 죽어 게이트 20종이 한꺼번에 무너진다
+        return None, None, "호출 실패 %s" % type(e).__name__
+    t = int(os.environ.get("DUNGEON_BRAIN_TIMEOUT", str(TIMEOUT)))
+    try:
+        r = requests.post(url, headers=headers,
+                          data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+                          timeout=(5, t))
+        # ⚠️ think_all 의 f.result() 엔 타임아웃이 없다 — 여기가 틱 정지를 막는 유일한 장치다.
+    except requests.exceptions.Timeout:
+        return None, None, "타임아웃 %ds" % t          # Connect/Read 공통 조상
+    except Exception as e:
+        return None, None, "호출 실패 %s" % type(e).__name__
+    try:
+        return r.status_code, r.json(), None
+    except Exception:
+        return r.status_code, None, None               # 비 JSON 본문(게이트웨이 HTML 등)
+
+
+_ENUMISH = re.compile(r"[A-Za-z_]{1,40}\Z")
+
+
+def _errtag(*vals):
+    """에러 응답에서 **종류 이름만** 뽑는다 — rate_limit_error / RESOURCE_EXHAUSTED 같은 고정
+    어휘. message 는 요청 내용을 되비출 수 있어 절대 안 싣는다. 화이트리스트 모양(영문+밑줄,
+    40자)까지 통과해야 붙인다 — 자유문이 라벨로 새는 것 차단."""
+    for v in vals:
+        if isinstance(v, str) and _ENUMISH.match(v):
+            return " | " + v
+    return ""
+
+
+def _call_anthropic(prompt, model):
+    """Anthropic Messages API 를 requests 로 직접 친다. SDK 없음(이 환경엔 pip 이 없다) —
+    스트리밍·툴·비전 전부 불필요하다: 프롬프트 하나 넣고 JSON 한 줄 받는 POST 하나다.
+
+    프롬프트를 **통째로 user 메시지 하나**로 보낸다 — claude.exe 가 stdin 으로 받는 바이트와
+    동일. '전송만 바꾼다'가 이 실험의 전제이고, system 분리는 그 자체로 모델 거동을 흔들어
+    (질감) 지연 비교를 오염시킨다. 캐싱은 지연 실험이 끝난 뒤 독립 변수로 따로 잰다."""
+    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if not key:
+        # ⚠️ 소켓을 열기 **전에** 끊는다 — 게이트가 모킹을 빠뜨려도 키 없는 프로세스에선
+        #    실 API 가 물리적으로 못 나간다(구조적 안전핀이 여기서 닫힌다).
+        return "", "호출 실패 NoAPIKey"
+    mid = os.environ.get("DUNGEON_ANTHROPIC_MODEL") or _MODEL_ID["anthropic_api"].get(model)
+    if not mid:
+        return "", "호출 실패 UnknownModel"     # 모르는 별칭이 조용히 딴 모델로 흐르지 않게
+
+    st, obj, why = _http_post(API_URL_ANTHROPIC, {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"}, {
+        "model": mid,
+        "max_tokens": int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "1024")),
+        "messages": [{"role": "user", "content": prompt}]})
+    if why:
+        return "", why
+    if st != 200:
+        # HTTP 에러코드 → 기존 라벨 문법으로 번역. rc= 를 재사용하는 이유: report.decision_board
+        # 의 버킷 키가 `split(" | ")[0].split(":")[0]` 이라 "빈 응답 rc=429" 가 자기 버킷을
+        # 얻는다 — 집계 코드 한 줄 안 고치고 401/429/500/529 가 따로 세어진다.
+        return "", "빈 응답 rc=%s%s" % (st, _errtag(((obj or {}).get("error") or {}).get("type")))
+
+    u = (obj or {}).get("usage") or {}
+    _TLS.usage = {"in_tok": u.get("input_tokens"), "out_tok": u.get("output_tokens"),
+                  "cache_read": u.get("cache_read_input_tokens"),   # 캐싱 실측용 관측점
+                  "stop": (obj or {}).get("stop_reason") or ""}
+    txt = "".join(b.get("text", "") for b in ((obj or {}).get("content") or [])
+                  if b.get("type") == "text").strip()
+    if not txt:
+        # stop_reason ∈ end_turn/max_tokens/stop_sequence/tool_use/refusal — 고정 어휘라 안전.
+        # 잘렸어도(max_tokens) 텍스트가 있으면 통과시킨다 — _extract 가 판단하게 두는 관용 원칙.
+        return "", "빈 응답 rc=200%s" % _errtag((obj or {}).get("stop_reason") or "empty")
+    return txt, None
+
+
+def _call_gemini(prompt, model):
+    """Gemini generateContent 를 requests 로 직접. 키를 넣으면 실제로 동작하지만 기본값으론
+    절대 안 켜진다(DUNGEON_BRAIN_BACKEND=gemini_api 를 명시해야만).
+    ⚠️ 이건 **다른 모델**이다 — 지연 비교의 대조군이 아니라 별도 팔(질감 리베이스라인 필요)."""
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        return "", "호출 실패 NoAPIKey"
+    mid = os.environ.get("DUNGEON_GEMINI_MODEL") or _MODEL_ID["gemini_api"].get(model)
+    if not mid:
+        return "", "호출 실패 UnknownModel"
+
+    st, obj, why = _http_post(API_URL_GEMINI % mid, {
+        "x-goog-api-key": key,
+        "content-type": "application/json"}, {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "maxOutputTokens": int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "1024"))}})
+    if why:
+        return "", why
+    if st != 200:
+        return "", "빈 응답 rc=%s%s" % (st, _errtag(((obj or {}).get("error") or {}).get("status")))
+
+    cands = (obj or {}).get("candidates") or []
+    if not cands:
+        # 입력 단계 안전 차단 — 후보 자체가 안 온다. blockReason ∈ SAFETY/OTHER/… 고정 어휘
+        pf = (obj or {}).get("promptFeedback") or {}
+        return "", "빈 응답 rc=200%s" % _errtag(pf.get("blockReason") or "no_candidate")
+    c = cands[0]
+    fr = c.get("finishReason") or ""     # STOP / MAX_TOKENS / SAFETY / RECITATION / OTHER
+    um = (obj or {}).get("usageMetadata") or {}
+    _TLS.usage = {"in_tok": um.get("promptTokenCount"), "out_tok": um.get("candidatesTokenCount"),
+                  "cache_read": um.get("cachedContentTokenCount"), "stop": fr}
+    txt = "".join(p.get("text", "")
+                  for p in ((c.get("content") or {}).get("parts") or [])).strip()
+    if not txt:
+        # 출력 단계 안전 차단(SAFETY/RECITATION)도 여기로 — 라벨로 구분된다
+        return "", "빈 응답 rc=200%s" % _errtag(fr or "empty")
+    return txt, None
 
 
 def _extract(raw):
@@ -769,10 +992,15 @@ def think_all(d, bots, inbox=None):
             o["notes"] = list(b["notes"])   # D26 의미 기억 — 스스로 남긴 한 줄들(자기 것=시야-온리 무관)
         obss[b["char"]] = o             # 주입 솔기. 세계 정보가 아니라 자기 것이라 시야-온리 무관.
     if thinkers:
+        _t0 = time.time()               # 플레이어가 실제로 기다리는 시간 = 틱 벽시계.
+                                        # 콜당 지연의 합이 아니라 **최댓값**이다(동시 호출) —
+                                        # 이 둘이 벌어지면 동시성이 실효하지 않는다는 뜻.
         with ThreadPoolExecutor(max_workers=len(thinkers)) as ex:
             futs = {b["char"]: ex.submit(claude_brain, obss[b["char"]], b["char"], b, bots)
                     for b in thinkers}       # bot=시트 포함 봇 dict, roster=파티(관계 이름 풀이)
             out.update({c: f.result() for c, f in futs.items()})
+        _brainlog(kind="tick", backend=backend_name(), n=len(thinkers),
+                  ms=int((time.time() - _t0) * 1000))
     by = {b["char"]: b for b in live}
     for c, dec in out.items():          # 이번 판단을 자기 기억으로 저장 → 다음 결정의 obs.intent.
         it = {"type": dec.get("type", "")}   # bot_snapshot 화이트리스트 밖 = 스트림 계약 불변
