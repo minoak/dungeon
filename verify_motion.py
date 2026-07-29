@@ -96,7 +96,10 @@ bots5 = [a5, b5]
 for x in bots5:
     d5.view(x, bots5)
 d5.act(b5, {'type': 'goto', 'target': '@8,2'}, bots5)
-w5b = brains._wire(d5.view(a5, bots5))
+w5b = brains._wire(d5.view(a5, bots5), {'1': '두란', '2': '카야'})
+# ⚠️ names 를 넘기는 이유(2026-07-29 솔로 판 도입 때 드러남): 이름을 모르는 사람은 이제
+# '동료 카야'가 아니라 '낯선 사람(봇2)'으로 렌더된다(솔로 판=로스터 없음). 프로덕션은
+# claude_brain 이 늘 names 를 넘기므로, 여기서도 같은 입력을 줘야 파티 문안을 시험한다.
 check("⑤ 플랫 렌더 경로에도 '(이동중)'",
       any('동료' in ln and '(이동중)' in ln for ln in w5b.splitlines()))
 

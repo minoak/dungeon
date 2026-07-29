@@ -91,6 +91,8 @@ FLEE_STAMINA = 8         # 봇에게 보이며 도주한 턴 누적이 이만큼
                          #   영구 술래잡기 livelock(도주몹이 봇 결정 틱마다 비껴가며 미방문 칸을 막아
                          #   explore 재시도 무한) 차단 — 어떤 두뇌가 와도 엔진이 종결을 보장한다.
 EXIT_GATHER = 3          # 하강 조율: 살아있는 파티 전원이 계단 반경(체비셰프) 이내여야 내려간다(솔로탈출 방지)
+SOLO_APART = 12          # 솔로 판 출발 간격 하한(맨해튼) — 시야 반경보다 한참 멀어 첫 조우가 우연이 되게.
+                         #   실제 간격은 맵 크기로 키운다(아래 spawn) — 좁은 맵에선 단계적으로 완화한다.
 PLAN_MAX = 2             # 작정(D16): 현재 행동에 이어 미리 정해둘 수 있는 수의 상한 —
                          # 귀머거리 창(작정 집행 중엔 inbox 를 다음 결정점까지 못 읽음) 억제
 DETOUR_FACTOR = 2        # 사회적 대우회 감지(D18): 동료를 피해 깐 경로가 '동료 없다 치고'의 최단 대비
@@ -278,7 +280,7 @@ class Dungeon:
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                  scan=False, n_potions=0, loops=False, selfstop=False,
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
-                 motion=False, ally_sight=False, social=False):
+                 motion=False, ally_sight=False, social=False, solo=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -326,6 +328,19 @@ class Dungeon:
                                    #   b<char> 핑 허용)의 표시층 확장이지 새 원칙이 아니다.
                                    #   ⚠️ **동료 한정** — 몹·피처·구조는 LOS 그대로다(D19 문 광학·
                                    #   매복·인식 매트릭스 대칭 전부 무손상). 반경 밖은 여전히 안 보인다.
+        self.solo = bool(solo)     # 솔로 판(2026-07-29 파트너 발제) — 기본 꺼짐. 켜면 **파티라는
+                                   #   전제 자체가 빠진다**: 셋은 서로 모르는 별개의 인물로 흩어져
+                                   #   출발하고(spawn apart), 서로의 명단을 obs 로 받지 않으며(안 보이는
+                                   #   동료 핑 불가 — D18 '파티 감각' 무효), 각자 계단에 닿으면 혼자
+                                   #   내려간다(EXIT_GATHER 면제). 마주치면 그 다음은 자유 — 동행하든
+                                   #   갈라서든 엔진이 규정하지 않는다(말·hail·say 는 그대로 열려 있다).
+                                   #   왜: 파티 판에서 follow 가 결정의 36~39%(궁수는 67%)를 먹었는데,
+                                   #   승리 조건이 '전원 계단에 모이기'라 뭉치는 게 규칙상 최적해였다.
+                                   #   혼자면 그 최적해가 사라진다 — 각 캐릭터에게 주관이 있는지를
+                                   #   재는 판. 공유 던전(월드 러너)에서 남의 에이전트와 마주치는
+                                   #   상황과 같은 모양이라, 여기서 잰 것이 그대로 쓰인다.
+                                   #   ⚠️ 서로 공격은 아직 물리적으로 불가(_attack 이 몹만 해소) —
+                                   #   '자유'의 범위에서 이것만 빠져 있다는 걸 판 해석 때 감안할 것.
         self.graves = bool(graves) # D22 묘 스위치 — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_GRAVES(기본 1)로 켠다. 쓰러진 자리에 '~의 묘' 피처.
         self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
@@ -393,9 +408,11 @@ class Dungeon:
         d.motion = False           # 이동중 표시(D27) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.graves = d.events = False   # D22 스위치(묘·사건층) — 같은 규율(기존 장면 비트 동일)
         d.social = False           # 채널 분리 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
-        d.ally_sight = False       # 동료 시야 면제 — 손그림 장면도 기본 꺼짐(호출측이 켠다).
+        d.ally_sight = False       # 동료 시야 면제 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.solo = False             # 솔로 판(07-29) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
                                    #   ⚠️ from_ascii 는 __new__ 경유라 __init__ 을 안 탄다 —
-                                   #   새 스위치는 여기 명시 초기화가 필수(D21·D22 때 밟은 함정)
+                                   #   새 스위치는 여기 명시 초기화가 필수(D21·D22·솔로 때 밟은 함정.
+                                   #   빼먹으면 AttributeError 로 게이트 15개가 한꺼번에 붉어진다)
         starts, mslots, tslots = {}, [], []
         for y, row in enumerate(rows):
             for x, ch in enumerate(row):
@@ -1176,7 +1193,12 @@ class Dungeon:
                   and self._ally_seen(bot, b, seen)]
         # party = 파티 명단(좌표 없음 — 시야-온리 유지). 안 보여도 'b<char>' 핑은 허용(파티 감각):
         # TRPG에서 일행의 대략적 방향은 안다는 통념. 하강 조율(동료 데리러 가기)의 통로.
-        party = [{'char': o['char'], 'job': o['job'], 'alive': o['alive'],
+        # 솔로 판(self.solo)에서는 명단 자체가 없다 — 남남끼리는 서로 몇이고 누가 살았는지
+        # 모른다. 빈 리스트라 _valid_targets 의 party 루프도 자연히 비고(brains 무수정),
+        # 리모컨 메뉴에서 '안 보이는 동료 찾아가기' 항목도 사라진다. 보이는 사람은
+        # sights.bots 로 여전히 나가고 핑도 된다 — 눈에 보이면 지칭할 수 있는 게 맞다.
+        party = [] if self.solo else [
+                 {'char': o['char'], 'job': o['job'], 'alive': o['alive'],
                   'won': o['won'], 'visible': self._ally_seen(bot, o, seen)}
                  for o in bots if o['char'] != bot['char']]
 
@@ -2479,6 +2501,12 @@ class Dungeon:
         if kind == 'exit':
             others = [o for o in (bots or []) if o['alive'] and not o['won']
                       and o['char'] != bot['char']]
+            if self.solo:                        # 솔로 판: 각자 계단에 닿으면 혼자 내려간다.
+                bot['won'] = True                #   기다릴 일행이 없다 — 모임 조건을 그대로 두면
+                bot['order'], bot['path'], bot['plan'] = None, [], []   # 남남끼리 서로를 찾아
+                return {**base, 'result': 'exit', 'party': [bot['char']]}  # 다녀야 해서 없애려던
+                                                 #   그 뭉침이 규칙으로 강제된다. 판은 안 끝난다 —
+                                                 #   러너가 전원 won/사망까지 돈다(전부 관찰).
             far = [o for o in others if self._cheb(o['x'], o['y'], tx, ty) > EXIT_GATHER]
             if far:                              # 아직 안 모임 — 혼자 내려가지 않는다
                 return {**base, 'result': 'wait_allies',
@@ -2916,14 +2944,16 @@ def new_ledger():
     return {'statics': {}, 'moving': {}, 'zones': {}}
 
 
-def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None):
+def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=False):
     """캐릭터 시트를 입혀 봇을 던전에 놓는다. sheet=None 이면 내장 HEROES[char]
     (하위호환 — 기존 verify 들의 spawn(d,'1',[]) 그대로 통과). 시트 외부화(party.json)는
     러너가 load_party 로 검증해 sheet= 로 넘긴다 — 시트=사용자 저작물의 원형(UGC 씨앗).
     파티는 함께 출발한다 — 첫 영웅은 출구에서 멀리(즉시 탈출 방지), 다음 영웅은
     그 곁(맨해튼 cluster 이내)에. 출구 바로 옆·맵 양끝 분리를 막는다.
+    apart=True(솔로 판)면 그 가정이 뒤집힌다 — 전원이 '첫 영웅'처럼 출구에서 멀리, 그리고
+    서로에게서도 SOLO_APART 이상 떨어져 선다. 남남이 같은 던전에서 각자 눈뜨는 그림.
     ⚠️ 'bots 리스트 = 파티' 가정을 여기서 더 심화하지 말 것(솔기 노트) — 살아있는 세상에선
-    파티=에이전트 간 관계(가입/탈퇴)라 이 등식이 깨진다."""
+    파티=에이전트 간 관계(가입/탈퇴)라 이 등식이 깨진다. apart 가 그 솔기의 첫 사용처다."""
     sheet = sheet or HEROES[char]
     ex, ey = dungeon.exit
 
@@ -2935,14 +2965,22 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None):
                 and not any(b['x'] == x and b['y'] == y for b in bots))
 
     base = [(x, y) for y in range(dungeon.h) for x in range(dungeon.w) if free(x, y)]
-    if bots:                       # 둘째+ 영웅: 먼저 온 동료 곁에 (함께 출발)
+    lone = [(x, y) for (x, y) in base            # 홀로 서는 자리: 출구에서 멀고 몹과도 떨어진 곳
+            if abs(x - ex) + abs(y - ey) >= min_exit_dist
+            and all(abs(x - m.x) + abs(y - m.y) >= 2 for m in dungeon.monsters)]
+    if apart:                      # 솔로 판: 전원이 '첫 영웅'처럼 놓인다 — 출구에서도, 서로에게서도
+        gap = max(SOLO_APART, (dungeon.w + dungeon.h) // 5)   #   멀리. 간격은 맵 크기를 탄다.
+        cands = []
+        while not cands and gap >= 2:
+            cands = [(x, y) for (x, y) in lone
+                     if all(abs(x - b['x']) + abs(y - b['y']) >= gap for b in bots)]
+            gap //= 2              # 맵이 좁아 못 벌리면 단계적 완화(빈 후보로 base 추락하는 것 방지)
+    elif bots:                     # 둘째+ 영웅: 먼저 온 동료 곁에 (함께 출발)
         a = bots[0]
         cands = [(x, y) for (x, y) in base
                  if 1 <= abs(x - a['x']) + abs(y - a['y']) <= cluster]
     else:                          # 첫 영웅: 출구에서 멀고 몬스터와 떨어진 곳
-        cands = [(x, y) for (x, y) in base
-                 if abs(x - ex) + abs(y - ey) >= min_exit_dist
-                 and all(abs(x - m.x) + abs(y - m.y) >= 2 for m in dungeon.monsters)]
+        cands = lone
     if not cands:                  # 조건이 너무 빡빡하면 완화
         cands = base
     x, y = dungeon.rng.choice(cands)

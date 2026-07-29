@@ -109,6 +109,12 @@ ALLY_SIGHT_ON = os.environ.get("DUNGEON_ALLY_SIGHT", "0") != "0"   # 동료 시�
                                                              #   건드리는 실험층이라 A/B 대조가 끝날
                                                              #   때까지 켜지 않는다(D19 SCAN 선례).
                                                              #   켜면 동료만 반경 내 장애물 무관.
+SOLO_ON = os.environ.get("DUNGEON_SOLO", "0") != "0"          # 솔로 판(07-29 파트너 발제) — 러너·
+                                                             #   엔진 둘 다 기본 0. 켜면 파티 전제가
+                                                             #   빠진다: 흩어져 출발·서로 모름·혼자
+                                                             #   하강. 마주친 뒤는 자유(엔진 무규정).
+                                                             #   ⚠️ 별개의 실험 판이지 기본 게임의
+                                                             #   개선이 아니다 — 승격 대상 아님.
 WAIT_ON = os.environ.get("DUNGEON_WAIT", "1") != "0"         # wait 동사(07-24 D25) — 러너 기본 1,
                                                              #   엔진 기본 0. 제자리 대기(사건 기반) —
                                                              #   셔틀의 고정점, 대기 중 LLM 0콜
@@ -334,7 +340,10 @@ def act_summary(res):
     if t == "interact":
         r = res["result"]
         if r == "exit":
-            return "다 모였다 — 함께 하강!! (%s)" % "·".join(res.get("party", []))
+            group = res.get("party", [])
+            if len(group) == 1:                    # 솔로 판 — 혼자 계단을 내려간다. '다 모였다'는
+                return "홀로 계단을 내려간다 — 탈출!!"   #   거짓이다(결과 보고 오역은 이 판의 오랜 병).
+            return "다 모였다 — 함께 하강!! (%s)" % "·".join(group)
         if r == "wait_allies":
             return "계단에서 동료를 기다린다 (아직: 봇%s)" % "·".join(res.get("missing", []))
         if r == "chest_loot":
@@ -411,11 +420,11 @@ def main():
                   n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,
                   loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
                   dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
-                  ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON)
+                  ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON)
     d.lore = lore
     bots = []
     for c in chars:
-        b = G.spawn(d, c, bots, sheet=sheets[c])
+        b = G.spawn(d, c, bots, sheet=sheets[c], apart=SOLO_ON)
         b['known'] = iss.known(names[c])   # 도감 주입 켬 — 발급기의 set 과 *같은 객체*(획득 즉시 다음 obs 반영)
         if LEDGER_ON:
             b['ledger'] = G.new_ledger()   # 공간 장부(D17) 켬 — 이 층에서 본 것의 원장
@@ -469,6 +478,9 @@ def main():
             ally_sight=ALLY_SIGHT_ON,  # 동료 시야 면제(07-26) 여부 — **시야 물리 메타**(scan 과 같은 급).
                                        #   켠 판은 동료가 벽·문을 통과해 보이므로 obs·결정이 근본적으로
                                        #   달라진다. A/B 비교의 전제라 리플레이·판 대조 시 필수 대조 필드.
+            solo=SOLO_ON,              # 솔로 판(07-29) 여부 — **판의 종류가 다른 메타**. 배치(흩어짐)·
+                                       #   obs(party 명단 부재)·승리 조건(혼자 하강)이 전부 달라지므로
+                                       #   파티 판과는 애초에 비교 대상이 아니다. 대조군 고를 때 필수 필드.
             graves=GRAVES_ON,          # 묘(D22) 여부 — 피처가 늘어나는 세계 물리 메타
             events=EVENTS_ON,          # 사건층(D22) 여부 — obs(목격·기억)를 바꾸는 실행모드 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
@@ -626,11 +638,12 @@ def main():
                           scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
                           graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
                           wait_verb=WAIT_ON, motion=MOTION_ON,
-                          ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON)
+                          ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON)
             d.lore = lore
             nb = []
             for b in sorted(survivors, key=lambda b: b["char"]):
-                n = G.spawn(d, b["char"], nb, sheet=sheets[b["char"]])   # ⚠️ sheet 필수 — 없으면
+                n = G.spawn(d, b["char"], nb, sheet=sheets[b["char"]],
+                            apart=SOLO_ON)                              # ⚠️ sheet 필수 — 없으면
                 n["hp"], n["bag"] = b["hp"], b["bag"]     # HP·보물 이월     외부 시트 봇('3'+)이 2층서 죽는다
                 n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
                 n["memories"] = list(b.get("memories") or [])   # 기억도 이월(D22) — 전사는 원정급

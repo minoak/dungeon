@@ -557,7 +557,10 @@ def _last_prose(last, names=None):
             return ("기습! " if last.get("surprise") else "") + s
     if t == "interact":
         if r == "exit":
-            return "다 모여서 — 함께 내려갔다(%s)" % "·".join(last.get("party", []))
+            group = last.get("party", [])
+            if len(group) == 1:              # 솔로 판 — 혼자 내려갔다. 캐릭터가 읽는 문장이라
+                return "혼자 계단을 내려갔다"    #   더 중요하다: 없던 일행을 지어내면 안 된다.
+            return "다 모여서 — 함께 내려갔다(%s)" % "·".join(group)
         if r == "wait_allies":
             return ("계단에서 하강을 시도했지만 — 아직 안 모였다(빠진 동료: 봇%s)."
                     " 기다리거나 데리러 가라" % "·".join(last.get("missing", [])))
@@ -621,6 +624,13 @@ def _wire(obs, names=None):
 
     def nm(char):
         return "%s(봇%s)" % (names.get(char, "동료"), char)
+
+    def who(char):
+        """시야에 든 사람을 뭐라 부르나 — 아는 사람은 '동료 카야', 모르는 사람은 '낯선 사람'.
+        솔로 판(로스터 없음)에서 names 가 비어 남남이 된다. 도감의 '낯선 짐승'과 같은 문법:
+        모르는 것은 모른다고 쓴다. ⚠️ 이름을 모를 뿐 id(봇2)는 그대로 — 지칭은 돼야
+        핑을 걸 수 있고, 이름은 만나서 통성명해야 얻는 것이다(그건 아직 없다)."""
+        return "동료 %s" % nm(char) if names.get(char) else "낯선 사람(봇%s)" % char
 
     def at(o):
         if o.get("dist") == 0:
@@ -729,9 +739,9 @@ def _wire(obs, names=None):
                 "%s %dm (발각됨 — 위치를 안다)" % (t.get("name", "함정"), t.get("dist", 0)))
         for b in s.get("bots", []):
             put(b.get("bearing"), b.get("dist", 0),
-                "동료 %s(겉보기 %s) %dm%s" % (nm(b.get("char", "?")),
-                                              b.get("condition", "?"), b.get("dist", 0),
-                                              " (이동중)" if b.get("moving") else ""))
+                "%s(겉보기 %s) %dm%s" % (who(b.get("char", "?")),
+                                         b.get("condition", "?"), b.get("dist", 0),
+                                         " (이동중)" if b.get("moving") else ""))
         if under:
             L.append("- 발밑: " + " / ".join(under))
         KR = {"N": "북쪽", "NE": "북동쪽", "E": "동쪽", "SE": "남동쪽",
@@ -766,9 +776,9 @@ def _wire(obs, names=None):
             L.append("- %s %s — %s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
                                          " (와 본 자리)" if f.get("visited") else ""))
         for b in s.get("bots", []):
-            L.append("- 동료 %s — 겉보기 %s — %s%s" % (nm(b.get("char", "?")),
-                                                       b.get("condition", "?"), at(b),
-                                                       " (이동중)" if b.get("moving") else ""))
+            L.append("- %s — 겉보기 %s — %s%s" % (who(b.get("char", "?")),
+                                                  b.get("condition", "?"), at(b),
+                                                  " (이동중)" if b.get("moving") else ""))
         for w in s.get("ways", []):
             L.append("- %s쪽으로 트인 길 — 거리 %d, %s%s"
                      % (w.get("bearing", "?"), w.get("dist", 0),
@@ -1025,7 +1035,8 @@ def social_all(d, bots, inbox=None):
                if b['alive'] and not b['won'] and b.get('order') and b.get('hailed')]
     if not talkers:
         return {}
-    names = {o['char']: (o.get('name') or o.get('job', '동료')) for o in bots}
+    roster = [] if getattr(d, 'solo', False) else bots   # 솔로 판: 로스터 없음(위 think_all 과 같은 이유)
+    names = {o['char']: (o.get('name') or o.get('job', '동료')) for o in roster}
     obss = {}
     for b in talkers:
         o = d.view(b, bots)
@@ -1033,7 +1044,7 @@ def social_all(d, bots, inbox=None):
         obss[b['char']] = o
 
     def ask(b):
-        prompt = (_sheet(b, bots) + "\n" + SOCIAL_PROMPT
+        prompt = (_sheet(b, roster) + "\n" + SOCIAL_PROMPT
                   + "\n\n" + _wire(obss[b['char']], names)
                   + "\n\n오직 JSON 한 줄로만 답하라.")
         raw, why = _call_claude(prompt, "haiku")
@@ -1088,8 +1099,12 @@ def think_all(d, bots, inbox=None):
                                         # 콜당 지연의 합이 아니라 **최댓값**이다(동시 호출) —
                                         # 이 둘이 벌어지면 동시성이 실효하지 않는다는 뜻.
         with ThreadPoolExecutor(max_workers=len(thinkers)) as ex:
-            futs = {b["char"]: ex.submit(claude_brain, obss[b["char"]], b["char"], b, bots)
+            roster = [] if getattr(d, 'solo', False) else bots   # 솔로 판(07-29)은 로스터가 없다 —
+            futs = {b["char"]: ex.submit(claude_brain, obss[b["char"]], b["char"], b, roster)
                     for b in thinkers}       # bot=시트 포함 봇 dict, roster=파티(관계 이름 풀이)
+                                             #   시트에서 relationships 를 빼도 '- 동료: 두란(봇1)…'
+                                             #   줄이 로스터에서 되살아나 이름을 알려준다(누출).
+                                             #   남남은 명단도 이름도 모르는 채로 시작한다.
             out.update({c: f.result() for c, f in futs.items()})
         _brainlog(kind="tick", backend=backend_name(), n=len(thinkers),
                   ms=int((time.time() - _t0) * 1000))
