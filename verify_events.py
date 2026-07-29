@@ -254,6 +254,168 @@ def run_once():
 
 check("⑨ 같은 장면 2회 = 같은 목격·기억·피처 열", run_once() == run_once())
 
+# ───────────────── ⑩ 전달층 확장(07-29): 획득 — 사라진 것의 행방 ─────────────────
+# 원칙: **변화가 일어난 칸이 시야에 들면 이유도 안다.** 보물과 줍는 사람은 같은 칸이라
+# "사라짐을 본 사람 = 가져간 사람을 본 사람"이 공짜로 성립(거리 문턱·예외 없음).
+# 발단: 07-26 판 — 피른이 보물을 줍자 말하기 전까지 곁의 둘이 아무것도 모름(획득 무목격).
+print("── ⑩ 전달층 확장 — 획득(ally_loot)·비대칭 해소(ally_mishap)")
+LOOT_ROWS = [
+    "###########",
+    "#1$.2.#.3.#",
+    "#.=.~.#...#",
+    "#!....#..>#",
+    "###########",
+]
+
+
+def loot_scene(events=True, known=None):
+    d, starts = Dungeon.from_ascii(LOOT_ROWS, seed=7)
+    d.events = events
+    b1 = mkbot('1', *starts['1'], job='전사')
+    b2 = mkbot('2', *starts['2'], job='도적')
+    b3 = mkbot('3', *starts['3'], job='궁수')
+    bots = [b1, b2, b3]
+    if known is not None:
+        for b in bots:
+            b['known'] = set(known)
+    return d, b1, b2, b3, bots
+
+
+def fid(d, ftype):
+    return next('f%d' % f.id for f in d.features.values() if f.type == ftype)
+
+
+d, b1, b2, b3, bots = loot_scene()
+d._enter_cell(b1, 2, 1, bots)                      # 밟아 줍기(walk 경로)
+loots = wit_of(b2, 'ally_loot')
+check("⑩ 밟아 줍기: 시야 내 동료 ally_loot {char, what=보물}",
+      len(loots) == 1 and loots[0]['char'] == '1' and loots[0]['what'] == '보물')
+check("⑩ 시야 밖(벽 너머) 동료: 무주입", not wit_of(b3, 'ally_loot'))
+check("⑩ 당사자 제외(자기 경험은 last 소관)", not b1.get('witnessed'))
+
+d, b1, b2, b3, bots = loot_scene()
+b1['x'], b1['y'] = 1, 2                            # 물약(1,3) 곁 — interact 경로
+res = d._interact(b1, fid(d, 'potion'), bots)
+check("⑩ interact 줍기: 물약 → ally_loot {what=물약}", res['result'] == 'potion'
+      and wit_of(b2, 'ally_loot') and wit_of(b2, 'ally_loot')[0]['what'] == '물약')
+
+d, b1, b2, b3, bots = loot_scene()
+b1['x'], b1['y'] = 1, 2
+d.d20 = lambda: 20                                 # 확정 성공(결정론 스텁)
+res = d._interact(b1, fid(d, 'chest'), bots)
+check("⑩ 상자 성공: chest_loot → ally_loot {what=상자}", res['result'] == 'chest_loot'
+      and wit_of(b2, 'ally_loot') and wit_of(b2, 'ally_loot')[0]['what'] == '상자')
+
+d, b1, b2, b3, bots = loot_scene()
+b1['x'], b1['y'] = 1, 2
+d.d20 = lambda: 1                                  # 확정 실패
+res = d._interact(b1, fid(d, 'chest'), bots)
+mis = wit_of(b2, 'ally_mishap')
+check("⑩ 상자 실패: chest_trap → ally_mishap {what=상자 독침, dmg}",
+      res['result'] == 'chest_trap' and len(mis) == 1
+      and mis[0]['what'] == '상자 독침' and mis[0]['dmg'] == 2)
+
+d, b1, b2, b3, bots = loot_scene()
+b2['x'], b2['y'] = 4, 1                            # 샘(4,2) 곁
+d.d20 = lambda: 1                                  # 오염 확정
+res = d._interact(b2, fid(d, 'fountain'), bots)
+check("⑩ 샘 오염: fountain_harm → ally_mishap {what=오염된 샘} (축복만 보이던 비대칭 해소)",
+      res['result'] == 'fountain_harm'
+      and wit_of(b1, 'ally_mishap') and wit_of(b1, 'ally_mishap')[0]['what'] == '오염된 샘')
+
+d, b1, b2, b3, bots = loot_scene()
+b1['x'], b1['y'] = 1, 2
+b1['hp'] = 2                                       # 독침 2피해 = 확정 전사
+d.d20 = lambda: 1
+d._interact(b1, fid(d, 'chest'), bots)
+check("⑩ 독침 전사: ally_mishap 없음 — ally_down 이 담당(중복 금지, 함정 패턴)",
+      not wit_of(b2, 'ally_mishap') and len(wit_of(b2, 'ally_down')) == 1)
+
+# ───────────────── ⑪ 전달층 확장(07-29): 발견 — 나타난 것의 사연 ─────────────────
+# 같은 원칙의 거울면: 숨은 함정·매복이 드러나면(t.hidden=False) 다른 봇 눈에 '갑자기 나타난다' —
+# 판정 칸 = **드러난 물건의 자리**(발견자 아님). 발견자는 보여도 물건이 벽 뒤면 모른다.
+print("── ⑪ 전달층 확장 — 발견(ally_spot): 판정 칸=드러난 물건의 자리")
+SPOT_ROWS = [
+    "############",
+    "#2....1.^.>#",
+    "############",
+]
+
+
+def spot_scene(b2x=4, events=True, known=None, mon=None, rows=None):
+    d, starts = Dungeon.from_ascii(rows or SPOT_ROWS, seed=7, monsters=mon or {})
+    d.events = events
+    b1 = mkbot('1', *starts['1'], job='도적')
+    b1['search_r'] = 2                             # 함정(8,1)까지 반경 2 — 능동 수색 확정 발견
+    b2 = mkbot('2', *starts['2'], job='전사')
+    b2['x'] = b2x
+    bots = [b1, b2]
+    if known is not None:
+        for b in bots:
+            b['known'] = set(known)
+    return d, b1, b2, bots
+
+
+d, b1, b2, bots = spot_scene(b2x=4)                # 함정 칸(8,1)과 거리 4 = 시야 내
+check("⑪ 전제: b2 눈에 함정 칸이 보인다", (8, 1) in d.visible_cells(b2['x'], b2['y']))
+res = d._search(b1, bots)
+check("⑪ 능동 수색 발견 성립(장면 전제)",
+      any(f['kind'] == 'trap' for f in res['found']))
+spots = wit_of(b2, 'ally_spot')
+check("⑪ 시야 내 동료: ally_spot {char, what=함정 이름}",
+      len(spots) == 1 and spots[0]['char'] == '1' and spots[0].get('what'))
+check("⑪ 당사자 제외", not b1.get('witnessed'))
+
+d, b1, b2, bots = spot_scene(b2x=1)                # 함정 칸(8,1)과 거리 7 = 시야 밖, b1(거리 5)은 보임
+check("⑪ 전제: b2 눈에 발견자(b1)는 보이고", (6, 1) in d.visible_cells(b2['x'], b2['y']))
+check("⑪ 전제: 함정 칸은 안 보인다", (8, 1) not in d.visible_cells(b2['x'], b2['y']))
+d._search(b1, bots)
+check("⑪ 발견자만 보이고 물건이 시야 밖이면 무주입(판정 칸=물건 칸)",
+      not wit_of(b2, 'ally_spot'))
+
+MON = {'s': {'kind': '그림자거미', 'hp': 4, 'ac': 12, 'concealed': True,
+             'state': 'SLEEPING'}}
+MON_ROWS = [r.replace('^', 's') for r in SPOT_ROWS]   # 같은 자리에 매복 몹(원본은 안 덮는다)
+d, b1, b2, bots = spot_scene(b2x=4, mon=MON, known=set(), rows=MON_ROWS)
+d._search(b1, bots)
+o = d.view(b2, bots)
+mspots = [w for w in (o.get('witnessed') or []) if w['kind'] == 'ally_spot']
+check("⑪ 매복 발견: ally_spot {mon} — 빈 도감 목격자에겐 낯선 짐승(도감 게이트)",
+      len(mspots) == 1 and mspots[0]['mon'] == G.UNKNOWN_BEAST)
+d, b1, b2, bots = spot_scene(b2x=4, mon=MON, known={'monster:그림자거미'},
+                             rows=MON_ROWS)
+d._search(b1, bots)
+o = d.view(b2, bots)
+mspots = [w for w in (o.get('witnessed') or []) if w['kind'] == 'ally_spot']
+check("⑪ 아는 종이면 이름 그대로", len(mspots) == 1 and mspots[0]['mon'] == '그림자거미')
+
+# ───────────────── ⑫ 렌더 + 스위치 격리(확장 어휘) ─────────────────
+print("── ⑫ 렌더 — 새 어휘 문장 · events=0 무발화")
+d, b1, b2, b3, bots = loot_scene()
+d._enter_cell(b1, 2, 1, bots)
+wire = brains._wire(d.view(b2, bots))
+check("⑫ 획득 문장(\"챙기는 것을\")", '챙기는 것을' in wire)
+d, b1, b2, bots = spot_scene(b2x=4)
+d._search(b1, bots)
+wire = brains._wire(d.view(b2, bots))
+check("⑫ 발견 문장(\"찾아내는 것을\")", '찾아내는 것을' in wire)
+d, b1, b2, b3, bots = loot_scene()
+b1['x'], b1['y'] = 1, 2
+d.d20 = lambda: 1
+d._interact(b1, fid(d, 'chest'), bots)
+wire = brains._wire(d.view(b2, bots))
+check("⑫ 피해 문장(\"당하는 것을\")", '당하는 것을' in wire)
+d, b1, b2, b3, bots = loot_scene(events=False)     # 스위치 격리 — 새 어휘도 D22 규율
+d._enter_cell(b1, 2, 1, bots)
+b1['x'], b1['y'] = 1, 2
+d.d20 = lambda: 1
+d._interact(b1, fid(d, 'chest'), bots)
+d._interact(b1, fid(d, 'potion'), bots)
+check("⑫ events=0: 획득·피해 전부 무주입", not b2.get('witnessed'))
+d, b1, b2, bots = spot_scene(b2x=4, events=False)
+d._search(b1, bots)
+check("⑫ events=0: 발견 무주입", not b2.get('witnessed'))
+
 print()
 if C.failed:
     print("FAIL — %d개 실패" % C.failed)

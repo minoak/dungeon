@@ -449,6 +449,15 @@ def _witness_prose(w):
         return "%s가 %s에 당하는 것을" % (who, w.get("trap", "함정"))
     if k == "ally_heal":
         return "%s가 %s으로 기운을 차리는 것을" % (who, w.get("how", "?"))
+    if k == "ally_loot":
+        what = w.get("what", "?")
+        if what == "상자":
+            return "%s가 상자에서 보물을 꺼내는 것을" % who
+        return "%s가 %s을(를) 챙기는 것을" % (who, what)
+    if k == "ally_spot":
+        return "%s가 숨어 있던 %s을(를) 찾아내는 것을" % (who, w.get("mon") or w.get("what", "?"))
+    if k == "ally_mishap":
+        return "%s가 %s에 당하는 것을" % (who, w.get("what", "?"))
     return "%s의 일: %s" % (who, json.dumps(w, ensure_ascii=False))
 
 

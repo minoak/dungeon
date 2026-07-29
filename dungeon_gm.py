@@ -1536,7 +1536,7 @@ class Dungeon:
         elif typ == 'interact':
             res = self._interact(bot, tgt, bots)
         elif typ == 'search':
-            res = self._search(bot)
+            res = self._search(bot, bots)
         elif typ == 'drink':
             res = self._drink(bot, bots)              # 회복 물약(07-17) — 무대상 즉시 동사(search 선례)
         elif typ == 'wait':
@@ -2119,7 +2119,7 @@ class Dungeon:
             bot['order'], bot['path'] = None, []      #   적의 공격이 '매복' 판정되는 거짓 they-ambush)
             return {**base, 'result': 'at_exit'}
         newly = self._perceive(bot)                   # 이동으로 새로 보인 몹 = aware_of 등록(처음 본 것만)
-        found = self._passive_search(bot)             # 직업 인지 스윕(수동 search-on-move) — 숨은 것 발견
+        found = self._passive_search(bot, bots)       # 직업 인지 스윕(수동 search-on-move) — 숨은 것 발견
         reunion = None
         if self.scan:                                 # 구역 발자국(been 어휘·장부 재료 — 정지와 무관.
             zid = self.zone_at.get((nx, ny))          #   D19 정정: '처음 방 무조건 정지'는 폐지 —
@@ -2296,11 +2296,17 @@ class Dungeon:
         tf = self.feature_at(nx, ny, 'treasure')
         if tf and not tf.concealed:               # 숨은 보물은 밟아도 모른다 — 인지로 드러나야 줍는다
             del self.features[tf.id]; bot['bag'] += 1; out['treasure'] = True
+            self._witness(bots, nx, ny,           # 전달층(D22 확장 07-29): 획득도 목격 — 보물이 눈앞에서
+                          {'kind': 'ally_loot', 'char': bot['char'], 'what': '보물'},
+                          exclude=(bot['char'],))  # 사라지는 걸 본 사람은 누가 가져갔는지도 본 사람이다
         pf = self.feature_at(nx, ny, 'potion')
         if pf and not pf.concealed:               # 회복 물약(07-17): 보물과 같은 줍기 문법(밟으면 소지)
             del self.features[pf.id]
             bot['potions'] = bot.get('potions', 0) + 1
             out['potion'] = True
+            self._witness(bots, nx, ny,
+                          {'kind': 'ally_loot', 'char': bot['char'], 'what': '물약'},
+                          exclude=(bot['char'],))
         if (nx, ny) == self.exit:
             out['at_exit'] = True
         trap = next((t for t in self.traps if t.x == nx and t.y == ny and not t.sprung), None)
@@ -2344,7 +2350,7 @@ class Dungeon:
             # FLEEING/desperate 는 안 건드린다 — 도주 시계(flee_turns) 리셋·중복 연출 방지
         return woken
 
-    def _passive_search(self, bot):
+    def _passive_search(self, bot, bots=()):
         """수동 search-on-move(SPD 능동/수동 분리의 수동쪽): 자동보행 칸마다 인지 반경(search_r) 내
         '보이는' 숨은 것들에 d20+DEX ≥ DC 굴림. 도적(반경2·DEX+3)이 압도적 = 직업 인지의 몸통.
         드러난 것 목록 반환(step_order 가 인카운터로 정지 → "잠깐, 함정이야!" 장면)."""
@@ -2359,12 +2365,19 @@ class Dungeon:
                     t.hidden = False
                     found.append({'kind': 'trap', 'name': t.name,
                                   'bearing': self._bearing(t.x - cx, t.y - cy)})
+                    self._witness(bots, t.x, t.y,   # 전달층(D22 확장 07-29): 발견도 목격 — 갑자기
+                                  {'kind': 'ally_spot', 'char': bot['char'],   # 나타난 함정의 사연.
+                                   'what': t.name},                # 판정 칸=드러난 물건의 자리(변화가
+                                  exclude=(bot['char'],))          # 일어난 칸을 본 사람이 이유를 안다)
         for f in list(self.features.values()):
             if f.concealed and (f.x, f.y) in seen:
                 if self.d20() + bot['dex'] >= (f.perception_gate or PASSIVE_DC):
                     f.concealed = False
                     found.append({'kind': f.type, 'name': f.name,
                                   'bearing': self._bearing(f.x - cx, f.y - cy)})
+                    self._witness(bots, f.x, f.y,
+                                  {'kind': 'ally_spot', 'char': bot['char'], 'what': f.name},
+                                  exclude=(bot['char'],))
         for m in self.monsters:
             if m.alive and m.concealed and (m.x, m.y) in seen:
                 if self.d20() + bot['dex'] >= LURK_DC:
@@ -2372,6 +2385,9 @@ class Dungeon:
                     bot['aware_of'].add(m.id)     # 정체를 봤다 → 매트릭스 봇쪽 비트 = we-ambush 가능
                     found.append({'kind': 'monster', 'name': m.kind, 'id': 'm%d' % m.id,
                                   'bearing': self._bearing(m.x - cx, m.y - cy)})
+                    self._witness(bots, m.x, m.y,   # 몹 이름은 mon 필드 — 목격자 도감 게이트를 탄다
+                                  {'kind': 'ally_spot', 'char': bot['char'], 'mon': m.kind},
+                                  exclude=(bot['char'],))
         return found
 
     def _zone_label(self, x, y):
@@ -2533,16 +2549,25 @@ class Dungeon:
             return {**base, 'result': 'nothing'}
         if f and f.type == 'treasure':
             del self.features[f.id]; bot['bag'] += 1
+            self._witness(bots, tx, ty,          # 전달층(D22 확장 07-29): 획득도 목격 — 사라진 보물의 행방
+                          {'kind': 'ally_loot', 'char': bot['char'], 'what': '보물'},
+                          exclude=(bot['char'],))
             return {**base, 'result': 'treasure'}
         if f and f.type == 'potion':             # 회복 물약 — 곁에서 집기(줍기 문법, 마시는 건 drink)
             del self.features[f.id]
             bot['potions'] = bot.get('potions', 0) + 1
+            self._witness(bots, tx, ty,
+                          {'kind': 'ally_loot', 'char': bot['char'], 'what': '물약'},
+                          exclude=(bot['char'],))
             return {**base, 'result': 'potion', 'potions': bot['potions']}
         if f and f.type == 'chest':              # 상자 도박 — 손재주(DEX)가 좋으면 안전하게 연다
             del self.features[f.id]
             r = self.d20(); total = r + bot['dex']
             if total >= 10:
                 bot['bag'] += 2
+                self._witness(bots, tx, ty,      # 전달층: 상자를 여는 좋은 결과 — 나쁜 결과(독침)와 대칭
+                              {'kind': 'ally_loot', 'char': bot['char'], 'what': '상자'},
+                              exclude=(bot['char'],))
                 return {**base, 'result': 'chest_loot', 'roll': r, 'mod': bot['dex'],
                         'total': total, 'loot': 2}
             bot['hp'] -= 2
@@ -2553,6 +2578,11 @@ class Dungeon:
                 g = self._on_down(bot, bots, by='함정 상자', by_kind='hazard')
                 if g:
                     out['grave'] = g
+            if bot['alive']:                     # 전달층: 독침 장면 목격 — 전사면 ally_down 이 담당(함정 패턴)
+                self._witness(bots, tx, ty,
+                              {'kind': 'ally_mishap', 'char': bot['char'],
+                               'what': '상자 독침', 'dmg': 2},
+                              exclude=(bot['char'],))
             return out
         if f and f.type == 'fountain':           # 샘 도박 — 대체로 이득(회복), 가끔 오염
             del self.features[f.id]
@@ -2571,6 +2601,11 @@ class Dungeon:
                 g = self._on_down(bot, bots, by='오염된 샘', by_kind='hazard')
                 if g:
                     out['grave'] = g
+            if bot['alive']:                     # 전달층: 오염 장면 목격 — 같은 샘의 축복(ally_heal)만
+                self._witness(bots, tx, ty,      #   보이고 저주는 안 보이던 비대칭의 해소(07-29)
+                              {'kind': 'ally_mishap', 'char': bot['char'],
+                               'what': '오염된 샘', 'dmg': 1},
+                              exclude=(bot['char'],))
             return out
         return {**base, 'result': 'nothing'}
 
@@ -2651,7 +2686,7 @@ class Dungeon:
         return {**base, 'result': 'drink_heal', 'heal': heal, 'hp': bot['hp'],
                 'potions': bot['potions']}
 
-    def _search(self, bot):
+    def _search(self, bot, bots=()):
         """능동 search(SPD 능동/수동 분리의 능동쪽): 턴을 통째로 써서 인지 반경(search_r) 내
         '보이는' 숨은 것 **전부 확정 발견**(굴림 없음 — 시간을 쓰는 대가). 도적 반경 2 vs 전사 1."""
         r = bot.get('search_r', 1)
@@ -2663,17 +2698,26 @@ class Dungeon:
                 t.hidden = False
                 found.append({'kind': 'trap', 'name': t.name,
                               'bearing': self._bearing(t.x - cx, t.y - cy)})
+                self._witness(bots, t.x, t.y,     # 전달층(D22 확장 07-29): 능동 수색의 발견도 목격
+                              {'kind': 'ally_spot', 'char': bot['char'], 'what': t.name},
+                              exclude=(bot['char'],))
         for f in list(self.features.values()):
             if f.concealed and (f.x, f.y) in seen:
                 f.concealed = False
                 found.append({'kind': f.type, 'name': f.name,
                               'bearing': self._bearing(f.x - cx, f.y - cy)})
+                self._witness(bots, f.x, f.y,
+                              {'kind': 'ally_spot', 'char': bot['char'], 'what': f.name},
+                              exclude=(bot['char'],))
         for m in self.monsters:
             if m.alive and m.concealed and (m.x, m.y) in seen:
                 m.concealed = False
                 bot['aware_of'].add(m.id)
                 found.append({'kind': 'monster', 'name': m.kind, 'id': 'm%d' % m.id,
                               'bearing': self._bearing(m.x - cx, m.y - cy)})
+                self._witness(bots, m.x, m.y,     # 몹 이름은 mon 필드 — 목격자 도감 게이트를 탄다
+                              {'kind': 'ally_spot', 'char': bot['char'], 'mon': m.kind},
+                              exclude=(bot['char'],))
         return {'char': bot['char'], 'type': 'search', 'radius': r, 'found': found}
 
     # ── 몬스터 턴 (봇들이 행동한 뒤 엔진이 굴린다) ──────────────
