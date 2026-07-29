@@ -25,18 +25,39 @@ from concurrent.futures import ThreadPoolExecutor
 import dungeon_gm as G
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-with open(os.path.join(HERE, "adventurer_prompt.md"), encoding="utf-8") as _f:
-    ADV_PROMPT = _f.read()
-try:
-    with open(os.path.join(HERE, "adventurer_prompt_menu.md"), encoding="utf-8") as _f:
-        MENU_PROMPT = _f.read()
-except OSError:                                  # 파일 누락 배포여도 게임은 죽지 않는다(안전망)
-    MENU_PROMPT = ""
-try:                                             # 사교 콜 프롬프트(채널 분리 2026-07-26)
-    with open(os.path.join(HERE, "social_prompt.md"), encoding="utf-8") as _f:
-        SOCIAL_PROMPT = _f.read()
-except OSError:
-    SOCIAL_PROMPT = ""                           # 없으면 사교 채널이 통째로 꺼진다(안전망)
+
+
+def _variant(text, solo):
+    """프롬프트에서 판에 맞는 쪽만 남긴다 — `<!--PARTY-->…<!--/PARTY-->` / `<!--SOLO-->…<!--/SOLO-->`.
+
+    왜 파일을 둘로 안 쪼갰나(2026-07-29): 갈리는 건 10줄인데 같은 건 60줄이다(세계 물리·작정·
+    출력 형식). 파일이 둘이면 물리를 고칠 때 한쪽만 고치고 나머지가 조용히 낡는다 —
+    이 레포는 verify_plan 이 4커밋 동안 빨간불인 걸 아무도 못 본 전적이 있다.
+
+    이게 왜 중요한가: 솔로 판 첫 실측에서 두란이 계단을 t156 에 확보하고도 **t210 까지 54틱을
+    없는 동료를 찾아다녔다**. 역할극이 아니었다 — 프롬프트가 "계단은 전원이 모여야 하강"이라고
+    **규칙으로** 알려주고 있었다. 엔진은 이미 면제했는데 프롬프트가 거짓말을 한 것.
+    세계가 바뀌면 세계 설명서도 같이 바뀌어야 한다 — verify_solo ⑪이 그물이다."""
+    keep, drop = ("SOLO", "PARTY") if solo else ("PARTY", "SOLO")
+    text = re.sub(r"<!--%s-->\n?.*?<!--/%s-->\n?" % (drop, drop), "", text, flags=re.S)
+    return text.replace("<!--%s-->\n" % keep, "").replace("<!--/%s-->\n" % keep, "")
+
+
+def _load_prompt(fname, required=True):
+    try:
+        with open(os.path.join(HERE, fname), encoding="utf-8") as f:
+            raw = f.read()
+    except OSError:                              # 파일 누락 배포여도 게임은 죽지 않는다(안전망)
+        if required:
+            raise
+        return "", ""
+    return _variant(raw, False), _variant(raw, True)
+
+
+ADV_PROMPT, ADV_PROMPT_SOLO = _load_prompt("adventurer_prompt.md")
+MENU_PROMPT, MENU_PROMPT_SOLO = _load_prompt("adventurer_prompt_menu.md", required=False)
+# 사교 콜 프롬프트(채널 분리 2026-07-26) — 없으면 사교 채널이 통째로 꺼진다(안전망)
+SOCIAL_PROMPT, SOCIAL_PROMPT_SOLO = _load_prompt("social_prompt.md", required=False)
 
 # 리모컨 모드(기본 on): 행동=엔진 열거 옵션에서 번호 선택, 말·속내=자유.
 # DUNGEON_MENU=0 이면 구식 자유서술(동사+target 직접 작성) — A/B 대조군.
@@ -938,7 +959,7 @@ def _fallback(obs, char, why="파싱 실패"):
     return fb
 
 
-def claude_brain(obs, char="?", bot=None, roster=None):
+def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
     if bot is None:                          # 하위호환(구 시그니처): HEROES 로 유사 봇 구성
         h = G.HEROES.get(char, {})
         bot = {**h, "char": char, "maxhp": h.get("hp")}
@@ -948,12 +969,12 @@ def claude_brain(obs, char="?", bot=None, roster=None):
     if MENU:
         menu = "\n".join("%d. %s" % (o["n"], o["label"])
                          for o in (obs.get("options") or []))
-        prompt = (_sheet(bot, roster) + "\n" + MENU_PROMPT
+        prompt = (_sheet(bot, roster) + "\n" + (MENU_PROMPT_SOLO if solo else MENU_PROMPT)
                   + "\n\n" + _wire(obs, names)
                   + "\n\n## 이번 턴 선택지 — 이 중 번호 하나를 골라라\n" + menu
                   + "\n\n오직 JSON 한 줄로만 답하라.")
     else:
-        prompt = (_sheet(bot, roster) + "\n" + ADV_PROMPT
+        prompt = (_sheet(bot, roster) + "\n" + (ADV_PROMPT_SOLO if solo else ADV_PROMPT)
                   + "\n\n" + _wire(obs, names)
                   + "\n\n오직 JSON 한 줄로만 답하라.")
     res = _call_claude(prompt, "haiku")
@@ -1044,7 +1065,8 @@ def social_all(d, bots, inbox=None):
         obss[b['char']] = o
 
     def ask(b):
-        prompt = (_sheet(b, roster) + "\n" + SOCIAL_PROMPT
+        prompt = (_sheet(b, roster) + "\n"
+                  + (SOCIAL_PROMPT_SOLO if getattr(d, 'solo', False) else SOCIAL_PROMPT)
                   + "\n\n" + _wire(obss[b['char']], names)
                   + "\n\n오직 JSON 한 줄로만 답하라.")
         raw, why = _call_claude(prompt, "haiku")
@@ -1099,8 +1121,10 @@ def think_all(d, bots, inbox=None):
                                         # 콜당 지연의 합이 아니라 **최댓값**이다(동시 호출) —
                                         # 이 둘이 벌어지면 동시성이 실효하지 않는다는 뜻.
         with ThreadPoolExecutor(max_workers=len(thinkers)) as ex:
-            roster = [] if getattr(d, 'solo', False) else bots   # 솔로 판(07-29)은 로스터가 없다 —
-            futs = {b["char"]: ex.submit(claude_brain, obss[b["char"]], b["char"], b, roster)
+            solo = bool(getattr(d, 'solo', False))
+            roster = [] if solo else bots    # 솔로 판(07-29)은 로스터가 없다 —
+            futs = {b["char"]: ex.submit(claude_brain, obss[b["char"]], b["char"], b,
+                                         roster, solo)
                     for b in thinkers}       # bot=시트 포함 봇 dict, roster=파티(관계 이름 풀이)
                                              #   시트에서 relationships 를 빼도 '- 동료: 두란(봇1)…'
                                              #   줄이 로스터에서 되살아나 이름을 알려준다(누출).

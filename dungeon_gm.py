@@ -1330,7 +1330,13 @@ class Dungeon:
                 _add('attack', m['id'], '공격: %s (%s)'
                      % (_mfact(m), '인접' if m['adj'] else '%d칸 거리' % m['dist']))
         if exit_obj and exit_obj['adj']:
+            # ⚠️ 라벨이 규칙을 말한다 — 그리고 이건 '고르라고 열거된 선택지 본문'이라
+            #    프롬프트 설명문보다 무겁게 읽힌다. 솔로 판에서 파티 규칙을 그대로 띄우면
+            #    엔진은 혼자 내려보내면서 메뉴는 모이라고 하는 모순이 된다(07-29 실측:
+            #    두란이 계단 확보 후 54틱을 없는 동료 찾기에 썼다). 규칙 문구는 판을 탄다.
             _add('interact', 'exit',
+                 '계단에서 하강 시도 (규칙: 너 혼자 내려간다 — 기다릴 일행이 없다)'
+                 if self.solo else
                  '계단에서 하강 시도 (규칙: 살아있는 파티 전원이 계단 근처에 모여야 내려간다)')
         for f in feats:
             if f['adj']:
@@ -1359,25 +1365,31 @@ class Dungeon:
             if not m['adj']:
                 _add('goto', m['id'], '접근: %s — %s, 거리 %d'
                      % (_mfact(m), m['bearing'], m['dist']))
-        names = {o['char']: (o.get('name') or o['job']) for o in bots}
+        # 솔로 판에서는 이름을 모른다 — 통성명한 적이 없다. brains 의 wire 가 '낯선 사람'
+        # 이라고 쓰는데 엔진 메뉴만 '카야(봇2)'라고 부르면 두 층이 서로 다른 말을 한다
+        # (선택지 라벨이 더 무겁게 읽히므로 이쪽이 이긴다). 표기의 단일 진실원천을 지킨다.
+        # id(봇2)는 그대로 남는다 — 지칭은 돼야 핑을 건다. 모르는 건 이름뿐이다.
+        names = ({} if self.solo
+                 else {o['char']: (o.get('name') or o['job']) for o in bots})
+        _unknown = '낯선 사람' if self.solo else '동료'
         vis_allies = {a['char'] for a in allies}
         for a in allies:
             if a['adj']:
                 continue        # 이미 곁(직교 인접)의 동료 '합류'는 no-op — 다른 adj 분기와 대칭
             _add('goto', a['id'], '합류: %s(봇%s) — %s, %s, 거리 %d'
-                 % (names.get(a['char'], '동료'), a['char'], a['condition'],
+                 % (names.get(a['char'], _unknown), a['char'], a['condition'],
                     a['bearing'], a['dist']))          # 등급 병기(A-4) — 빈사 동료가 눈에 밟히게
         for p in party:
             if p['alive'] and not p['won'] and p['char'] not in vis_allies:
                 _add('goto', 'b%s' % p['char'],        # 안 보이는 동료 = 등급 미병기(시야-온리)
                      '찾아가기: %s(봇%s) — 지금 안 보임(파티 감각으로 접근)'
-                     % (names.get(p['char'], '동료'), p['char']))
+                     % (names.get(p['char'], _unknown), p['char']))
         for a in allies:                               # 동행(D18 A-5) — 보이는 동료마다 지속 order
             ob = next(o for o in bots if o['char'] == a['char'])
             mutual = str(ob.get('order') or '') == 'follow:b%s' % bot['char']
             _add('follow', a['id'],                    # ※주석=사실만(수색 '이미 살폈다' 선례).
                  '동행: %s(봇%s) 곁을 따라 걷는다 — 새 일이 생기면 멈추고 묻는다%s'
-                 % (names.get(a['char'], '동료'), a['char'],
+                 % (names.get(a['char'], _unknown), a['char'],
                     ' ※ 그는 지금 너를 따르는 중이다 — 서로 따르면 아무도 못 움직인다'
                     if mutual else ''))                # 곁에서 나를 계속 따르는 행동은 눈에 보인다
                                                        # (보이는 동료 한정=allies 루프 — 시야-온리)
@@ -1419,7 +1431,7 @@ class Dungeon:
         # 1회성: 이번 결정에 한 번 전달하고 비운다(휘발=다음 결정 1회 — D22).
         # 자기 사건은 last 가 담당(중복 없음). 종 표기는 내 도감 기준(모르는 종=낯선 짐승 — D9 정합).
         def _mask(w):                          # 도감 게이트 — 몹 이름만 가린다(함정·샘은 by_kind 로 면제)
-            out = {**w, 'name': names.get(w['char'], '동료')}
+            out = {**w, 'name': names.get(w['char'], _unknown)}
             if known is not None:
                 if 'by' in out and out.get('by_kind', 'monster') == 'monster' \
                         and 'monster:' + out['by'] not in known:

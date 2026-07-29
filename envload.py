@@ -23,7 +23,11 @@ def load(path=None):
     """.env 를 읽어 os.environ 에 채운다(이미 있는 키는 보존). 반환 = 새로 채운 개수."""
     path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
     try:
-        with open(path, encoding="utf-8") as f:
+        # utf-8-sig: BOM 이 있으면 먹고, 없으면 utf-8 과 동일하다. Windows 편집기·PowerShell
+        # 리다이렉션이 BOM 을 붙이는 일이 흔한데, 그러면 첫 줄 키가 '﻿GEMINI_API_KEY' 가
+        # 되어 **키를 제대로 넣고도 못 찾는다**(strip() 은 BOM 을 공백으로 안 본다).
+        # 진단이 어려운 실패라 로더에서 흡수한다. CRLF 는 splitlines()+strip() 이 이미 처리.
+        with open(path, encoding="utf-8-sig") as f:
             body = f.read()
     except OSError:
         return 0                       # 없으면 조용히 통과 — .env 는 선택 사항이다

@@ -167,6 +167,36 @@ check("⑧ 솔로 메뉴에 동료 항목 없음(엔진이 거부할 선택지�
       unseen_solo == [])
 check("⑧ 파티 메뉴에는 종전대로 있다", len(unseen_party) > 0)
 
+# 계단 라벨이 규칙을 말한다 — 그리고 '고르라고 열거된 선택지 본문'이라 프롬프트 설명문보다
+# 무겁게 읽힌다. 프롬프트만 고치고 여기를 놓치면 엔진은 혼자 내려보내면서 메뉴는 모이라고
+# 한다(07-29 실측이 딱 이 모순이었다).
+_lab = {}
+for solo in (True, False):
+    d, bots = stage(solo)
+    bots[0]['x'], bots[0]['y'] = d.exit
+    o = d.view(bots[0], bots)
+    _lab[solo] = next((t['label'] for t in (o.get('options') or [])
+                       if t.get('target') == 'exit' and t.get('type') == 'interact'), '')
+check("⑧ 솔로 계단 라벨이 파티 규칙을 말하지 않는다 (%r)" % _lab[True][:40],
+      _lab[True] and '전원' not in _lab[True] and '모여야' not in _lab[True])
+check("⑧ 솔로 계단 라벨이 혼자임을 말한다", '혼자' in _lab[True])
+check("⑧ 파티 계단 라벨은 종전 그대로", '모여야' in _lab[False])
+
+# 이름 누출 — brains 의 wire 는 '낯선 사람'이라 쓰는데 엔진 메뉴만 '카야(봇2)'라고 부르면
+# 두 층이 서로 다른 말을 한다. 선택지 라벨이 더 무겁게 읽히므로 그쪽이 이긴다.
+_meet = {}
+for solo in (True, False):
+    d, bots = stage(solo)
+    bots[1]['x'], bots[1]['y'] = bots[0]['x'] + 1, bots[0]['y']
+    o = d.view(bots[0], bots)
+    _meet[solo] = " | ".join(t['label'] for t in (o.get('options') or [])
+                             if str(t.get('target', '')).startswith('b'))
+check("⑧ 마주친 남의 메뉴 라벨에 이름이 안 샌다 (%r)" % _meet[True][:46],
+      _meet[True] and '카야' not in _meet[True] and '낯선 사람' in _meet[True])
+check("⑧ 파티 판은 종전대로 이름으로 부른다", '카야' in _meet[False])
+check("⑧ 그래도 id 는 남는다 — 보이면 지칭할 수 있어야 핑을 건다",
+      '봇2' in _meet[True])
+
 # ── ⑨ 시트 파일 대조 ─────────────────────────────────────────────────────
 print("\n⑨ party_solo.json = party.json - relationships")
 raw_p = json.load(open("party.json", encoding="utf-8"))
@@ -186,6 +216,47 @@ check("⑨ 솔로 시트엔 relationships 가 아예 없다",
       all('relationships' not in raw_s[k] for k in keys_s))
 check("⑨ 파티 시트엔 그대로 있다",
       all('relationships' in raw_p[k] for k in keys_p))
+
+# ── ⑪ 프롬프트 갈림 ──────────────────────────────────────────────────────
+# 첫 솔로 판이 가르쳐 준 것: 엔진에서 파티를 없애도 **프롬프트가 규칙을 거짓으로 말하면**
+# 캐릭터는 그 거짓을 따른다. 두란은 계단을 t156 에 확보하고도 "전원이 모여야 하강"이라는
+# 프롬프트 문장 때문에 t210 까지 54틱을 없는 동료를 찾아다녔다. 역할극이 아니라 규칙 준수였다.
+# 세계가 바뀌면 세계 설명서도 바뀌어야 한다 — 그걸 사람이 기억하는 대신 여기서 지킨다.
+print("\n⑪ 프롬프트 갈림(PARTY/SOLO 마커)")
+FALSE_IN_SOLO = ("모여야", "함께 내려간다", "파티가 함께", "동료와 의논",
+                 "파티 안에서", "파티 감각", "데리러 가라")
+#            ↑ 낱말이 아니라 **규칙 진술**이어야 한다 — '데리러' 만 보면 솔로의 정당한 문장
+#              "데리러 갈 사람도 없다" 가 걸려 헛경보가 난다(초안이 실제로 그랬다)
+PAIRS = (("메뉴", brains.MENU_PROMPT, brains.MENU_PROMPT_SOLO),
+         ("자유서술", brains.ADV_PROMPT, brains.ADV_PROMPT_SOLO),
+         ("사교", brains.SOCIAL_PROMPT, brains.SOCIAL_PROMPT_SOLO))
+for _nm, _party, _solo in PAIRS:
+    check("⑪ %s: 두 판본 다 마커 잔재 없음" % _nm,
+          not any(m in t for t in (_party, _solo)
+                  for m in ("<!--PARTY", "<!--SOLO", "<!--/")))
+    check("⑪ %s: 솔로 판본에 파티 규칙 진술이 없다" % _nm,
+          not [w for w in FALSE_IN_SOLO if w in _solo])
+    check("⑪ %s: 두 판본이 실제로 다르다(갈림이 살아 있다)" % _nm,
+          bool(_party) and _party != _solo)
+check("⑪ 파티 판본 무손상 — 계단 규칙이 그대로 있다",
+      "파티가 함께" in brains.MENU_PROMPT and "동료와 의논" in brains.MENU_PROMPT)
+check("⑪ 솔로 판본이 혼자임을 명시한다",
+      "혼자" in brains.MENU_PROMPT_SOLO and "## 혼자다" in brains.MENU_PROMPT_SOLO)
+# 상수만 비교하면 헛돈다(자기 자신과의 비교) — 실제로 조립돼 나가는 프롬프트를 붙잡는다.
+_cap = {}
+_orig_call = brains._call_claude
+brains._call_claude = lambda p, m="haiku": (_cap.update(p=p), ("", "stub"))[1]
+try:
+    brains.claude_brain(o_s, '1', b_s[0], [], True)
+    _solo_prompt = _cap.get('p', '')
+    brains.claude_brain(o_p, '1', b_p[0], b_p, False)
+    _party_prompt = _cap.get('p', '')
+finally:
+    brains._call_claude = _orig_call            # 스텁 원복 — 안 되돌리면 뒤 체크가 오염된다
+check("⑪ 실제로 나가는 솔로 프롬프트에 '## 혼자다' 가 있고 파티 규칙은 없다",
+      "## 혼자다" in _solo_prompt and "모여야" not in _solo_prompt)
+check("⑪ 실제로 나가는 파티 프롬프트는 종전 그대로",
+      "동료와 의논" in _party_prompt and "파티가 함께" in _party_prompt)
 
 # ── 결정론 ───────────────────────────────────────────────────────────────
 print("\n⑩ 결정론")
