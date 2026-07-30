@@ -18,7 +18,7 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
   들어 있다(극적 아이러니의 원천). 봇에게 이 파일을 보여주면 시야-온리 계약이 깨진다.
   플레이어향 뷰를 만들 소비자는 스스로 필터링할 것.
 
-## 라인 종류(kind) 5종
+## 라인 종류(kind) 5종 (+마을 판 한정 `ascend` — 2026-07-30 D29 additive)
 
 ### `run_meta` — 첫 라인, 실행당 1회
 | 필드 | 내용 |
@@ -31,6 +31,7 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 | `monsters` `traps` `lurkers` | 1층 기준 배치 수(몬스터는 층당 +1) |
 | `potions` | 층당 회복 물약 배치 수(`DUNGEON_POTIONS`, 러너 기본 1 — 2026-07-17 additive. 엔진 직생성 기본 0) |
 | `gear` | 층당 장비 배치 수(`DUNGEON_GEAR`, 러너 기본 3 — 2026-07-30 additive. 엔진 직생성 기본 0. 순환: 단검·가죽 갑옷·장검·사슬 갑옷) |
+| `town` | 마을 판 여부(`DUNGEON_TOWN` — 2026-07-30 D29 additive). true 면 판 모양 자체가 다르다: depth 0=마을(손그림·전체 시야·NPC·몹 0), 왕복 전이(`ascend` 라인), DEPTHS 기본 1, 최심층 하강=관측 클리어(outcome 은 기존 escaped 유지) |
 | `max_turns` | 틱 한도 (0이면 퇴화: tick 0개·end.turn=0) |
 | `gm` | GM(LLM 내레이터) 사용 여부(bool) — 이 필드 자체를 제외하면 스트림 내용에 영향 없음(GM은 tick emit 뒤에 도는 소비자, 엔진·RNG 무접촉) |
 | `stream_obs` | decisions 에 obs 동봉 여부(bool, `DUNGEON_STREAM_OBS=1`) — tick 스키마 판별용 |
@@ -79,6 +80,10 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 | `bots[]` `monsters[]` `features[]` `traps[]` | 이 틱 **종료 시점 전체 스냅샷(델타 아님)** — 임의 틱 시킹 가능. `visited`(발자국)만 제외: 파생 규칙 "각 level 의 party 좌표(스폰 칸) + 이후 각 tick 의 봇 좌표 누적" |
 
 ### `descend` — 층 전이(전원 won) 때. 직후 라인은 반드시 `level`
+### `ascend` — 마을 판(D29) 상행 전이(전원 won·went=up) 때. 직후 라인은 반드시 `level`
+필드는 `descend` 와 동일(`to_depth`=올라가는 층 — 마을이면 0). 마을 판의 `level` 은 같은 depth 가
+여러 번 나올 수 있다(재입장 — **같은 층 보존**: level_seed·격자 동일, 세계 상태는 떠날 때 그대로).
+
 | 필드 | 내용 |
 |---|---|
 | `turn` | 전이가 일어난 틱 |
@@ -134,7 +139,7 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 | | ↳ `paced` | (2026-07-17 D18 개정 additive) 동료 char — 같은 방향으로 행군 중인 동료에게 **한 박자 양보**(제자리, `to` 없음, `result:'walking'`). 맞교대 셔틀(밀린 쪽이 되밀어 무한 왕복 — 50시드 10판 비종결 실측)의 치료. 같은 상황이 두 틱 이어지면 교대 강행(끼인 동료 추월 보장) |
 | | ↳ `name` | (2026-07-20 D21① additive, `DUNGEON_SELFSTOP` scan 판만) `result=reunion` — **아는 구역에 새 연결(무방향 구역쌍 에지 최초 통과)로 들어서 정지**("낯익은 곳이다"). name=그 봇의 기억으로 부른 사람말 이름(내용물 우선 "샘 있던 방", 없으면 크기, 좌표·번호 없음 — 봇마다 다를 수 있다: 장부가 다르니까). 같은 문 왕복은 첫 통과 때 에지가 적혀 재발화 없음(재방문 과제약 금지). 정지=재결정·작정 파기. treasure/potion 병기 가능 |
 | | ↳ `steps` | (2026-07-20 D21② additive, `DUNGEON_SELFSTOP` scan 판만) `result=wander` — **결정 없이 걸음만 이었는데(≥WANDER_N=10) 새로 본 칸 0 + 밟았던 칸 되밟기** → 정지+관찰 보고(질문·조향 금지 — 판단은 두뇌 몫). steps=그 걸음 수. 직행 관통(출구 귀환·장부 goto)은 되밟기가 없어 안 울린다. 새 목격·새 결정(act)이 창을 접는다. 3인 회전 셔틀(07-20 큰 판, 결정 0 ~50틱 회전) 류의 그물이자 맞물림 계측의 "맴돎 경고" 열 |
-| `interact` | `target`, `result=exit(party[])/wait_allies(missing[])/treasure/potion(potions — 2026-07-17 additive)/chest_loot(roll,mod,total,loot)/chest_trap(roll,mod,total,dmg,hp,down?)/fountain_heal(roll,heal,hp)/fountain_harm(roll,dmg,hp,down?)/equip(item,slot,bonus,dropped? — 2026-07-30 D28 additive)/nothing/too_far/no_target` | 계단(파티 동반 하강/대기)·줍기·상자·샘·물약 집기·장비 착용(스왑 시 dropped=그 자리에 놓은 헌 장비 이름 — 같은 칸에 새 피처로 실린다). exit 의 party=함께 내려간 char 명단 |
+| `interact` | `target`, `result=exit(party[])/wait_allies(missing[])/treasure/potion(potions — 2026-07-17 additive)/chest_loot(roll,mod,total,loot)/chest_trap(roll,mod,total,dmg,hp,down?)/fountain_heal(roll,heal,hp)/fountain_harm(roll,dmg,hp,down?)/equip(item,slot,bonus,dropped? — 2026-07-30 D28 additive)/ascend(party[] — 마을 복귀, D29 additive)/npc_talk(npc,line — 마을 NPC 말 걸기, D29 additive)/nothing/too_far/no_target` | 계단(파티 동반 하강/대기)·줍기·상자·샘·물약 집기·장비 착용(스왑 시 dropped=그 자리에 놓은 헌 장비 이름 — 같은 칸에 새 피처로 실린다). exit 의 party=함께 내려간 char 명단 |
 | `attack` | `result=attack/no_target/too_far`(**항상 존재**). `attack` 일 때만 `target`(몹 종류)·`target_id`(`m<n>`)·`roll mod total ac hit`·`surprise? crit? dmg? monster_hp? killed?` 존재 — 실패 2종은 `char/type/result` 뿐 | 봇의 공격. **result 로 분기하라.** surprise=우리 기습(we-ambush) |
 | `search` | `radius`, `found[]` | 능동 수색(턴 소모, 반경 내 확정 발견). found 빈 배열=허탕 |
 | `drink` | `result=drink_heal(heal,hp,potions)/no_potion` | (2026-07-17 additive) 회복 물약 마시기 — 굴림 없는 확정 완전 회복(샘=도박과 대비되는 '들고 다니는 보험'), 한 턴 소모. `potions`=남은 병 수. `no_potion`=빈 손 정직 보고. 만피에 마셔도 소모(heal=0 — 세계는 낭비를 말리지 않는다) |

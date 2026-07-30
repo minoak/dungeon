@@ -116,9 +116,13 @@ def build(spec):
                                              "zone": d._zone_label(f.x, f.y), "turn": t0}
         b["ledger"] = led
         bots.append(b)
-    for fs in spec.get("features") or []:      # 추가 피처 — from_ascii 글리프 밖(장비 상위 티어 등)
+    if spec.get("town"):                       # 마을 장면(D29) — 전체 시야·마을 어휘
+        d.town = True
+    for fs in spec.get("features") or []:      # 추가 피처 — from_ascii 글리프 밖(장비 상위 티어·NPC 등)
         d._add_feature(fs["type"], fs["name"], int(fs["x"]), int(fs["y"]),
                        concealed=bool(fs.get("concealed")))
+        if fs["type"] == "npc" and fs.get("line"):
+            d.npc_lines[fs["name"]] = fs["line"]
     for m in d.monsters:                       # HUNTING/FLEEING 템플릿 목표 좌표 채움
         if m.target:
             t = next((b for b in bots if b["char"] == m.target), None)

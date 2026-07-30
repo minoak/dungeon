@@ -36,6 +36,9 @@ GRAVE = 'T'                     # 묘(D22): 쓰러진 자리의 표지판 — �
                                 # 없음, D4 불가침). "누가 묻었나"는 묻지 않는 게임 문법(로그라이크 묘비).
 POTION = '!'                    # 회복 물약(07-17, PD 문법): 주워 들고 다니는 확정 완전 회복 —
                                 # 샘(그 자리 도박)과 대비되는 '보험'. 첫 소지 아이템(bot['potions'])
+STAIRS_UP, NPC = '<', '&'       # 마을(D29, 2026-07-30): '<'=위로 오르는 계단(마을 복귀 — 하강 '>'와
+                                # 대칭 문법), '&'=NPC(가게 앞에 서 있는 사람 — 몸이 있어 통과 불가,
+                                # 말 걸면 한 줄. 거래·대화=다음 단계). 마을=0층, 던전=1층부터.
 WEAPON, ARMOR = ')', '['        # 장비(2026-07-30, 뼈대): 슬롯 2(무기·방어구)+단순 보정. 착용=캐릭터
                                 # 판단(interact — 자동 줍기 아님·보물/물약과 다른 문법). 스왑=헌 장비를
                                 # 그 자리에 놓는다(인벤토리 없음 — 슬롯이 소지의 전부).
@@ -295,7 +298,8 @@ class Dungeon:
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                  scan=False, n_potions=0, loops=False, selfstop=False,
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
-                 motion=False, ally_sight=False, social=False, solo=False, n_gear=0):
+                 motion=False, ally_sight=False, social=False, solo=False, n_gear=0,
+                 town=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -356,6 +360,11 @@ class Dungeon:
                                    #   상황과 같은 모양이라, 여기서 잰 것이 그대로 쓰인다.
                                    #   ⚠️ 서로 공격은 아직 물리적으로 불가(_attack 이 몹만 해소) —
                                    #   '자유'의 범위에서 이것만 빠져 있다는 걸 판 해석 때 감안할 것.
+        self.town = bool(town)     # 마을 층(D29, 2026-07-30) — 기본 꺼짐. 켜면 ①전체가 보인다
+                                   #   (visible_cells=맵 전부 — 고향은 다 아는 곳, 시야 엔진은 던전
+                                   #   전용 긴장 장치) ②계단 어휘가 마을 문맥(던전 입구/복귀).
+                                   #   실전은 러너 build_town(from_ascii 손그림)이 켠다.
+        self.npc_lines = {}        # NPC 이름→인사 한 줄(town.json 데이터 — lore 선례. 판정 무접촉)
         self.graves = bool(graves) # D22 묘 스위치 — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_GRAVES(기본 1)로 켠다. 쓰러진 자리에 '~의 묘' 피처.
         self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
@@ -428,6 +437,8 @@ class Dungeon:
         d.social = False           # 채널 분리 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.ally_sight = False       # 동료 시야 면제 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.solo = False             # 솔로 판(07-29) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.town = False             # 마을 층(D29) — 기본 꺼짐(러너 build_town 이 켠다)
+        d.npc_lines = {}           # NPC 인사 사전 — build_town 이 채운다(데이터, 판정 무접촉)
                                    #   ⚠️ from_ascii 는 __new__ 경유라 __init__ 을 안 탄다 —
                                    #   새 스위치는 여기 명시 초기화가 필수(D21·D22·솔로 때 밟은 함정.
                                    #   빼먹으면 AttributeError 로 게이트 15개가 한꺼번에 붉어진다)
@@ -454,6 +465,8 @@ class Dungeon:
                     d._add_feature('weapon', '단검', x, y)     # 상위 티어 장면은 호출측이
                 elif ch == ARMOR:                              # _add_feature('weapon','장검',…)로 직접
                     d._add_feature('armor', '가죽 갑옷', x, y)
+                elif ch == STAIRS_UP:      # 마을(D29) — 위로 오르는 계단(복귀. 하강 '>'와 대칭)
+                    d._add_feature('stairs_up', '위로 오르는 계단', x, y)
                 elif ch == TRAP:
                     tslots.append((x, y))
                 elif ch.isdigit():
@@ -940,6 +953,9 @@ class Dungeon:
             return False
         if self.monster_at(x, y):
             return False
+        f = self.feature_at(x, y)
+        if f and f.type == 'npc':          # NPC(D29) — 사람이 서 있는 칸은 몸이 막는다(밟고 지나갈
+            return False                   #   수 없다). 말은 곁에서(interact 맨해튼 1) 건넨다
         return True
 
     def tile(self, x, y, spectator=False):
@@ -970,6 +986,10 @@ class Dungeon:
             return WEAPON
         if f and f.type == 'armor' and not f.concealed:
             return ARMOR
+        if f and f.type == 'stairs_up':           # 마을(D29): 위로 오르는 계단·NPC — 숨김 개념 없음
+            return STAIRS_UP
+        if f and f.type == 'npc':
+            return NPC
         if f and f.type == 'grave':               # 묘(D22) — 숨김 개념 없음(죽음은 공공연한 사실)
             return GRAVE
         for t in self.traps:
@@ -1129,7 +1149,11 @@ class Dungeon:
         return (v + h) or '-'
 
     def visible_cells(self, cx, cy, r=SIGHT):
-        """(cx,cy)이 지금 보는 칸 집합 — (2r+1)² 중 벽에 안 가린 칸(LOS). 대칭(A↔B)."""
+        """(cx,cy)이 지금 보는 칸 집합 — (2r+1)² 중 벽에 안 가린 칸(LOS). 대칭(A↔B).
+        마을(D29): 전체가 보인다 — 고향은 다 아는 곳(파트너 확정 07-30). 여기가 유일한 조임목이라
+        obs·메뉴·목격·say 배달·정지 전부가 한 줄로 따라온다. 시야 엔진=던전 전용 긴장 장치."""
+        if self.town:
+            return {(x, y) for y in range(self.h) for x in range(self.w)}
         cells = set()
         for dy in range(-r, r + 1):
             for dx in range(-r, r + 1):
@@ -1206,7 +1230,9 @@ class Dungeon:
                  for f in self.features.values()
                  if f.type != 'exit' and not f.concealed and (f.x, f.y) in seen]
         ex, ey = self.exit                                       # v3: 출구 = beacon 아님 → 보일 때만
-        exit_obj = ({'id': 'exit', 'type': 'exit', 'name': '출구', **bear(ex, ey)}
+        exit_obj = ({'id': 'exit', 'type': 'exit',
+                     'name': '던전 입구' if self.town else '출구',   # 마을(D29): 같은 '>'라도 입구다
+                     **bear(ex, ey)}
                     if (ex, ey) in seen else None)
         led = bot.get('ledger')            # D17 스위치: 장부 켠 판만 구역 어휘·known 노출
                                            # (끈 판 obs 는 구판과 자구까지 동일 — 게이트 무수정 통과)
@@ -1365,13 +1391,26 @@ class Dungeon:
             #    프롬프트 설명문보다 무겁게 읽힌다. 솔로 판에서 파티 규칙을 그대로 띄우면
             #    엔진은 혼자 내려보내면서 메뉴는 모이라고 하는 모순이 된다(07-29 실측:
             #    두란이 계단 확보 후 54틱을 없는 동료 찾기에 썼다). 규칙 문구는 판을 탄다.
-            _add('interact', 'exit',
-                 '계단에서 하강 시도 (규칙: 너 혼자 내려간다 — 기다릴 일행이 없다)'
-                 if self.solo else
-                 '계단에서 하강 시도 (규칙: 살아있는 파티 전원이 계단 근처에 모여야 내려간다)')
+            if self.town:                      # 마을(D29): 같은 계단이라도 문맥이 다르다 — 여기의
+                _add('interact', 'exit',      #   하강은 '탈출'이 아니라 '모험의 시작'이다
+                     '던전 입구로 내려간다 (규칙: 너 혼자 내려간다)'
+                     if self.solo else
+                     '던전 입구로 내려간다 (규칙: 살아있는 일행 전원이 입구 근처에 모여야 내려간다)')
+            else:
+                _add('interact', 'exit',
+                     '계단에서 하강 시도 (규칙: 너 혼자 내려간다 — 기다릴 일행이 없다)'
+                     if self.solo else
+                     '계단에서 하강 시도 (규칙: 살아있는 파티 전원이 계단 근처에 모여야 내려간다)')
         for f in feats:
             if f['adj']:
-                if f['type'] in ('weapon', 'armor'):
+                if f['type'] == 'stairs_up':   # 마을 복귀(D29) — 라벨이 규칙을 말한다(하강 라벨 대칭)
+                    _add('interact', f['id'],
+                         '계단을 올라 마을로 돌아간다 (규칙: 너 혼자 올라간다)'
+                         if self.solo else
+                         '계단을 올라 마을로 돌아간다 (규칙: 살아있는 일행 전원이 계단 근처에 모여야 올라간다)')
+                elif f['type'] == 'npc':       # NPC(D29) — 말 걸기(거래 아님. 사실만)
+                    _add('interact', f['id'], '말 걸기: %s %s (곁)' % (f['name'], f['id']))
+                elif f['type'] in ('weapon', 'armor'):
                     # 장비 비교(07-30 파트너 설계): 착용 정보는 시트에 상주(캐싱)하고, **비교는
                     # 입수 결정 시점에만** 여기 라벨로 나온다. 라벨=사실만(수치·지금 착용·스왑 물리).
                     word = '피해' if f['type'] == 'weapon' else '막기'
@@ -1388,8 +1427,9 @@ class Dungeon:
                  % (bot['potions'],
                     ' ※ 지금은 상처가 없다' if bot['hp'] >= bot['maxhp'] else ''))
         if exit_obj and not exit_obj['adj']:
-            _add('goto', 'exit', '이동: 계단 exit — %s, 거리 %d'
-                 % (exit_obj['bearing'], exit_obj['dist']))
+            _add('goto', 'exit', '이동: %s exit — %s, 거리 %d'
+                 % ('던전 입구' if self.town else '계단',
+                    exit_obj['bearing'], exit_obj['dist']))
         for f in feats:
             if not f['adj']:
                 _add('goto', f['id'], '이동: %s %s — %s, 거리 %d'
@@ -1448,13 +1488,18 @@ class Dungeon:
                         ('%d턴 전' % ago) if ago > 0 else '방금'))
         # 수색 라벨 — 지금 살필 반경이 전부 '이미 살핀 곳'이면 그 사실을 붙인다(자기 행동 기억).
         # A/B 실측에서 이 주석 없이는 같은 자리 수색 반복 평균 70회(수색 합창 루프)로 판이 죽었다.
-        s_seen = self.visible_cells(cx, cy, bot.get('search_r', 1))
-        already = s_seen <= bot.get('searched', set())
-        _add('search', None,
-             '수색: 반경 %d 안 보이는 범위의 숨은 함정·매복·보물을 드러낸다 (벽 뒤는 못 본다 — 한 턴 소모)%s'
-             % (bot.get('search_r', 1),
-                ' ※ 이 반경은 이미 샅샅이 살폈다 — 반복해도 새로 나올 게 없다' if already else ''))
-        if zone_obs is not None:               # D19: 탐색 종점=명사(막다른 곳) — 시야 가장자리 폐기.
+        # 마을(D29)에선 수색·탐색 동사가 안 열린다 — 전부 보이는 곳에서 "벽 뒤·시야 밖" 라벨은
+        # 거짓이 된다(세계가 말하는 것=규칙이 하는 것). 숨을 것도, 못 본 길도 없다.
+        if not self.town:
+            s_seen = self.visible_cells(cx, cy, bot.get('search_r', 1))
+            already = s_seen <= bot.get('searched', set())
+            _add('search', None,
+                 '수색: 반경 %d 안 보이는 범위의 숨은 함정·매복·보물을 드러낸다 (벽 뒤는 못 본다 — 한 턴 소모)%s'
+                 % (bot.get('search_r', 1),
+                    ' ※ 이 반경은 이미 샅샅이 살폈다 — 반복해도 새로 나올 게 없다' if already else ''))
+        if self.town:
+            pass                               # 마을: explore 옵션군 전체 생략(위 사유)
+        elif zone_obs is not None:             # D19: 탐색 종점=명사(막다른 곳) — 시야 가장자리 폐기.
             for e in zone_obs.get('ends', []):   # 문은 위 goto 가 전담(중복 옵션 금지 — 1:1 원칙)
                 if e['kind'] == '막다른 곳' and not e['been']:
                     _add('explore', e['bearing'], '탐색: %s쪽 막다른 곳까지 가 본다 — %dm'
@@ -1496,6 +1541,7 @@ class Dungeon:
                 'str': bot['str'], 'dex': bot['dex'], 'inventory': bot['bag'],
                 'potions': bot.get('potions', 0),   # 소지 회복 물약(07-17) — 자기 몸의 사실
                 'gear': {'weapon': bot.get('weapon'), 'armor': bot.get('armor')},
+                **({'town': True} if self.town else {}),   # 마을(D29) — 층의 사실(던전 obs 무변경)
                                       # 장비(07-30) — 자기 몸의 사실(더미·BYO 소비용 데이터).
                                       # ⚠️ 프롬프트 상시 노출은 금지 계약: 착용 정보는 시트(불변
                                       # 프리픽스=캐싱)에 살고, 비교는 입수 메뉴 라벨에만 나온다
@@ -2577,6 +2623,7 @@ class Dungeon:
                       and o['char'] != bot['char']]
             if self.solo:                        # 솔로 판: 각자 계단에 닿으면 혼자 내려간다.
                 bot['won'] = True                #   기다릴 일행이 없다 — 모임 조건을 그대로 두면
+                bot['went'] = 'down'             #   (D29: 방향 기록 — 왕복 러너가 행선지를 읽는다)
                 bot['order'], bot['path'], bot['plan'] = None, [], []   # 남남끼리 서로를 찾아
                 return {**base, 'result': 'exit', 'party': [bot['char']]}  # 다녀야 해서 없애려던
                                                  #   그 뭉침이 규칙으로 강제된다. 판은 안 끝난다 —
@@ -2588,11 +2635,31 @@ class Dungeon:
             group = [bot] + others
             for o in group:                      # 모인 전원이 함께 하강/탈출 — 이 층의 작정도 끝
                 o['won'] = True
+                o['went'] = 'down'               # D29: 방향 기록(왕복 러너용 — 기존 판은 안 읽음)
                 o['order'], o['path'], o['plan'] = None, [], []
             return {**base, 'result': 'exit', 'party': sorted(o['char'] for o in group)}
         f = self.feature_at(tx, ty)
         if f and f.concealed:                    # 숨은 건 아직 '없는' 것 — 드러나야 만질 수 있다
             return {**base, 'result': 'nothing'}
+        if f and f.type == 'stairs_up':          # 마을 복귀(D29) — 하강과 대칭 문법(모임 규칙 동일:
+            others = [o for o in (bots or []) if o['alive'] and not o['won']   # 함께 왔으면
+                      and o['char'] != bot['char']]                            # 함께 돌아간다)
+            if self.solo:
+                bot['won'], bot['went'] = True, 'up'
+                bot['order'], bot['path'], bot['plan'] = None, [], []
+                return {**base, 'result': 'ascend', 'party': [bot['char']]}
+            far = [o for o in others if self._cheb(o['x'], o['y'], tx, ty) > EXIT_GATHER]
+            if far:
+                return {**base, 'result': 'wait_allies',
+                        'missing': sorted(o['char'] for o in far)}
+            group = [bot] + others
+            for o in group:
+                o['won'], o['went'] = True, 'up'
+                o['order'], o['path'], o['plan'] = None, [], []
+            return {**base, 'result': 'ascend', 'party': sorted(o['char'] for o in group)}
+        if f and f.type == 'npc':                # NPC(D29) — 말 걸기: 한 줄 인사(거래·대화=다음 단계)
+            return {**base, 'result': 'npc_talk', 'npc': f.name,
+                    'line': self.npc_lines.get(f.name, '…')}
         if f and f.type == 'treasure':
             del self.features[f.id]; bot['bag'] += 1
             self._witness(bots, tx, ty,          # 전달층(D22 확장 07-29): 획득도 목격 — 사라진 보물의 행방

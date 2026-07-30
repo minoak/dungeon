@@ -598,6 +598,13 @@ def _last_prose(last, names=None):
             if len(group) == 1:              # 솔로 판 — 혼자 내려갔다. 캐릭터가 읽는 문장이라
                 return "혼자 계단을 내려갔다"    #   더 중요하다: 없던 일행을 지어내면 안 된다.
             return "다 모여서 — 함께 내려갔다(%s)" % "·".join(group)
+        if r == "ascend":
+            group = last.get("party", [])
+            if len(group) == 1:              # 마을 복귀(D29) — 대칭 문법·같은 정직성
+                return "혼자 계단을 올라 마을로 돌아갔다"
+            return "다 모여서 — 함께 마을로 올라갔다(%s)" % "·".join(group)
+        if r == "npc_talk":
+            return '%s에게 말을 걸었다 — "%s"' % (last.get("npc", "?"), last.get("line", "…"))
         if r == "wait_allies":
             return ("계단에서 하강을 시도했지만 — 아직 안 모였다(빠진 동료: 봇%s)."
                     " 기다리거나 데리러 가라" % "·".join(last.get("missing", [])))
@@ -655,6 +662,7 @@ _WIRE_KEYS = frozenset((
     "depth", "turn",
     "zone", "known", "witnessed", "memories", "dry", "last", "order", "ascii_view", "legend",
     "sights", "party", "options", "messages", "intent", "notes",
+    "town",    # 마을(D29): 안전한 층의 사실 한 줄 — 아래 _wire 가 그린다
     "gear"))   # 장비(07-30): 아는 키지만 wire 는 일부러 안 그린다 — 착용 정보의 표현은
                #   시트(_sheet 차림 줄, 불변 프리픽스=캐싱)가 소유하고, 비교는 입수 메뉴
                #   라벨에만 나온다(파트너 설계: 상시 가변부 미노출). 여기 등재를 빼면
@@ -699,6 +707,9 @@ def _wire(obs, names=None):
                 obs.get("str", 0), obs.get("dex", 0), obs.get("inventory", 0),
                 (", 회복 물약 %d병" % obs["potions"]) if obs.get("potions") else "",
                 obs.get("depth", 1)))
+    if obs.get("town"):
+        # 마을(D29) — 사실만: 안전·전체 가시. 여기서 뭘 할지는 캐릭터 몫(추천 안 싣는다).
+        L.append("- 여기는 마을이다 — 위험한 것이 없고, 마을 전체가 한눈에 보인다")
     z = obs.get("zone")
     scan = isinstance((z or {}).get("doors"), list)   # D19 구조 조회가 실려 있으면 트리 직렬화
     if z and not scan:

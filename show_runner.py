@@ -20,6 +20,8 @@
           DUNGEON_DEPTHS(기본2 — 층수. 계단 '>'로 파티가 함께 내려간다. 마지막 층 계단=탈출)
           DUNGEON_LURKERS(기본1 — 층당 매복몹 수) / DUNGEON_POTIONS(기본1 — 층당 회복 물약)
           DUNGEON_GEAR(기본3 — 층당 장비. 순환 배치: 단검·가죽 갑옷·장검·사슬 갑옷. 0=끔)
+          DUNGEON_TOWN(기본0 — 마을 판(D29): 마을(0층)↔던전 왕복. 켜면 DEPTHS 기본 1 —
+                       1층 아래 계단=관측 클리어. 재입장=같은 층(세계·기억 보존). 솔로와 동시 불가 v0)
           DUNGEON_STREAM_OBS(1이면 스트림 decisions 에 각 봇 obs 동봉 — 용량 커짐, 디버그/BYO용)
           DUNGEON_PARTY_FILE(기본 party.json — 캐릭터 시트. 검증 실패=내장 2인 폴백)
           DUNGEON_MENU(기본1 — 리모컨: 행동을 엔진 열거 옵션에서 번호 선택. 0=구식 자유서술)
@@ -82,7 +84,11 @@ N_POTION = int(os.environ.get("DUNGEON_POTIONS", "1"))   # 층당 회복 물약(
 N_GEAR = int(os.environ.get("DUNGEON_GEAR", "3"))        # 층당 장비(07-30) — 러너 기본 3(순환:
                                                           # 단검·가죽 갑옷·장검 = 한 층 안에서 상위
                                                           # 무기 비교가 성립). 엔진 직생성 기본 0
-DEPTHS = int(os.environ.get("DUNGEON_DEPTHS", "2"))
+TOWN_ON = os.environ.get("DUNGEON_TOWN", "0") == "1"     # 마을 판(D29) — 마을(0층)↔던전 왕복.
+                                                          # 기본 0(기존 판 그대로) — 퀵스타터가 켠다
+DEPTHS = int(os.environ.get("DUNGEON_DEPTHS", "1" if TOWN_ON else "2"))
+                                                          # 마을 판 기본 1층까지(2층=아직 안 만듦 —
+                                                          # 1층의 하강 계단=관측 클리어 조건, 파트너 확정)
 GM_ON = os.environ.get("DUNGEON_GM", "1") != "0"
 PARTY_FILE = os.environ.get("DUNGEON_PARTY_FILE", os.path.join(HERE, "party.json"))
 BESTIARY_FILE = os.environ.get("DUNGEON_BESTIARY_FILE", "")  # 도감 원장(D9). 빈값=영속 끔(판 안 학습만)
@@ -238,7 +244,7 @@ def write_map(d, bots, turn):
                         b.get("potions", 0), gear, ping, state))
     alive_m = sum(1 for m in d.monsters if m.alive)
     lines.append("")
-    lines.append("  몬스터 %d/%d    범례: # 벽  . 바닥  + 문  $ 보물  > 계단  M 몬스터  ^ 함정  = 상자  ~ 샘  ! 물약  ) 무기  [ 방어구  %s 영웅"
+    lines.append("  몬스터 %d/%d    범례: # 벽  . 바닥  + 문  $ 보물  > 계단  < 위계단  & NPC  M 몬스터  ^ 함정  = 상자  ~ 샘  ! 물약  ) 무기  [ 방어구  %s 영웅"
                  % (alive_m, len(d.monsters), ",".join(sorted(b["char"] for b in bots))))
     lines.append("               (관전자 전용: m 숨은 적  * 숨은 보물 — 봇들은 모른다)")
     with open(os.path.join(STATE, "gm_map.txt"), "w", encoding="utf-8") as f:
@@ -351,6 +357,13 @@ def act_summary(res):
             if len(group) == 1:                    # 솔로 판 — 혼자 계단을 내려간다. '다 모였다'는
                 return "홀로 계단을 내려간다 — 탈출!!"   #   거짓이다(결과 보고 오역은 이 판의 오랜 병).
             return "다 모였다 — 함께 하강!! (%s)" % "·".join(group)
+        if r == "ascend":
+            group = res.get("party", [])
+            if len(group) == 1:
+                return "홀로 계단을 올라 마을로"
+            return "다 모였다 — 함께 마을로!! (%s)" % "·".join(group)
+        if r == "npc_talk":
+            return '%s — "%s"' % (res.get("npc", "?"), res.get("line", "…"))
         if r == "wait_allies":
             return "계단에서 동료를 기다린다 (아직: 봇%s)" % "·".join(res.get("missing", []))
         if r == "chest_loot":
@@ -414,7 +427,50 @@ def mon_summary(e):
     return "%s 다가온다" % e["monster"]
 
 
+# ── 마을(D29, 2026-07-30) — 마을(0층)↔던전(1층~) 왕복의 러너 몫 ──────────────
+def build_town():
+    """town.json(손그림 고정 맵 — 고향은 랜덤이 아니다) → 마을 Dungeon.
+    NPC 는 좌표로 심는다(맵의 '&'는 그림 표기 — from_ascii 는 바닥으로 읽음).
+    반환: (dungeon, starts) — starts=맵 숫자 표기 자리(첫 출발)."""
+    with open(os.path.join(HERE, "town.json"), encoding="utf-8") as f:
+        spec = json.load(f)
+    d, starts = G.Dungeon.from_ascii(spec["map"], seed=DUNGEON_SEED, depth=0)
+    d.town = True
+    for n in spec.get("npcs", []):
+        x, y = int(n["x"]), int(n["y"])
+        if d.grid[y][x] != G.FLOOR:            # 좌표-그림 어긋남은 시작 전에 죽는 게 낫다
+            raise ValueError("town.json NPC %r 좌표 (%d,%d)가 바닥이 아니다" % (n["name"], x, y))
+        d._add_feature("npc", n["name"], x, y)
+        d.npc_lines[n["name"]] = n.get("line", "…")
+    d.features[d._exit_fid].name = "던전 입구"   # 같은 '>'라도 마을에선 탈출구가 아니라 입구다
+    return d, starts
+
+
+def arrive_cells(d, ax, ay, k):
+    """(ax,ay) 곁의 자유 칸 k개 — BFS 순(결정론). 계단을 내려선 사람들이 계단 곁에 선다."""
+    seen, out, frontier = {(ax, ay)}, [], [(ax, ay)]
+    while frontier and len(out) < k:
+        nxt = []
+        for (x, y) in frontier:
+            for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0),
+                           (-1, -1), (1, -1), (-1, 1), (1, 1)):
+                nx, ny = x + dx, y + dy
+                if (nx, ny) in seen or not (0 <= nx < d.w and 0 <= ny < d.h):
+                    continue
+                seen.add((nx, ny))
+                if d.grid[ny][nx] == G.WALL:
+                    continue
+                nxt.append((nx, ny))
+                if d.feature_at(nx, ny) is None and not d.monster_at(nx, ny):
+                    out.append((nx, ny))
+        frontier = nxt
+    return out[:k]
+
+
 def main():
+    if TOWN_ON and SOLO_ON:
+        raise SystemExit("솔로+마을(D29 v0)은 아직 함께 못 쓴다 — 행선(위/아래)이 갈리면 "
+                         "러너의 현재 층이 하나뿐이라 두 무리를 동시에 못 좇는다(서랍: 다중 층 동시 진행)")
     sheets = load_party(PARTY_FILE)                       # 시트 외부화 — 파티 구성=이 파일이 결정
     chars = sorted(sheets)
     names = {c: (sheets[c].get("name") or "봇%s" % c) for c in chars}
@@ -428,19 +484,31 @@ def main():
         open(os.path.join(STATE, n), "w", encoding="utf-8").close()
     sw = stream.StreamWriter(os.path.join(STATE, "stream.jsonl"))   # 실행당 truncate
 
-    d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION,
-                  n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,
-                  loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
-                  dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
-                  ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR)
-    d.lore = lore
+    if TOWN_ON:                            # 마을 판(D29): 원정은 고향에서 시작한다
+        d, tstarts = build_town()
+        d.lore = lore
+    else:
+        d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION,
+                      n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,
+                      loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
+                      dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
+                      ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR)
+        d.lore = lore
     bots = []
     for c in chars:
         b = G.spawn(d, c, bots, sheet=sheets[c], apart=SOLO_ON)
+        if TOWN_ON:                        # 출발 자리=맵 숫자 표기(광장). 표기 밖 인원은 1번 곁
+            spot = tstarts.get(c) or (arrive_cells(d, *tstarts[min(tstarts)], 9)[len(bots)]
+                                      if tstarts else (b['x'], b['y']))
+            d.visited.discard((b['x'], b['y']))
+            b['x'], b['y'] = spot
+            d.visited.add(spot)
         b['known'] = iss.known(names[c])   # 도감 주입 켬 — 발급기의 set 과 *같은 객체*(획득 즉시 다음 obs 반영)
         if LEDGER_ON:
             b['ledger'] = G.new_ledger()   # 공간 장부(D17) 켬 — 이 층에서 본 것의 원장
         bots.append(b)
+    saved = {}                             # 마을 판(D29): 층 보존 — depth → {'d': 던전, 'mem': 봇별
+                                           #   층-로컬 기억}. "재입장=같은 1층"(파트너 확정 07-30)
     botlog = {c: "bot%s.log" % c for c in chars}
     gm_q = gm_thread = None
     if GM_ON:
@@ -473,6 +541,7 @@ def main():
             monsters=N_MON, traps=N_TRAP, lurkers=N_LURK,
             potions=N_POTION,          # 층당 회복 물약(07-17 additive) — 배치를 바꾸는 판 파라미터
             gear=N_GEAR,               # 층당 장비(07-30 additive) — 같은 급(배치 파라미터)
+            town=TOWN_ON,              # 마을 판(D29 additive) — 판 모양 자체가 다름(0층·왕복·클리어)
             sight=G.SIGHT,             # 시야 반경(DUNGEON_SIGHT) — 굴림 수를 바꾸는 세계 물리
                                        #   (리플레이·판 비교의 전제, seed 와 같은 급)
             max_turns=MAX_TURNS, gm=GM_ON,
@@ -637,27 +706,56 @@ def main():
         if all(b["won"] or not b["alive"] for b in bots):
             survivors = [b for b in bots if b["won"]]
             fallen += [b["char"] for b in bots if not b["alive"]]
-            if not survivors or d.depth >= DEPTHS:
-                break                     # 전멸 or 최심층 돌파 = 진짜 탈출(승리)
-            # ── 강하 전이(Stage 4): 다음 층 생성(마스터시드→층별 파생) + 생존 파티 이월 ──
-            nd = d.depth + 1
-            sw.emit("descend", turn=turn, to_depth=nd,
+            up = TOWN_ON and bool(survivors) and all(b.get("went") == "up" for b in survivors)
+            # 행선 혼합(위/아래)은 여기 못 온다 — 파티는 모임 규칙이 한 계단을 강제하고,
+            # 솔로+마을은 main() 초입에서 거부(v0 — 서랍: 다중 층 동시 진행).
+            if not survivors or (not up and d.depth >= DEPTHS):
+                break                     # 전멸 or 최심층 하강 = 탈출(기존)/관측 클리어(마을 판)
+            # ── 층 전이: 하강(기존 Stage 4) + 마을 왕복(D29 — 보존된 층은 그대로 복원) ──
+            if TOWN_ON:                   # 떠나는 층을 봇별 층-로컬 기억과 함께 보존("같은 1층")
+                saved[d.depth] = {"d": d, "mem": {
+                    b["char"]: {"seen_keys": b.get("seen_keys"),
+                                "searched": b.get("searched"),
+                                "aware_of": b.get("aware_of"),
+                                "ledger": b.get("ledger")}
+                    for b in survivors}}
+            nd = d.depth - 1 if up else d.depth + 1
+            sw.emit("ascend" if up else "descend", turn=turn, to_depth=nd,
                     party=[{"char": b["char"], "hp": b["hp"], "bag": b["bag"],
                             "potions": b.get("potions", 0)}
                            for b in sorted(survivors, key=lambda b: b["char"])],
                     fallen=list(fallen))
-            d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
-                          n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
-                          scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
-                          graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
-                          wait_verb=WAIT_ON, motion=MOTION_ON,
-                          ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
-                          n_gear=N_GEAR)
-            d.lore = lore
+            mem = {}
+            if TOWN_ON and nd in saved:   # 가 본 층 = 세계 상태 그대로(몹·주운 것·묘·헌 장비)
+                d = saved[nd]["d"]
+                mem = saved[nd]["mem"]
+                fresh = False
+            else:
+                d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
+                              n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
+                              scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
+                              graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
+                              wait_verb=WAIT_ON, motion=MOTION_ON,
+                              ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
+                              n_gear=N_GEAR)
+                d.lore = lore
+                fresh = True
+            # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,
+            # 재입장='위로 오르는 계단' 곁. 첫 하강만 기존 스폰(깊은 곳에서 눈뜸)+곁에 '<' 신설.
+            anchor = None
+            if TOWN_ON and not fresh:
+                anchor = (d.exit if up else
+                          next(((f.x, f.y) for f in d.features.values()
+                                if f.type == "stairs_up"), d.exit))
+            spots = arrive_cells(d, *anchor, len(survivors)) if anchor else []
             nb = []
             for b in sorted(survivors, key=lambda b: b["char"]):
                 n = G.spawn(d, b["char"], nb, sheet=sheets[b["char"]],
-                            apart=SOLO_ON)                              # ⚠️ sheet 필수 — 없으면
+                            apart=SOLO_ON and not spots)                # ⚠️ sheet 필수 — 없으면
+                if spots:                                 # 계단 곁 도착(BFS 순 = 결정론)
+                    d.visited.discard((n["x"], n["y"]))
+                    n["x"], n["y"] = spots[len(nb)]
+                    d.visited.add((n["x"], n["y"]))
                 n["hp"], n["bag"] = b["hp"], b["bag"]     # HP·보물 이월     외부 시트 봇('3'+)이 2층서 죽는다
                 n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
                 n["weapon"] = b.get("weapon")             # 장비도 이월(07-30) — 걸치고 내려간다
@@ -669,16 +767,29 @@ def main():
                 n["known"] = iss.known(names[b["char"]])  # 도감은 층을 넘어도 그대로(지식=영속층)
                 if LEDGER_ON:
                     n["ledger"] = G.new_ledger()          # 장부는 새 원장(층의 기억 — id 층-로컬, D17)
+                lm = mem.get(b["char"]) or {}             # 가 본 층 = 그 층의 기억도 그대로(D29 —
+                for k in ("seen_keys", "searched", "aware_of", "ledger"):   # 낯익은 곳을 낯설게
+                    if lm.get(k) is not None:             # 다시 배우게 하지 않는다)
+                        n[k] = lm[k]
                 nb.append(n)
+            if TOWN_ON and fresh and nd >= 1:             # 첫 입장 층에 '위로 오르는 계단' 신설 —
+                c0 = arrive_cells(d, nb[0]["x"], nb[0]["y"], 1)   # 일행이 내려선 자리 곁(왕복의 몸)
+                ux, uy = c0[0] if c0 else (nb[0]["x"], nb[0]["y"])
+                d._add_feature("stairs_up", "위로 오르는 계단", ux, uy)
             d.turn = turn
             bots = nb
             inbox = {b["char"]: [] for b in bots}   # 층 전이 = 대화 리셋(형태는 전 봇 키로 고정)
-            lvl = {"turn": turn, **d.level_snapshot(),            # descend 직후 level 불변식
+            lvl = {"turn": turn, **d.level_snapshot(),            # descend/ascend 직후 level 불변식
                    "party": [G.bot_snapshot(b) for b in bots]}
             sw.emit("level", **lvl)
             iss.consume("level", lvl)               # 새 층 몹 id→종 지도 갱신
-            event("=== 일행은 어둠 속 계단을 내려선다 — 지하 %d층 (깊을수록 흉흉하다: 몬스터 %d) ==="
-                  % (nd, N_MON + nd - 1))
+            if up:
+                event("=== 일행은 계단을 올라선다 — 마을이다. 낯익은 지붕들 ===")
+            elif TOWN_ON and d.depth == 1:
+                event("=== 일행은 던전 입구로 내려선다 — 지하 1층 (몬스터 %d) ===" % (N_MON,))
+            else:
+                event("=== 일행은 어둠 속 계단을 내려선다 — 지하 %d층 (깊을수록 흉흉하다: 몬스터 %d) ==="
+                      % (nd, N_MON + nd - 1))
             write_map(d, bots, turn)
             time.sleep(1.0)
 
@@ -687,8 +798,12 @@ def main():
     left = [b["char"] for b in bots if b["alive"] and not b["won"]]
     if won and d.depth >= DEPTHS:
         outcome = "escaped"                          # 최심층 돌파 = 진짜 탈출(승리)
-        event("=== 종료 (turn %d) — 지하 %d층 돌파·탈출!! %s / 쓰러짐 %s ==="
-              % (turn, d.depth, won, dead or "없음"))
+        if TOWN_ON:                                  # 마을 판(D29): 아래 계단 = 관측 클리어 조건
+            event("=== 종료 (turn %d) — 지하 %d층의 아래 계단으로, 더 깊은 어둠 속으로!! "
+                  "(클리어) %s / 쓰러짐 %s ===" % (turn, d.depth, won, dead or "없음"))
+        else:
+            event("=== 종료 (turn %d) — 지하 %d층 돌파·탈출!! %s / 쓰러짐 %s ==="
+                  % (turn, d.depth, won, dead or "없음"))
     elif not left:                                   # 전원 사망(승자 없음)
         outcome = "wiped"
         event("=== 종료 (turn %d, 지하 %d층) — 파티 전멸... 쓰러짐 %s ==="

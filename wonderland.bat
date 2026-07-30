@@ -16,6 +16,7 @@ echo   [6] Big map 1F test  (80x30, many mobs)
 echo   [7] Gemini brain     (API - COSTS MONEY)
 echo   [8] Gemini + ally-sight  (door fix ON - compare with 7)
 echo   [9] BIG verdict: map + Gemini + ally-sight + social  (~25min, ~500 KRW)
+echo   [T] TOWN run (D29): village 0F + dungeon 1F, round trip  (Gemini - COSTS MONEY)
 echo   [Q] Quit
 echo  ==========================================
 set "pick="
@@ -29,6 +30,7 @@ if /i "%pick%"=="6" goto bigmap
 if /i "%pick%"=="7" goto gemini
 if /i "%pick%"=="8" goto allysight
 if /i "%pick%"=="9" goto bigally
+if /i "%pick%"=="T" goto town
 if /i "%pick%"=="Q" exit /b 0
 goto menu
 
@@ -70,6 +72,14 @@ timeout /t 4 /nobreak >nul
 start "" http://localhost:8000/viewer/
 goto menu
 
+:town
+echo TOWN run (D29): party starts in the village (full sight, 3 NPCs, dungeon gate).
+echo 1F down-stairs = observed CLEAR condition. Re-entry keeps the same 1F.
+echo Gemini brain - COSTS MONEY (key from .env). Closing the window stops the run.
+start "Wonderland town" wsl -e bash -lc "DUNGEON_TOWN=1 DUNGEON_BRAIN_BACKEND=gemini_api bash ~/dungeon/live.sh"
+timeout /t 4 /nobreak >nul
+start "" http://localhost:8000/viewer/
+goto menu
 :gemini
 echo Gemini brain: HTTP API instead of claude.exe. Key comes from .env (GEMINI_API_KEY).
 echo *** THIS COSTS MONEY *** - paid tier, ~1400 KRW per 200-tick run.
