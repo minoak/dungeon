@@ -36,6 +36,21 @@ GRAVE = 'T'                     # 묘(D22): 쓰러진 자리의 표지판 — �
                                 # 없음, D4 불가침). "누가 묻었나"는 묻지 않는 게임 문법(로그라이크 묘비).
 POTION = '!'                    # 회복 물약(07-17, PD 문법): 주워 들고 다니는 확정 완전 회복 —
                                 # 샘(그 자리 도박)과 대비되는 '보험'. 첫 소지 아이템(bot['potions'])
+WEAPON, ARMOR = ')', '['        # 장비(2026-07-30, 뼈대): 슬롯 2(무기·방어구)+단순 보정. 착용=캐릭터
+                                # 판단(interact — 자동 줍기 아님·보물/물약과 다른 문법). 스왑=헌 장비를
+                                # 그 자리에 놓는다(인벤토리 없음 — 슬롯이 소지의 전부).
+GEAR_KINDS = {'단검': 1, '장검': 2, '가죽 갑옷': 1, '사슬 갑옷': 2}   # 이름→보정(피처는 이름만 들고
+                                # 보정은 여기서 푼다 — Feature __slots__/스트림 계약 무접촉).
+                                # 저주·미식별·강화=2차 서랍(07-30 합의).
+GEAR_CYCLE = [('weapon', '단검'), ('armor', '가죽 갑옷'),             # 배치 순환(함정 kinds 선례 —
+              ('weapon', '장검'), ('armor', '사슬 갑옷')]             # RNG 무소비 결정론)
+
+
+def gear_bonus(bot, slot):
+    """봇의 착용 보정(무기=피해·방어구=막기). 미착용/구판 봇 dict(키 없음)=0 — 하위호환.
+    장비 뼈대(07-30)의 판정 접점은 이 함수 둘뿐: _attack 피해 · _monster_attack 방어."""
+    g = bot.get(slot)
+    return g['bonus'] if g else 0
 LURKER, HIDDEN = 'm', '*'       # 관전자 전용(극적 아이러니): 숨은 적/숨은 보물. 봇 시야(view)엔 절대 안 나간다.
 UNKNOWN_BEAST = '낯선 짐승'     # 도감(D9) 미등재 몬스터의 obs 표기 — 보이지만 정체를 모른다.
 
@@ -280,7 +295,7 @@ class Dungeon:
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                  scan=False, n_potions=0, loops=False, selfstop=False,
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
-                 motion=False, ally_sight=False, social=False, solo=False):
+                 motion=False, ally_sight=False, social=False, solo=False, n_gear=0):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -353,8 +368,10 @@ class Dungeon:
             self._stamp_doors()    # D19 정정: 관통점에 문 타일(+) — scan 판 전용(기본 격자 무변경)
         self._build_room_graph()   # 방 인접 그래프(connect 체인) — BFS·'방 핑'의 토대
         self._place_targets(n_monsters, n_traps, n_lurkers,   # floors=FLOOR만 → 문 위 배치 자동 회피
-                            n_potions)   # 물약 기본 0 = 엔진 직생성 판(기존 verify) 비트 동일.
+                            n_potions,   # 물약 기본 0 = 엔진 직생성 판(기존 verify) 비트 동일.
                                          #   러너가 DUNGEON_POTIONS(기본 1)로 켠다(scan 승격 전 선례)
+                            n_gear)      # 장비(07-30)도 같은 규율 — 개수 파라미터·엔진 기본 0
+                                         #   (스위치 아님 = from_ascii 명시 초기화 함정 자체가 없다)
         self._assign_room_types()  # entrance/exit/standard 타입 부여 (출구 배치 후)
         self._classify_tiles()     # 각 바닥 칸에 'room'/'corridor' 속성 부여
         self.zones = None
@@ -381,6 +398,7 @@ class Dungeon:
         문자 맵으로 층을 짓는다. 판정·시야·자동보행·스트림은 생성 층과 완전 동일(같은 코드) —
         조립되는 건 세계가 아니라 '장면'이다.
         기호: '#'/공백=벽 · '.'=바닥 · '>'=출구(필수) · '$'보물 · '='상자 · '~'샘 · '!'회복 물약 ·
+        ')'=무기(단검) · '['=방어구(가죽 갑옷) ·
         '^'=함정(traps 리스트를 (y,x) 순서로 적용, 기본 spike·hidden) ·
         소문자=몬스터 슬롯(monsters[문자] 템플릿: kind/hp/atk/dmg/ac/state/concealed/target —
         state HUNTING 이면 호출측이 봇 배치 후 last_seen 을 채울 것) ·
@@ -432,6 +450,10 @@ class Dungeon:
                     d._add_feature('fountain', '샘', x, y)
                 elif ch == POTION:
                     d._add_feature('potion', '회복 물약', x, y)
+                elif ch == WEAPON:         # 장비(07-30) — 장면 저작용은 1티어 고정(단검·가죽 갑옷).
+                    d._add_feature('weapon', '단검', x, y)     # 상위 티어 장면은 호출측이
+                elif ch == ARMOR:                              # _add_feature('weapon','장검',…)로 직접
+                    d._add_feature('armor', '가죽 갑옷', x, y)
                 elif ch == TRAP:
                     tslots.append((x, y))
                 elif ch.isdigit():
@@ -532,7 +554,7 @@ class Dungeon:
             if a.id not in b.neighbours:
                 b.neighbours.append(a.id)
 
-    def _place_targets(self, n_monsters, n_traps, n_lurkers=0, n_potions=0):
+    def _place_targets(self, n_monsters, n_traps, n_lurkers=0, n_potions=0, n_gear=0):
         """출구·보물·몬스터·함정·방콘텐츠를 겹치지 않게 흩뿌린다. 출구·보물 = Feature 로 흡수.
         출구는 가능하면 '방 안'에 둔다(ExitRoom 성립 → Stage 2 기본 핑 목표).
         Stage 3 추가: 매복몹(concealed)·함정 종류 순환(경보 포함)·상자/샘·숨은 보물(도적 인지의 보상)."""
@@ -577,6 +599,11 @@ class Dungeon:
             if pool:                          #   맨 마지막 배치 = 같은 시드의 기존 배치 전부 불변
                 x, y = pool.pop()             #   (pool.pop 은 RNG 무소비 — additive 재현성)
                 self._add_feature('potion', '회복 물약', x, y)
+        for i in range(n_gear):               # 장비(07-30): 물약 뒤 = 같은 additive 규율.
+            if pool:                          #   순환 배치(RNG 무소비) — 기본 3개면 단검·가죽 갑옷·
+                x, y = pool.pop()             #   장검이 깔려 한 층 안에서 '더 좋은 것' 비교가 생긴다
+                slot, name = GEAR_CYCLE[i % len(GEAR_CYCLE)]
+                self._add_feature(slot, name, x, y)
 
     def _assign_room_types(self):
         """출구 든 방 = exit, 출구에서 가장 먼 방 = entrance, 나머지 standard.
@@ -939,6 +966,10 @@ class Dungeon:
             return FOUNTAIN
         if f and f.type == 'potion' and not f.concealed:
             return POTION
+        if f and f.type == 'weapon' and not f.concealed:   # 장비(07-30): 바닥의 무기/방어구
+            return WEAPON
+        if f and f.type == 'armor' and not f.concealed:
+            return ARMOR
         if f and f.type == 'grave':               # 묘(D22) — 숨김 개념 없음(죽음은 공공연한 사실)
             return GRAVE
         for t in self.traps:
@@ -1340,7 +1371,17 @@ class Dungeon:
                  '계단에서 하강 시도 (규칙: 살아있는 파티 전원이 계단 근처에 모여야 내려간다)')
         for f in feats:
             if f['adj']:
-                _add('interact', f['id'], '상호작용: %s %s (발밑/인접)' % (f['name'], f['id']))
+                if f['type'] in ('weapon', 'armor'):
+                    # 장비 비교(07-30 파트너 설계): 착용 정보는 시트에 상주(캐싱)하고, **비교는
+                    # 입수 결정 시점에만** 여기 라벨로 나온다. 라벨=사실만(수치·지금 착용·스왑 물리).
+                    word = '피해' if f['type'] == 'weapon' else '막기'
+                    cur = bot.get(f['type'])
+                    now = ('%s %s +%d — 바꾸면 헌것은 그 자리에 놓는다'
+                           % (cur['name'], word, cur['bonus'])) if cur else '기본 무장'
+                    _add('interact', f['id'], '장비: %s %s (발밑/인접) — 걸치면 %s +%d (지금: %s)'
+                         % (f['name'], f['id'], word, GEAR_KINDS.get(f['name'], 0), now))
+                else:
+                    _add('interact', f['id'], '상호작용: %s %s (발밑/인접)' % (f['name'], f['id']))
         if bot.get('potions'):                 # 물약(07-17): 소지 중일 때만 어휘가 된다 — 즉시행동군.
             _add('drink', None,                #   주석=사실만(만피 낭비 경고는 '이미 살폈다' 선례)
                  '회복 물약을 마신다 — 상처가 전부 아문다 (한 턴 소모, 소지 %d병)%s'
@@ -1454,6 +1495,10 @@ class Dungeon:
                 'job': bot['job'], 'sex': bot['sex'],
                 'str': bot['str'], 'dex': bot['dex'], 'inventory': bot['bag'],
                 'potions': bot.get('potions', 0),   # 소지 회복 물약(07-17) — 자기 몸의 사실
+                'gear': {'weapon': bot.get('weapon'), 'armor': bot.get('armor')},
+                                      # 장비(07-30) — 자기 몸의 사실(더미·BYO 소비용 데이터).
+                                      # ⚠️ 프롬프트 상시 노출은 금지 계약: 착용 정보는 시트(불변
+                                      # 프리픽스=캐싱)에 살고, 비교는 입수 메뉴 라벨에만 나온다
                 'depth': self.depth,
                 **({'zone': zone_obs} if zone_obs is not None else
                    ({'zone': {'id': ('r%d' % rid_here) if rid_here is not None else None,
@@ -1478,6 +1523,7 @@ class Dungeon:
                 'legend': {'@': 'you', '#': 'wall', '.': 'floor', '+': 'door',
                            '$': 'treasure', '>': 'stairs/exit', 'M': 'monster',
                            '^': 'trap', '=': 'chest', '~': 'fountain', '!': 'potion',
+                           ')': 'weapon', '[': 'armor',
                            'T': 'grave', ' ': 'unknown'}}
 
     # ── 탐색 프런티어 (explore = 미지로 트인 출입구) ─────────────
@@ -2560,6 +2606,19 @@ class Dungeon:
                           {'kind': 'ally_loot', 'char': bot['char'], 'what': '물약'},
                           exclude=(bot['char'],))
             return {**base, 'result': 'potion', 'potions': bot['potions']}
+        if f and f.type in ('weapon', 'armor'):  # 장비(07-30) — 착용은 자동 줍기가 아니라 여기,
+            slot = f.type                        #   즉 캐릭터의 '결정'이다(밟고 지나가면 그대로 둔 것).
+            old = bot.get(slot)
+            bonus = GEAR_KINDS.get(f.name, 0)
+            del self.features[f.id]
+            if old:                              # 스왑: 헌 장비는 그 자리에 놓는다(슬롯=소지의 전부).
+                self._add_feature(slot, old['name'], tx, ty)   # 동료가 보고 주울 수 있다
+            bot[slot] = {'name': f.name, 'bonus': bonus}
+            self._witness(bots, tx, ty,          # 전달층(D22): 획득 문법 그대로 — 챙기는 걸 본 사람은 안다
+                          {'kind': 'ally_loot', 'char': bot['char'], 'what': f.name},
+                          exclude=(bot['char'],))
+            return {**base, 'result': 'equip', 'slot': slot, 'item': f.name,
+                    'bonus': bonus, **({'dropped': old['name']} if old else {})}
         if f and f.type == 'chest':              # 상자 도박 — 손재주(DEX)가 좋으면 안전하게 연다
             del self.features[f.id]
             r = self.d20(); total = r + bot['dex']
@@ -2644,7 +2703,9 @@ class Dungeon:
         if surprise:
             res['surprise'] = True
         if hit:
-            dmg = bot['wdmg'] * (2 if r == 20 else 1) + (SURPRISE_DMG_BOT if surprise else 0)
+            dmg = ((bot['wdmg'] + gear_bonus(bot, 'weapon'))   # 장비(07-30): 무기 보정은 크리에도
+                   * (2 if r == 20 else 1)                     #   함께 배가된다(맹타는 든 것째로)
+                   + (SURPRISE_DMG_BOT if surprise else 0))
             mon.hp -= dmg
             res.update(crit=(r == 20), dmg=dmg, monster_hp=max(0, mon.hp))
             if mon.hp <= 0:
@@ -2790,7 +2851,7 @@ class Dungeon:
         A-3(D18): 명중/처치는 피격 칸이 시야 내인 다른 생존 봇의 witnessed 에 목격 사실로 쌓인다
         ("상처도 시야를 탄다" — 라이브 22틱 카야 전사 무목격 부검)."""
         ambush = m.id not in b.get('aware_of', set())
-        ac = 10 + b['dex']
+        ac = 10 + b['dex'] + gear_bonus(b, 'armor')   # 장비(07-30): 방어구=막기 — 갑옷이 이를 받는다
         r = max(self.d20(), self.d20()) if ambush else self.d20()
         total = r + m.atk
         hit = (r == 20) or (total >= ac)
@@ -3058,6 +3119,9 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'bag': 0, 'alive': True, 'won': False,
             'potions': 0,                   # 소지 회복 물약(07-17) — 첫 소비 아이템. 층 이월은
                                             # 러너 재스폰이 담당(bag 이월 선례)
+            'weapon': None, 'armor': None,  # 장비 슬롯 2(07-30) — {'name','bonus'} 또는 None.
+                                            # 시트 wdmg=기본 무장(불가침), 장비=위에 얹는 보정.
+                                            # 층 이월은 러너 재스폰(물약 선례)
             'order': None, 'path': [],      # 핑 목표 id + 엔진이 BFS로 깐 자동보행 경로
             'aware_of': set(),              # 인지한 몹 id (newly 판정 + 매트릭스 봇쪽 비트)
             'known': None,                  # 도감(D9): 아는 종키 set — None=게이팅 끔(하위호환).
@@ -3090,6 +3154,7 @@ def bot_snapshot(b):
             'x': b['x'], 'y': b['y'], 'hp': b['hp'], 'maxhp': b['maxhp'],
             'bag': b['bag'], 'alive': b['alive'], 'won': b['won'],
             'potions': b.get('potions', 0),   # 회복 물약 소지(07-17 additive)
+            'weapon': b.get('weapon'), 'armor': b.get('armor'),   # 장비(07-30 additive)
             'order': b.get('order'),
             'aware_of': sorted(b.get('aware_of', set()))}
 
@@ -3106,6 +3171,12 @@ def dummy_brain(obs, char='?'):
     for f in s['features']:                          # 인접 보물/상자 → 줍기·열기(자동회수 안전망)
         if f['type'] in ('treasure', 'chest') and f['adj']:
             return {'type': 'interact', 'target': f['id']}
+    gear = obs.get('gear') or {}
+    for f in s['features']:                          # 인접 장비(07-30): 엄격히 더 좋을 때만 걸친다
+        if f['type'] in ('weapon', 'armor') and f['adj']:   # (같거나 낮으면 무시 — 스왑으로 떨어진
+            cur = gear.get(f['type'])                       #  헌 장비를 되집는 왕복 진동 방지)
+            if GEAR_KINDS.get(f['name'], 0) > (cur['bonus'] if cur else 0):
+                return {'type': 'interact', 'target': f['id']}
     ex = s.get('exit')
     if ex and ex.get('adj'):                          # 곁에 계단 → 하강 시도. 파티가 안 모였으면
         return {'type': 'interact', 'target': 'exit'}  # wait_allies = 그 자리서 기다린다(제자리 대기).

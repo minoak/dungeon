@@ -417,6 +417,13 @@ def _sheet(bot, roster=None):
     lines.append("- 능력: HP %s, 힘(STR) +%s, 민첩(DEX) +%s, 은신 +%s, 인지 반경 %s"
                  % (bot.get("maxhp"), bot.get("str"), bot.get("dex"),
                     bot.get("stealth", 0), bot.get("search_r", 1)))
+    if "weapon" in bot or "armor" in bot:
+        # 차림(장비 07-30, 파트너 설계): 착용 정보는 여기 — 시트=불변 프리픽스라 상시 캐싱되고,
+        # 교체 순간에만 한 번 바뀐다. 매턴 가변부(obs)에는 안 싣는다. 비교는 입수 메뉴 라벨의 몫.
+        w, a = bot.get("weapon"), bot.get("armor")
+        lines.append("- 차림: 무기 %s / 방어구 %s"
+                     % ("%s(피해 +%d)" % (w["name"], w["bonus"]) if w else "기본 무장",
+                        "%s(막기 +%d)" % (a["name"], a["bonus"]) if a else "기본 무장"))
     names = {o["char"]: (o.get("name") or "모험가 %s" % o["char"])
              for o in (roster or []) if o.get("char") != bot.get("char")}
     if names:
@@ -604,6 +611,12 @@ def _last_prose(last, names=None):
             return "샘물이 오염돼 있었다 — %d 피해" % last.get("dmg", 0)
         if r == "potion":
             return "회복 물약을 집어 챙겼다 (소지 %d병)" % last.get("potions", 1)
+        if r == "equip":
+            word = "피해" if last.get("slot") == "weapon" else "막기"
+            return "%s을(를) 걸쳤다 — %s +%d%s" % (
+                last.get("item", "?"), word, last.get("bonus", 0),
+                (". 헌 %s은(는) 그 자리에 놓았다" % last["dropped"])
+                if last.get("dropped") else "")
         fin = {"treasure": "보물을 주웠다", "nothing": "아무것도 없었다",
                "too_far": "너무 멀었다(붙어야 만진다)", "no_target": "대상이 그 자리에 없었다"}
         if r in fin:
@@ -641,7 +654,11 @@ _WIRE_KEYS = frozenset((
     "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "potions",
     "depth", "turn",
     "zone", "known", "witnessed", "memories", "dry", "last", "order", "ascii_view", "legend",
-    "sights", "party", "options", "messages", "intent", "notes"))
+    "sights", "party", "options", "messages", "intent", "notes",
+    "gear"))   # 장비(07-30): 아는 키지만 wire 는 일부러 안 그린다 — 착용 정보의 표현은
+               #   시트(_sheet 차림 줄, 불변 프리픽스=캐싱)가 소유하고, 비교는 입수 메뉴
+               #   라벨에만 나온다(파트너 설계: 상시 가변부 미노출). 여기 등재를 빼면
+               #   '그 밖의 정보' JSON 덤프로 매턴 새 나간다(화이트리스트 폴백)
 
 
 def _wire(obs, names=None):

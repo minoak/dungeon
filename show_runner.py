@@ -19,6 +19,7 @@
           DUNGEON_GM(0이면 GM 끔) / DUNGEON_MONSTERS(기본2) / DUNGEON_TRAPS(기본3)
           DUNGEON_DEPTHS(기본2 — 층수. 계단 '>'로 파티가 함께 내려간다. 마지막 층 계단=탈출)
           DUNGEON_LURKERS(기본1 — 층당 매복몹 수) / DUNGEON_POTIONS(기본1 — 층당 회복 물약)
+          DUNGEON_GEAR(기본3 — 층당 장비. 순환 배치: 단검·가죽 갑옷·장검·사슬 갑옷. 0=끔)
           DUNGEON_STREAM_OBS(1이면 스트림 decisions 에 각 봇 obs 동봉 — 용량 커짐, 디버그/BYO용)
           DUNGEON_PARTY_FILE(기본 party.json — 캐릭터 시트. 검증 실패=내장 2인 폴백)
           DUNGEON_MENU(기본1 — 리모컨: 행동을 엔진 열거 옵션에서 번호 선택. 0=구식 자유서술)
@@ -78,6 +79,9 @@ N_TRAP = int(os.environ.get("DUNGEON_TRAPS", "3"))
 N_LURK = int(os.environ.get("DUNGEON_LURKERS", "1"))
 N_POTION = int(os.environ.get("DUNGEON_POTIONS", "1"))   # 층당 회복 물약(07-17) — 러너 기본 1,
                                                           # 엔진 직생성 기본 0(기존 verify 비트 동일)
+N_GEAR = int(os.environ.get("DUNGEON_GEAR", "3"))        # 층당 장비(07-30) — 러너 기본 3(순환:
+                                                          # 단검·가죽 갑옷·장검 = 한 층 안에서 상위
+                                                          # 무기 비교가 성립). 엔진 직생성 기본 0
 DEPTHS = int(os.environ.get("DUNGEON_DEPTHS", "2"))
 GM_ON = os.environ.get("DUNGEON_GM", "1") != "0"
 PARTY_FILE = os.environ.get("DUNGEON_PARTY_FILE", os.path.join(HERE, "party.json"))
@@ -226,12 +230,15 @@ def write_map(d, bots, turn):
         order = b.get("order")
         ping = ("탐색" if str(order or "")[:1] == "@" else order) or "-"
         nm = ("%s·" % b["name"]) if b.get("name") else ""
-        lines.append("  봇%s %s%s(%s)  pos=(%2d,%2d)  보물 %d  물약 %d  핑:%s  %s"
+        w, a = b.get("weapon"), b.get("armor")            # 장비(07-30) — 관전 한 눈 확인
+        gear = ("".join(filter(None, (w and ")%s" % w["name"], a and "[%s" % a["name"])))
+                or "-")
+        lines.append("  봇%s %s%s(%s)  pos=(%2d,%2d)  보물 %d  물약 %d  장비:%s  핑:%s  %s"
                      % (b["char"], nm, b["job"], b["sex"], b["x"], b["y"], b["bag"],
-                        b.get("potions", 0), ping, state))
+                        b.get("potions", 0), gear, ping, state))
     alive_m = sum(1 for m in d.monsters if m.alive)
     lines.append("")
-    lines.append("  몬스터 %d/%d    범례: # 벽  . 바닥  + 문  $ 보물  > 계단  M 몬스터  ^ 함정  = 상자  ~ 샘  ! 물약  %s 영웅"
+    lines.append("  몬스터 %d/%d    범례: # 벽  . 바닥  + 문  $ 보물  > 계단  M 몬스터  ^ 함정  = 상자  ~ 샘  ! 물약  ) 무기  [ 방어구  %s 영웅"
                  % (alive_m, len(d.monsters), ",".join(sorted(b["char"] for b in bots))))
     lines.append("               (관전자 전용: m 숨은 적  * 숨은 보물 — 봇들은 모른다)")
     with open(os.path.join(STATE, "gm_map.txt"), "w", encoding="utf-8") as f:
@@ -354,6 +361,11 @@ def act_summary(res):
             return "샘물을 마셨다 — HP %d 회복" % res.get("heal", 0)
         if r == "fountain_harm":
             return "샘물이 오염돼 있었다 — %d피해" % res.get("dmg", 0)
+        if r == "equip":
+            return "%s 착용 — %s +%d%s" % (
+                res.get("item", "?"), "피해" if res.get("slot") == "weapon" else "막기",
+                res.get("bonus", 0),
+                (" (헌 %s은 그 자리에)" % res["dropped"]) if res.get("dropped") else "")
         tag = {"treasure": "$ 획득", "potion": "! 회복 물약 획득", "too_far": "너무 멀다",
                "nothing": "허탕", "no_target": "대상 없음"}
         return "상호작용 %s — %s" % (res.get("target", "?"), tag.get(r, r))
@@ -420,7 +432,7 @@ def main():
                   n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,
                   loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
                   dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
-                  ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON)
+                  ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR)
     d.lore = lore
     bots = []
     for c in chars:
@@ -460,6 +472,7 @@ def main():
             seed=DUNGEON_SEED, w=DUNGEON_W, h=DUNGEON_H, depths=DEPTHS,
             monsters=N_MON, traps=N_TRAP, lurkers=N_LURK,
             potions=N_POTION,          # 층당 회복 물약(07-17 additive) — 배치를 바꾸는 판 파라미터
+            gear=N_GEAR,               # 층당 장비(07-30 additive) — 같은 급(배치 파라미터)
             sight=G.SIGHT,             # 시야 반경(DUNGEON_SIGHT) — 굴림 수를 바꾸는 세계 물리
                                        #   (리플레이·판 비교의 전제, seed 와 같은 급)
             max_turns=MAX_TURNS, gm=GM_ON,
@@ -638,7 +651,8 @@ def main():
                           scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
                           graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
                           wait_verb=WAIT_ON, motion=MOTION_ON,
-                          ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON)
+                          ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
+                          n_gear=N_GEAR)
             d.lore = lore
             nb = []
             for b in sorted(survivors, key=lambda b: b["char"]):
@@ -646,6 +660,8 @@ def main():
                             apart=SOLO_ON)                              # ⚠️ sheet 필수 — 없으면
                 n["hp"], n["bag"] = b["hp"], b["bag"]     # HP·보물 이월     외부 시트 봇('3'+)이 2층서 죽는다
                 n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
+                n["weapon"] = b.get("weapon")             # 장비도 이월(07-30) — 걸치고 내려간다
+                n["armor"] = b.get("armor")
                 n["memories"] = list(b.get("memories") or [])   # 기억도 이월(D22) — 전사는 원정급
                                                           # 사건(장부=층의 기억과 대비. 구역 이름은
                                                           # 그 층의 것 — 층수 없인 모호하나 v0 수용)

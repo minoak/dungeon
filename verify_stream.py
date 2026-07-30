@@ -57,6 +57,7 @@ _time.sleep = lambda s: None                             # 러너 고정 sleep �
 SPATH = os.path.join(show_runner.STATE, "stream.jsonl")
 KINDS = {"run_meta", "level", "tick", "descend", "end"}
 BOT_FIELDS = {"char", "job", "sex", "x", "y", "hp", "maxhp", "bag", "potions",
+              "weapon", "armor",     # 장비(07-30 additive) — STREAM_FORMAT 개정과 한 몸
               "alive", "won", "order", "aware_of"}
 MON_FIELDS = {"id", "kind", "x", "y", "hp", "maxhp", "ac", "atk", "dmg",
               "alive", "state", "concealed", "target", "desperate"}

@@ -96,6 +96,10 @@ def build(spec):
             b["plan"] = [dict(s) for s in ov["plan"]][:G.PLAN_MAX]
         if "intent" in ov:
             b["intent"] = dict(ov["intent"])
+        if "weapon" in ov:                     # 장비(07-30) 프리셋 — 착용 상태 장면 저작
+            b["weapon"] = dict(ov["weapon"]) if ov["weapon"] else None
+        if "armor" in ov:
+            b["armor"] = dict(ov["armor"]) if ov["armor"] else None
         if "order" in ov:                      # 진행 중 order 프리셋(D18) — 동행 고착 류 장면 저작.
             b["order"] = ov["order"]           # path 는 안 깐다: follow 류는 자가 재경로로 자활,
                                                # goto 류는 다음 틱 _order_done 판정 — 장면 저작자 책임
@@ -112,6 +116,9 @@ def build(spec):
                                              "zone": d._zone_label(f.x, f.y), "turn": t0}
         b["ledger"] = led
         bots.append(b)
+    for fs in spec.get("features") or []:      # 추가 피처 — from_ascii 글리프 밖(장비 상위 티어 등)
+        d._add_feature(fs["type"], fs["name"], int(fs["x"]), int(fs["y"]),
+                       concealed=bool(fs.get("concealed")))
     for m in d.monsters:                       # HUNTING/FLEEING 템플릿 목표 좌표 채움
         if m.target:
             t = next((b for b in bots if b["char"] == m.target), None)
