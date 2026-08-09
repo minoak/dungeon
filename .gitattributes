@@ -1,0 +1,2 @@
+# .bat 는 CRLF 그대로 보존 — autocrlf=input 이 LF 로 바꾸면 cmd 가 깨진다 (run.bat 사건)
+*.bat -text

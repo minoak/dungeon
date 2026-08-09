@@ -80,6 +80,10 @@
   "trap:dart": {
    "turn": 48,
    "depth": 1
+  },
+  "trap:spike": {
+   "turn": 151,
+   "depth": 1
   }
  }
 }
