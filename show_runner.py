@@ -365,7 +365,9 @@ def act_summary(res):
         if r == "npc_talk":
             return '%s — "%s"' % (res.get("npc", "?"), res.get("line", "…"))
         if r == "wait_allies":
-            return "계단에서 동료를 기다린다 (아직: 봇%s)" % "·".join(res.get("missing", []))
+            bits = ([f"아직: 봇{'·'.join(res['missing'])}"] if res.get("missing") else []) \
+                 + ([f"볼일 중: 봇{'·'.join(res['busy'])}"] if res.get("busy") else [])
+            return "계단에서 동료를 기다린다 (%s)" % " / ".join(bits)
         if r == "chest_loot":
             return "상자를 열었다 — 보물 %d개!" % res.get("loot", 0)
         if r == "chest_trap":

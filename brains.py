@@ -606,8 +606,15 @@ def _last_prose(last, names=None):
         if r == "npc_talk":
             return '%s에게 말을 걸었다 — "%s"' % (last.get("npc", "?"), last.get("line", "…"))
         if r == "wait_allies":
-            return ("계단에서 하강을 시도했지만 — 아직 안 모였다(빠진 동료: 봇%s)."
-                    " 기다리거나 데리러 가라" % "·".join(last.get("missing", [])))
+            verb = "올라가려" if last.get("dir") == "up" else "내려가려"
+            parts = []                     # 멀다/딴 작정은 다른 사실 — 섞어 말하면 곁의 동료를
+            if last.get("missing"):        # "데리러 가라"는 거짓 지시가 된다(08-09 정직화)
+                parts.append("아직 안 모였다(빠진 동료: 봇%s) — 기다리거나 데리러 가라"
+                             % "·".join(last["missing"]))
+            if last.get("busy"):
+                parts.append("곁의 봇%s는 하던 일(탐색·다른 목표)이 있다 —"
+                             " 기다리거나 말을 걸어라" % "·".join(last["busy"]))
+            return "계단에서 %s 했지만 — %s" % (verb, " / ".join(parts))
         if r == "chest_loot":
             return "상자를 열었다 — 보물 %d개!" % last.get("loot", 0)
         if r == "chest_trap":

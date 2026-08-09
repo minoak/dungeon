@@ -1395,19 +1395,19 @@ class Dungeon:
                 _add('interact', 'exit',      #   하강은 '탈출'이 아니라 '모험의 시작'이다
                      '던전 입구로 내려간다 (규칙: 너 혼자 내려간다)'
                      if self.solo else
-                     '던전 입구로 내려간다 (규칙: 살아있는 일행 전원이 입구 근처에 모여야 내려간다)')
+                     '던전 입구로 내려간다 (규칙: 살아있는 일행 전원이 입구 근처에 모이고 저마다 하던 일이 없어야 내려간다)')
             else:
                 _add('interact', 'exit',
                      '계단에서 하강 시도 (규칙: 너 혼자 내려간다 — 기다릴 일행이 없다)'
                      if self.solo else
-                     '계단에서 하강 시도 (규칙: 살아있는 파티 전원이 계단 근처에 모여야 내려간다)')
+                     '계단에서 하강 시도 (규칙: 살아있는 파티 전원이 계단 근처에 모이고 저마다 하던 일이 없어야 내려간다)')
         for f in feats:
             if f['adj']:
                 if f['type'] == 'stairs_up':   # 마을 복귀(D29) — 라벨이 규칙을 말한다(하강 라벨 대칭)
                     _add('interact', f['id'],
                          '계단을 올라 마을로 돌아간다 (규칙: 너 혼자 올라간다)'
                          if self.solo else
-                         '계단을 올라 마을로 돌아간다 (규칙: 살아있는 일행 전원이 계단 근처에 모여야 올라간다)')
+                         '계단을 올라 마을로 돌아간다 (규칙: 살아있는 일행 전원이 계단 근처에 모이고 저마다 하던 일이 없어야 올라간다)')
                 elif f['type'] == 'npc':       # NPC(D29) — 말 걸기(거래 아님. 사실만)
                     _add('interact', f['id'], '말 걸기: %s %s (곁)' % (f['name'], f['id']))
                 elif f['type'] in ('weapon', 'armor'):
@@ -2606,10 +2606,30 @@ class Dungeon:
             bot['aware_of'].add(m.id)
         return newly
 
+    def _gather_busy(self, leader, near, target_id):
+        """모임 '동의'는 위치가 아니라 의사(08-09 왕복 셔틀 부검) — 반경 안이어도 딴 작정
+        (탐색·다른 목표·대기)이 살아 있으면 안 모인 것으로 센다.
+        왜: D29 가 도착 지점을 계단 곁으로 정하면서 '반경 안'은 엔진이 스스로 만든 상태가
+        됐다 — 위치만 세면 한 명의 변심이 탐색을 고른 동료까지 끌고 가 마을↔1층 셔틀이
+        된다(08-09 실측: 층 전이 18회, 탐색 선택 봇이 같은 턴에 마을로 끌려감).
+        동의로 치는 것: 작정 소진(None) / 이 계단이 목표 / 동행 — 따라가는 상대가 동의
+        무리 안이면 함께 간다(연쇄 포함. follow:b1←b2←b3 도 한 무리)."""
+        group = {leader['char']}
+        group |= {o['char'] for o in near
+                  if not o.get('order') or o['order'] == target_id}
+        while True:
+            add = [o for o in near if o['char'] not in group
+                   and str(o.get('order') or '').startswith('follow:b')
+                   and str(o['order'])[8:] in group]
+            if not add:
+                return [o for o in near if o['char'] not in group]
+            group |= {o['char'] for o in add}
+
     def _interact(self, bot, target_id, bots=None):
         """인접/현재 칸의 피처와 상호작용.
         출구(계단) = **파티 조율 하강**(Stage 4): 살아있는 파티 전원이 계단 반경 EXIT_GATHER 안에
-          모여야 함께 내려간다(솔로탈출 방지). 안 모였으면 wait_allies — 동료를 부르거나 데리러 가라.
+          모이고 저마다 딴 작정이 없어야(_gather_busy) 함께 내려간다(솔로탈출 방지 + 의사 존중).
+          안 모였으면 wait_allies — 동료를 부르거나 데리러 가거나, 볼일이 끝나길 기다려라.
         상자/샘(Stage 3) = 도박: 상자 d20+DEX≥10 → 보물2 / 실패 → 독침 2피해. 샘 d20≥8 → 회복3 / 오염 1피해."""
         base = {'char': bot['char'], 'type': 'interact', 'target': target_id}
         res = self._resolve_target(target_id, bots)
@@ -2629,9 +2649,11 @@ class Dungeon:
                                                  #   그 뭉침이 규칙으로 강제된다. 판은 안 끝난다 —
                                                  #   러너가 전원 won/사망까지 돈다(전부 관찰).
             far = [o for o in others if self._cheb(o['x'], o['y'], tx, ty) > EXIT_GATHER]
-            if far:                              # 아직 안 모임 — 혼자 내려가지 않는다
-                return {**base, 'result': 'wait_allies',
-                        'missing': sorted(o['char'] for o in far)}
+            busy = self._gather_busy(bot, [o for o in others if o not in far], target_id)
+            if far or busy:                      # 아직 안 모임(멀거나·딴 작정) — 혼자 안 내려간다
+                return {**base, 'result': 'wait_allies', 'dir': 'down',
+                        'missing': sorted(o['char'] for o in far),
+                        'busy': sorted(o['char'] for o in busy)}
             group = [bot] + others
             for o in group:                      # 모인 전원이 함께 하강/탈출 — 이 층의 작정도 끝
                 o['won'] = True
@@ -2649,9 +2671,11 @@ class Dungeon:
                 bot['order'], bot['path'], bot['plan'] = None, [], []
                 return {**base, 'result': 'ascend', 'party': [bot['char']]}
             far = [o for o in others if self._cheb(o['x'], o['y'], tx, ty) > EXIT_GATHER]
-            if far:
-                return {**base, 'result': 'wait_allies',
-                        'missing': sorted(o['char'] for o in far)}
+            busy = self._gather_busy(bot, [o for o in others if o not in far], target_id)
+            if far or busy:
+                return {**base, 'result': 'wait_allies', 'dir': 'up',
+                        'missing': sorted(o['char'] for o in far),
+                        'busy': sorted(o['char'] for o in busy)}
             group = [bot] + others
             for o in group:
                 o['won'], o['went'] = True, 'up'

@@ -7,6 +7,7 @@
   ② 전체 시야: visible_cells=전맵 / obs.town / 수색·탐색 옵션 부재(거짓 라벨 방지) / 마을 라벨
   ③ NPC: 몸이 막는다(walkable) / npc_talk 인사 / 기존 판(obs)에 town 키 없음
   ④ 계단 대칭(엔진 장면): stairs_up 모임 규칙(wait_allies→ascend·went=up) / 솔로 혼자 상행
+     + 모임 동의=의사(08-09 셔틀 부검): 곁이어도 딴 작정=busy(안 끌려감) / 계단 목표·동행=동의
   ⑤ [러너 풀런] 왕복: 마을→1층→마을→1층→클리어 — ascend 레코드·depth 열·같은 1층(시드·격자·
      '<' 보존)·run_meta.town·outcome
   ⑥ 결정론: 러너 2회 = started 제외 라인 동일
@@ -134,6 +135,31 @@ uid = next('f%d' % f.id for f in ds.features.values() if f.type == 'stairs_up')
 r = ds._interact(bs, uid, [bs, mkbot('2', 7, 2)])
 check("④ 솔로 판 — 혼자 올라간다(모임 조건 없음)",
       r['result'] == 'ascend' and r['party'] == ['1'] and bs['went'] == 'up')
+dv, _ = G.Dungeon.from_ascii(rows2, seed=7)
+uid = next('f%d' % f.id for f in dv.features.values() if f.type == 'stairs_up')
+bv, bw = mkbot('1', 2, 1), mkbot('2', 4, 1)
+bw['order'], bw['path'] = '@7,2', [(5, 1)]        # 곁이지만 탐색 작정이 살아 있다
+r = dv._interact(bv, uid, [bv, bw])
+check("④ 동의는 위치가 아니라 의사(08-09) — 곁이어도 딴 작정이면 busy(안 끌려감)",
+      r['result'] == 'wait_allies' and r['missing'] == [] and r['busy'] == ['2']
+      and r['dir'] == 'up' and not bw['won'])
+bw['order'], bw['path'] = uid, []                  # 작정이 이 계단 자체 = 동의
+r = dv._interact(bv, uid, [bv, bw])
+check("④ 이 계단이 목표인 작정 = 동의 — 함께 상행",
+      r['result'] == 'ascend' and r['party'] == ['1', '2'])
+df, _ = G.Dungeon.from_ascii(rows2, seed=7)
+uid = next('f%d' % f.id for f in df.features.values() if f.type == 'stairs_up')
+bf, bg = mkbot('1', 2, 1), mkbot('2', 4, 1)
+bg['order'] = 'follow:b1'                          # 동행 — 따라가는 상대가 동의 무리 안
+r = df._interact(bf, uid, [bf, bg])
+check("④ 동행은 함께 간다 — follow:리더 = 동의(연쇄)",
+      r['result'] == 'ascend' and r['party'] == ['1', '2'])
+de, _ = G.Dungeon.from_ascii(rows2, seed=7)
+be, bh = mkbot('1', 5, 3), mkbot('2', 4, 1)       # '>' 위 + 반경 안 동료
+bh['order'] = '@7,2'
+r = de._interact(be, 'exit', [be, bh])
+check("④ 하강도 같은 문법 — 딴 작정 동료는 busy(dir=down)",
+      r['result'] == 'wait_allies' and r['busy'] == ['2'] and r['dir'] == 'down')
 
 # ───────────────────── ⑤ 러너 풀런 — 왕복 + 클리어 ─────────────────────
 print("── ⑤ 러너 왕복 풀런(LLM 0콜 — 각본 두뇌)")

@@ -180,7 +180,8 @@ for solo in (True, False):
 check("⑧ 솔로 계단 라벨이 파티 규칙을 말하지 않는다 (%r)" % _lab[True][:40],
       _lab[True] and '전원' not in _lab[True] and '모여야' not in _lab[True])
 check("⑧ 솔로 계단 라벨이 혼자임을 말한다", '혼자' in _lab[True])
-check("⑧ 파티 계단 라벨은 종전 그대로", '모여야' in _lab[False])
+check("⑧ 파티 계단 라벨은 파티 규칙을 말한다(모임+의사 — 08-09 개정)",
+      '모이고' in _lab[False] and '하던 일이 없어야' in _lab[False])
 
 # 이름 누출 — brains 의 wire 는 '낯선 사람'이라 쓰는데 엔진 메뉴만 '카야(봇2)'라고 부르면
 # 두 층이 서로 다른 말을 한다. 선택지 라벨이 더 무겁게 읽히므로 그쪽이 이긴다.
