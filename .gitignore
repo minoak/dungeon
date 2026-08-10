@@ -9,3 +9,7 @@ state_*/
 .env.*
 !.env.example
 *.key
+
+# Claude 세션 기억 스냅샷(로컬 전용) — 공개 리포에 실리면 안 된다.
+# 2026-08-10 filter-repo 로 히스토리에서도 제거했음. 로컬 폴더는 보관.
+claude-memory/
