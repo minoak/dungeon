@@ -2652,6 +2652,8 @@ class Dungeon:
                 bot['won'] = True                #   기다릴 일행이 없다 — 모임 조건을 그대로 두면
                 bot['went'] = 'down'             #   (D29: 방향 기록 — 왕복 러너가 행선지를 읽는다)
                 bot['order'], bot['path'], bot['plan'] = None, [], []   # 남남끼리 서로를 찾아
+                self._witness_use(bots, tx, ty, [bot],   # D30(09-05): 남는 사람이 본다 — "낯선 사람이 계단을 사용"
+                                  ('던전 입구' if self.town else '계단') + '(exit)', 'exit')
                 return {**base, 'result': 'exit', 'party': [bot['char']]}  # 다녀야 해서 없애려던
                                                  #   그 뭉침이 규칙으로 강제된다. 판은 안 끝난다 —
                                                  #   러너가 전원 won/사망까지 돈다(전부 관찰).
@@ -2666,6 +2668,8 @@ class Dungeon:
                 o['won'] = True
                 o['went'] = 'down'               # D29: 방향 기록(왕복 러너용 — 기존 판은 안 읽음)
                 o['order'], o['path'], o['plan'] = None, [], []
+            self._witness_use(bots, tx, ty, group,    # D30: 전원 하강이라 남는 목격자 없음(부분 하강 규칙이
+                              ('던전 입구' if self.town else '계단') + '(exit)', 'exit')   # 생기면 그대로 발화)
             return {**base, 'result': 'exit', 'party': sorted(o['char'] for o in group)}
         f = self.feature_at(tx, ty)
         if f and f.concealed:                    # 숨은 건 아직 '없는' 것 — 드러나야 만질 수 있다
@@ -2676,6 +2680,7 @@ class Dungeon:
             if self.solo:
                 bot['won'], bot['went'] = True, 'up'
                 bot['order'], bot['path'], bot['plan'] = None, [], []
+                self._witness_use(bots, tx, ty, [bot], f.name, 'f%d' % f.id)   # D30 — 하강과 대칭
                 return {**base, 'result': 'ascend', 'party': [bot['char']]}
             far = [o for o in others if self._cheb(o['x'], o['y'], tx, ty) > EXIT_GATHER]
             busy = self._gather_busy(bot, [o for o in others if o not in far], target_id)
@@ -2687,6 +2692,7 @@ class Dungeon:
             for o in group:
                 o['won'], o['went'] = True, 'up'
                 o['order'], o['path'], o['plan'] = None, [], []
+            self._witness_use(bots, tx, ty, group, f.name, 'f%d' % f.id)      # D30 — 하강과 대칭
             return {**base, 'result': 'ascend', 'party': sorted(o['char'] for o in group)}
         if f and f.type == 'npc':                # NPC(D29) — 말 걸기: 한 줄 인사(거래·대화=다음 단계)
             return {**base, 'result': 'npc_talk', 'npc': f.name,
@@ -2718,12 +2724,14 @@ class Dungeon:
             return {**base, 'result': 'equip', 'slot': slot, 'item': f.name,
                     'bonus': bonus, **({'dropped': old['name']} if old else {})}
         if f and f.type == 'chest':              # 상자 도박 — 손재주(DEX)가 좋으면 안전하게 연다
+            cid = 'f%d' % f.id                   # D30: 사용 목격의 id(삭제 전에 잡는다)
             del self.features[f.id]
             r = self.d20(); total = r + bot['dex']
             if total >= 10:
                 bot['bag'] += 2
-                self._witness(bots, tx, ty,      # 전달층: 상자를 여는 좋은 결과 — 나쁜 결과(독침)와 대칭
-                              {'kind': 'ally_loot', 'char': bot['char'], 'what': '상자'},
+                self._witness(bots, tx, ty,      # D30 확장(09-05): 상자=오브젝트 사용, 결과는 괄호 한 마디
+                              {'kind': 'ally_use', 'char': bot['char'], 'what': '상자',   # (07-29 좋은/나쁜
+                               'id': cid, 'result': '보물을 꺼냈다'},                   #  결과 대칭 보존)
                               exclude=(bot['char'],))
                 return {**base, 'result': 'chest_loot', 'roll': r, 'mod': bot['dex'],
                         'total': total, 'loot': 2}
@@ -2735,10 +2743,10 @@ class Dungeon:
                 g = self._on_down(bot, bots, by='함정 상자', by_kind='hazard')
                 if g:
                     out['grave'] = g
-            if bot['alive']:                     # 전달층: 독침 장면 목격 — 전사면 ally_down 이 담당(함정 패턴)
-                self._witness(bots, tx, ty,
-                              {'kind': 'ally_mishap', 'char': bot['char'],
-                               'what': '상자 독침', 'dmg': 2},
+            if bot['alive']:                     # D30 확장: 독침도 '상자를 사용 (독침에 당했다)' — 전사면
+                self._witness(bots, tx, ty,      #   ally_down 이 담당(중복 금지, 함정 패턴 그대로)
+                              {'kind': 'ally_use', 'char': bot['char'], 'what': '상자',
+                               'id': cid, 'result': '독침에 당했다', 'dmg': 2},
                               exclude=(bot['char'],))
             return out
         if f and f.type == 'fountain':           # 샘 도박 — 대체로 이득(회복), 가끔 오염
@@ -2911,6 +2919,20 @@ class Dungeon:
                 continue
             if (x, y) in self.visible_cells(o['x'], o['y']):
                 o.setdefault('witnessed', []).append(dict(fact))
+
+    def _witness_use(self, bots, x, y, movers, what, fid=None, result=None):
+        """D30 오브젝트 사용 목격 — 사용한 사람마다 한 줄(문·계단·상자…). 동사는 '사용' 하나, what 은
+        obs 가 그 오브젝트를 부르는 이름(문 d0 / 계단(exit) / 상자), result 는 결과가 있는 사용의 괄호
+        한 마디(상자: 보물을 꺼냈다·독침에 당했다 — 파트너 동의 09-05). 사용자 전원은 제외(자기
+        경험=last). 계단처럼 사용자가 층을 떠나는 경우 witnessed 는 남는 사람에게만 실린다 —
+        파티 전원 하강이면 목격자가 없고, 솔로·부분 하강이면 "낯선 사람이 계단을 사용"이 남는다."""
+        for m in movers:
+            fact = {'kind': 'ally_use', 'char': m['char'], 'what': what}
+            if fid:
+                fact['id'] = fid
+            if result:
+                fact['result'] = result
+            self._witness(bots, x, y, fact, exclude=tuple(mm['char'] for mm in movers))
 
     def _on_down(self, bot, bots, by, by_kind='monster', witness=True):
         """D22 — 쓰러짐의 공통 처리(굴림 없음). 모든 사망 경로(몹·함정·상자·샘)가 부른다.

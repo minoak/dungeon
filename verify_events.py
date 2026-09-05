@@ -20,6 +20,8 @@
   ⑬ 오브젝트 사용 목격(D30 09-05): 문 타일 밟기 = 문 칸을 본 동료에게 ally_use{what,id} 1회 —
      시야 밖·당사자 무주입 / 걷는 관찰자의 다음 view 에 생존(상태 아닌 사건) / 1회 / 스위치·트임 격리 /
      휘발 / 렌더 "문 d0을(를) 사용하는 것을" / 결정론
+     · 확장 1차(같은 날): 계단=내려가는 순간(밟기 아님)·남는 사람만 본다(전원 하강=목격자 0) / 상행·
+       마을 입구 이름 / 상자=ally_loot·mishap → ally_use{result} 이관, 렌더 "사용하는 것을 (독침에 당했다)"
 (기존 verify 19종은 별도 실행.)
 """
 import json
@@ -307,17 +309,21 @@ d, b1, b2, b3, bots = loot_scene()
 b1['x'], b1['y'] = 1, 2
 d.d20 = lambda: 20                                 # 확정 성공(결정론 스텁)
 res = d._interact(b1, fid(d, 'chest'), bots)
-check("⑩ 상자 성공: chest_loot → ally_loot {what=상자}", res['result'] == 'chest_loot'
-      and wit_of(b2, 'ally_loot') and wit_of(b2, 'ally_loot')[0]['what'] == '상자')
+u = wit_of(b2, 'ally_use')
+check("⑩ 상자 성공: chest_loot → ally_use {what=상자, id=f<n>, result=보물을 꺼냈다} (D30 확장 — 구 ally_loot 이관)",
+      res['result'] == 'chest_loot' and len(u) == 1 and u[0]['what'] == '상자'
+      and u[0]['id'].startswith('f') and u[0]['result'] == '보물을 꺼냈다'
+      and not wit_of(b2, 'ally_loot'))
 
 d, b1, b2, b3, bots = loot_scene()
 b1['x'], b1['y'] = 1, 2
 d.d20 = lambda: 1                                  # 확정 실패
 res = d._interact(b1, fid(d, 'chest'), bots)
-mis = wit_of(b2, 'ally_mishap')
-check("⑩ 상자 실패: chest_trap → ally_mishap {what=상자 독침, dmg}",
-      res['result'] == 'chest_trap' and len(mis) == 1
-      and mis[0]['what'] == '상자 독침' and mis[0]['dmg'] == 2)
+u = wit_of(b2, 'ally_use')
+check("⑩ 상자 실패: chest_trap → ally_use {what=상자, result=독침에 당했다, dmg} (구 ally_mishap 이관)",
+      res['result'] == 'chest_trap' and len(u) == 1 and u[0]['what'] == '상자'
+      and u[0]['result'] == '독침에 당했다' and u[0]['dmg'] == 2
+      and not wit_of(b2, 'ally_mishap'))
 
 d, b1, b2, b3, bots = loot_scene()
 b2['x'], b2['y'] = 4, 1                            # 샘(4,2) 곁
@@ -332,8 +338,9 @@ b1['x'], b1['y'] = 1, 2
 b1['hp'] = 2                                       # 독침 2피해 = 확정 전사
 d.d20 = lambda: 1
 d._interact(b1, fid(d, 'chest'), bots)
-check("⑩ 독침 전사: ally_mishap 없음 — ally_down 이 담당(중복 금지, 함정 패턴)",
-      not wit_of(b2, 'ally_mishap') and len(wit_of(b2, 'ally_down')) == 1)
+check("⑩ 독침 전사: ally_use·ally_mishap 없음 — ally_down 이 담당(중복 금지, 함정 패턴)",
+      not wit_of(b2, 'ally_mishap') and not wit_of(b2, 'ally_use')
+      and len(wit_of(b2, 'ally_down')) == 1)
 
 # ───────────────── ⑪ 전달층 확장(07-29): 발견 — 나타난 것의 사연 ─────────────────
 # 같은 원칙의 거울면: 숨은 함정·매복이 드러나면(t.hidden=False) 다른 봇 눈에 '갑자기 나타난다' —
@@ -408,7 +415,8 @@ b1['x'], b1['y'] = 1, 2
 d.d20 = lambda: 1
 d._interact(b1, fid(d, 'chest'), bots)
 wire = brains._wire(d.view(b2, bots))
-check("⑫ 피해 문장(\"당하는 것을\")", '당하는 것을' in wire)
+check("⑫ 상자 실패 문장(\"상자 f<n>을(를) 사용하는 것을 (독침에 당했다)\") — D30 확장: 결과는 괄호",
+      '상자 f' in wire and '사용하는 것을 (독침에 당했다)' in wire)
 d, b1, b2, b3, bots = loot_scene(events=False)     # 스위치 격리 — 새 어휘도 D22 규율
 d._enter_cell(b1, 2, 1, bots)
 b1['x'], b1['y'] = 1, 2
@@ -500,6 +508,59 @@ d._enter_cell(b2, 5, 2, bots)
 wire = brains._wire(d.view(b1, bots))
 check("⑬ 렌더: '네 눈으로 봤다: … 문 d0을(를) 사용하는 것을' (json 폴백 아님)",
       '문 d0을(를) 사용하는 것을' in wire and '네 눈으로 봤다' in wire and '"kind"' not in wire)
+
+
+# 계단·상자(D30 확장 1차, 파트너 "나도 동의해" — 픽셀 던전 시스템 로그의 시야 내 전달판): 계단=내려가는
+# 순간(밟기 아님 — 밟고 기다리는 장면이 흔하다), 남는 사람만 본다(파티 전원 하강=목격자 0, 솔로/부분
+# 하강=발화). 상자=ally_loot/mishap 을 ally_use{result} 로 이관 — 결과는 괄호 한 마디(07-29 비대칭 보존).
+print("── ⑬ 확장 1차 — 계단(하강·상행·마을 입구)·상자(결과 괄호)")
+d, b1, b2, b3, bots = loot_scene()
+d.solo = True
+b2['x'], b2['y'] = 7, 1                            # 오른쪽 방 — 계단(9,3)이 보인다
+b3['x'], b3['y'] = 8, 3                            # 계단 곁
+check("⑬ 전제: b2 는 계단 칸이 보이고 b1(왼쪽 방)은 안 보인다",
+      (9, 3) in d.visible_cells(7, 1) and (9, 3) not in d.visible_cells(b1['x'], b1['y']))
+res = d._interact(b3, 'exit', bots)
+u = wit_of(b2, 'ally_use')
+check("⑬ 솔로 하강: 남은 b2 에 ally_use {what='계단(exit)', id='exit', char='3'} 1건",
+      res['result'] == 'exit' and len(u) == 1 and u[0]['what'] == '계단(exit)'
+      and u[0]['id'] == 'exit' and u[0]['char'] == '3')
+check("⑬ 계단 칸 시야 밖(b1)·내려간 당사자(b3): 무주입",
+      not wit_of(b1, 'ally_use') and not b3.get('witnessed'))
+wire = brains._wire(d.view(b2, bots))
+check("⑬ 렌더: '계단(exit)을(를) 사용하는 것을' — id 가 라벨에 있으면 두 번 안 붙는다",
+      '계단(exit)을(를) 사용하는 것을' in wire and 'exit exit' not in wire)
+
+d, b1, b2, b3, bots = loot_scene()
+d.solo, d.town = True, True
+b2['x'], b2['y'] = 7, 1
+b3['x'], b3['y'] = 8, 3
+d._interact(b3, 'exit', bots)
+check("⑬ 마을(town): what='던전 입구(exit)' — obs 가 부르는 이름 그대로",
+      bool(wit_of(b2, 'ally_use')) and wit_of(b2, 'ally_use')[0]['what'] == '던전 입구(exit)')
+
+d, b1, b2, b3, bots = loot_scene()                 # 파티 전원 하강 — 남는 목격자가 없다
+b1['x'], b1['y'] = 8, 2
+b2['x'], b2['y'] = 7, 3
+b3['x'], b3['y'] = 8, 3
+res = d._interact(b3, 'exit', bots)
+check("⑬ 파티 전원 하강: 목격자 0(전원 won) — 사건 무발화",
+      res['result'] == 'exit' and all(b['won'] for b in bots)
+      and not any(b.get('witnessed') for b in bots))
+
+d, b1, b2, b3, bots = loot_scene()                 # 위로 오르는 계단(D29 stairs_up) — 같은 문법
+d.solo = True
+sid = d._add_feature('stairs_up', '위로 오르는 계단', 9, 1)
+b2['x'], b2['y'] = 7, 3
+b3['x'], b3['y'] = 8, 1
+res = d._interact(b3, 'f%d' % sid, bots)
+u = wit_of(b2, 'ally_use')
+check("⑬ 상행: ally_use {what='위로 오르는 계단', id='f<n>'}",
+      res['result'] == 'ascend' and len(u) == 1 and u[0]['what'] == '위로 오르는 계단'
+      and u[0]['id'] == 'f%d' % sid)
+wire = brains._wire(d.view(b2, bots))
+check("⑬ 렌더: '위로 오르는 계단 f<n>을(를) 사용하는 것을'",
+      '위로 오르는 계단 f%d을(를) 사용하는 것을' % sid in wire)
 
 
 def use_once():

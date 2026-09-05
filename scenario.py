@@ -106,6 +106,8 @@ def build(spec):
                                                # goto 류는 다음 틱 _order_done 판정 — 장면 저작자 책임
         if "witnessed" in ov:                  # 목격 프리셋(D30 09-05) — "사건 한 줄을 읽은 캐릭터가 뭘
             b["witnessed"] = [dict(w) for w in ov["witnessed"]]   # 하나" 프로브용(다음 view 1회 노출·소거)
+        if ov.get("won"):                      # 먼저 내려간 동료 프리셋(D30 계단 프로브) — 명단 "먼저 내려갔다"
+            b["won"], b["went"] = True, "down"
         led = G.new_ledger()                   # 공간 장부(D17) — 장면은 라이브 판과 같은 조건(기본 켬)
         pre = ov.get("ledger")
         if isinstance(pre, dict):              # 장면 전제 기억: {"statics": ["chest","exit"...], "turn": N}

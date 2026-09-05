@@ -467,9 +467,12 @@ def _witness_prose(w):
         return "%s가 %s에 당하는 것을" % (who, w.get("what", "?"))
     if k == "ally_use":                     # D30(09-05) 오브젝트 사용 — 동사는 '사용' 하나(파트너 확정:
         what = w.get("what", "?")           #   "~가 문을 사용". 종류별 문장 사전 없음 — 확장 시 what 만
-        if w.get("id"):                     #   바뀐다). 사실만 — 어디로 갔는지·따라가라는 말은 없다.
-            what += " %s" % w["id"]
-        return "%s가 %s을(를) 사용하는 것을" % (who, what)
+        if w.get("id") and w["id"] not in what:   # 바뀐다). id 는 obs 가 부르는 이름에 없을 때만 붙인다
+            what += " %s" % w["id"]         #   ("문 d0" 은 붙고, "계단(exit)" 은 이미 라벨 그대로).
+        line = "%s가 %s을(를) 사용하는 것을" % (who, what)
+        if w.get("result"):                 # 결과가 있는 사용(상자류) — 괄호 한 마디(파트너 동의 09-05):
+            line += " (%s)" % w["result"]   #   동사는 하나로 두고 좋은/나쁜 결과 정보는 잃지 않는다.
+        return line                         # 사실만 — 어디로 갔는지·따라가라는 말은 없다.
     return "%s의 일: %s" % (who, json.dumps(w, ensure_ascii=False))
 
 
