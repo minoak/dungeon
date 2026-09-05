@@ -724,6 +724,9 @@ def _last_prose(last, names=None):
         if r == "arrived":
             return "%s — 이미 곁이다" % (tgt or "?")
         if r == "no_path":
+            if last.get("exhausted"):         # D19 개정: 보이는 새 길·기억의 계단·기억 속 안 가 본 문 전부 없음
+                return ("탐색하려 했지만 — 새 길이 없다: 보이는 길은 전부 가 봤고,"
+                        " 기억 속에도 안 가 본 문이 없다")
             return "탐색하려 했지만 — 지금 갈 수 있는 새 길이 없다"
         if r == "following":
             return "%s 곁에서 동행을 시작했다" % tgt
@@ -741,6 +744,7 @@ _WIRE_KEYS = frozenset((
     "sights", "party", "options", "messages", "intent", "notes",
     "status",  # 상태 태그(D34): 아래 _wire "## 네 몸 상태" 절이 그린다
     "relations",   # 관계 장부(D36): 뼈 횟수·초대는 _wire, 살(한 줄)은 _sheet 가 그린다
+    "exhausted",   # 탐색 소진(D19 개정 09-06): '탐색' 어휘 대신 사실 한 줄
     "town",    # 마을(D29): 안전한 층의 사실 한 줄 — 아래 _wire 가 그린다
     "gear"))   # 장비(07-30): 아는 키지만 wire 는 일부러 안 그린다 — 착용 정보의 표현은
                #   시트(_sheet 차림 줄, 불변 프리픽스=캐싱)가 소유하고, 비교는 입수 메뉴
@@ -798,6 +802,8 @@ def _wire(obs, names=None):
         L.append("- 좌표: %s" % obs["pos"])
     if obs.get("order"):
         L.append("- 진행 중이던 핑: %s" % obs["order"])
+    if obs.get("exhausted"):                # D19 개정 — 관찰 사실만(어디로 가라는 말 없음)
+        L.append("- 이 자리에서 보이는 길은 전부 가 봤고, 기억 속에도 안 가 본 문이 없다 — 새 길이 없다")
     st = obs.get("status")
     if st:                                  # 상태 태그(D34) — 몸에 붙은 것. 라벨=효과(사실만)
         L += ["", "## 네 몸 상태 (붙은 것은 그 줄이 말하는 그대로 작용한다)"]

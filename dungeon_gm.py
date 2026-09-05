@@ -1569,6 +1569,7 @@ class Dungeon:
                  '수색: 반경 %d 안 보이는 범위의 숨은 함정·매복·보물을 드러낸다 (벽 뒤는 못 본다 — 한 턴 소모)%s'
                  % (bot.get('search_r', 1),
                     ' ※ 이 반경은 이미 샅샅이 살폈다 — 반복해도 새로 나올 게 없다' if already else ''))
+        exhausted = False
         if self.town:
             pass                               # 마을: explore 옵션군 전체 생략(위 사유)
         elif zone_obs is not None:             # D19: 탐색 종점=명사(막다른 곳) — 시야 가장자리 폐기.
@@ -1576,14 +1577,20 @@ class Dungeon:
                 if e['kind'] == '막다른 곳' and not e['been']:
                     _add('explore', e['bearing'], '탐색: %s쪽 막다른 곳까지 가 본다 — %dm'
                          % (e['bearing'], e['dist']))
-            _add('explore', None, '탐색: 아직 못 본 곳/새 길을 찾아 나선다 (엔진에 맡긴다)')
+            if self._explore_plan(bot, None, bots) is not None:   # D19 개정: 갈 곳이 있을 때만 어휘가 된다
+                _add('explore', None, '탐색: 아직 못 본 곳/새 길을 찾아 나선다 (엔진에 맡긴다)')
+            else:
+                exhausted = True               #   없으면 라벨 대신 사실 한 줄(obs.exhausted — 조향 없음)
         else:
             fresh_ways = [w for w in ways if not w['visited']]
             for w in fresh_ways:
                 _add('explore', w['bearing'], '탐색: %s쪽 안 가본 길 — 거리 %d'
                      % (w['bearing'], w['dist']))
             if not fresh_ways:
-                _add('explore', None, '탐색: 새 길을 찾아 나선다 (시야 밖 — 엔진에 맡긴다)')
+                if self._explore_plan(bot, None, bots) is not None:
+                    _add('explore', None, '탐색: 새 길을 찾아 나선다 (시야 밖 — 엔진에 맡긴다)')
+                else:
+                    exhausted = True
 
         # A-3(D18)+D22 전달층: 목격 — 내 눈으로 본 동료의 사건(피격·전사·명중·처치·함정·회복).
         # 1회성: 이번 결정에 한 번 전달하고 비운다(휘발=다음 결정 1회 — D22).
@@ -1652,6 +1659,7 @@ class Dungeon:
                 **({'status': [{'tag': t, **e} for t, e in sorted(bot['status'].items())]}
                    if (self.status and bot.get('status')) else {}),   # 상태 태그(D34) — 자기 몸의 사실
                 **({'relations': rel_obs} if rel_obs else {}),   # 관계 장부(D36) — 뼈 횟수·살·초대
+                **({'exhausted': True} if exhausted else {}),   # 탐색 소진(D19 개정) — 새 길·기억의 계단·안 가 본 문 없음
                 'last': bot.get('last'),      # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의
                                               #   결과를 관측할 수 있어야 한다". 자기 경험=시야-온리 무위반
                 'order': ('explore' if str(bot.get('order') or '')[:1] == '@'
@@ -2081,7 +2089,7 @@ class Dungeon:
                    else any(s in seen for s in dr.sides.values()))}
         return ks
 
-    def _set_explore_scan(self, bot, direction, bots, base):
+    def _explore_scan_plan(self, bot, direction, bots, base):
         """D19 탐색: 종점은 시야 가장자리 칸이 아니라 **명사** — 현 구역의 문(너머 안 가 본 것)과
         막다른 곳(발자국 없는 것). 단 **눈에 든 적 있는 명사만**(D19 정정 — 못 본 문은 어휘가
         아니다). 문 목표는 '지나 들어서는' 칸이라 도착이 곧 새 구역(빈 복도는 끝까지 걷는다 —
@@ -2124,19 +2132,71 @@ class Dungeon:
         if not routed:
             return None
         t, b, path = min(routed, key=lambda r: (len(r[2]), r[0]))
-        bot['order'], bot['path'] = '@%d,%d' % t, path
-        return {**base, 'result': 'pathed', 'len': len(path), 'bearing': b}
+        return '@%d,%d' % t, path, {**base, 'result': 'pathed', 'len': len(path), 'bearing': b}
 
-    def _set_explore(self, bot, direction, bots):
-        """탐색 폴백(v3): 지금 보이는 '미지로 트인 출입구' 중 *도달 가능*한 걸 골라 자동보행.
-        안 밟은(발자국 없는) 곳 우선 = 발자국 가지치기(왕복 방지). direction 주면 그 방위 우선.
-        도달 가능한 미지 출입구가 없으면(탐색 끝) 그때만 출구로 best-effort 행군.
-        D19(scan): 명사 종점(_set_explore_scan)이 먼저 — 없을 때만 프런티어/출구 폴백."""
+    def _remembers_exit(self, bot):
+        """계단을 본 적 있나 — 평생 목격 장부(scan seen_keys) 또는 공간 장부(ledger statics 'exit')."""
+        return ('exit' in (bot.get('seen_keys') or ())
+                or 'exit' in (((bot.get('ledger') or {}).get('statics')) or {}))
+
+    def _explore_door_plan(self, bot, bots, base):
+        """기억 속 '너머를 안 가 본 문'(D19 개정 2026-09-06) — 본 적 있는 문(doors_seen) 가운데 건너편
+        구역에 들어가 본 적 없는 것으로, 가장 가까운 문의 건너편 칸까지. 캐릭터가 아는 정보만으로 걷는
+        탐색의 마지막 발 — 안 본 계단 대신 이것이 폴백이다. 반환 (order, path, res) 또는 None."""
+        ent = bot.get('zones_entered') or set()
+        cands = []
+        for did in sorted(bot.get('doors_seen') or ()):
+            door = self.doors.get(did)
+            if door is None:
+                continue
+            for other in door.zones:
+                if other in ent:
+                    continue                          # 너머를 아는 문은 새 발견이 아니다
+                tgt = door.sides[other]
+                p = self.path_to(bot['x'], bot['y'], tgt[0], tgt[1], bots)
+                if p:
+                    cands.append((len(p), did, tgt, p))
+        if not cands:
+            return None
+        _, did, tgt, path = min(cands)
+        return '@%d,%d' % tgt, path, {**base, 'result': 'pathed', 'len': len(path), 'door': did}
+
+    def _explore_frontier_plan(self, bot, bots, base):
+        """기억 속 안 본 가장자리(D19 개정) — 본 바닥 칸 가운데 직교 이웃에 한 번도 못 본 칸이 있는 곳(시야
+        끝에서 봤던 '저 너머'). 현 시야의 프런티어(_ways)를 봇의 평생 시야(seen_cells)로 일반화한 것 —
+        캐릭터가 아는 정보만으로 걷는 마지막 발이자 종결 보장(갈 때마다 본 칸이 늘어 언젠가 소진된다).
+        가까운 순(체비셰프·좌표 — 결정론)으로 첫 도달 가능 칸. 반환 (order, path, res) 또는 None."""
+        scells = bot.get('seen_cells')
+        if not scells:
+            return None
+        cx, cy = bot['x'], bot['y']
+        cands = []
+        for (x, y) in scells:
+            if (x, y) == (cx, cy) or not (0 <= x < self.w and 0 <= y < self.h) or self.grid[y][x] == WALL:
+                continue
+            if any(0 <= x + dx < self.w and 0 <= y + dy < self.h and (x + dx, y + dy) not in scells
+                   for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0))):
+                cands.append((max(abs(x - cx), abs(y - cy)), x, y))
+        for _, x, y in sorted(cands):
+            p = self.path_to(cx, cy, x, y, bots)
+            if p:
+                return '@%d,%d' % (x, y), p, {**base, 'result': 'pathed', 'len': len(p), 'frontier': True}
+        return None
+
+    def _explore_plan(self, bot, direction, bots):
+        """탐색 계획(순수 — 봇 order 무변경): (order, path, res) 또는 None(갈 곳 없음). _set_explore 가
+        집행하고 view() 가 '탐색' 어휘의 유무를 이걸로 정한다(같은 논리 한 벌 — 라벨=사실).
+        순서: ①D19 명사 종점(현 구역의 안 가 본 문·막다른 곳) ②보이는 새 길(프런티어) ③**계단은 본 적
+        있을 때만**(기억의 계단) ④기억 속 안 가 본 문 ⑤기억 속 안 본 가장자리 ⑥없음. **D19 개정(2026-09-06, 파트너 확정 "계단을
+        찾는 게 목적인데 이미 핑이 찍혀서 계속 가게 된다")**: 구판은 ②가 비면 안 본 계단으로 best-effort
+        행군했다 — 머리는 모르는데 발이 아는 떠먹임(09-05 판 실측: 반경 안에 든 적 없는 계단 좌표가 order 로
+        46·52틱, 뷰어엔 계단 핑으로 보임). scan 없는 판(평생 시야 장부 없음 — 구판 장부만·더미 장면)만
+        구 폴백 유지(프런티어 소진=종결을 표현할 장부가 없다; 러너는 scan 기본 1)."""
         base = {'char': bot['char'], 'type': 'explore', 'target': direction or 'auto'}
         if self.scan:                                 # '새로 등장' 판정은 이제 order 종류 무관 —
-            res = self._set_explore_scan(bot, direction, bots, base)   # _sighted_stop(봇 평생 장부)
-            if res is not None:
-                return res
+            plan = self._explore_scan_plan(bot, direction, bots, base)   # _sighted_stop(봇 평생 장부)
+            if plan is not None:
+                return plan
         seen = self.visible_cells(bot['x'], bot['y'])
         scells = bot.get('seen_cells') if self.scan else None
         fresh = []
@@ -2167,17 +2227,37 @@ class Dungeon:
                     fresh = dirmatch
             w, path = min(fresh, key=lambda rp: (len(rp[1]), rp[0]['cell']))
             tx, ty = w['cell']
-            bot['order'], bot['path'] = '@%d,%d' % (tx, ty), path
-            return {**base, 'result': 'pathed', 'len': len(path), 'bearing': w['bearing']}
-        # 새로 트인 길이 (도달 가능하겐) 없다 → 발견할 게 없으니 출구로(떠먹임 아님). 막혔으면 가장 가까운 칸까지.
-        ex, ey = self.exit
-        path = self.path_to(bot['x'], bot['y'], ex, ey, bots, best_effort=True)
-        if path:
-            tx, ty = path[-1]
-            bot['order'], bot['path'] = '@%d,%d' % (tx, ty), path
-            return {**base, 'result': 'pathed', 'len': len(path), 'to_exit': True}
-        bot['order'], bot['path'], bot['plan'] = None, [], []   # 발 디딜 곳 없음 — 작정 진행 불가(D16)
-        return {**base, 'result': 'no_path'}
+            return '@%d,%d' % (tx, ty), path, {**base, 'result': 'pathed', 'len': len(path),
+                                               'bearing': w['bearing']}
+        # 새로 트인 길이 (도달 가능하겐) 없다 — 걷는 곳은 캐릭터가 아는 곳뿐(D19 개정).
+        # 정직한 폴백은 평생 시야 장부(scan seen_cells)가 있어야 종결(프런티어 소진)을 보장한다 —
+        # scan 없는 판(구판 장부만·더미 장면)은 그 장부가 없어 구 폴백(안 본 계단 행군)을 유지한다.
+        memoryless = not self.scan
+        remembered = self._remembers_exit(bot)
+        if remembered or memoryless:                  # 기억의 계단(또는 기억 장치 없는 봇의 구 폴백)
+            ex, ey = self.exit
+            path = self.path_to(bot['x'], bot['y'], ex, ey, bots, best_effort=True)
+            if path:
+                tx, ty = path[-1]
+                return '@%d,%d' % (tx, ty), path, {**base, 'result': 'pathed', 'len': len(path),
+                                                   'to_exit': True,
+                                                   **({'remembered': True} if remembered else {})}
+        if self.scan:                                 # 기억 속 안 가 본 문 → 기억 속 안 본 가장자리
+            return (self._explore_door_plan(bot, bots, base)
+                    or self._explore_frontier_plan(bot, bots, base))
+        return None
+
+    def _set_explore(self, bot, direction, bots):
+        """탐색 집행 — _explore_plan 의 계획을 봇에 싣는다. 계획이 없으면 no_path 정직 보고(+exhausted:
+        보이는 새 길·기억의 계단·기억 속 안 가 본 문이 전부 없다 — 판단은 두뇌에게: 돌아가기·동료·기다리기)."""
+        base = {'char': bot['char'], 'type': 'explore', 'target': direction or 'auto'}
+        plan = self._explore_plan(bot, direction, bots)
+        if plan is None:
+            bot['order'], bot['path'], bot['plan'] = None, [], []   # 발 디딜 곳 없음 — 작정 진행 불가(D16)
+            return {**base, 'result': 'no_path', **({'exhausted': True} if self.scan else {})}
+        order, path, res = plan
+        bot['order'], bot['path'] = order, path
+        return res
 
     def _sighted_stop(self, bot, base, treasure=False, potion=False):
         """정지 신호(D19 정정 2026-07-15, 파트너 확정): "새 오브젝트가 시야에 들어올 때 멈춰

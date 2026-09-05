@@ -479,6 +479,82 @@ check("⑬ 문턱에 올라서는 순간 다음 공간이 열린다 — 그 자�
 w13b = go_until(d13, b13, [b13], 'exit', 'at_exit')
 check("⑬ 발견 후 핑 → 계단 앞(at_exit)", w13b is not None and w13b['result'] == 'at_exit')
 
+# ───────────────────── ⑭ 정직한 탐색 폴백(D19 개정 2026-09-06) — 안 본 계단으로 걷지 않는다 ─────────────────────
+print("── ⑭ 탐색 폴백 — 걷는 곳은 캐릭터가 아는 곳뿐")
+ROWS14 = ["###############",
+          "#1...+....+...#",
+          "#....#....#..>#",
+          "###############"]
+
+
+def scene14():
+    d, st = G.Dungeon.from_ascii(ROWS14, seed=7, scan=True)
+    b = mkbot('1', *st['1'], ledger=True)
+    zA = d.zone_at[(2, 1)]; zB = d.zone_at[(7, 1)]; zC = d.zone_at[(12, 1)]
+    dAB = next(k for k, dr in d.doors.items() if set(dr.zones) == {zA, zB})
+    dBC = next(k for k, dr in d.doors.items() if set(dr.zones) == {zB, zC})
+    floor = set(d.zones[zA].cells) | set(d.zones[zB].cells) | {d.doors[dAB].cell, d.doors[dBC].cell}
+    seen = set()
+    for (x, y) in floor:                            # A·B 를 걸어 다닌 봇의 평생 시야(벽 포함)
+        seen |= set(d.visible_cells(x, y))
+    b['seen_cells'] = seen
+    b['zone_seen'] = {zA: set(d.zones[zA].cells), zB: set(d.zones[zB].cells)}
+    b['zones_entered'] = {zA, zB}                   # A·B 에 들어가 봤다
+    b['doors_seen'] = {dAB, dBC}                    # 두 문을 봤다(C 너머는 안 가 봄)
+    b['seen_keys'] = set()                          # 계단은 본 적 없다
+    return d, b, zC, dBC
+
+
+d14, b14, zC, dBC = scene14()
+r = d14._set_explore(b14, None, [b14])
+check("⑭ 계단 미목격·새 길 없음 → 기억 속 안 가 본 문(d%s) 건너편으로(door 병기, to_exit 없음)" % dBC[1:],
+      r['result'] == 'pathed' and r.get('door') == dBC and not r.get('to_exit')
+      and b14['order'] == '@%d,%d' % d14.doors[dBC].sides[zC])
+d14, b14, zC, dBC = scene14()
+b14['seen_keys'] = {'exit'}                          # 계단을 본 적 있다 → 기억의 계단
+r = d14._set_explore(b14, None, [b14])
+check("⑭ 계단을 본 적 있으면 기억의 계단행(to_exit+remembered)",
+      r['result'] == 'pathed' and r.get('to_exit') is True and r.get('remembered') is True)
+d14, b14, zC, dBC = scene14()
+b14['zones_entered'].add(zC)                         # 문 너머도 가 봤지만 B 의 구석 두 칸은 못 봤다
+b14['seen_cells'] -= {(9, 2), (8, 2)}
+r = d14._set_explore(b14, None, [b14])
+check("⑭ 문은 다 가 봤고 계단 미목격 → 기억 속 안 본 가장자리로(frontier)",
+      r['result'] == 'pathed' and r.get('frontier') is True and b14['order'] in ('@9,1', '@8,1', '@7,2'))
+d14, b14, zC, dBC = scene14()
+b14['zones_entered'].add(zC)                         # 문 너머도 다 가 봤고 본 칸 가장자리도 없다(계단만 못 봄 — 단위 장면:
+b14['seen_cells'] = {(x, y) for y in range(d14.h) for x in range(d14.w)}   # 실 맵에선 '다 봤는데 계단만 못 봄'은 없다)
+r = d14._set_explore(b14, None, [b14])
+check("⑭ 전부 소진 → no_path+exhausted·order 파기(안 본 계단으로 안 걷는다)",
+      r['result'] == 'no_path' and r.get('exhausted') is True and b14['order'] is None)
+o = d14.view(b14, [b14])
+check("⑭ 소진 시 '탐색' 어휘 없음 + obs.exhausted", not any(x['type'] == 'explore' for x in o['options'])
+      and o.get('exhausted') is True)
+w = brains._wire(o)
+check("⑭ 렌더 '새 길이 없다'(관찰 사실만, 물음표 0)", "새 길이 없다" in w and "?" not in
+      [ln for ln in w.splitlines() if "새 길이 없다" in ln][0])
+check("⑭ 자기 관측 문장(exhausted)", "기억 속에도 안 가 본 문이 없다" in brains._last_prose(
+    {'type': 'explore', 'result': 'no_path', 'target': 'auto', 'exhausted': True}))
+d14, b14, zC, dBC = scene14()
+o = d14.view(b14, [b14])
+check("⑭ 갈 곳(기억 속 문)이 있으면 '탐색' 어휘 있음", any(x['type'] == 'explore' for x in o['options'])
+      and 'exhausted' not in o)
+dm, stm = G.Dungeon.from_ascii(["######", "#1..>#", "######"], seed=7, scan=False)
+bm = mkbot('1', *stm['1'])                           # 기억 장치 없는 봇(장부·스캔 둘 다 없음)
+dm.visited.update({(1, 1), (2, 1), (3, 1), (4, 1)})   # 발자국으로 '새 길' 소거(구판 프런티어 기준 — 계단 칸까지)
+r = dm._set_explore(bm, None, [bm])
+check("⑭ scan 없는 판(평생 시야 장부 없음)은 구 폴백 유지(to_exit, remembered 없음)",
+      r.get('to_exit') is True and not r.get('remembered'))
+
+
+def once14():
+    d, b, zC, dBC = scene14()
+    r = d._set_explore(b, None, [b])
+    return (r, b['order'])
+
+
+check("⑭ 결정론", once14() == once14())
+
 print("=" * 44)
 if C.failed:
     print("RESULT: %d FAIL" % C.failed)

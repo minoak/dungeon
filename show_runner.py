@@ -323,9 +323,17 @@ def act_summary(res):
         r = res["result"]
         if r == "pathed":
             if res.get("to_exit"):
-                return "탐색 — 더 볼 곳 없음, 출구로 향함"
+                return ("탐색 — 더 볼 곳 없음, 기억의 계단으로 향함" if res.get("remembered")
+                        else "탐색 — 더 볼 곳 없음, 출구로 향함")
+            if res.get("door"):                                # D19 개정: 기억 속 안 가 본 문
+                return "탐색 — 더 볼 곳 없음, 기억 속 문 %s 너머로" % res["door"]
+            if res.get("frontier"):                            # D19 개정: 기억 속 안 본 가장자리
+                return "탐색 — 더 볼 곳 없음, 기억 속 안 본 가장자리로"
             return "탐색 -> %s 방향 자동보행" % res.get("bearing", "?")
-        return "탐색 — 갈 곳 없음" if r == "no_path" else "탐색(%s)" % r
+        if r == "no_path":
+            return ("탐색 — 갈 곳 없음(새 길·기억의 계단·안 가 본 문 전부 없음)" if res.get("exhausted")
+                    else "탐색 — 갈 곳 없음")
+        return "탐색(%s)" % r
     if t == "walk":
         r = res["result"]
         if res.get("bleed", {}).get("down"):
