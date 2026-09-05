@@ -206,6 +206,16 @@ else:
     st, pre = call("/api/presets")
     check("③ GET /api/presets: 200 · traits 12 · jobs 3 · 기본 파티 3인 미리보기",
           st == 200 and len(pre["traits"]) == 12 and len(pre["jobs"]) == 3 and len(pre["default_party"]) == 3)
+    # 거부 테스트를 먼저 — 배경 401자 케이스는 200(절단 저장)이라 파일을 덮어쓴다(게이트 순서 교정 09-05:
+    # 이 저장이 뒤의 3인 파티를 덮어써 start 검사가 1인 판을 보는 사고가 있었다).
+    st1, r1_ = call("/api/party", {"slots": [{"job": "전사", "traits": [], "name": "a", "sex": "남"}]})
+    st2, r2_ = call("/api/party", {"slots": [{"job": "전사", "traits": ["용맹한"] * 4, "name": "a", "sex": "남"}]})
+    st3, r3_ = call("/api/party", {"slots": [{"job": "전사", "traits": ["용맹한"], "name": "a", "sex": "남",
+                                              "background": "가" * 401}]})
+    saved1 = json.load(io.open(os.path.join(TMP, "party_web.json"), encoding="utf-8"))
+    check("③ POST /api/party 거부: 키워드 0개·중복 4개 = 400 + 이유 한 줄 / 배경 401자는 400자로 절단 저장(200)",
+          st1 == 400 and r1_.get("error") and st2 == 400 and r2_.get("error") and st3 == 200
+          and len(saved1["1"]["background"]) == 400)
     st, res = call("/api/party", {"slots": [
         {"job": "도적", "traits": ["신중한", "겁 많은"], "name": "테스", "sex": "여", "background": "광산 마을 출신."},
         {"job": "전사", "traits": ["용맹한"], "name": "브란", "sex": "남"},
@@ -213,12 +223,6 @@ else:
     saved = json.load(io.open(os.path.join(TMP, "party_web.json"), encoding="utf-8"))
     check("③ POST /api/party: 200 저장 → party_web.json 3인(load_party 재검증 통과)",
           st == 200 and res.get("ok") and sorted(k for k in saved if not k.startswith("_")) == ["1", "2", "3"])
-    st1, r1_ = call("/api/party", {"slots": [{"job": "전사", "traits": [], "name": "a", "sex": "남"}]})
-    st2, r2_ = call("/api/party", {"slots": [{"job": "전사", "traits": ["용맹한"] * 4, "name": "a", "sex": "남"}]})
-    st3, r3_ = call("/api/party", {"slots": [{"job": "전사", "traits": ["용맹한"], "name": "a", "sex": "남",
-                                              "background": "가" * 401}]})
-    check("③ POST /api/party 거부: 키워드 0개·중복 4개 = 400 + 이유 한 줄 / 배경 401자는 절단 저장(200)",
-          st1 == 400 and r1_.get("error") and st2 == 400 and r2_.get("error") and st3 == 200)
     st, ok = call("/api/start", {"map": "normal", "town": False, "brain": "dummy", "seed": 7})
     t0 = time.time()
     running = None

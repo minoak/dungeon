@@ -17,6 +17,7 @@ echo   [7] Gemini brain     (API - COSTS MONEY)
 echo   [8] Gemini + ally-sight  (door fix ON - compare with 7)
 echo   [9] BIG verdict: map + Gemini + ally-sight + social  (~25min, ~500 KRW)
 echo   [T] TOWN run (D29): village 0F + dungeon 1F, round trip  (Gemini - COSTS MONEY)
+echo   [L] LAUNCHER (web): build your party, pick options, start, watch  (D31)
 echo   [Q] Quit
 echo  ==========================================
 set "pick="
@@ -30,6 +31,7 @@ if /i "%pick%"=="7" goto gemini
 if /i "%pick%"=="8" goto allysight
 if /i "%pick%"=="9" goto bigally
 if /i "%pick%"=="T" goto town
+if /i "%pick%"=="L" goto launcher
 if /i "%pick%"=="Q" exit /b 0
 goto menu
 
@@ -115,6 +117,13 @@ echo Closing the new window stops the run. Previous run is auto-saved to runs/.
 start "Wonderland big verdict" cmd /k "set DUNGEON_W=80&& set DUNGEON_H=30&& set DUNGEON_MONSTERS=7&& set DUNGEON_TRAPS=4&& set DUNGEON_LURKERS=2&& set DUNGEON_POTIONS=1&& set DUNGEON_DEPTHS=1&& set DUNGEON_TURNS=500&& set DUNGEON_BRAIN_BACKEND=gemini_api&& set DUNGEON_ALLY_SIGHT=1&& set DUNGEON_SOCIAL=1&& call %~dp0live.bat"
 timeout /t 4 /nobreak >nul
 start "" http://localhost:8000/viewer/
+goto menu
+
+:launcher
+echo Web launcher: party builder (job / trait keywords / free-text background), options, start, viewer.
+echo It serves port 8000 itself - close any old "python -m http.server 8000" window first.
+echo Brains that call an API cost money (Gemini). The rules brain (dummy) is free.
+start "Wonderland launcher" cmd /k "set PYTHONUTF8=1&& python %~dp0launcher.py"
 goto menu
 
 :viewer

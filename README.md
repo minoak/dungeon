@@ -84,6 +84,11 @@ cd dungeon
 wonderland.bat        ← 더블클릭: 메뉴식 스타터 (라이브 판 / 뷰어 / 솔로 판 / 마을 판)
 ```
 
+**가장 쉬운 시작(D31 웹 론처)**: `wonderland.bat` → **[L]** (또는 `python launcher.py`) → 브라우저에서
+파티를 꾸미고(직업 · 성격 키워드 최대 3개 · 배경 자유입력) 던전 옵션(맵 크기 · 마을 시작 · 두뇌 · 시드)을
+고른 뒤 **원정 시작** → 관전 뷰어로 이어진다. 시드는 기본 랜덤(뽑힌 값은 판 기록에 남아 재현 가능).
+콘솔 메뉴의 다른 항목은 개발·실험용이다.
+
 관전: 판이 시작되면 http://localhost:8000/viewer/ 가 자동으로 열린다.
 
 ```bash
@@ -97,7 +102,7 @@ python make_replay_viewer.py runs/stream-XXXX.jsonl -o replay_viewer.html
 python analyze_run.py runs/stream-XXXX.jsonl
 ```
 
-주요 환경변수: `DUNGEON_SEED` `DUNGEON_W/H` `DUNGEON_DEPTHS` `DUNGEON_BRAIN_BACKEND`
+주요 환경변수: `DUNGEON_SEED`(정수 또는 `random` — 데모 기본) `DUNGEON_PARTY_FILE` `DUNGEON_W/H` `DUNGEON_DEPTHS` `DUNGEON_BRAIN_BACKEND`
 `DUNGEON_SOLO` `DUNGEON_TOWN` 등 — `show_runner.py`와 `wonderland.bat` 참고.
 
 ## 데이터와 에셋

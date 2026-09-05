@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>원더랜드 — 시작</title>
+<style>
+  /* ── 론처 한 장(D31) — 뷰어(viewer/index.html)와 같은 톤. launcher.py 의 /api/* 소비자 ── */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    background: #0e0f13; color: #d8dbe2;
+    font: 14px/1.55 "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 14px 22px; background: #14161c; border-bottom: 1px solid #23262f; }
+  header h1 { font-size: 18px; color: #e8c268; letter-spacing: 2px; }
+  header .sub { color: #8a8f9c; font-size: 12px; }
+  main { max-width: 1080px; margin: 0 auto; padding: 22px; }
+  section[hidden] { display: none; }
+  h2 { font-size: 15px; color: #e8c268; margin: 6px 0 12px; letter-spacing: 1px; }
+  .title { text-align: center; padding: 60px 0 30px; }
+  .title .logo { font-size: 44px; color: #e8c268; letter-spacing: 8px; margin-bottom: 8px; }
+  .title .tag { color: #8a8f9c; margin-bottom: 34px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .center { justify-content: center; }
+  button {
+    background: #1d2029; color: #d8dbe2; border: 1px solid #2c303c; border-radius: 6px;
+    padding: 9px 16px; font-size: 14px; cursor: pointer; font-family: inherit;
+  }
+  button:hover { border-color: #e8c268; }
+  button.primary { background: #e8c268; color: #14161c; font-weight: bold; border-color: #e8c268; }
+  button.primary:disabled { opacity: .45; cursor: default; }
+  button.danger { border-color: #7a2f28; color: #ff8b7a; }
+  button.small { padding: 4px 10px; font-size: 12px; }
+  .status { margin-top: 18px; color: #8a8f9c; font-size: 13px; }
+  .status b { color: #6fe3b0; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .card { background: #12141a; border: 1px solid #23262f; border-radius: 8px; padding: 14px; }
+  .card h3 { font-size: 13px; color: #8a8f9c; margin-bottom: 10px; letter-spacing: 1px; }
+  .card h3 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+  label.f { display: block; font-size: 12px; color: #8a8f9c; margin: 8px 0 3px; }
+  input[type=text], textarea, select {
+    width: 100%; background: #1d2029; color: #d8dbe2; border: 1px solid #2c303c; border-radius: 5px;
+    padding: 7px 9px; font-size: 13.5px; font-family: inherit;
+  }
+  textarea { min-height: 78px; resize: vertical; }
+  .radios { display: flex; gap: 6px; flex-wrap: wrap; }
+  .radios label, .traits label {
+    border: 1px solid #2c303c; border-radius: 14px; padding: 3px 11px; font-size: 12.5px; cursor: pointer;
+    user-select: none; background: #171922;
+  }
+  .radios input, .traits input { display: none; }
+  .radios label.on, .traits label.on { border-color: #e8c268; color: #e8c268; }
+  .traits label.off { opacity: .4; cursor: default; }
+  .traits { display: flex; gap: 6px; flex-wrap: wrap; }
+  .hint { font-size: 11.5px; color: #6a6f7a; margin-top: 4px; }
+  .cnt { float: right; }
+  .cnt.over { color: #ff8b7a; }
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  details summary { cursor: pointer; color: #8a8f9c; font-size: 12.5px; margin-top: 6px; }
+  #err { color: #ff8b7a; font-size: 13px; min-height: 18px; margin-top: 10px; white-space: pre-wrap; }
+  .foot { margin-top: 22px; display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+  .preview { font-size: 12.5px; color: #b9bec9; }
+  .preview b { color: #d8dbe2; }
+  .muted { color: #6a6f7a; font-size: 12px; }
+</style>
+</head>
+<body>
+<header><h1>WONDERLAND</h1><span class="sub">에이전트는 픽셀 던전을 플레이한다 — 시작 화면(D31)</span></header>
+<main>
+
+<!-- ═══ 1. 타이틀 ═══ -->
+<section id="sTitle">
+  <div class="title">
+    <div class="logo">원더랜드</div>
+    <div class="tag">캐릭터를 꾸미고, 던전을 열고, 그들이 어떻게 헤쳐 나가는지 지켜본다</div>
+    <div class="row center">
+      <button class="primary" id="bNew">새 원정</button>
+      <button id="bReplays">지난 판 보기</button>
+    </div>
+    <div class="status" id="tStatus">상태 확인 중…</div>
+    <div class="row center" id="tRunRow" hidden style="margin-top:10px">
+      <button id="bWatch">관전으로</button>
+      <button class="danger" id="bStop">진행 중인 판 중지</button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 2. 파티 ═══ -->
+<section id="sParty" hidden>
+  <h2>1 / 2 · 파티</h2>
+  <div class="row" style="margin-bottom:12px">
+    <div class="radios" id="partyMode">
+      <label class="on"><input type="radio" name="pm" value="custom" checked>커스텀 파티</label>
+      <label><input type="radio" name="pm" value="default">기본 파티 (두란·카야·피른)</label>
+    </div>
+    <span class="muted">성격은 키워드로 고른다(최대 3개) — 키워드가 행동을 만든다. 배경은 자유롭게 써도 된다.</span>
+  </div>
+  <div class="cards" id="cards"></div>
+  <div class="preview" id="defaultPreview" hidden></div>
+  <div id="err"></div>
+  <div class="foot">
+    <button id="bBack1">← 타이틀</button>
+    <button class="primary" id="bNext">다음: 던전 옵션 →</button>
+  </div>
+</section>
+
+<!-- ═══ 3. 옵션 → 시작 ═══ -->
+<section id="sOpts" hidden>
+  <h2>2 / 2 · 던전</h2>
+  <div class="opts">
+    <div class="card">
+      <h3>맵</h3>
+      <div class="radios" id="mapMode">
+        <label class="on"><input type="radio" name="map" value="normal" checked>보통 (56×20)</label>
+        <label><input type="radio" name="map" value="big">큰 판 (80×30, 몹 7)</label>
+      </div>
+      <label class="f"><input type="checkbox" id="town"> 마을에서 시작 (0층 → 던전 입구, D29)</label>
+    </div>
+    <div class="card">
+      <h3>두뇌</h3>
+      <select id="brain">
+        <option value="gemini_api">Gemini API (빠름 · 판당 ~150원)</option>
+        <option value="claude_cli">Claude CLI (구독 · 느림)</option>
+        <option value="dummy">규칙 두뇌 (LLM 0콜 — 배관 점검)</option>
+      </select>
+      <div class="hint">API 키는 .env 에서 읽는다(launcher.py 가 띄운 러너에 그대로 전달).</div>
+    </div>
+    <div class="card">
+      <h3>시드</h3>
+      <div class="preview">기본은 <b>랜덤</b> — 매번 다른 던전. 뽑힌 시드는 판 기록(run_meta)에 남아 언제든 재현된다.</div>
+      <details><summary>고급: 시드 지정</summary>
+        <input type="text" id="seed" placeholder="비우면 랜덤 · 정수 입력 시 그 던전">
+      </details>
+    </div>
+  </div>
+  <div id="err2" style="color:#ff8b7a;font-size:13px;min-height:18px;margin-top:10px"></div>
+  <div class="foot">
+    <button id="bBack2">← 파티</button>
+    <button class="primary" id="bStart">원정 시작</button>
+  </div>
+</section>
+
+</main>
+<script>
+/* ═══ 상태 ═══ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const COLORS = ['#ffd166', '#6fe3b0', '#c77dff'];
+let presets = null;
+let slots = [
+  { name: '', sex: '남', job: '전사', traits: [], background: '' },
+  { name: '', sex: '여', job: '도적', traits: [], background: '' },
+  { name: '', sex: '여', job: '궁수', traits: [], background: '' },
+];
+let partyMode = 'custom';
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? { cache: 'no-store' }
+    : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  let j = {};
+  try { j = await r.json(); } catch (e) { /* 빈 응답 */ }
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+function show(id) { for (const s of ['sTitle', 'sParty', 'sOpts']) $(s).hidden = (s !== id); }
+
+/* ═══ 타이틀 — 상태 ═══ */
+async function refreshStatus() {
+  try {
+    const st = await api('/api/status');
+    if (st.running) {
+      $('tStatus').innerHTML = `판 <b>진행 중</b> — seed ${esc(st.seed ?? '…')}, t=${esc(st.turn ?? 0)}` +
+        (st.party?.length ? ` · ${st.party.map(p => esc(p.name)).join('·')}` : '');
+      $('tRunRow').hidden = false;
+    } else {
+      $('tStatus').textContent = st.seed != null
+        ? `지난 판: seed ${st.seed}, ${st.turn ?? 0}틱, 결말 ${st.outcome ?? '(중단)'}` : '아직 돈 판이 없다';
+      $('tRunRow').hidden = true;
+    }
+  } catch (e) { $('tStatus').textContent = '서버 연결 실패 — launcher.py 가 떠 있나? (' + e.message + ')'; }
+}
+$('bNew').onclick = async () => { await loadPresets(); show('sParty'); };
+$('bReplays').onclick = () => { location.href = '/viewer/'; };
+$('bWatch').onclick = () => { location.href = '/viewer/?run=state/stream.jsonl'; };
+$('bStop').onclick = async () => { await api('/api/stop', {}); refreshStatus(); };
+
+/* ═══ 파티 ═══ */
+async function loadPresets() {
+  if (presets) return;
+  presets = await api('/api/presets');
+  renderCards();
+  $('defaultPreview').innerHTML = presets.default_party.map(p =>
+    `<div><b>${esc(p.name)}</b> — ${esc(p.job)}(${esc(p.sex)}) · ${esc(p.persona)}</div>`).join('');
+}
+function renderCards() {
+  const jobs = Object.keys(presets.jobs), traits = Object.keys(presets.traits);
+  $('cards').innerHTML = slots.map((s, i) => `
+    <div class="card" data-i="${i}">
+      <h3><span class="dot" style="background:${COLORS[i]}"></span>모험가 ${i + 1}</h3>
+      <label class="f">이름</label>
+      <input type="text" maxlength="20" data-k="name" value="${esc(s.name)}" placeholder="한 줄, 20자 이내">
+      <label class="f">성별</label>
+      <div class="radios" data-k="sex">${['남', '여'].map(v =>
+        `<label class="${s.sex === v ? 'on' : ''}"><input type="radio" value="${v}">${v}</label>`).join('')}</div>
+      <label class="f">직업 <span class="hint" style="display:inline">— 몸 수치를 정한다</span></label>
+      <div class="radios" data-k="job">${jobs.map(v =>
+        `<label class="${s.job === v ? 'on' : ''}" title="${esc(jobDesc(v))}"><input type="radio" value="${v}">${esc(v)}</label>`).join('')}</div>
+      <label class="f">성격 키워드 <span class="cnt" data-cnt="traits">${s.traits.length}/${presets.max_traits}</span></label>
+      <div class="traits" data-k="traits">${traits.map(t =>
+        `<label class="${s.traits.includes(t) ? 'on' : ''}" title="${esc(presets.traits[t].persona)}"><input type="checkbox" value="${esc(t)}">${esc(t)}</label>`).join('')}</div>
+      <div class="hint" data-persona>${esc(personaOf(s))}</div>
+      <label class="f">배경 (자유 입력 · 이 캐릭터의 과거) <span class="cnt" data-cnt="bg">${s.background.length}/400</span></label>
+      <textarea maxlength="400" data-k="background" placeholder="예: 광산 마을에서 자랐다. 무너진 갱도에서 혼자 살아 나온 뒤로 어둠을 믿지 않는다.">${esc(s.background)}</textarea>
+    </div>`).join('');
+  for (const card of $('cards').querySelectorAll('.card')) bindCard(card, +card.dataset.i);
+}
+function jobDesc(j) { const b = presets.jobs[j]; return `HP ${b.hp} · 힘 ${b.str} · 민첩 ${b.dex} · 은신 ${b.stealth} · 인지 ${b.search_r} · 사거리 ${b.atk_range}`; }
+function personaOf(s) { return s.traits.map(t => presets.traits[t].persona).join(' ') || '키워드를 고르면 성격 문장이 여기 조립된다.'; }
+function bindCard(card, i) {
+  const s = slots[i];
+  card.querySelector('[data-k=name]').oninput = e => { s.name = e.target.value; };
+  const bg = card.querySelector('[data-k=background]');
+  bg.oninput = e => { s.background = e.target.value; card.querySelector('[data-cnt=bg]').textContent = `${s.background.length}/400`; };
+  for (const k of ['sex', 'job']) {
+    for (const lab of card.querySelectorAll(`[data-k=${k}] label`)) {
+      lab.onclick = () => {
+        s[k] = lab.querySelector('input').value;
+        card.querySelectorAll(`[data-k=${k}] label`).forEach(l => l.classList.toggle('on', l === lab));
+      };
+    }
+  }
+  const tl = card.querySelector('[data-k=traits]');
+  const paint = () => {
+    for (const lab of tl.querySelectorAll('label')) {
+      const v = lab.querySelector('input').value, on = s.traits.includes(v);
+      lab.classList.toggle('on', on);
+      lab.classList.toggle('off', !on && s.traits.length >= presets.max_traits);
+    }
+    card.querySelector('[data-cnt=traits]').textContent = `${s.traits.length}/${presets.max_traits}`;
+    card.querySelector('[data-persona]').textContent = personaOf(s);
+  };
+  for (const lab of tl.querySelectorAll('label')) {
+    lab.onclick = () => {
+      const v = lab.querySelector('input').value;
+      if (s.traits.includes(v)) s.traits = s.traits.filter(x => x !== v);
+      else if (s.traits.length < presets.max_traits) s.traits.push(v);
+      paint();
+    };
+  }
+}
+for (const lab of $('partyMode').querySelectorAll('label')) {
+  lab.onclick = () => {
+    partyMode = lab.querySelector('input').value;
+    $('partyMode').querySelectorAll('label').forEach(l => l.classList.toggle('on', l === lab));
+    $('cards').hidden = partyMode !== 'custom';
+    $('defaultPreview').hidden = partyMode !== 'default';
+  };
+}
+$('bBack1').onclick = () => show('sTitle');
+$('bNext').onclick = async () => {
+  $('err').textContent = '';
+  if (partyMode === 'custom') {
+    try {
+      const res = await api('/api/party', { slots });
+      $('err').style.color = '#6fe3b0';
+      $('err').textContent = '저장됨: ' + res.party.map(p => `${p.name}(${p.job}: ${p.traits.join('·')})`).join(' / ');
+    } catch (e) { $('err').style.color = '#ff8b7a'; $('err').textContent = e.message; return; }
+  }
+  show('sOpts');
+};
+
+/* ═══ 옵션 → 시작 ═══ */
+for (const lab of $('mapMode').querySelectorAll('label')) {
+  lab.onclick = () => $('mapMode').querySelectorAll('label').forEach(l => l.classList.toggle('on', l === lab));
+}
+$('bBack2').onclick = () => show('sParty');
+$('bStart').onclick = async () => {
+  $('err2').textContent = '';
+  const body = {
+    map: $('mapMode').querySelector('label.on input').value,
+    town: $('town').checked,
+    brain: $('brain').value,
+    seed: $('seed').value.trim() || null,
+    party: partyMode,
+  };
+  $('bStart').disabled = true;
+  try {
+    await api('/api/start', body);
+    $('err2').style.color = '#8a8f9c';
+    $('err2').textContent = '러너를 띄우는 중… 던전이 생성되면 관전 뷰어로 넘어간다.';
+    const t0 = Date.now();
+    while (Date.now() - t0 < 60000) {
+      await new Promise(r => setTimeout(r, 700));
+      const st = await api('/api/status');
+      if (st.seed != null && (st.running || st.outcome)) { location.href = st.viewer; return; }
+      if (!st.running && st.seed == null) { /* 아직 run_meta 전 */ }
+    }
+    $('err2').style.color = '#ff8b7a';
+    $('err2').textContent = '러너가 60초 안에 판을 열지 못했다 — state/runner.out 을 확인하라.';
+  } catch (e) { $('err2').style.color = '#ff8b7a'; $('err2').textContent = e.message; }
+  $('bStart').disabled = false;
+};
+
+refreshStatus();
+setInterval(() => { if (!$('sTitle').hidden) refreshStatus(); }, 3000);
+</script>
+</body>
+</html>
