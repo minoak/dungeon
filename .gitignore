@@ -15,3 +15,7 @@ state_*.out
 # Claude 세션 기억 스냅샷(로컬 전용) — 공개 리포에 실리면 안 된다.
 # 2026-08-10 filter-repo 로 히스토리에서도 제거했음. 로컬 폴더는 보관.
 claude-memory/
+
+# 론처(D31, 2026-09-05)가 만드는 사용자 파일·러너 콘솔 덤프 — 개인 저작물이라 커밋 안 함
+party_custom.json
+state/runner.out

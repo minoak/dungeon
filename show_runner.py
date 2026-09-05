@@ -67,6 +67,7 @@ import brains
 import gm
 import stream
 import bestiary
+import sheetkit                 # D31(09-05) 배경 정제(자유 입력 격리) — 러너도 같은 자를 쓴다
 
 STATE = os.environ.get("DUNGEON_STATE_DIR") or os.path.join(HERE, "state")
 os.makedirs(STATE, exist_ok=True)
@@ -203,6 +204,19 @@ def load_party(path):
                 if not isinstance(v, int) or isinstance(v, bool) or not (lo <= v <= hi):
                     raise ValueError("봇%s %s 는 %d~%d 정수여야 함: %r" % (char, k, lo, hi, v))
                 out[k] = v
+            bg = s.get("background")            # D31(09-05) 자유 입력 2호 — 시트 UGC 인젝션 관문:
+            if bg is not None:                  #   막지 않고 격리한다(sheetkit.sanitize_background —
+                if not isinstance(bg, str):     #   개행·마크다운 표식 제거·400자). 빈 결과=필드 없음
+                    raise ValueError("봇%s background 는 문자열이어야 함" % char)
+                bg = sheetkit.sanitize_background(bg, sheetkit.BACKGROUND_MAX)
+                if bg:
+                    out["background"] = bg
+            tr = s.get("traits")                # 성격 키워드 원본(부검용 — 프롬프트엔 문장이 대신 나간다)
+            if tr is not None:
+                if (not isinstance(tr, list) or len(tr) > 5
+                        or not all(isinstance(t, str) and 0 < len(t) <= 20 for t in tr)):
+                    raise ValueError("봇%s traits 는 20자 이내 문자열 최대 5개 리스트" % char)
+                out["traits"] = list(tr)
             rel = s.get("relationships")
             if rel is not None:
                 if not isinstance(rel, dict):
@@ -591,7 +605,10 @@ def main():
             bestiary_file=bool(BESTIARY_FILE),   # 영속 여부(실행모드 메타 — gm/menu 와 같은 급)
             party=[{**{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
                                          "wdmg", "stealth", "search_r", "persona")},
-                    **({"name": b["name"]} if b.get("name") else {})}   # additive: 보고서·웹의 호칭
+                    **({"name": b["name"]} if b.get("name") else {}),   # additive: 보고서·웹의 호칭
+                    **{k: b[k] for k in ("speech", "goal", "background")   # D31(09-05) additive —
+                       if b.get(k)},                                       #   커스텀 시트 원문(있을 때만)
+                    **({"traits": list(b["traits"])} if b.get("traits") else {})}   # 키워드 원본
                    for b in bots])
     lvl = {"turn": 0, **d.level_snapshot(),
            "party": [G.bot_snapshot(b) for b in bots]}
