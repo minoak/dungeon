@@ -465,6 +465,11 @@ def _witness_prose(w):
         return "%s가 숨어 있던 %s을(를) 찾아내는 것을" % (who, w.get("mon") or w.get("what", "?"))
     if k == "ally_mishap":
         return "%s가 %s에 당하는 것을" % (who, w.get("what", "?"))
+    if k == "ally_use":                     # D30(09-05) 오브젝트 사용 — 동사는 '사용' 하나(파트너 확정:
+        what = w.get("what", "?")           #   "~가 문을 사용". 종류별 문장 사전 없음 — 확장 시 what 만
+        if w.get("id"):                     #   바뀐다). 사실만 — 어디로 갔는지·따라가라는 말은 없다.
+            what += " %s" % w["id"]
+        return "%s가 %s을(를) 사용하는 것을" % (who, what)
     return "%s의 일: %s" % (who, json.dumps(w, ensure_ascii=False))
 
 

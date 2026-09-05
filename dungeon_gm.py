@@ -2385,6 +2385,13 @@ class Dungeon:
         bot['x'], bot['y'] = nx, ny
         self.visited.add((nx, ny))
         out = {}
+        if self.scan:                             # D30(09-05) 오브젝트 사용 목격 — 첫 사례=문 타일(+).
+            dr = next((dd for dd in self.doors.values() if dd.cell == (nx, ny)), None)
+            if dr is not None:                    # 밟는 순간 1회(너머로 내려서는 걸음은 안 온다). 트임
+                self._witness(bots, nx, ny,       #   (cell 없는 문)은 빛을 안 막아 동료가 사라지지 않으니
+                              {'kind': 'ally_use', 'char': bot['char'],   # 대상 아님. 교대(swap)로 밀려난
+                               'what': '문', 'id': dr.id},                 # 동료는 여기 안 온다(지나간 게
+                              exclude=(bot['char'],))                      # 아니다). 문장은 brains 가 쓴다.
         tf = self.feature_at(nx, ny, 'treasure')
         if tf and not tf.concealed:               # 숨은 보물은 밟아도 모른다 — 인지로 드러나야 줍는다
             del self.features[tf.id]; bot['bag'] += 1; out['treasure'] = True
@@ -2892,7 +2899,11 @@ class Dungeon:
         """D22 전달층 — (x,y)가 시야에 든 생존 봇에게 목격 사실 주입. A-3 문법 그대로:
         witnessed 에 쌓였다가 다음 결정 obs 에 1회 실리고 소거(휘발=다음 결정 1회 — 시계 TTL 이면
         자동보행 틱 동안 아무 두뇌도 못 읽고 증발한다). 당사자는 exclude(자기 경험은 last 소관).
-        events 스위치 뒤 — 기존 몹 피격 주입(무스위치, _monster_attack)과 별개로 어휘만 늘린다."""
+        events 스위치 뒤 — 기존 몹 피격 주입(무스위치, _monster_attack)과 별개로 어휘만 늘린다.
+        어휘(kind): ally_hit/kill/trap/heal/down(전투·함정·회복·전사) · ally_loot/spot/mishap(07-29 획득·
+        발견·비대칭) · **ally_use{what,id}**(D30 09-05 — 오브젝트 사용, 첫 사례=문 타일 밟기. 동사는
+        '사용' 하나, 확장 시 what 만 바뀐다 — 파트너 확정. 상태가 아니라 사건인 이유: 걷는 동료는 그
+        틱에 결정하지 않는다)."""
         if not self.events:
             return
         for o in bots or ():

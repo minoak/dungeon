@@ -19,7 +19,8 @@ JSON 저작으로 꺼낸 것: 새 장면 = 새 JSON 한 장, 코드 무수정.
    "map": ["#########", "#1g....>#", ...],
    "monsters": {"g": {"kind": "고블린", "state": "HUNTING", "target": "1"}},
    "traps": [{"kind": "spike", "hidden": true}],
-   "bots": {"1": {"hp": 3, "known": ["monster:고블린"], "plan": [...], "intent": {...}}},
+   "bots": {"1": {"hp": 3, "known": ["monster:고블린"], "plan": [...], "intent": {...},
+                  "witnessed": [{"kind": "ally_use", "char": "2", "what": "문", "id": "d0"}]}},
    "probe": {"bot": "1", "messages": [{"from": "2", "text": "물러서!"}]}}
 
 ⚠️ 실LLM 모드(haiku·probe)는 claude.exe 콜을 만든다 — 다른 실판(스모크·배치)이 도는
@@ -103,6 +104,8 @@ def build(spec):
         if "order" in ov:                      # 진행 중 order 프리셋(D18) — 동행 고착 류 장면 저작.
             b["order"] = ov["order"]           # path 는 안 깐다: follow 류는 자가 재경로로 자활,
                                                # goto 류는 다음 틱 _order_done 판정 — 장면 저작자 책임
+        if "witnessed" in ov:                  # 목격 프리셋(D30 09-05) — "사건 한 줄을 읽은 캐릭터가 뭘
+            b["witnessed"] = [dict(w) for w in ov["witnessed"]]   # 하나" 프로브용(다음 view 1회 노출·소거)
         led = G.new_ledger()                   # 공간 장부(D17) — 장면은 라이브 판과 같은 조건(기본 켬)
         pre = ov.get("ledger")
         if isinstance(pre, dict):              # 장면 전제 기억: {"statics": ["chest","exit"...], "turn": N}

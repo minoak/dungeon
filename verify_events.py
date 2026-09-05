@@ -16,6 +16,10 @@
   ⑦ 도감 게이트: 모르는 종 = 낯선 짐승(mon·by), 비몬스터 사인(by_kind)은 면제
   ⑧ 렌더: brains 프롬프트에 목격 문장·"잊지 못할 일" 섹션
   ⑨ 결정론: 같은 장면 2회 = 같은 목격·기억 열
+  ⑩~⑫ 전달층 확장(07-29): 획득(ally_loot)·발견(ally_spot)·비대칭(ally_mishap)·렌더·스위치 격리
+  ⑬ 오브젝트 사용 목격(D30 09-05): 문 타일 밟기 = 문 칸을 본 동료에게 ally_use{what,id} 1회 —
+     시야 밖·당사자 무주입 / 걷는 관찰자의 다음 view 에 생존(상태 아닌 사건) / 1회 / 스위치·트임 격리 /
+     휘발 / 렌더 "문 d0을(를) 사용하는 것을" / 결정론
 (기존 verify 19종은 별도 실행.)
 """
 import json
@@ -416,8 +420,99 @@ d, b1, b2, bots = spot_scene(b2x=4, events=False)
 d._search(b1, bots)
 check("⑫ events=0: 발견 무주입", not b2.get('witnessed'))
 
+# ───────────────── ⑬ D30(09-05) 오브젝트 사용 목격 — 첫 사례 = 문 ─────────────────
+# 발단: 동료가 문을 지나 시야에서 사라지면 "그 문으로 나갔다"를 재구성하지 못한다 — 07-26 기준선·
+# 07-23 큰 판의 lost 직후 결정 21건 중 문 지향 0("사라졌다, 찾자"만). 프롬프트엔 위치와 오브젝트가
+# 따로만 실렸다("동쪽: 동료 카야 3m (이동중), 문 d0 3m"). 파트너 확정: "문을 밟았을 때 '문을 사용'
+# 한마디" + 어휘는 오브젝트+사용 일반형(동사 하나, 확장 시 what 만 바뀐다).
+# 왜 상태(그 틱 sights 접미)가 아니라 사건(witnessed)인가: 걷는 동료는 그 틱에 결정하지 않고, 걷는
+# 동안 동료 위치를 장부에 적지도 않는다(_perceive 는 bots 를 안 받음). 문턱 위 한 틱은 아무도 못 읽는다.
+print("── ⑬ 오브젝트 사용 목격(ally_use) — 문 타일 밟기 = 문 칸을 본 동료에게 한 줄")
+USE_ROWS = [                    # verify_ally 무대(문 + 하나 사이 두 방) + 벽 너머 골방 봇3(문 칸 시야 밖)
+    "##############",
+    "#....#.....#.#",
+    "#.1..+.2...#3#",
+    "#....#....>#.#",
+    "##############",
+]
+OPEN_ROWS = [                   # 같은 두 방, 문 타일 없는 트임(개방 아치) — 빛을 안 막는다
+    "############",
+    "#....#.....#",
+    "#.1....2...#",
+    "#....#....>#",
+    "############",
+]
+
+
+def use_scene(events=True, scan=True, rows=None):
+    d, starts = Dungeon.from_ascii(rows or USE_ROWS, seed=7, scan=scan)
+    d.events = events
+    b1 = mkbot('1', *starts['1'], job='전사')
+    b2 = mkbot('2', *starts['2'], job='도적')
+    b3 = mkbot('3', *starts['3'], job='궁수') if '3' in starts else None
+    bots = [b for b in (b1, b2, b3) if b]
+    return d, b1, b2, b3, bots
+
+
+d, b1, b2, b3, bots = use_scene()
+check("⑬ 전제: 문 칸(5,2)이 두란(2,2) 시야 안 · 골방 봇3 시야 밖",
+      (5, 2) in d.visible_cells(2, 2) and (5, 2) not in d.visible_cells(b3['x'], b3['y']))
+check("⑬ 전제: 문 d0 = 문 타일(cell 있음)",
+      'd0' in d.doors and d.doors['d0'].cell == (5, 2))
+d._enter_cell(b2, 5, 2, bots)                      # 카야가 문 타일을 밟는다
+uses = wit_of(b1, 'ally_use')
+check("⑬ 문 밟기: 문 칸을 본 동료 witnessed 에 ally_use {char='2', what='문', id='d0'} 정확히 1건",
+      len(uses) == 1 and uses[0]['char'] == '2' and uses[0]['what'] == '문' and uses[0]['id'] == 'd0')
+check("⑬ 문 칸 시야 밖(벽 너머 골방) 동료: 무주입", not wit_of(b3, 'ally_use'))
+check("⑬ 당사자 제외(자기 경험은 last 소관)", not b2.get('witnessed'))
+
+# 걷는 관찰자 — 두란은 order·path 가 있는 '걷는' 상태. 상태 표시라면 이 틱에 결정하지 않는 두란은
+# 문턱 위의 카야를 영영 못 읽는다. 사건이라 다음 view 에 실린다(카야는 이미 문 너머 = sights 에 없다).
+d, b1, b2, b3, bots = use_scene()
+b1['order'], b1['path'] = '@3,2', [(3, 2)]
+d._enter_cell(b2, 5, 2, bots)                      # 문턱에 올라섬 → 사건
+d._enter_cell(b2, 6, 2, bots)                      # 너머로 내려섬 → 두 번째 사건 없음
+check("⑬ 1회: 문턱→너머 두 걸음에 ally_use 는 1건", len(wit_of(b1, 'ally_use')) == 1)
+d.step_order(b1, bots)                             # 두란의 걷는 틱(LLM 0콜) — 사건은 살아남는다
+o = d.view(b1, bots)
+check("⑬ 걷는 관찰자: 다음 view 에 ally_use 배달 · 카야는 sights 에 없다(문 너머)",
+      any(w['kind'] == 'ally_use' for w in (o.get('witnessed') or []))
+      and not o['sights']['bots'])
+check("⑬ 휘발: view 1회 노출 후 소거(D22 문법)",
+      b1['witnessed'] == [] and 'witnessed' not in d.view(b1, bots))
+
+d, b1, b2, b3, bots = use_scene(events=False)      # 스위치 격리 — 새 어휘도 D22 규율
+d._enter_cell(b2, 5, 2, bots)
+check("⑬ events=0: 무주입", not b1.get('witnessed'))
+d, b1, b2, b3, bots = use_scene(scan=False)        # 스캐너 없으면 문 어휘 자체가 없다
+d._enter_cell(b2, 5, 2, bots)
+check("⑬ scan=0: 무주입(문 명사 없음 — doors 미참조)", not b1.get('witnessed'))
+
+d, b1, b2, b3, bots = use_scene(rows=OPEN_ROWS)    # 트임(cell 없는 문) — 사라지지 않으니 사건 아님
+check("⑬ 전제: 트임 맵의 문은 전부 cell 없음",
+      bool(d.doors) and all(dd.cell is None for dd in d.doors.values()))
+d._enter_cell(b2, 5, 2, bots)
+check("⑬ 트임 통과: 무주입 · 카야는 계속 보인다",
+      not wit_of(b1, 'ally_use') and (5, 2) in d.visible_cells(b1['x'], b1['y']))
+
+d, b1, b2, b3, bots = use_scene()                  # 렌더 — 파트너 확정 문장 그대로("~가 문을 사용")
+d._enter_cell(b2, 5, 2, bots)
+wire = brains._wire(d.view(b1, bots))
+check("⑬ 렌더: '네 눈으로 봤다: … 문 d0을(를) 사용하는 것을' (json 폴백 아님)",
+      '문 d0을(를) 사용하는 것을' in wire and '네 눈으로 봤다' in wire and '"kind"' not in wire)
+
+
+def use_once():
+    d, b1, b2, b3, bots = use_scene()
+    d._enter_cell(b2, 5, 2, bots)
+    d._enter_cell(b2, 6, 2, bots)
+    return [dict(w) for w in wit_of(b1)], [dict(w) for w in (b3.get('witnessed') or [])]
+
+
+check("⑬ 결정론: 같은 장면 2회 = 같은 목격 열", use_once() == use_once())
+
 print()
 if C.failed:
     print("FAIL — %d개 실패" % C.failed)
     raise SystemExit(1)
-print("ALL PASS — verify_events (D22 사건층 2겹+묘)")
+print("ALL PASS — verify_events (D22 사건층 2겹+묘 · D30 오브젝트 사용 목격)")
