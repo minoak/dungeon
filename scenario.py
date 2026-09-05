@@ -71,6 +71,12 @@ def build(spec):
                                      monsters=spec.get("monsters"),
                                      traps=spec.get("traps"), scan=SCAN_ON)
     d.ally_sight = ALLY_SIGHT_ON       # from_ascii 는 __new__ 경유 — 스위치는 호출측이 켠다
+    for attr, env in (("events", "DUNGEON_EVENTS"), ("graves", "DUNGEON_GRAVES"),   # 러너 기본 스위치 미러링
+                      ("hail", "DUNGEON_HAIL"), ("wait_verb", "DUNGEON_WAIT"),      #   (09-05 구멍 ②: 장면이
+                      ("motion", "DUNGEON_MOTION"), ("selfstop", "DUNGEON_SELFSTOP"),   #   라이브 판과 같은
+                      ("dry_signal", "DUNGEON_DRY"), ("status", "DUNGEON_STATUS"),      #   조건이어야 프로브가
+                      ("rest_verb", "DUNGEON_REST"), ("relations", "DUNGEON_RELATIONS")):   # 참말을 한다)
+        setattr(d, attr, os.environ.get(env, "1") != "0")   # 전부 러너 기본 1 — 끄려면 env 로
     try:
         with open(os.path.join(HERE, "lore.json"), encoding="utf-8") as f:
             d.lore = json.load(f)
@@ -106,6 +112,18 @@ def build(spec):
                                                # goto 류는 다음 틱 _order_done 판정 — 장면 저작자 책임
         if "witnessed" in ov:                  # 목격 프리셋(D30 09-05) — "사건 한 줄을 읽은 캐릭터가 뭘
             b["witnessed"] = [dict(w) for w in ov["witnessed"]]   # 하나" 프로브용(다음 view 1회 노출·소거)
+        if "status" in ov:                     # 상태 태그(D34 09-06) 프리셋 — {태그: {n, by, since}}
+            b["status"] = {k: dict(v) for k, v in ov["status"].items()}
+        if "memories" in ov:                   # 기억(D22) 프리셋 — fallen / grave_found(09-06 개정) 줄
+            b["memories"] = [dict(m) for m in ov["memories"]]
+        if "relations" in ov:                  # 관계 장부(D36 09-06) 프리셋 — 뼈·살·초대 큐(시트 씨앗 덮어씀)
+            b["relations"] = {oc: {**e, "bones": {k: dict(v) for k, v in e.get("bones", {}).items()},
+                                   "queue": list(e.get("queue") or [])}
+                              for oc, e in ov["relations"].items()}
+        if "last" in ov:                       # 직전 결과 프리셋(hail 등) — obs.last
+            b["last"] = dict(ov["last"])
+        if "alive" in ov and not ov["alive"]:  # 죽은 동료 프리셋 — 명단 '죽었다'(D22 개정), 시야엔 안 나간다
+            b["alive"] = False
         if ov.get("won"):                      # 먼저 내려간 동료 프리셋(D30 계단 프로브) — 명단 "먼저 내려갔다"
             b["won"], b["went"] = True, "down"
         led = G.new_ledger()                   # 공간 장부(D17) — 장면은 라이브 판과 같은 조건(기본 켬)
@@ -295,6 +313,11 @@ def probe(spec, n, jobs):
         elif dec.get("reason"):
             line += "  | " + dec.get("reason", "")[:60]
         print(line)
+        for k in ("say", "note"):                    # 말·남긴 한 줄도 프로브의 답이다(09-06)
+            if dec.get(k):
+                print("         %s: %s" % (k, dec[k]))
+        if dec.get("relation"):                      # 관계 살(D36) — 초대 받은 결정의 relation_line
+            print("         relation_line(→봇%s): %s" % (dec["relation"].get("to"), dec["relation"].get("line")))
     print("── 분포 ──")
     for k, v in acts.most_common():
         print("  %2d/%d  %s" % (v, n, k))
