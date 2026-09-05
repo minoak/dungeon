@@ -224,7 +224,8 @@ function bindCard(card, i) {
   bg.oninput = e => { s.background = e.target.value; card.querySelector('[data-cnt=bg]').textContent = `${s.background.length}/400`; };
   for (const k of ['sex', 'job']) {
     for (const lab of card.querySelectorAll(`[data-k=${k}] label`)) {
-      lab.onclick = () => {
+      lab.onclick = (e) => {
+        e.preventDefault();                 // label→input 합성 클릭의 이중 발화 차단(선택 상태는 class 로만 관리)
         s[k] = lab.querySelector('input').value;
         card.querySelectorAll(`[data-k=${k}] label`).forEach(l => l.classList.toggle('on', l === lab));
       };
@@ -241,8 +242,9 @@ function bindCard(card, i) {
     card.querySelector('[data-persona]').textContent = personaOf(s);
   };
   for (const lab of tl.querySelectorAll('label')) {
-    lab.onclick = () => {
-      const v = lab.querySelector('input').value;
+    lab.onclick = (e) => {
+      e.preventDefault();                   // ⚠️파트너 육안 1호(09-05): 이걸 빼면 한 클릭에 토글이 두 번 돌아
+      const v = lab.querySelector('input').value;   //   "클릭해도 선택이 안 된다"(라벨 클릭 + 체크박스 합성 클릭)
       if (s.traits.includes(v)) s.traits = s.traits.filter(x => x !== v);
       else if (s.traits.length < presets.max_traits) s.traits.push(v);
       paint();
@@ -250,7 +252,8 @@ function bindCard(card, i) {
   }
 }
 for (const lab of $('partyMode').querySelectorAll('label')) {
-  lab.onclick = () => {
+  lab.onclick = (e) => {
+    e.preventDefault();
     partyMode = lab.querySelector('input').value;
     $('partyMode').querySelectorAll('label').forEach(l => l.classList.toggle('on', l === lab));
     $('cards').hidden = partyMode !== 'custom';
@@ -272,7 +275,7 @@ $('bNext').onclick = async () => {
 
 /* ═══ 옵션 → 시작 ═══ */
 for (const lab of $('mapMode').querySelectorAll('label')) {
-  lab.onclick = () => $('mapMode').querySelectorAll('label').forEach(l => l.classList.toggle('on', l === lab));
+  lab.onclick = (e) => { e.preventDefault(); $('mapMode').querySelectorAll('label').forEach(l => l.classList.toggle('on', l === lab)); };
 }
 $('bBack2').onclick = () => show('sParty');
 $('bStart').onclick = async () => {
