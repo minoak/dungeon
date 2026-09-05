@@ -1589,7 +1589,8 @@ class Dungeon:
         # 1회성: 이번 결정에 한 번 전달하고 비운다(휘발=다음 결정 1회 — D22).
         # 자기 사건은 last 가 담당(중복 없음). 종 표기는 내 도감 기준(모르는 종=낯선 짐승 — D9 정합).
         def _mask(w):                          # 도감 게이트 — 몹 이름만 가린다(함정·샘은 by_kind 로 면제)
-            out = {**w, 'name': names.get(w['char'], _unknown)}
+            out = {**w, **({'name': names.get(w['char'], _unknown)} if 'char' in w else {})}
+            #   ↑ 몹 주어 사실(mon_use — D30 확장 2차)은 char 가 없다: 이름 풀이는 사람 사건에만
             if known is not None:
                 if 'by' in out and out.get('by_kind', 'monster') == 'monster' \
                         and 'monster:' + out['by'] not in known:
@@ -3327,6 +3328,21 @@ class Dungeon:
         b.setdefault('aware_of', set()).add(m.id)        # 맞으면 안다 — 같은 몹에 연속 매복 금지
         return ev
 
+    def _mon_door(self, m, bots):
+        """D30 확장 2차(2026-09-06 파트너 발제 "몬스터도 문을 이용하는 건 캐릭터에게 전달해야") — 몹이 문
+        타일을 밟는 순간 그 칸을 본 봇에게 mon_use{mon,id,what:'문',door} 1회. 동료 문법(ally_use)과 같은 문장
+        "고블린(m0)가 문 d0을(를) 사용하는 것을". 문 타일은 양쪽에서 보이는 순간이라 나가는 몹도 들어오는 몹도
+        같은 사건이다(다음 틱 사라지거나 나타나는 이유를 봇이 안다). 매복(concealed) 몹은 존재 비누설. 도감
+        게이트는 _mask 의 mon 필드가 탄다(모르는 종=낯선 짐승). 반환=문 id 또는 None(monster_move 병기용)."""
+        if not self.scan or m.concealed:
+            return None
+        dr = next((dd for dd in self.doors.values() if dd.cell == (m.x, m.y)), None)
+        if dr is None:
+            return None
+        self._witness(bots, m.x, m.y, {'kind': 'mon_use', 'mon': m.kind, 'id': 'm%d' % m.id,
+                                       'what': '문', 'door': dr.id})
+        return dr.id
+
     def _flee_step(self, m, near, bots, events):
         """도주 한 칸: '보이는 모든 봇과의 최소 맨해튼 거리'가 **엄격히 늘어나는** 직교 칸으로.
         ⚠️ '가장 가까운 봇 한 명' 기준이면 협공(양쪽에 봇) 사이에서 좌우 셔틀 진동 —
@@ -3342,10 +3358,11 @@ class Dungeon:
         if not cands:
             return False
         m.x, m.y = max(cands, key=lambda c: (score(*c), c))
+        door = self._mon_door(m, bots)                # 문 타일이면 목격(D30 확장 2차)
         live = [o for o in bots if o['alive'] and not o['won']]
         if any((m.x, m.y) in self.visible_cells(o['x'], o['y'], MON_SIGHT) for o in live):
             events.append({'type': 'monster_move', 'id': 'm%d' % m.id, 'monster': m.kind,
-                           'to': [m.x, m.y], 'fleeing': True})
+                           'to': [m.x, m.y], 'fleeing': True, **({'door': door} if door else {})})
         return True
 
     def _chase_step(self, m, bots, events):
@@ -3362,10 +3379,12 @@ class Dungeon:
             nx, ny = m.x + sx, m.y + sy
             if self._monster_walkable(nx, ny, bots):
                 m.x, m.y = nx, ny
+                door = self._mon_door(m, bots)        # 문 타일이면 목격(D30 확장 2차)
                 live = [o for o in bots if o['alive'] and not o['won']]
                 if any((nx, ny) in self.visible_cells(o['x'], o['y'], MON_SIGHT) for o in live):
                     events.append({'type': 'monster_move', 'id': 'm%d' % m.id,
-                                   'monster': m.kind, 'to': [nx, ny]})
+                                   'monster': m.kind, 'to': [nx, ny],
+                                   **({'door': door} if door else {})})
                 return                                # 이동 이벤트=봇 시야 안일 때만(도주/배회와 정책 통일)
 
     def monster_turn(self, bots):
@@ -3466,9 +3485,11 @@ class Dungeon:
                 wx, wy = self.rng.choice([(0, -1), (0, 1), (1, 0), (-1, 0)])
                 if self._monster_walkable(m.x + wx, m.y + wy, bots):
                     m.x, m.y = m.x + wx, m.y + wy
+                    door = self._mon_door(m, bots)    # 문 타일이면 목격(D30 확장 2차)
                     if any((m.x, m.y) in self.visible_cells(b['x'], b['y'], MON_SIGHT) for b in live):
                         events.append({'type': 'monster_move', 'id': 'm%d' % m.id,
-                                       'monster': m.kind, 'to': [m.x, m.y]})
+                                       'monster': m.kind, 'to': [m.x, m.y],
+                                       **({'door': door} if door else {})})
         return events
 
     def render(self, bots):

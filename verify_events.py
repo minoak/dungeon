@@ -632,6 +632,67 @@ def grave_once():
 
 check("⑭ 결정론", grave_once() == grave_once())
 
+# ───────────────────── ⑮ 몹도 문을 쓴다(D30 확장 2차, 09-06 파트너 발제) ─────────────────────
+print("── ⑮ 몹의 문 사용 — '고블린(m0)가 문 d0을(를) 사용하는 것을'")
+MON_ROWS = [
+    "##############",
+    "#....#.....#.#",
+    "#.1..+g.2..#3#",
+    "#....#....>#.#",
+    "##############",
+]
+
+
+def mon_scene(events=True, scan=True, concealed=False, known=None):
+    d, starts = Dungeon.from_ascii(MON_ROWS, seed=7, scan=scan,
+                                   monsters={'g': {'kind': '고블린', 'state': 'HUNTING', 'target': '1',
+                                                   'concealed': concealed}})
+    d.events = events
+    b1 = mkbot('1', *starts['1'], job='전사')
+    b2 = mkbot('2', *starts['2'], job='도적')
+    b3 = mkbot('3', *starts['3'], job='궁수')
+    bots = [b1, b2, b3]
+    if known is not None:
+        for b in bots:
+            b['known'] = set(known)
+    m = d.monsters[0]
+    m.last_seen = (b1['x'], b1['y'])               # 두란 쪽으로 추격 — 첫 걸음이 문 타일(5,2)
+    evs = []
+    d._chase_step(m, bots, evs)
+    return d, b1, b2, b3, bots, m, evs
+
+
+d, b1, b2, b3, bots, m, evs = mon_scene()
+check("⑮ 전제: 추격 한 걸음이 문 타일 d0(5,2)", (m.x, m.y) == (5, 2) and d.doors['d0'].cell == (5, 2))
+u1 = wit_of(b1, 'mon_use')
+check("⑮ 문 칸을 본 두란: mon_use {mon=고블린, id=m0, what=문, door=d0} 정확히 1건",
+      len(u1) == 1 and u1[0]['mon'] == '고블린' and u1[0]['id'] == 'm0'
+      and u1[0]['what'] == '문' and u1[0]['door'] == 'd0')
+check("⑮ 문 너머 쪽 카야도 본다(문턱=양쪽에서 보이는 순간)", len(wit_of(b2, 'mon_use')) == 1)
+check("⑮ 벽 너머 골방 피른: 무주입", not wit_of(b3, 'mon_use'))
+mv = [e for e in evs if e.get('type') == 'monster_move']
+check("⑮ 스트림 monster_move 에 door='d0' 병기(additive)", mv and mv[0].get('door') == 'd0')
+wire = brains._wire(d.view(b1, bots), {'1': '두란', '2': '카야', '3': '피른'})
+check("⑮ 렌더 '고블린(m0)가 문 d0을(를) 사용하는 것을'", '고블린(m0)가 문 d0을(를) 사용하는 것을' in wire)
+d, b1, b2, b3, bots, m, evs = mon_scene(known=set())
+wire = brains._wire(d.view(b1, bots), {'1': '두란', '2': '카야', '3': '피른'})
+check("⑮ 도감 게이트: 모르는 종 = 낯선 짐승(m0)", '낯선 짐승(m0)가 문 d0을(를) 사용하는 것을' in wire)
+d, b1, b2, b3, bots, m, evs = mon_scene(events=False)
+check("⑮ events=0: 무주입(스위치 격리)", not wit_of(b1, 'mon_use'))
+d, b1, b2, b3, bots, m, evs = mon_scene(scan=False)
+check("⑮ scan=0(문 타일 없음): 무주입·door 무병기",
+      not wit_of(b1, 'mon_use') and not any(e.get('door') for e in evs))
+d, b1, b2, b3, bots, m, evs = mon_scene(concealed=True)
+check("⑮ 매복(concealed) 몹: 존재 비누설", not wit_of(b1, 'mon_use') and not wit_of(b2, 'mon_use'))
+
+
+def mon_once():
+    d, b1, b2, b3, bots, m, evs = mon_scene()
+    return [dict(w) for w in wit_of(b1, 'mon_use')], evs
+
+
+check("⑮ 결정론", mon_once() == mon_once())
+
 print()
 if C.failed:
     print("FAIL — %d개 실패" % C.failed)

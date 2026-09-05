@@ -499,6 +499,11 @@ def _witness_prose(w):
         return "%s가 숨어 있던 %s을(를) 찾아내는 것을" % (who, w.get("mon") or w.get("what", "?"))
     if k == "ally_mishap":
         return "%s가 %s에 당하는 것을" % (who, w.get("what", "?"))
+    if k == "mon_use":                      # D30 확장 2차(09-06 파트너): 몹도 문을 쓴다 — 같은 문장
+        what = w.get("what", "?")
+        if w.get("door") and w["door"] not in what:
+            what += " %s" % w["door"]
+        return "%s(%s)가 %s을(를) 사용하는 것을" % (w.get("mon", "?"), w.get("id", "?"), what)
     if k == "ally_use":                     # D30(09-05) 오브젝트 사용 — 동사는 '사용' 하나(파트너 확정:
         what = w.get("what", "?")           #   "~가 문을 사용". 종류별 문장 사전 없음 — 확장 시 what 만
         if w.get("id") and w["id"] not in what:   # 바뀐다). id 는 obs 가 부르는 이름에 없을 때만 붙인다
