@@ -92,6 +92,9 @@ class Runner:
             env["PYTHONUTF8"] = "1"
             env["DUNGEON_GM"] = "0"
             env["DUNGEON_STATE_DIR"] = self.state_dir
+            env.setdefault("DUNGEON_SIGHT", "6")        # 데모 시야 6(D33 09-05, 파트너 "지금은 너무 좁다 — 1~2칸") —
+                                                        #   엔진·게이트·장면 기본은 5 그대로(손그림 장면이 5 전제).
+                                                        #   run_meta.sight 에 기록되므로 판 비교의 전제가 남는다.
             brain = str(opts.get("brain") or default_brain or "gemini_api")
             if brain not in BRAINS:
                 raise BadRequest("두뇌는 %s 중 하나" % "/".join(BRAINS))

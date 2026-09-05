@@ -8,6 +8,8 @@ set "PYTHONUTF8=1"
 set "DUNGEON_STATE_DIR="
 rem Demo runs get a fresh dungeon each time (D31, 2026-09-05). Gates/A-B set an integer seed.
 if not defined DUNGEON_SEED set "DUNGEON_SEED=random"
+rem Demo sight radius 6 (D33, 2026-09-05; engine/gates keep 5). Ally sight exemption is runner default 1.
+if not defined DUNGEON_SIGHT set "DUNGEON_SIGHT=6"
 if not exist state mkdir state
 if not exist runs mkdir runs
 

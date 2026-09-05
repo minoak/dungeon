@@ -61,8 +61,8 @@ def load_sheets():
 
 SCAN_ON = os.environ.get("DUNGEON_SCAN", "1") != "0"   # 스캐너(D19) — 러너와 같은 스위치·같은 기본
                                                         #   (기본 1 승격: 2026-07-15 미로 판정 채택 — 파트너 육안)
-ALLY_SIGHT_ON = os.environ.get("DUNGEON_ALLY_SIGHT", "0") != "0"   # 동료 시야 면제(07-26) —
-                                                        #   러너와 같은 스위치·같은 기본(0). A/B 대조용
+ALLY_SIGHT_ON = os.environ.get("DUNGEON_ALLY_SIGHT", "1") != "0"   # 동료 시야 면제(07-26) —
+                                                        #   러너와 같은 스위치·같은 기본(1 — D33 09-05 승격)
 
 
 def build(spec):

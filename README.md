@@ -98,11 +98,12 @@ bash _run_gates.sh
 # 지난 판 → 단일 HTML 리플레이 만들기
 python make_replay_viewer.py runs/stream-XXXX.jsonl -o replay_viewer.html
 
-# 지난 판 0콜 부검(이동·전투·대화 통계)
+# 지난 판 0콜 부검(이동·전투·대화 통계) / 사회층 부검(정지·정체·동행·lost·저체력 결정)
 python analyze_run.py runs/stream-XXXX.jsonl
+python analyze_social.py runs/stream-XXXX.jsonl
 ```
 
-주요 환경변수: `DUNGEON_SEED`(정수 또는 `random` — 데모 기본) `DUNGEON_PARTY_FILE` `DUNGEON_W/H` `DUNGEON_DEPTHS` `DUNGEON_BRAIN_BACKEND`
+주요 환경변수: `DUNGEON_SEED`(정수 또는 `random` — 데모 기본) `DUNGEON_SIGHT`(엔진 5 · 데모 6) `DUNGEON_ALLY_SIGHT`(동료는 반경 안에서 벽·문 무시, 기본 1) `DUNGEON_PARTY_FILE` `DUNGEON_W/H` `DUNGEON_DEPTHS` `DUNGEON_BRAIN_BACKEND`
 `DUNGEON_SOLO` `DUNGEON_TOWN` 등 — `show_runner.py`와 `wonderland.bat` 참고.
 
 ## 데이터와 에셋
