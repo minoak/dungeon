@@ -440,12 +440,36 @@ def _sheet(bot, roster=None):
     return "\n".join(lines) + "\n"
 
 
+def _ro(word):
+    """조사 '로/으로' — 받침 없음·ㄹ 받침이면 '로'."""
+    if not word:
+        return "로"
+    c = ord(word[-1]) - 0xAC00
+    if 0 <= c < 11172:
+        return "로" if (c % 28) in (0, 8) else "으로"
+    return "로"
+
+
+def _by_phrase(w):
+    """사인·원천의 조사 — 몹은 '에게', 함정·오브젝트는 '에', 상태(출혈)는 '로'."""
+    by = w.get("by", "?")
+    bk = w.get("by_kind", "monster")
+    if bk == "status":
+        return "%s%s" % (by, _ro(by))
+    if bk in ("trap", "hazard"):
+        return "%s에" % by
+    return "%s에게" % by
+
+
 def _witness_prose(w):
     """목격 사실 한 줄(D22 전달층) — 어휘별 사람말. 새 kind 는 마지막 폴백이 정직하게 흘린다."""
     who = "%s(봇%s)" % (w.get("name", "동료"), w.get("char", "?"))
     k = w.get("kind")
     if k == "ally_down":
-        return "%s가 %s에게 쓰러지는 것을" % (who, w.get("by", "?"))
+        return "%s가 %s 쓰러지는 것을" % (who, _by_phrase(w))
+    if k == "ally_status":                  # 상태 태그(D34) — 상태는 겉으로 드러난다
+        by = w.get("by", "?")
+        return "%s가 %s%s %s 상태가 되는 것을" % (who, by, _ro(by), w.get("tag", "?"))
     if k == "ally_hurt":
         return "%s가 %s에게 맞는 것을" % (who, w.get("by", "?"))
     if k == "ally_kill":
@@ -500,7 +524,8 @@ def _last_prose(last, names=None):
         s = "%s(%s)에게 맞았다 — %d 피해, 남은 HP %d" % (
             last.get("by", "?"), last.get("by_id", "?"),
             last.get("dmg", 0), last.get("hp", 0))
-        return s + (" — 기습당했다!" if last.get("surprise") else "")
+        return (s + (" — 기습당했다!" if last.get("surprise") else "")
+                + ((" — [%s]이(가) 붙었다" % last["status"]) if last.get("status") else ""))
     if t == "plan_broken":
         st = last.get("step") or {}
         return "작정이 깨졌다(%s) — 못 이룬 수: %s. 남은 계획은 접혔다, 새로 판단하라" % (
@@ -533,7 +558,9 @@ def _last_prose(last, names=None):
                 elif tr.get("alarm") is not None:
                     bits.append("%s이(가) 울렸다!! 근방의 적들이 깼다" % tr.get("name", "경보"))
                 else:
-                    bits.append("%s에 당했다 — %d 피해" % (tr.get("name", "함정"), tr.get("dmg", 0)))
+                    bits.append("%s에 당했다 — %d 피해%s"
+                                % (tr.get("name", "함정"), tr.get("dmg", 0),
+                                   (", [%s]이(가) 붙었다" % tr["status"]) if tr.get("status") else ""))
             if last.get("treasure"):
                 bits.append("보물을 주웠다")
             if last.get("potion"):
@@ -633,11 +660,13 @@ def _last_prose(last, names=None):
         if r == "chest_loot":
             return "상자를 열었다 — 보물 %d개!" % last.get("loot", 0)
         if r == "chest_trap":
-            return "상자에서 독침이 튀었다 — %d 피해" % last.get("dmg", 0)
+            return "상자에서 독침이 튀었다 — %d 피해%s" % (
+                last.get("dmg", 0), (", [%s]이(가) 붙었다" % last["status"]) if last.get("status") else "")
         if r == "fountain_heal":
             return "샘물을 마셨다 — HP %d 회복" % last.get("heal", 0)
         if r == "fountain_harm":
-            return "샘물이 오염돼 있었다 — %d 피해" % last.get("dmg", 0)
+            return "샘물이 오염돼 있었다 — %d 피해%s" % (
+                last.get("dmg", 0), (", [%s]이(가) 붙었다" % last["status"]) if last.get("status") else "")
         if r == "potion":
             return "회복 물약을 집어 챙겼다 (소지 %d병)" % last.get("potions", 1)
         if r == "equip":
@@ -684,6 +713,7 @@ _WIRE_KEYS = frozenset((
     "depth", "turn",
     "zone", "known", "witnessed", "memories", "dry", "last", "order", "ascii_view", "legend",
     "sights", "party", "options", "messages", "intent", "notes",
+    "status",  # 상태 태그(D34): 아래 _wire "## 네 몸 상태" 절이 그린다
     "town",    # 마을(D29): 안전한 층의 사실 한 줄 — 아래 _wire 가 그린다
     "gear"))   # 장비(07-30): 아는 키지만 wire 는 일부러 안 그린다 — 착용 정보의 표현은
                #   시트(_sheet 차림 줄, 불변 프리픽스=캐싱)가 소유하고, 비교는 입수 메뉴
@@ -741,6 +771,15 @@ def _wire(obs, names=None):
         L.append("- 좌표: %s" % obs["pos"])
     if obs.get("order"):
         L.append("- 진행 중이던 핑: %s" % obs["order"])
+    st = obs.get("status")
+    if st:                                  # 상태 태그(D34) — 몸에 붙은 것. 라벨=효과(사실만)
+        L += ["", "## 네 몸 상태 (붙은 것은 그 줄이 말하는 그대로 작용한다)"]
+        for e in st:
+            n = e.get("n", 1)
+            L.append("- [%s%s] %s (%s, %s)"
+                     % (e.get("tag", "?"), (" ×%d" % n) if n > 1 else "",
+                        G.status_prose(e.get("tag", "?")), e.get("by", "?"),
+                        ago(e.get("since", 0))))
 
     if OBS_ASCII and obs.get("ascii_view"):
         n = len(obs["ascii_view"])
@@ -856,9 +895,10 @@ def _wire(obs, names=None):
             L.append("- %s %s — %s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
                                          " (와 본 자리)" if f.get("visited") else ""))
         for b in s.get("bots", []):
-            L.append("- %s — 겉보기 %s — %s%s" % (who(b.get("char", "?")),
-                                                  b.get("condition", "?"), at(b),
-                                                  " (이동중)" if b.get("moving") else ""))
+            L.append("- %s — 겉보기 %s%s — %s%s"
+                     % (who(b.get("char", "?")), b.get("condition", "?"),
+                        (" · " + " · ".join(b["status"])) if b.get("status") else "",   # D34 상태
+                        at(b), " (이동중)" if b.get("moving") else ""))
         for w in s.get("ways", []):
             L.append("- %s쪽으로 트인 길 — 거리 %d, %s%s"
                      % (w.get("bearing", "?"), w.get("dist", 0),
@@ -914,6 +954,8 @@ def _wire(obs, names=None):
                 L.append('  그때 동료에게 한 말: "%s"' % it["say"])
         if la:
             L.append("- 그 결과: %s" % _last_prose(la, names))
+            if la.get("bleed"):                   # 출혈(D34) — 걷는 동안 흘린 피(사실만)
+                L.append("- 걷는 동안 출혈로 피를 흘렸다 — 남은 HP %d" % la["bleed"].get("hp", 0))
         for w in (wit or []):
             L.append("- 네 눈으로 봤다: " + _witness_prose(w))
         if dry:                       # 무발견 신호(07-24) — 관찰 사실만(질문·조향 금지), 도달 1회

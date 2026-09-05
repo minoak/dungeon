@@ -150,6 +150,9 @@ GRAVES_ON = os.environ.get("DUNGEON_GRAVES", "1") != "0"     # 묘(D22) — 러�
 EVENTS_ON = os.environ.get("DUNGEON_EVENTS", "1") != "0"     # 사건층(D22) — 러너 기본 1, 엔진 기본 0.
                                                              #   전달층(시야 내 사건 목격, 휘발=다음 결정
                                                              #   1회)+기억층(fallen 지속 재제시, 휘발 0)
+STATUS_ON = os.environ.get("DUNGEON_STATUS", "1") != "0"     # 상태 태그(D34, 09-06) — 러너 기본 1,
+                                                             #   엔진 기본 0. 몹·함정의 특수=태그(출혈·
+                                                             #   둔화·중독), 효과는 몸에만, 지우기=휴식
 LORE_FILE = os.path.join(HERE, "lore.json")
 STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적용 후 맵이 보이게(헤들리스=0)
 
@@ -316,6 +319,10 @@ def act_summary(res):
         return "탐색 — 갈 곳 없음" if r == "no_path" else "탐색(%s)" % r
     if t == "walk":
         r = res["result"]
+        if res.get("bleed", {}).get("down"):
+            return "출혈로 쓰러졌다!"                     # 상태 태그(D34) — 걷다 피를 다 흘림
+        if r == "walking" and res.get("slowed"):
+            return "둔화 — 이 틱은 못 걷는다"
         if r == "waiting":
             return "대기 중"
         if r == "wait_met":
@@ -452,6 +459,8 @@ def mon_summary(e):
         if not e["hit"]:
             return "%s%s -> 봇%s  빗나감" % (sneak, e["monster"], e["target"])
         tail = "  쓰러짐!" if e.get("down") else "  (HP%d)" % e["hp"]
+        if e.get("status"):
+            tail += "  [%s]" % e["status"]                 # 몹의 특수(D34) — 태그가 붙었다
         return "%s%s -> 봇%s  %d피해%s" % (sneak, e["monster"], e["target"], e["dmg"], tail)
     if e.get("fleeing"):
         return "%s 도망친다" % e["monster"]
@@ -467,6 +476,7 @@ def build_town():
         spec = json.load(f)
     d, starts = G.Dungeon.from_ascii(spec["map"], seed=DUNGEON_SEED, depth=0)
     d.town = True
+    d.status = STATUS_ON                   # 상태 태그(D34)는 마을에서도 몸에 붙어 있다(걸으면 피가 난다)
     for n in spec.get("npcs", []):
         x, y = int(n["x"]), int(n["y"])
         if d.grid[y][x] != G.FLOOR:            # 좌표-그림 어긋남은 시작 전에 죽는 게 낫다
@@ -527,7 +537,8 @@ def main():
                       n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,
                       loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
                       dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
-                      ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR)
+                      ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
+                      status=STATUS_ON)
         d.lore = lore
     bots = []
     for c in chars:
@@ -600,6 +611,7 @@ def main():
                                        #   파티 판과는 애초에 비교 대상이 아니다. 대조군 고를 때 필수 필드.
             graves=GRAVES_ON,          # 묘(D22) 여부 — 피처가 늘어나는 세계 물리 메타
             events=EVENTS_ON,          # 사건층(D22) 여부 — obs(목격·기억)를 바꾸는 실행모드 메타
+            status=STATUS_ON,          # 상태 태그(D34) 여부 — 몸 물리(걸음·굴림)와 obs 를 바꾸는 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
@@ -775,7 +787,7 @@ def main():
                               graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
                               wait_verb=WAIT_ON, motion=MOTION_ON,
                               ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
-                              n_gear=N_GEAR)
+                              n_gear=N_GEAR, status=STATUS_ON)
                 d.lore = lore
                 fresh = True
             # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,
@@ -798,6 +810,8 @@ def main():
                 n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
                 n["weapon"] = b.get("weapon")             # 장비도 이월(07-30) — 걸치고 내려간다
                 n["armor"] = b.get("armor")
+                n["status"] = {t: dict(e) for t, e in (b.get("status") or {}).items()}   # 상태 태그(D34)
+                n["bleed_steps"] = b.get("bleed_steps", 0)   #   도 이월 — 몸은 층을 넘어도 그 몸이다
                 n["memories"] = list(b.get("memories") or [])   # 기억도 이월(D22) — 전사는 원정급
                                                           # 사건(장부=층의 기억과 대비. 구역 이름은
                                                           # 그 층의 것 — 층수 없인 모호하나 v0 수용)

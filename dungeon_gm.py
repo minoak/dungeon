@@ -148,6 +148,29 @@ HAIL_CD = 3              # 말 걸림 정지(07-24 D24) 쿨다운: 같은 발화
                          #   쿨다운이 유일한 대화 조절기 — 관대하게, 즉시 재정지만 막는 몇 틱
                          #   ("셋이 서서 세 턴이면 어색해질 시간" D14 K=3 과 같은 자). 튜닝마라.
 
+# ── 상태 태그(D34, 2026-09-06 파트너 확정 "HP 는 그대로, 몹·함정이 특수공격으로 태그를 붙인다") ──
+# 태그 = 몸에 붙는 상태. 효과는 몸(굴림·걸음)에만 닿고 판단은 강제하지 않는다(D14 — 정신 붕괴류
+# 없음). 지우는 길은 휴식(D35)뿐 — 저절로 사라지는 태그를 만들면 지우는 규칙이 둘이 되고 쉴 이유가
+# 사라진다. 라벨 문장은 여기가 단일 소스(_mfact 선례) — 리모컨·wire·act_summary 가 같은 말을 한다.
+# 사실만: 효과를 그대로 말한다("세계가 말하는 것=규칙이 하는 것", 07-29 거짓 규칙 계보).
+# 같은 태그 재발 = n 만 는다(×N 표시 — 효과 불변, 첫 판 관찰 뒤 재론). 물약은 HP 만(태그 불변).
+STATUS_KINDS = {
+    '출혈': '{steps}걸음마다 피가 1 난다 (제자리·전투 중엔 안 난다)',
+    '둔화': '{every}틱에 한 칸밖에 못 걷는다 (붙은 몹을 떨어뜨릴 수 없다)',
+    '중독': '명중과 회피가 {mod} 깎인다',
+}
+BLEED_STEPS = 3          # 출혈: 이만큼 걸을 때마다 HP 1 (첫 판 관찰값 — 튜닝은 판 뒤)
+SLOW_EVERY = 2           # 둔화: 자동보행 이 틱마다 한 칸(=한 틱 걷고 한 틱 쉼)
+POISON_MOD = 2           # 중독: 명중(_attack mod)·회피(_monster_attack ac) 감산
+MON_STATUS = {'그림자거미': '둔화'}   # 몹의 특수 = 태그(명중 시). 고블린=무태그(기준선 몹 — 대비의 자)
+
+
+def status_prose(tag):
+    """태그 한 줄 사실 문장(효과) — 리모컨·wire·목격 문장의 단일 소스. 미등록 태그는 정직하게 흘린다."""
+    s = STATUS_KINDS.get(tag, '%s — 정체 모를 상태' % tag)
+    return s.format(steps=BLEED_STEPS, every=SLOW_EVERY, mod=POISON_MOD)
+
+
 # ── 캐릭터 시트 (영웅) ───────────────────────────────────────────
 # d20 + 능력보정 vs 목표(AC/DC). 전사=힘·HP, 도적=민첩(함정 회피·기습).
 # stealth = 발각 DC 가산(은신). 전사 0(시끄러움→잘 들킴), 도적 4(은신→매복 주력).
@@ -197,8 +220,8 @@ class Monster:
 #   spike = 기본 피해 / dart = 독침(가벼운 피해·회피 어려움) / alarm = 경보(피해 0, 층의 몹 일제 각성
 #   = justAlerted 굴림 우회 → 함정이 인식 시스템에 결합되는 지점. 줄당 연출 최고).
 TRAP_KINDS = {
-    'spike': {'name': '가시 함정', 'dc': 13, 'dmg': 3},
-    'dart':  {'name': '독침 함정', 'dc': 14, 'dmg': 2},
+    'spike': {'name': '가시 함정', 'dc': 13, 'dmg': 3, 'status': '출혈'},   # 특수(D34): 피해와 별개로 태그
+    'dart':  {'name': '독침 함정', 'dc': 14, 'dmg': 2, 'status': '중독'},   #   (판정 실패·생존 시)
     'alarm': {'name': '경보 함정', 'dc': 13, 'dmg': 0},
 }
 
@@ -299,7 +322,7 @@ class Dungeon:
                  scan=False, n_potions=0, loops=False, selfstop=False,
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
                  motion=False, ally_sight=False, social=False, solo=False, n_gear=0,
-                 town=False):
+                 town=False, status=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -372,6 +395,9 @@ class Dungeon:
         self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
                                    #   전달층(시야 내 사건 목격 주입, A-3 어휘 확장 — 휘발=다음 결정
                                    #   1회)+기억층(목격한 전사=지속 기억 fallen, 휘발 0).
+        self.status = bool(status) # 상태 태그(D34, 09-06) — 기본 꺼짐(기존 verify 비트 동일). 러너가
+                                   #   DUNGEON_STATUS(기본 1)로 켠다. 몹·함정의 특수가 태그를 붙이고
+                                   #   (출혈·둔화·중독) 효과는 걸음·굴림에만, 지우기는 휴식(D35)뿐.
         self._ring_target = 0      # loops 판에서 주 고리에 배속할 방 수(_carve_rooms 가 굴림)
         self.rooms = self._carve_rooms()
         self._connect(self.rooms)
@@ -440,6 +466,7 @@ class Dungeon:
         d.ally_sight = False       # 동료 시야 면제 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.solo = False             # 솔로 판(07-29) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.town = False             # 마을 층(D29) — 기본 꺼짐(러너 build_town 이 켠다)
+        d.status = False           # 상태 태그(D34) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.npc_lines = {}           # NPC 인사 사전 — build_town 이 채운다(데이터, 판정 무접촉)
         d.npc_gifts = {}           # D32 상점 v0 — from_ascii 는 __new__ 경유라 여기서도 명시 초기화(함정 계보)
         d.npc_lines_again = {}
@@ -1248,7 +1275,9 @@ class Dungeon:
                    'condition': _wound_label(b['hp'], b['maxhp']),   # 겉보기 부상 등급(A-4) —
                    **bear(b['x'], b['y']),                           #   보이는 동료만(시야-온리)
                    **({'moving': True} if (self.motion and b.get('order')   # 이동중(D27) — 몸짓도
-                       and b.get('path')) else {})}                  #   시야를 탄다. 깃발 하나뿐
+                       and b.get('path')) else {}),                  #   시야를 탄다. 깃발 하나뿐
+                   **({'status': sorted(b['status'])}                # 상태 태그(D34) — 겉으로 드러난다
+                      if (self.status and b.get('status')) else {})}   #   (파트너 확정: 같은 단어)
                   for b in bots
                   if b['alive'] and not b['won'] and b['char'] != bot['char']
                   and self._ally_seen(bot, b, seen)]
@@ -1560,6 +1589,8 @@ class Dungeon:
                 **({'witnessed': wit} if wit else {}),   # 목격(A-3) — 있을 때만 실림(intent 선례)
                 **({'dry': dry_out} if dry_out else {}),   # 무발견 신호(07-24) — 도달 시점 1회
                 **({'memories': mem} if mem else {}),    # 기억(D22 fallen) — 휘발 0, 있을 때만 실림
+                **({'status': [{'tag': t, **e} for t, e in sorted(bot['status'].items())]}
+                   if (self.status and bot.get('status')) else {}),   # 상태 태그(D34) — 자기 몸의 사실
                 'last': bot.get('last'),      # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의
                                               #   결과를 관측할 수 있어야 한다". 자기 경험=시야-온리 무위반
                 'order': ('explore' if str(bot.get('order') or '')[:1] == '@'
@@ -2148,6 +2179,21 @@ class Dungeon:
         if not bot.get('path'):
             self._perceive(bot)               # 멈춘 자리에서도 눈은 뜨고 있다 — 곁의 몹을 못 본 채
             return self._order_done(bot, bots, base)  #   맞으면 거짓 매복(they-ambush)이 되므로
+        if self.status and '둔화' in (bot.get('status') or {}):   # 둔화(D34): SLOW_EVERY 틱에 한 칸 —
+            beat = (bot.get('slow_beat') or 0) + 1                 #   나머지 틱은 제자리(몹은 따라붙는다)
+            bot['slow_beat'] = beat % SLOW_EVERY
+            if bot['slow_beat'] != 0:
+                newly = self._perceive(bot)       # 쉬는 틱에도 눈은 뜨고 — 새 몹이면 멈춰 묻는다(D2)
+                if newly:
+                    bot['order'], bot['path'], bot['plan'] = None, [], []
+                    return {**base, 'result': 'encounter',
+                            'monsters': [{'id': 'm%d' % m.id, 'kind': m.kind, 'state': m.state}
+                                         for m in newly]}
+                sres = self._sighted_stop(bot, base)
+                if sres:
+                    return sres
+                self._wander_beat(bot)            # 제자리 틱도 맴돎 박자(양보 틱 선례)
+                return {**base, 'result': 'walking', 'slowed': True}
         nx, ny = bot['path'][0]
         ally = next((o for o in bots if o is not bot and o['alive'] and not o['won']
                      and (o['x'], o['y']) == (nx, ny)), None)
@@ -2201,10 +2247,14 @@ class Dungeon:
         bot['path'].pop(0)
         enter = self._enter_cell(bot, nx, ny, bots)   # 이동 + 보물/계단/함정 처리
         base.update(to=[nx, ny])
-        if not bot['alive']:                          # 함정 즉사 — 시체는 지각하지 않는다(사후 인지굴림 금지:
+        if enter.get('bleed'):
+            base['bleed'] = enter['bleed']            # 출혈(D34) 걸음 — 이 걸음의 어떤 결과에도 병기
+        if not bot['alive']:                          # 함정 즉사·출혈사 — 시체는 지각하지 않는다(사후 인지굴림 금지:
             bot['order'], bot['path'], bot['plan'] = None, [], []   # 죽은 자의 주사위가 숨은 것을 드러내
                                                       #   산 자 경로를 바꿈. 작정도 죽음과 함께 소멸
-            res = {**base, 'result': 'encounter', 'trap': enter['trap']}
+            res = {**base, 'result': 'encounter'}
+            if enter.get('trap'):
+                res['trap'] = enter['trap']
             if enter.get('treasure'):                 # 죽으며 주운 보물도 진실(원장)에 남긴다 — 지금은 보물·함정
                 res['treasure'] = True                #   동칸 배치가 없어 dormant이나, 배치 규칙 변경 즉시 발화
             if enter.get('potion'):
@@ -2389,6 +2439,17 @@ class Dungeon:
         bot['x'], bot['y'] = nx, ny
         self.visited.add((nx, ny))
         out = {}
+        if self.status and '출혈' in (bot.get('status') or {}):   # 출혈(D34): 걸음이 피를 낸다 —
+            bot['bleed_steps'] = bot.get('bleed_steps', 0) + 1     #   제자리·전투·휴식은 안 낸다(라벨 그대로).
+            if bot['bleed_steps'] % BLEED_STEPS == 0:              #   인터럽트 아님(D2 — 태그가 붙던 순간의
+                bot['hp'] -= 1                                     #   함정/피격이 이미 멈춰 물었다)
+                out['bleed'] = {'hp': bot['hp']}
+                if bot['hp'] <= 0:                                 # 걷다 쓰러짐 — 묘·목격 문법 그대로
+                    bot['alive'] = False; out['bleed']['down'] = True
+                    g = self._on_down(bot, bots, by='출혈', by_kind='status')
+                    if g:
+                        out['bleed']['grave'] = g
+                    return out                                     # 죽은 자는 줍지도 밟지도 않는다
         if self.scan:                             # D30(09-05) 오브젝트 사용 목격 — 첫 사례=문 타일(+).
             dr = next((dd for dd in self.doors.values() if dd.cell == (nx, ny)), None)
             if dr is not None:                    # 밟는 순간 1회(너머로 내려서는 걸음은 안 온다). 트임
@@ -2429,6 +2490,10 @@ class Dungeon:
                         g = self._on_down(bot, bots, by=trap.name, by_kind='trap')
                         if g:
                             tr['grave'] = g
+                st = TRAP_KINDS.get(trap.kind, {}).get('status')
+                if st and bot['alive']:           # 함정의 특수(D34): 가시=출혈·독침=중독 — 피해와 별개
+                    if self._apply_status(bot, st, trap.name, bots, by_kind='trap'):
+                        tr['status'] = st
             if bot['alive']:                      # 전달층(D22): 함정 장면 목격 — 전사면 ally_down 이 담당
                 self._witness(bots, nx, ny,
                               {'kind': 'ally_trap', 'char': bot['char'], 'trap': trap.name,
@@ -2766,6 +2831,10 @@ class Dungeon:
                 g = self._on_down(bot, bots, by='함정 상자', by_kind='hazard')
                 if g:
                     out['grave'] = g
+            if bot['alive']:                     # 상자 독침의 특수(D34): 중독
+                st = self._apply_status(bot, '중독', '함정 상자', bots, by_kind='hazard')
+                if st:
+                    out['status'] = st
             if bot['alive']:                     # D30 확장: 독침도 '상자를 사용 (독침에 당했다)' — 전사면
                 self._witness(bots, tx, ty,      #   ally_down 이 담당(중복 금지, 함정 패턴 그대로)
                               {'kind': 'ally_use', 'char': bot['char'], 'what': '상자',
@@ -2789,6 +2858,10 @@ class Dungeon:
                 g = self._on_down(bot, bots, by='오염된 샘', by_kind='hazard')
                 if g:
                     out['grave'] = g
+            if bot['alive']:                     # 오염된 샘의 특수(D34): 중독
+                st = self._apply_status(bot, '중독', '오염된 샘', bots, by_kind='hazard')
+                if st:
+                    out['status'] = st
             if bot['alive']:                     # 전달층: 오염 장면 목격 — 같은 샘의 축복(ally_heal)만
                 self._witness(bots, tx, ty,      #   보이고 저주는 안 보이던 비대칭의 해소(07-29)
                               {'kind': 'ally_mishap', 'char': bot['char'],
@@ -2823,6 +2896,8 @@ class Dungeon:
         surprise = mon.state in ('SLEEPING', 'WANDERING') or mon.waking > 0
         r = max(self.d20(), self.d20()) if surprise else self.d20()
         mod = bot['dex'] if int(bot.get('atk_range') or 1) > 1 else bot['str']
+        if self.status and '중독' in (bot.get('status') or {}):
+            mod -= POISON_MOD                     # 중독(D34): 손이 떨린다 — 명중 감산
         # 활잡이는 DEX 로 굴린다 — 힘이 아니라 겨눔이다. 스트림의 mod 키는 그대로라
         # 소비자 무접촉(값만 어느 능력치에서 왔는지가 달라진다).
         total = r + mod
@@ -2957,6 +3032,25 @@ class Dungeon:
                 fact['result'] = result
             self._witness(bots, x, y, fact, exclude=tuple(mm['char'] for mm in movers))
 
+    def _apply_status(self, bot, tag, by, bots=(), by_kind='hazard'):
+        """상태 태그(D34) 부착 — 몹·함정·오브젝트의 특수. 스위치 꺼짐=무동작(기존 판 비트 동일).
+        같은 태그 재발=n 만 는다(×N 표시 — 효과 불변, 첫 판 관찰 뒤 재론). 목격(D22 문법): 시야 안
+        동료는 '카야가 가시 함정으로 출혈 상태가 되는 것을' 본다 — 상태는 겉으로 드러난다(파트너 확정
+        "동료도 같은 단어를 본다"). by_kind: monster(도감 게이트 대상)/trap/hazard. 반환=태그 또는 None."""
+        if not self.status or not bot.get('alive', True):
+            return None
+        st = bot.setdefault('status', {})
+        e = st.get(tag)
+        if e:
+            e['n'] += 1; e['by'] = by; e['since'] = self.turn
+        else:
+            st[tag] = {'n': 1, 'by': by, 'since': self.turn}
+        self._witness(bots, bot['x'], bot['y'],
+                      {'kind': 'ally_status', 'char': bot['char'], 'tag': tag, 'by': by,
+                       **({'by_kind': by_kind} if by_kind != 'monster' else {})},
+                      exclude=(bot['char'],))
+        return tag
+
     def _on_down(self, bot, bots, by, by_kind='monster', witness=True):
         """D22 — 쓰러짐의 공통 처리(굴림 없음). 모든 사망 경로(몹·함정·상자·샘)가 부른다.
         · 묘(graves): 쓰러진 칸에 '~의 묘' 피처 — 광학(sights)·조회·goto 앵커. 표지판이지 시체가
@@ -2999,6 +3093,8 @@ class Dungeon:
         ("상처도 시야를 탄다" — 라이브 22틱 카야 전사 무목격 부검)."""
         ambush = m.id not in b.get('aware_of', set())
         ac = 10 + b['dex'] + gear_bonus(b, 'armor')   # 장비(07-30): 방어구=막기 — 갑옷이 이를 받는다
+        if self.status and '중독' in (b.get('status') or {}):
+            ac -= POISON_MOD                      # 중독(D34): 몸이 무디다 — 회피 감산
         r = max(self.d20(), self.d20()) if ambush else self.d20()
         total = r + m.atk
         hit = (r == 20) or (total >= ac)
@@ -3021,6 +3117,11 @@ class Dungeon:
                 g = self._on_down(b, bots, by=m.kind, witness=False)   # 목격은 아래 A-3 소관(중복 금지)
                 if g:
                     ev['grave'] = g            # 사망 이벤트에 묘 정보 동봉(스트림 additive — 뷰어·태그용)
+            st = MON_STATUS.get(m.kind)          # 몹의 특수(D34): 그림자거미 명중=둔화(생존 시)
+            if st and b['alive']:
+                if self._apply_status(b, st, m.kind, bots, by_kind='monster'):
+                    ev['status'] = st
+                    b['last']['status'] = st     # 자기 관측(D1-4): "맞았다 — 둔화가 생겼다"
             # 목격 주입(A-3): 자기 피격은 last 가 담당 — 중복 금지. 다음 view() 가 1회성 노출·소거.
             fact = {'kind': 'ally_down' if not b['alive'] else 'ally_hurt',
                     'char': b['char'], 'by': m.kind, 'by_id': 'm%d' % m.id}
@@ -3268,6 +3369,10 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'bag': 0, 'alive': True, 'won': False,
             'potions': 0,                   # 소지 회복 물약(07-17) — 첫 소비 아이템. 층 이월은
                                             # 러너 재스폰이 담당(bag 이월 선례)
+            'status': {},                   # 상태 태그(D34, 09-06): 태그→{n, by, since}. 몹·함정의 특수가
+                                            # 붙이고 휴식(D35)만 지운다. 층 이월=러너 재스폰(물약 선례)
+            'bleed_steps': 0,               # 출혈 걸음 부기(BLEED_STEPS 마다 HP 1)
+            'slow_beat': 0,                 # 둔화 박자(SLOW_EVERY 마다 한 칸)
             'weapon': None, 'armor': None,  # 장비 슬롯 2(07-30) — {'name','bonus'} 또는 None.
                                             # 시트 wdmg=기본 무장(불가침), 장비=위에 얹는 보정.
                                             # 층 이월은 러너 재스폰(물약 선례)
@@ -3305,6 +3410,7 @@ def bot_snapshot(b):
             'potions': b.get('potions', 0),   # 회복 물약 소지(07-17 additive)
             'weapon': b.get('weapon'), 'armor': b.get('armor'),   # 장비(07-30 additive)
             'order': b.get('order'),
+            **({'status': sorted(b['status'])} if b.get('status') else {}),   # 상태 태그(D34 additive)
             'aware_of': sorted(b.get('aware_of', set()))}
 
 
