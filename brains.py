@@ -432,10 +432,17 @@ def _sheet(bot, roster=None):
     if names:
         lines.append("- 동료: " + ", ".join("%s(봇%s)" % (names[c], c) for c in sorted(names)))
     rel = bot.get("relationships") or {}
-    for oc in sorted(rel):
+    live = bot.get("relations") or {}       # D36: 살(한 줄)이 있으면 시트 문장을 대체한다 — 시트가 초기값,
+    for oc in sorted(set(rel) | {c for c, e in live.items() if e.get("line")}):   # 캐릭터가 겹쳐 쓴다
         if oc not in names:
             continue                        # roster 밖 대상(무해 처리) — 죽은/없는 동료 관계는 침묵
-        lines.append("- %s(봇%s)와의 관계: %s" % (names[oc], oc, rel[oc]))
+        e = live.get(oc) or {}
+        if e.get("line"):
+            src = ("시트" if e.get("line_src") == "sheet"
+                   else "네가 %s턴에 남긴 말" % e.get("line_turn", "?"))
+            lines.append("- %s(봇%s)와의 관계: %s (%s)" % (names[oc], oc, e["line"], src))
+        else:
+            lines.append("- %s(봇%s)와의 관계: %s" % (names[oc], oc, rel[oc]))
     lines.append("- 시트의 성격·말투·목표·관계대로 판단하고 말하라.")
     return "\n".join(lines) + "\n"
 
@@ -728,6 +735,7 @@ _WIRE_KEYS = frozenset((
     "zone", "known", "witnessed", "memories", "dry", "last", "order", "ascii_view", "legend",
     "sights", "party", "options", "messages", "intent", "notes",
     "status",  # 상태 태그(D34): 아래 _wire "## 네 몸 상태" 절이 그린다
+    "relations",   # 관계 장부(D36): 뼈 횟수·초대는 _wire, 살(한 줄)은 _sheet 가 그린다
     "town",    # 마을(D29): 안전한 층의 사실 한 줄 — 아래 _wire 가 그린다
     "gear"))   # 장비(07-30): 아는 키지만 wire 는 일부러 안 그린다 — 착용 정보의 표현은
                #   시트(_sheet 차림 줄, 불변 프리픽스=캐싱)가 소유하고, 비교는 입수 메뉴
@@ -936,6 +944,15 @@ def _wire(obs, names=None):
                 st = "시야 밖 — 말은 안 닿고, 찾아갈 수는 있다(파티 감각)"
             L.append("- %s, %s — %s" % (nm(p.get("char", "?")), p.get("job", "?"), st))
 
+    rels = obs.get("relations") or []
+    if rels:                                # 관계 장부(D36) — 뼈 횟수(사실). 살은 시트에 산다
+        L += ["", "## 동료와 겪은 일 (횟수 — 세계가 센 사실)"]
+        for r in rels:
+            bits = ["%s ×%d%s" % (b_.get("label", b_.get("kind", "?")), b_.get("n", 0),
+                                 (" (%s)" % ago(b_["last"])) if b_.get("last") is not None else "")
+                    for b_ in r.get("bones", [])]
+            L.append("- %s: %s" % (nm(r.get("char", "?")), ", ".join(bits) if bits else "아직 없음"))
+
     k = obs.get("known")
     if k and (k.get("statics") or k.get("last_seen") or k.get("zones")):
         L += ["", "## 네가 기억하는 것 (이 층에서 직접 봄 — 지금은 시야 밖)"]
@@ -993,6 +1010,20 @@ def _wire(obs, names=None):
             else:                                   # 목격 — 사인·장소(D22 기억층 v0=fallen)
                 L.append("- [%s의 죽음을 목격] %s 죽었다 — %s에서 (%s)"
                          % (nm_, _by_phrase(e), e.get("zone", "?"), ago(e.get("turn", 0))))
+
+    inv = next((r for r in (obs.get("relations") or []) if r.get("invite")), None)
+    if inv:                                 # 살 초대(D36) — 강한 뼈 직후 또는 문턱 결정에만 칸이 생긴다
+        who_ = nm(inv.get("char", "?"))
+        why = {"rescued": "%s가 방금 너를 구했다" % who_,
+               "at_death": "%s가 죽을 때 네가 곁에 있었다" % who_,
+               }.get(inv["invite"], "%s와 그간 겪은 일이 쌓였다" % who_)
+        L += ["", "## %s에 대해 남길 한 줄 (선택)" % who_,
+              "- %s. %s에 대한 네 생각을 한 줄로 고쳐 써도 좋다 — 응답 JSON 의 `relation_line` 필드"
+              " (안 써도 된다. 쓰면 이전 줄을 덮어 쓴다)" % (why, who_)]
+        if inv.get("line"):
+            L.append('- 지금까지의 한 줄: "%s" (%s)'
+                     % (inv["line"], "시트" if inv.get("line_src") == "sheet"
+                        else "네가 %s턴에 남긴 말" % inv.get("line_turn", "?")))
 
     ms = obs.get("messages")
     if ms:
@@ -1106,6 +1137,10 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
         then = _then(obj, obs)                      # 작정(D16) — 유효 수만 남긴 이어질 계획(없으면 [])
         note = (str(obj.get("note", "") or "").strip()[:NOTE_LEN]   # D26 남길 한 줄(선택 필드)
                 if NOTES_ON else "")
+        inv = next((r for r in (obs.get("relations") or []) if r.get("invite")), None)
+        rline = (str(obj.get("relation_line", "") or "").strip()[:NOTE_LEN]   # D36 살 — 초대가 있을 때만
+                 if inv else "")                                             #   받는다(에지 없는 콜은 무시)
+        rel = {"relation": {"to": inv["char"], "line": rline}} if rline else {}
         if MENU:
             act = _pick(obj, obs)
             if act:
@@ -1114,6 +1149,7 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
                 return {**act,
                         **({"then": then} if then else {}),
                         **({"note": note} if note else {}),
+                        **rel,
                         "say": str(obj.get("say", ""))[:160],
                         "reason": str(obj.get("reason", ""))[:160],
                         "src": "haiku"}
@@ -1133,6 +1169,7 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
             out = {"type": typ,
                    **({"then": then} if then else {}),
                    **({"note": note} if note else {}),
+                   **rel,
                    "say": str(obj.get("say", ""))[:160],
                    "reason": str(obj.get("reason", ""))[:160],
                    "src": "haiku"}
@@ -1259,6 +1296,12 @@ def think_all(d, bots, inbox=None):
             if dec.get(k):                   # 작정 수(src='plan')도 자기 판단의 연속이라 intent 갱신
                 it[k] = dec[k]
         by[c]["intent"] = it
+        rl = dec.get("relation")
+        if rl and rl.get("line"):        # D36 살 — 그 상대 항목에 한 줄 겹쳐쓰기(옛 줄은 스트림 decisions 에)
+            e = by[c].setdefault("relations", {}).setdefault(
+                rl["to"], {"bones": {}, "total": 0, "line": None, "line_turn": None,
+                           "line_src": None, "queue": []})
+            e["line"], e["line_turn"], e["line_src"] = rl["line"], d.turn, "self"
         if dec.get("note"):              # D26 의미 기억 — 남긴 한 줄은 그 봇의 기억 로그로(FIFO)
             ns = by[c].setdefault("notes", [])
             ns.append(dec["note"])

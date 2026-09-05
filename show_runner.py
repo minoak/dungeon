@@ -156,6 +156,9 @@ STATUS_ON = os.environ.get("DUNGEON_STATUS", "1") != "0"     # 상태 태그(D34
 REST_ON = os.environ.get("DUNGEON_REST", "1") != "0"         # 휴식(D35, 09-06) — 러너 기본 1, 엔진
                                                              #   기본 0. 회복이 붙은 wait: 틱마다 HP,
                                                              #   완료 시 상태 태그 소거. 사건이 깨운다
+RELATIONS_ON = os.environ.get("DUNGEON_RELATIONS", "1") != "0"   # 관계 장부(D36, 09-06) — 러너 기본 1,
+                                                             #   엔진 기본 0. 뼈 5종+문턱 초대, 살은
+                                                             #   결정 응답 relation_line(엔진 불가침)
 LORE_FILE = os.path.join(HERE, "lore.json")
 STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적용 후 맵이 보이게(헤들리스=0)
 
@@ -491,6 +494,7 @@ def build_town():
     d.town = True
     d.status = STATUS_ON                   # 상태 태그(D34)는 마을에서도 몸에 붙어 있다(걸으면 피가 난다)
     d.rest_verb = REST_ON                  # 휴식(D35)은 마을에서도 된다(여관은 다음 단계)
+    d.relations = RELATIONS_ON             # 관계 장부(D36)는 마을 대화도 센다
     for n in spec.get("npcs", []):
         x, y = int(n["x"]), int(n["y"])
         if d.grid[y][x] != G.FLOOR:            # 좌표-그림 어긋남은 시작 전에 죽는 게 낫다
@@ -552,7 +556,7 @@ def main():
                       loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
                       dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
                       ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
-                      status=STATUS_ON, rest_verb=REST_ON)
+                      status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON)
         d.lore = lore
     bots = []
     for c in chars:
@@ -627,6 +631,7 @@ def main():
             events=EVENTS_ON,          # 사건층(D22) 여부 — obs(목격·기억)를 바꾸는 실행모드 메타
             status=STATUS_ON,          # 상태 태그(D34) 여부 — 몸 물리(걸음·굴림)와 obs 를 바꾸는 메타
             rest=REST_ON,              # 휴식(D35) 여부 — 메뉴·회복 물리 메타(wait 와 같은 급)
+            relations=RELATIONS_ON,    # 관계 장부(D36) 여부 — obs(뼈·초대)와 시트(살)를 바꾸는 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
@@ -724,6 +729,12 @@ def main():
             inbox[b["char"]] = [{"from": oc, "text": t} for oc, t in says.items()
                                 if oc != b["char"]
                                 and any(o["char"] == oc and (o["x"], o["y"]) in seen for o in bots)]
+        by_char = {o["char"]: o for o in bots}
+        for b in bots:                         # 이야기를 나눔(D36 뼈) — 배달된 말마다 쌍당 틱당 1(엔진이 중복 제거)
+            for m in inbox.get(b["char"], []):
+                ob = by_char.get(m["from"])
+                if ob is not None and b["alive"] and ob["alive"]:
+                    d.note_talk(b, ob)
 
         # 말 걸림 정지(07-24 D24, 여섯 번째 정지 신호): 방금 배달된 말이 있는 '걷던' 동료는
         # 멈춰서 다음 틱 결정권을 받는다(들리는 전원 — 기존 시야 배달 규칙에 그대로 올라탐).
@@ -802,7 +813,8 @@ def main():
                               graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
                               wait_verb=WAIT_ON, motion=MOTION_ON,
                               ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
-                              n_gear=N_GEAR, status=STATUS_ON, rest_verb=REST_ON)
+                              n_gear=N_GEAR, status=STATUS_ON, rest_verb=REST_ON,
+                              relations=RELATIONS_ON)
                 d.lore = lore
                 fresh = True
             # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,
@@ -827,6 +839,9 @@ def main():
                 n["armor"] = b.get("armor")
                 n["status"] = {t: dict(e) for t, e in (b.get("status") or {}).items()}   # 상태 태그(D34)
                 n["bleed_steps"] = b.get("bleed_steps", 0)   #   도 이월 — 몸은 층을 넘어도 그 몸이다
+                n["relations"] = {oc: {**e, "bones": {k: dict(v) for k, v in e["bones"].items()},
+                                       "queue": list(e.get("queue") or [])}
+                                  for oc, e in (b.get("relations") or {}).items()}   # 관계 장부(D36)도 이월
                 n["memories"] = list(b.get("memories") or [])   # 기억도 이월(D22) — 전사는 원정급
                                                           # 사건(장부=층의 기억과 대비. 구역 이름은
                                                           # 그 층의 것 — 층수 없인 모호하나 v0 수용)

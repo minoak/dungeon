@@ -166,6 +166,16 @@ MON_STATUS = {'그림자거미': '둔화'}   # 몹의 특수 = 태그(명중 시
 REST_HP = 1              # 휴식(D35): 틱마다 차는 HP (hp 2 → 만피 14 가 열두 틱쯤 = WAIT_MAX 눈금)
 REST_MIN = 5             # 휴식 완료 하한: 만피여도 이만큼은 쉬어야 몸 상태가 낫는다("푹 쉬어야 낫는다")
 
+# ── 관계 장부(D36, 2026-09-06 파트너 확정 "뼈는 기계가 세고, 살은 문턱에서만 캐릭터가 쓴다") ──
+# 림월드의 관계는 게임이 라벨과 숫자를 적고 플레이어가 서사로 읽는다 — 우리는 읽는 사람이 캐릭터
+# 자신이다. 뼈 = 말 내용 없이 구조(스트림 어휘)에서 나오는 사실만(say 해석 0 — D5). 살 = 캐릭터가
+# 문턱에서만 쓰는 한 줄(겹쳐쓰기, 엔진 불가침 — D15② 뼈/살). 호감도 숫자 없음(가중치=튜닝 축).
+RELATION_K = 10          # 약한 뼈 합계가 이 배수를 넘는 결정에 한 줄을 청한다(매 스텝 평가 방지)
+FOUGHT_WINDOW = 5        # 같은 몹을 이 틱 안에 둘이 치면 '함께 싸움'(쌍·몹당 1회)
+BONES = {'talk': '이야기를 나눔', 'fought': '함께 싸움', 'waited': '나를 기다려 줌',
+         'rescued': '나를 구함', 'at_death': '죽을 때 곁에 있었음'}
+STRONG_BONES = ('rescued', 'at_death')   # 즉시 청한다 — 한 번이 열 번의 잡담보다 무겁다
+
 
 def status_prose(tag):
     """태그 한 줄 사실 문장(효과) — 리모컨·wire·목격 문장의 단일 소스. 미등록 태그는 정직하게 흘린다."""
@@ -206,6 +216,8 @@ class Monster:
         self.concealed = False       # 매복몹(Stage 3): 인지판정/일격으로만 드러남. 봇 obs·맵에 안 나감
         self.flee_turns = 0          # 봇에게 보이며 도주한 턴 누적(FLEE_STAMINA 넘으면 필사 반전)
         self.desperate = False       # 필사 반전됨 — 다시는 도주하지 않는다(죽을 때까지 문다)
+        self.last_hits = {}          # 관계 장부(D36): char → 마지막으로 이 몹을 친 틱('함께 싸움' 재료)
+        self.fought = set()          # 이 몹을 두고 이미 '함께 싸움'이 적힌 쌍(frozenset) — 몹당 1회
 
     def as_dict(self):
         """스트림(JSONL) 직렬화 — 관전자/웹 데이터 계약(STREAM_FORMAT.md).
@@ -324,7 +336,7 @@ class Dungeon:
                  scan=False, n_potions=0, loops=False, selfstop=False,
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
                  motion=False, ally_sight=False, social=False, solo=False, n_gear=0,
-                 town=False, status=False, rest_verb=False):
+                 town=False, status=False, rest_verb=False, relations=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -404,6 +416,10 @@ class Dungeon:
         self.rest_verb = bool(rest_verb)   # 휴식(D35, 09-06) — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_REST(기본 1)로 켠다. 회복이 붙은 wait: 틱마다 HP, 완료 시
                                    #   상태 태그 소거. 파트너 확정 "지우는 조건은 캐릭터 선택지 — 휴식".
+        self.relations = bool(relations)   # 관계 장부(D36, 09-06) — 기본 꺼짐(기존 verify 비트 동일).
+                                   #   러너가 DUNGEON_RELATIONS(기본 1)로 켠다. 뼈 5종(대화·함께 싸움·
+                                   #   기다려 줌·나를 구함·죽을 때 곁)+문턱 초대. 엔진은 살(line)을 안 읽는다.
+        self._talked = set()       # (쌍, 틱) — 같은 틱 양방향 대화를 한 번으로(note_talk 중복 방지)
         self._ring_target = 0      # loops 판에서 주 고리에 배속할 방 수(_carve_rooms 가 굴림)
         self.rooms = self._carve_rooms()
         self._connect(self.rooms)
@@ -474,6 +490,8 @@ class Dungeon:
         d.town = False             # 마을 층(D29) — 기본 꺼짐(러너 build_town 이 켠다)
         d.status = False           # 상태 태그(D34) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.rest_verb = False        # 휴식(D35) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.relations = False        # 관계 장부(D36) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d._talked = set()
         d.grave_of = {}            # 묘→캐릭터(D22 개정) — __new__ 경유라 명시 초기화
         d.npc_lines = {}           # NPC 인사 사전 — build_town 이 채운다(데이터, 판정 무접촉)
         d.npc_gifts = {}           # D32 상점 v0 — from_ascii 는 __new__ 경유라 여기서도 명시 초기화(함정 계보)
@@ -1589,6 +1607,26 @@ class Dungeon:
         # D22 기억층: 목격한 중대사(v0=fallen)는 휘발하지 않는다 — 매 결정 재제시(비우지 않음).
         mem = [_mask(e) for e in (bot.get('memories') or [])]
 
+        rel_obs = []
+        if self.relations and not self.solo:       # 관계 장부(D36) — 솔로 판은 로스터가 없다(남남)
+            invited = False
+            for oc in sorted(bot.get('relations') or {}):
+                e = bot['relations'][oc]
+                ob = next((o for o in bots if o['char'] == oc), None)
+                if ob is None:
+                    continue                       # 로스터 밖 상대(시트 잔재) — 침묵
+                order = list(BONES) + sorted(k for k in e['bones'] if k not in BONES)   # 사전 순서(의미순)
+                bones = [{'kind': k, 'label': BONES.get(k, k), 'n': e['bones'][k]['n'],
+                          'last': e['bones'][k]['last']}
+                         for k in order if e['bones'].get(k, {}).get('n')]
+                ent = {'char': oc, 'name': ob.get('name') or ob['job'], 'bones': bones,
+                       'line': e.get('line'), 'line_turn': e.get('line_turn'),
+                       'line_src': e.get('line_src')}
+                if not invited and e.get('queue'):
+                    ent['invite'] = e['queue'].pop(0)   # 결정당 초대 1개 — 나머지는 다음 결정
+                    invited = True
+                if bones or ent.get('invite') or e.get('line'):
+                    rel_obs.append(ent)
         rid_here = self._room_id_at(cx, cy)
         return {'pos': [cx, cy], 'hp': bot['hp'], 'maxhp': bot['maxhp'],
                 'job': bot['job'], 'sex': bot['sex'],
@@ -1612,6 +1650,7 @@ class Dungeon:
                 **({'memories': mem} if mem else {}),    # 기억(D22 fallen) — 휘발 0, 있을 때만 실림
                 **({'status': [{'tag': t, **e} for t, e in sorted(bot['status'].items())]}
                    if (self.status and bot.get('status')) else {}),   # 상태 태그(D34) — 자기 몸의 사실
+                **({'relations': rel_obs} if rel_obs else {}),   # 관계 장부(D36) — 뼈 횟수·살·초대
                 'last': bot.get('last'),      # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의
                                               #   결과를 관측할 수 있어야 한다". 자기 경험=시야-온리 무위반
                 'order': ('explore' if str(bot.get('order') or '')[:1] == '@'
@@ -1972,6 +2011,9 @@ class Dungeon:
         if came:                                      # 동료가 시야에 — 새 존재(wait_met 문법)
             bot['order'], bot['path'], bot['plan'] = None, [], []
             bot['rest'] = None
+            for o in bots:                        # 나를 기다려 줌(D36) — 도착한 쪽의 장부에
+                if o['char'] in came:
+                    self._bone(o, bot['char'], 'waited')
             return {**base, 'result': 'rest_met', 'allies': sorted(came)}
         w['allies'] = here
         heal = min(REST_HP, bot['maxhp'] - bot['hp'])
@@ -2009,6 +2051,9 @@ class Dungeon:
         if came:                                      # 기다리던 보람 — 동료가 시야에 들어왔다
             bot['order'], bot['path'], bot['plan'] = None, [], []
             bot['wait'] = None
+            for o in bots:                        # 나를 기다려 줌(D36) — 도착한 쪽의 장부에
+                if o['char'] in came:
+                    self._bone(o, bot['char'], 'waited')
             return {**base, 'result': 'wait_met', 'allies': sorted(came)}
         w['allies'] = here                            # 떠난 동료는 장부에서 내림 — 재진입도 새 존재
         w['n'] += 1
@@ -2992,8 +3037,23 @@ class Dungeon:
                    + (SURPRISE_DMG_BOT if surprise else 0))
             mon.hp -= dmg
             res.update(crit=(r == 20), dmg=dmg, monster_hp=max(0, mon.hp))
+            if self.relations:                    # 함께 싸움(D36): FOUGHT_WINDOW 틱 안에 같은 몹을 친 둘
+                for oc, t in list(mon.last_hits.items()):
+                    key = frozenset((oc, bot['char']))
+                    if oc != bot['char'] and self.turn - t <= FOUGHT_WINDOW and key not in mon.fought:
+                        ob = next((o for o in (bots or []) if o['char'] == oc), None)
+                        if ob is not None:
+                            mon.fought.add(key)   # 몹당 한 번 — 한 전투는 한 번 센다
+                            self._bone(bot, oc, 'fought'); self._bone(ob, bot['char'], 'fought')
+                mon.last_hits[bot['char']] = self.turn
             if mon.hp <= 0:
                 mon.alive = False; res['killed'] = True
+                if self.relations and mon.state == 'HUNTING' and mon.target \
+                        and mon.target != bot['char']:    # 나를 구함(D36): 나를 물던 몹을 동료가 처치 —
+                    victim = next((o for o in (bots or []) if o['char'] == mon.target   # 그 처치를 본 사람만
+                                   and o['alive'] and not o['won']), None)              # (시야-온리)
+                    if victim is not None and (mon.x, mon.y) in self.visible_cells(victim['x'], victim['y']):
+                        self._bone(victim, bot['char'], 'rescued')
                 for o in (bots or []):    # 목격한 죽음은 장부에서 지운다(D17 교정 — 죽는 걸 본
                     if (o.get('alive') and not o.get('won')       # 몹이 '마지막 목격'으로 살아
                             and o.get('ledger') is not None       # 있는 척 잔존하는 유령 방지,
@@ -3112,6 +3172,42 @@ class Dungeon:
                 fact['result'] = result
             self._witness(bots, x, y, fact, exclude=tuple(mm['char'] for mm in movers))
 
+    def _rel(self, bot, other):
+        rel = bot.setdefault('relations', {})
+        e = rel.get(other)
+        if e is None:
+            e = rel[other] = {'bones': {}, 'total': 0, 'line': None, 'line_turn': None,
+                              'line_src': None, 'queue': []}
+        return e
+
+    def _bone(self, bot, other, kind):
+        """뼈 한 개(D36) — bot 의 장부에 '상대 other 와 kind 가 한 번 더'. 강한 뼈(구함·죽을 때 곁)는
+        즉시 초대를 큐에 넣고, 약한 뼈는 합계가 RELATION_K 의 배수가 되는 순간에만 넣는다(문턱 요약 —
+        파트너 확정 "일정 수치가 넘어가면 몇 자 이내로 요약"). 초대는 view 가 결정당 하나씩 꺼낸다."""
+        if not self.relations or other == bot['char'] or not bot.get('alive', True):
+            return
+        e = self._rel(bot, other)
+        b = e['bones'].setdefault(kind, {'n': 0, 'last': None})
+        b['n'] += 1; b['last'] = self.turn
+        if kind in STRONG_BONES:
+            e['queue'].append(kind)
+        else:
+            e['total'] += 1
+            if e['total'] % RELATION_K == 0:
+                e['queue'].append('milestone')
+
+    def note_talk(self, a, b):
+        """이야기를 나눔(D36 뼈) — 서로 보여 말이 배달된 틱에 쌍당 1회(양방향 대칭). 배달 규칙은
+        러너 inbox 가 소유하고 여기는 세기만 한다(말 내용은 안 읽는다)."""
+        if not self.relations:
+            return
+        key = (frozenset((a['char'], b['char'])), self.turn)
+        if key in self._talked:
+            return
+        self._talked.add(key)
+        self._bone(a, b['char'], 'talk')
+        self._bone(b, a['char'], 'talk')
+
     def _remember_grave(self, bot, f):
         """묘 발견 기억(D22 개정) — 그 죽음을 이미 아는 봇(목격 fallen·발견 grave_found)은 무등재,
         아니면 지속 기억 grave_found{char,name,zone,turn} 1회(fallen 문법: 좌표 금지·구역 이름만).
@@ -3173,6 +3269,7 @@ class Dungeon:
                     continue                          # 못 본 죽음은 모른다 — 시야-온리(전지 주입 금지)
                 if witness:
                     o.setdefault('witnessed', []).append(dict(fact))
+                self._bone(o, bot['char'], 'at_death')   # 죽을 때 곁에 있었음(D36, 강한 뼈) — 목격자 장부
                 zone = self._zone_name(o, zid) if zid is not None else self._zone_label(x, y)
                 o.setdefault('memories', []).append(
                     {'kind': 'fallen', 'char': bot['char'], 'by': by,
@@ -3471,6 +3568,14 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'bleed_steps': 0,               # 출혈 걸음 부기(BLEED_STEPS 마다 HP 1)
             'slow_beat': 0,                 # 둔화 박자(SLOW_EVERY 마다 한 칸)
             'rest': None,                   # 휴식 장부(D35): {n, healed, allies} — order='rest' 동안만
+            'relations': ({oc: {'bones': {}, 'total': 0, 'line': str(txt), 'line_turn': 0,
+                                'line_src': 'sheet', 'queue': []}
+                           for oc, txt in dict(sheet.get('relationships') or {}).items()}
+                          if getattr(dungeon, 'relations', False) else {}),
+                                            # 관계 장부(D36): 상대→{bones{kind:{n,last}}, total(약한 뼈 합),
+                                            # line(살 — 시트 관계 칸이 초기값, 캐릭터가 겹쳐 쓴다),
+                                            # line_turn, line_src(sheet/self), queue(청할 초대)}.
+                                            # 엔진은 line 을 절대 읽지 않는다(D15② 불투명 왕복)
             'weapon': None, 'armor': None,  # 장비 슬롯 2(07-30) — {'name','bonus'} 또는 None.
                                             # 시트 wdmg=기본 무장(불가침), 장비=위에 얹는 보정.
                                             # 층 이월은 러너 재스폰(물약 선례)
@@ -3509,6 +3614,11 @@ def bot_snapshot(b):
             'weapon': b.get('weapon'), 'armor': b.get('armor'),   # 장비(07-30 additive)
             'order': b.get('order'),
             **({'status': sorted(b['status'])} if b.get('status') else {}),   # 상태 태그(D34 additive)
+            **({'relations': {oc: {k: v['n'] for k, v in e['bones'].items() if v['n']}
+                              for oc, e in sorted(b['relations'].items())
+                              if any(v['n'] for v in e['bones'].values())}}
+               if any(v['n'] for e in (b.get('relations') or {}).values()
+                      for v in e['bones'].values()) else {}),    # 관계 뼈 횟수(D36 additive — 살은 decisions)
             'aware_of': sorted(b.get('aware_of', set()))}
 
 
