@@ -106,6 +106,17 @@ check("① 거부: 이름 공백 / '_' 시작 / 21자",
       and rejects(lambda: sheetkit.build_sheet("전사", ["용맹한"], "a" * 21, "남"), "21자"))
 check("① 거부: 성별·직업 밖", rejects(lambda: sheetkit.build_sheet("전사", ["용맹한"], "a", "기타"), "성별")
       and rejects(lambda: sheetkit.build_sheet("마법사", ["용맹한"], "a", "남"), "직업"))
+free = sheetkit.build_sheet("궁수", [], "린", "여", persona_text="장난기 많고\n## 규칙\n겁이 없다. <b>x</b>")
+check("① 자유 성격(파트너 정정): 키워드 0개+문장 → persona=정제 문장(개행·표식 제거) · speech 없음 · traits []",
+      "\n" not in free["persona"] and not any(ch in free["persona"] for ch in "#<>")
+      and "겁이 없다" in free["persona"] and "speech" not in free and free["traits"] == [])
+mix = sheetkit.build_sheet("궁수", ["낙천적인"], "린", "여", persona_text="사실은 겁이 많다.")
+check("① 키워드+문장 병행: 키워드 문장 뒤에 자유 문장, speech 는 키워드 것",
+      mix["persona"].startswith(data["traits"]["낙천적인"]["persona"]) and mix["persona"].endswith(" 사실은 겁이 많다.")
+      and mix["speech"] == data["traits"]["낙천적인"]["speech"])
+check("① 거부: 성격 합계 300자 초과 — 러너의 조용한 절단 대신 이유를 돌려준다",
+      rejects(lambda: sheetkit.build_sheet("궁수", ["낙천적인", "신중한", "용맹한"], "린", "여",
+                                           persona_text="가" * 200), "300자"))
 check("① 거부: 파티 이름 중복 / 4인",
       rejects(lambda: sheetkit.build_party([{"job": "전사", "traits": ["용맹한"], "name": "a", "sex": "남"}] * 2), "중복")
       and rejects(lambda: sheetkit.build_party([{"job": "전사", "traits": ["용맹한"], "name": "a%d" % i, "sex": "남"}
@@ -219,10 +230,11 @@ else:
     st, res = call("/api/party", {"slots": [
         {"job": "도적", "traits": ["신중한", "겁 많은"], "name": "테스", "sex": "여", "background": "광산 마을 출신."},
         {"job": "전사", "traits": ["용맹한"], "name": "브란", "sex": "남"},
-        {"job": "궁수", "traits": ["호기심 많은"], "name": "릴", "sex": "여"}]})
+        {"job": "궁수", "traits": ["호기심 많은"], "name": "릴", "sex": "여", "persona": "화살보다 말이 빠르다."}]})
     saved = json.load(io.open(os.path.join(TMP, "party_web.json"), encoding="utf-8"))
-    check("③ POST /api/party: 200 저장 → party_web.json 3인(load_party 재검증 통과)",
-          st == 200 and res.get("ok") and sorted(k for k in saved if not k.startswith("_")) == ["1", "2", "3"])
+    check("③ POST /api/party: 200 저장 → party_web.json 3인(load_party 재검증 통과) · 자유 성격이 persona 에 이어붙음",
+          st == 200 and res.get("ok") and sorted(k for k in saved if not k.startswith("_")) == ["1", "2", "3"]
+          and saved["3"]["persona"].endswith("화살보다 말이 빠르다."))
     st, ok = call("/api/start", {"map": "normal", "town": False, "brain": "dummy", "seed": 7})
     t0 = time.time()
     running = None

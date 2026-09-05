@@ -12,7 +12,7 @@
 
 API(JSON):
   GET  /api/presets  traits.json(키워드·직업) + 기본 파티(party.json) 미리보기 + 상태
-  POST /api/party    {"slots":[{job,traits[],name,sex,background?}, ...]} → sheetkit 조립 →
+  POST /api/party    {"slots":[{job,traits[],name,sex,background?,persona?}, ...]} → sheetkit 조립 →
                      러너의 load_party 로 재검증 → party_custom.json 저장 (실패 400 + 이유 한 줄)
   POST /api/start    {"map":"normal|big","town":bool,"brain":"gemini_api|claude_cli|anthropic_api|dummy",
                       "seed":int|null|"random","party":"custom|default"} → 이전 판 보존(live.bat 규칙)

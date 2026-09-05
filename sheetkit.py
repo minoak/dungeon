@@ -21,6 +21,8 @@ TRAITS_FILE = os.path.join(HERE, "traits.json")
 
 NAME_MAX = 20            # 이름 — 자유 입력 1호(한 줄, 프롬프트 호칭·도감 원장 키)
 BACKGROUND_MAX = 400     # 배경 — 자유 입력 2호(러너 load_party 도 같은 상한을 건다)
+PERSONA_MAX = 200        # 성격 자유 서술 — 자유 입력 3호(파트너 정정 09-05: "카테고리로는 갈리지 않을 것 같다")
+PERSONA_TOTAL_MAX = 300  # 키워드 문장+자유 서술 합계 상한 = 러너 FREETEXT_MAX(넘으면 조용히 잘리므로 여기서 거부)
 SEXES = ("남", "여")
 
 _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -62,6 +64,11 @@ def sanitize_name(name):
     return s
 
 
+def sanitize_freetext(text, limit):
+    """자유 입력 공통 정제(배경·성격 서술) — sanitize_background 의 본체."""
+    return sanitize_background(text, limit)
+
+
 def sanitize_background(text, limit=BACKGROUND_MAX):
     """배경 자유 입력의 격리 정제(방어 아님 — 위장 재료 제거 + 한 줄 + 상한).
     · 제어문자 제거 · 개행/탭/연속 공백 → 공백 하나(시트 안에서 항상 **한 줄**)
@@ -80,10 +87,12 @@ def sanitize_background(text, limit=BACKGROUND_MAX):
     return s[:limit]
 
 
-def build_sheet(job, traits, name, sex, background=None, data=None):
+def build_sheet(job, traits, name, sex, background=None, data=None, persona_text=None):
     """커스터마이징 입력 → party 시트 dict(load_party 계약 형태).
-    job: traits.json jobs 키 / traits: 키워드 1~max_traits / name: 자유 입력(한 줄) /
-    sex: '남'|'여' / background: 자유 입력(정제·상한) 또는 None.
+    job: traits.json jobs 키 / traits: 키워드 0~max_traits / name: 자유 입력(한 줄) /
+    sex: '남'|'여' / background: 자유 입력(정제·상한) 또는 None /
+    persona_text: 성격 자유 서술(파트너 정정 09-05 — 키워드 문장 뒤에 이어붙이고, 키워드 0개면 이것만).
+    키워드와 자유 서술 중 하나는 있어야 한다. 합계가 PERSONA_TOTAL_MAX 를 넘으면 거부(조용한 절단 금지).
     반환 시트에는 원본 키워드도 `traits` 로 남긴다 — 프롬프트엔 안 나가고(문장이 대신 나간다)
     run_meta 로 기록돼 "어떤 키워드가 어떤 행동이 되었나"를 부검할 수 있게."""
     data = data or load_traits()
@@ -92,8 +101,11 @@ def build_sheet(job, traits, name, sex, background=None, data=None):
         raise ValueError("직업은 %s 중 하나" % "/".join(jobs))
     if sex not in SEXES:
         raise ValueError("성별은 남/여")
-    if not isinstance(traits, (list, tuple)) or not traits:
-        raise ValueError("성격 키워드를 하나 이상 골라야 한다")
+    if not isinstance(traits, (list, tuple)):
+        raise ValueError("성격 키워드는 목록이어야 한다")
+    ptxt = sanitize_freetext(persona_text, PERSONA_MAX)
+    if not traits and not ptxt:
+        raise ValueError("성격 키워드를 하나 이상 고르거나 성격 문장을 써야 한다")
     if len(traits) > data["max_traits"]:
         raise ValueError("성격 키워드는 최대 %d개" % data["max_traits"])
     if len(set(traits)) != len(traits):
@@ -106,11 +118,15 @@ def build_sheet(job, traits, name, sex, background=None, data=None):
         "job": job, "sex": sex,
         "hp": body["hp"], "str": body["str"], "dex": body["dex"], "wdmg": body["wdmg"],
         "stealth": body["stealth"], "search_r": body["search_r"], "atk_range": body["atk_range"],
-        "persona": " ".join(table[t]["persona"].strip() for t in traits),
-        "speech": " ".join(table[t]["speech"].strip() for t in traits),
+        "persona": " ".join([table[t]["persona"].strip() for t in traits] + ([ptxt] if ptxt else [])),
         "name": sanitize_name(name),
         "traits": list(traits),
     }
+    if traits:                                   # 말투는 키워드에서만 온다(자유 서술은 성격 한 칸)
+        sheet["speech"] = " ".join(table[t]["speech"].strip() for t in traits)
+    if len(sheet["persona"]) > PERSONA_TOTAL_MAX:
+        raise ValueError("성격 문장 합계가 %d자를 넘는다(%d자) — 키워드를 줄이거나 문장을 줄여라"
+                         % (PERSONA_TOTAL_MAX, len(sheet["persona"])))
     if body.get("goal"):
         sheet["goal"] = body["goal"]
     bg = sanitize_background(background)
@@ -130,7 +146,8 @@ def build_party(slots, data=None):
         if not isinstance(s, dict):
             raise ValueError("슬롯 %d 형식 오류" % i)
         sheet = build_sheet(s.get("job"), s.get("traits") or [], s.get("name", ""),
-                            s.get("sex"), s.get("background"), data=data)
+                            s.get("sex"), s.get("background"), data=data,
+                            persona_text=s.get("persona"))
         if sheet["name"] in names:
             raise ValueError("이름 중복: %s" % sheet["name"])
         names.add(sheet["name"])

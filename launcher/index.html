@@ -94,7 +94,7 @@
       <label class="on"><input type="radio" name="pm" value="custom" checked>커스텀 파티</label>
       <label><input type="radio" name="pm" value="default">기본 파티 (두란·카야·피른)</label>
     </div>
-    <span class="muted">성격은 키워드로 고른다(최대 3개) — 키워드가 행동을 만든다. 배경은 자유롭게 써도 된다.</span>
+    <span class="muted">성격은 키워드(최대 3개)로 고르거나 직접 쓴다 — 문장이 행동을 만든다. 배경은 자유롭게.</span>
   </div>
   <div class="cards" id="cards"></div>
   <div class="preview" id="defaultPreview" hidden></div>
@@ -149,9 +149,9 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 const COLORS = ['#ffd166', '#6fe3b0', '#c77dff'];
 let presets = null;
 let slots = [
-  { name: '', sex: '남', job: '전사', traits: [], background: '' },
-  { name: '', sex: '여', job: '도적', traits: [], background: '' },
-  { name: '', sex: '여', job: '궁수', traits: [], background: '' },
+  { name: '', sex: '남', job: '전사', traits: [], persona: '', background: '' },
+  { name: '', sex: '여', job: '도적', traits: [], persona: '', background: '' },
+  { name: '', sex: '여', job: '궁수', traits: [], persona: '', background: '' },
 ];
 let partyMode = 'custom';
 
@@ -209,6 +209,8 @@ function renderCards() {
       <label class="f">성격 키워드 <span class="cnt" data-cnt="traits">${s.traits.length}/${presets.max_traits}</span></label>
       <div class="traits" data-k="traits">${traits.map(t =>
         `<label class="${s.traits.includes(t) ? 'on' : ''}" title="${esc(presets.traits[t].persona)}"><input type="checkbox" value="${esc(t)}">${esc(t)}</label>`).join('')}</div>
+      <label class="f">성격 자유 서술 (선택 — 키워드와 함께, 또는 키워드 없이) <span class="cnt" data-cnt="pt">${s.persona.length}/200</span></label>
+      <textarea maxlength="200" data-k="persona" placeholder="예: 겉으론 장난스럽지만 동료가 다치면 제일 먼저 뛰어든다.">${esc(s.persona)}</textarea>
       <div class="hint" data-persona>${esc(personaOf(s))}</div>
       <label class="f">배경 (자유 입력 · 이 캐릭터의 과거) <span class="cnt" data-cnt="bg">${s.background.length}/400</span></label>
       <textarea maxlength="400" data-k="background" placeholder="예: 광산 마을에서 자랐다. 무너진 갱도에서 혼자 살아 나온 뒤로 어둠을 믿지 않는다.">${esc(s.background)}</textarea>
@@ -216,10 +218,20 @@ function renderCards() {
   for (const card of $('cards').querySelectorAll('.card')) bindCard(card, +card.dataset.i);
 }
 function jobDesc(j) { const b = presets.jobs[j]; return `HP ${b.hp} · 힘 ${b.str} · 민첩 ${b.dex} · 은신 ${b.stealth} · 인지 ${b.search_r} · 사거리 ${b.atk_range}`; }
-function personaOf(s) { return s.traits.map(t => presets.traits[t].persona).join(' ') || '키워드를 고르면 성격 문장이 여기 조립된다.'; }
+function personaOf(s) {
+  const parts = s.traits.map(t => presets.traits[t].persona);
+  if (s.persona.trim()) parts.push(s.persona.trim());
+  return parts.join(' ') || '키워드를 고르거나 문장을 쓰면 성격이 여기 조립된다.';
+}
 function bindCard(card, i) {
   const s = slots[i];
   card.querySelector('[data-k=name]').oninput = e => { s.name = e.target.value; };
+  const pt = card.querySelector('[data-k=persona]');
+  pt.oninput = e => {
+    s.persona = e.target.value;
+    card.querySelector('[data-cnt=pt]').textContent = `${s.persona.length}/200`;
+    card.querySelector('[data-persona]').textContent = personaOf(s);
+  };
   const bg = card.querySelector('[data-k=background]');
   bg.oninput = e => { s.background = e.target.value; card.querySelector('[data-cnt=bg]').textContent = `${s.background.length}/400`; };
   for (const k of ['sex', 'job']) {
