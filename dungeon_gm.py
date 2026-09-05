@@ -155,14 +155,16 @@ HAIL_CD = 3              # 말 걸림 정지(07-24 D24) 쿨다운: 같은 발화
 # 사실만: 효과를 그대로 말한다("세계가 말하는 것=규칙이 하는 것", 07-29 거짓 규칙 계보).
 # 같은 태그 재발 = n 만 는다(×N 표시 — 효과 불변, 첫 판 관찰 뒤 재론). 물약은 HP 만(태그 불변).
 STATUS_KINDS = {
-    '출혈': '{steps}걸음마다 피가 1 난다 (제자리·전투 중엔 안 난다)',
-    '둔화': '{every}틱에 한 칸밖에 못 걷는다 (붙은 몹을 떨어뜨릴 수 없다)',
-    '중독': '명중과 회피가 {mod} 깎인다',
+    '출혈': '{steps}걸음마다 피가 1 난다 (제자리·전투 중엔 안 난다) — 쉬면 멎는다',
+    '둔화': '{every}틱에 한 칸밖에 못 걷는다 (붙은 몹을 떨어뜨릴 수 없다) — 쉬면 풀린다',
+    '중독': '명중과 회피가 {mod} 깎인다 — 쉬면 빠진다',
 }
 BLEED_STEPS = 3          # 출혈: 이만큼 걸을 때마다 HP 1 (첫 판 관찰값 — 튜닝은 판 뒤)
 SLOW_EVERY = 2           # 둔화: 자동보행 이 틱마다 한 칸(=한 틱 걷고 한 틱 쉼)
 POISON_MOD = 2           # 중독: 명중(_attack mod)·회피(_monster_attack ac) 감산
 MON_STATUS = {'그림자거미': '둔화'}   # 몹의 특수 = 태그(명중 시). 고블린=무태그(기준선 몹 — 대비의 자)
+REST_HP = 1              # 휴식(D35): 틱마다 차는 HP (hp 2 → 만피 14 가 열두 틱쯤 = WAIT_MAX 눈금)
+REST_MIN = 5             # 휴식 완료 하한: 만피여도 이만큼은 쉬어야 몸 상태가 낫는다("푹 쉬어야 낫는다")
 
 
 def status_prose(tag):
@@ -322,7 +324,7 @@ class Dungeon:
                  scan=False, n_potions=0, loops=False, selfstop=False,
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
                  motion=False, ally_sight=False, social=False, solo=False, n_gear=0,
-                 town=False, status=False):
+                 town=False, status=False, rest_verb=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -398,6 +400,9 @@ class Dungeon:
         self.status = bool(status) # 상태 태그(D34, 09-06) — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_STATUS(기본 1)로 켠다. 몹·함정의 특수가 태그를 붙이고
                                    #   (출혈·둔화·중독) 효과는 걸음·굴림에만, 지우기는 휴식(D35)뿐.
+        self.rest_verb = bool(rest_verb)   # 휴식(D35, 09-06) — 기본 꺼짐(기존 verify 비트 동일). 러너가
+                                   #   DUNGEON_REST(기본 1)로 켠다. 회복이 붙은 wait: 틱마다 HP, 완료 시
+                                   #   상태 태그 소거. 파트너 확정 "지우는 조건은 캐릭터 선택지 — 휴식".
         self._ring_target = 0      # loops 판에서 주 고리에 배속할 방 수(_carve_rooms 가 굴림)
         self.rooms = self._carve_rooms()
         self._connect(self.rooms)
@@ -467,6 +472,7 @@ class Dungeon:
         d.solo = False             # 솔로 판(07-29) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.town = False             # 마을 층(D29) — 기본 꺼짐(러너 build_town 이 켠다)
         d.status = False           # 상태 태그(D34) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.rest_verb = False        # 휴식(D35) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.npc_lines = {}           # NPC 인사 사전 — build_town 이 채운다(데이터, 판정 무접촉)
         d.npc_gifts = {}           # D32 상점 v0 — from_ascii 는 __new__ 경유라 여기서도 명시 초기화(함정 계보)
         d.npc_lines_again = {}
@@ -1277,7 +1283,9 @@ class Dungeon:
                    **({'moving': True} if (self.motion and b.get('order')   # 이동중(D27) — 몸짓도
                        and b.get('path')) else {}),                  #   시야를 탄다. 깃발 하나뿐
                    **({'status': sorted(b['status'])}                # 상태 태그(D34) — 겉으로 드러난다
-                      if (self.status and b.get('status')) else {})}   #   (파트너 확정: 같은 단어)
+                      if (self.status and b.get('status')) else {}),   #   (파트너 확정: 같은 단어)
+                   **({'resting': True} if (self.rest_verb            # 휴식중(D35) — 쉬는 몸도 보인다
+                       and b.get('order') == 'rest') else {})}
                   for b in bots
                   if b['alive'] and not b['won'] and b['char'] != bot['char']
                   and self._ally_seen(bot, b, seen)]
@@ -1507,6 +1515,12 @@ class Dungeon:
                     ' ※ 그는 지금 너를 따르는 중이다 — 서로 따르면 아무도 못 움직인다'
                     if mutual else ''))                # 곁에서 나를 계속 따르는 행동은 눈에 보인다
                                                        # (보이는 동료 한정=allies 루프 — 시야-온리)
+        if self.rest_verb and (bot['hp'] < bot['maxhp'] or bot.get('status')):
+            # 휴식(D35) — 다쳤거나 몸 상태가 있을 때만 어휘가 된다(성한 몸은 '기다린다'가 서 있기를
+            # 담당). 라벨=사실만: 회복량·완료 조건·깨는 사건. 안전은 약속하지 않는다.
+            _add('rest', None,
+                 '쉰다: 이 자리에서 — 틱마다 HP %d 회복, 다 나으면 몸 상태(출혈·둔화·중독)가 낫는다.'
+                 ' 맞거나 새것을 보거나 말을 걸어오면 깬다' % REST_HP)
         if self.wait_verb:                             # wait(D25) — 제자리 대기(사건 기반, 숫자 없음)
             _add('wait', None, '기다린다: 이 자리에서 — 동료가 오거나 새 일이 생기면 깨어난다')
         # 돌아가기(D17-1 귀환 핑) — 장부의 제자리 물건(id 있는 것)로 시야 밖 복귀. 라벨=사실만
@@ -1655,7 +1669,7 @@ class Dungeon:
         tgt = (action or {}).get('target')
         bot['wander'] = None                      # 새 결정 = '계속 이동'의 단절(D21 맴돎 창 리셋)
         if 'then' in (action or {}):              # 작정 접수 — 저작 검증(시야-온리)은 brains 소관,
-            bot['plan'] = ([] if typ in ('follow', 'wait')   # 동행·대기=열린 결말 — 뒤수 부적합
+            bot['plan'] = ([] if typ in ('follow', 'wait', 'rest')   # 동행·대기·휴식=열린 결말 — 뒤수 부적합
                            else [dict(s) for s in (action.get('then') or [])
                                  if isinstance(s, dict) and s.get('type')][:PLAN_MAX])
         if typ == 'attack':
@@ -1668,6 +1682,8 @@ class Dungeon:
             res = self._drink(bot, bots)              # 회복 물약(07-17) — 무대상 즉시 동사(search 선례)
         elif typ == 'wait':
             res = self._set_wait(bot, bots)           # 제자리 대기(D25) — 사건 기반, 숫자 없음
+        elif typ == 'rest':
+            res = self._set_rest(bot, bots)           # 휴식(D35) — 회복이 붙은 wait
         elif typ == 'explore':
             res = self._set_explore(bot, tgt, bots)   # 탐색(선택적 방위 tgt)
         elif typ == 'follow':
@@ -1699,7 +1715,7 @@ class Dungeon:
         typ = str(step.get('type') or '')
         tgt = step.get('target')
         why = None
-        if typ in ('search', 'explore', 'drink', 'wait'):
+        if typ in ('search', 'explore', 'drink', 'wait', 'rest'):
             pass                                      # 열린 동사 — drink 유무는 발동 시점 판정(no_potion
                                                       #   이 정직 보고. 시야-온리 정합: search 선례)
         elif typ == 'goto':
@@ -1909,6 +1925,61 @@ class Dungeon:
         self._perceive(bot)                             # 서기 시작한 자리에서도 눈은 뜨고 있다
         return {'char': bot['char'], 'type': 'wait', 'result': 'waiting'}
 
+    def _set_rest(self, bot, bots):
+        """휴식(D35, 2026-09-06 파트너 확정 "지우는 조건은 캐릭터 선택지로 — 휴식. 덤으로 피가 차고
+        캐릭터 간 상호작용도 가능"): **회복이 붙은 wait.** 틱마다 HP +REST_HP, 완료 = 만피 && REST_MIN 틱
+        → 상태 태그(D34) 전부 소거(rested). 깨어남 = wait 와 같은 사건(말 걸림·새 몹·새 오브젝트·동료
+        진입·피격) — 지루함 상한 대신 완료가 있다. 깨면 진행 리셋(다시 쉬면 처음부터). 어디서나 쉴 수
+        있고 안전은 보장하지 않는다 — 시간(상한)과 노출이 세계가 청구하는 비용(PD 셈법).
+        쉬는 동안 말이 오가면 hail 이 깨우고 대답한 뒤 다시 '쉰다'를 고를 수 있다 — 걷는 중엔 말이
+        이동 계획을 찢었지만 쉬는 중엔 찢을 계획이 없다(D23 회의가 앉을 자연 무대)."""
+        if not self.rest_verb:                          # 꺼진 판 — 미노출 동사(환각 방어=대기/탐색 폴백)
+            return self._set_wait(bot, bots) if self.wait_verb else self._set_explore(bot, None, bots)
+        bot['order'], bot['path'] = 'rest', []
+        bot['rest'] = {'n': 0, 'healed': 0,
+                       'allies': {o['char'] for o in bots if o is not bot
+                                  and o['alive'] and not o['won']
+                                  and (o['x'], o['y']) in self.visible_cells(bot['x'], bot['y'])}}
+        self._perceive(bot)                             # 눕는 자리에서도 눈은 뜨고 있다
+        return {'char': bot['char'], 'type': 'rest', 'result': 'resting', 'hp': bot['hp']}
+
+    def _rest_tick(self, bot, bots, base):
+        """휴식 틱(D35) — wait 틱 문법(시야 사건이 깨운다) + 회복 + 완료 판정. 출혈은 걸음이
+        아니라 안 난다(라벨 그대로 '쉬면 멎는다'). 말 걸림·피격은 각자의 인터럽트가 order 를 끊는다."""
+        newly = self._perceive(bot)
+        if newly:                                     # 새 몹 — 인카운터 문법(쉬다 눈을 떴다)
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            bot['rest'] = None
+            return {**base, 'result': 'encounter', 'woke': 'rest',
+                    'monsters': [{'id': 'm%d' % m.id, 'kind': m.kind, 'state': m.state}
+                                 for m in newly]}
+        sres = self._sighted_stop(bot, base)          # 새 오브젝트도 새 일
+        if sres:
+            bot['rest'] = None
+            return sres
+        w = bot.get('rest') or {'n': 0, 'healed': 0, 'allies': set()}
+        bot['rest'] = w
+        here = {o['char'] for o in bots if o is not bot and o['alive'] and not o['won']
+                and (o['x'], o['y']) in self.visible_cells(bot['x'], bot['y'])}
+        came = here - set(w.get('allies') or ())
+        if came:                                      # 동료가 시야에 — 새 존재(wait_met 문법)
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            bot['rest'] = None
+            return {**base, 'result': 'rest_met', 'allies': sorted(came)}
+        w['allies'] = here
+        heal = min(REST_HP, bot['maxhp'] - bot['hp'])
+        if heal > 0:
+            bot['hp'] += heal; w['healed'] += heal
+        w['n'] += 1
+        if bot['hp'] >= bot['maxhp'] and w['n'] >= REST_MIN:   # 푹 쉬었다 — 몸 상태가 낫는다
+            cleared = sorted(bot.get('status') or {})
+            bot['status'], bot['bleed_steps'], bot['slow_beat'] = {}, 0, 0
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            bot['rest'] = None
+            return {**base, 'result': 'rested', 'ticks': w['n'], 'healed': w['healed'],
+                    'cleared': cleared}
+        return {**base, 'result': 'resting', 'hp': bot['hp']}
+
     def _wait_tick(self, bot, bots, base):
         """대기 틱(D25) — 제자리에서 눈만 뜨고 있는다(걸음이 아니라 사건을 본다: 맴돎 박자·
         무발견 걸음 어느 창에도 안 쌓인다 — 자연 배타). 말 걸림·피격은 각자의 인터럽트
@@ -2112,6 +2183,8 @@ class Dungeon:
         order_s = str(bot.get('order') or '')
         if order_s == 'wait':                             # wait(D25): 걸음이 아니라 사건을 본다
             return self._wait_tick(bot, bots, base)
+        if order_s == 'rest':                             # 휴식(D35): 회복이 붙은 wait
+            return self._rest_tick(bot, bots, base)
         follow = order_s.startswith('follow:')            # 동행(A-5): 'follow:b<char>' 지속 order
         tid = order_s[7:] if follow else bot.get('order')
         res0 = self._resolve_target(tid, bots)
@@ -3373,6 +3446,7 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
                                             # 붙이고 휴식(D35)만 지운다. 층 이월=러너 재스폰(물약 선례)
             'bleed_steps': 0,               # 출혈 걸음 부기(BLEED_STEPS 마다 HP 1)
             'slow_beat': 0,                 # 둔화 박자(SLOW_EVERY 마다 한 칸)
+            'rest': None,                   # 휴식 장부(D35): {n, healed, allies} — order='rest' 동안만
             'weapon': None, 'armor': None,  # 장비 슬롯 2(07-30) — {'name','bonus'} 또는 None.
                                             # 시트 wdmg=기본 무장(불가침), 장비=위에 얹는 보정.
                                             # 층 이월은 러너 재스폰(물약 선례)

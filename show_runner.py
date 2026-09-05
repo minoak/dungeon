@@ -153,6 +153,9 @@ EVENTS_ON = os.environ.get("DUNGEON_EVENTS", "1") != "0"     # 사건층(D22) �
 STATUS_ON = os.environ.get("DUNGEON_STATUS", "1") != "0"     # 상태 태그(D34, 09-06) — 러너 기본 1,
                                                              #   엔진 기본 0. 몹·함정의 특수=태그(출혈·
                                                              #   둔화·중독), 효과는 몸에만, 지우기=휴식
+REST_ON = os.environ.get("DUNGEON_REST", "1") != "0"         # 휴식(D35, 09-06) — 러너 기본 1, 엔진
+                                                             #   기본 0. 회복이 붙은 wait: 틱마다 HP,
+                                                             #   완료 시 상태 태그 소거. 사건이 깨운다
 LORE_FILE = os.path.join(HERE, "lore.json")
 STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적용 후 맵이 보이게(헤들리스=0)
 
@@ -310,6 +313,9 @@ def act_summary(res):
     if t == "wait":                                            # 제자리 대기(D25)
         return ("기다린다 — 이 자리에서(사건이 깨울 때까지)"
                 if res["result"] == "waiting" else "대기(%s)" % res["result"])
+    if t == "rest":                                            # 휴식(D35)
+        return ("쉰다 — 이 자리에서(다 낫거나 사건이 깨울 때까지)"
+                if res["result"] == "resting" else "휴식(%s)" % res["result"])
     if t == "explore":
         r = res["result"]
         if r == "pathed":
@@ -325,6 +331,13 @@ def act_summary(res):
             return "둔화 — 이 틱은 못 걷는다"
         if r == "waiting":
             return "대기 중"
+        if r == "resting":
+            return "휴식 중 (HP%d)" % res.get("hp", 0)
+        if r == "rested":
+            return "휴식 끝 — HP +%d%s" % (res.get("healed", 0),
+                                          (", 나음: " + "·".join(res["cleared"])) if res.get("cleared") else "")
+        if r == "rest_met":
+            return "휴식 중단 — 동료(%s) 시야 진입" % ", ".join(res.get("allies", []))
         if r == "wait_met":
             return "대기 끝 — 동료(%s) 시야 진입" % ", ".join(res.get("allies", []))
         if r == "wait_bored":
@@ -477,6 +490,7 @@ def build_town():
     d, starts = G.Dungeon.from_ascii(spec["map"], seed=DUNGEON_SEED, depth=0)
     d.town = True
     d.status = STATUS_ON                   # 상태 태그(D34)는 마을에서도 몸에 붙어 있다(걸으면 피가 난다)
+    d.rest_verb = REST_ON                  # 휴식(D35)은 마을에서도 된다(여관은 다음 단계)
     for n in spec.get("npcs", []):
         x, y = int(n["x"]), int(n["y"])
         if d.grid[y][x] != G.FLOOR:            # 좌표-그림 어긋남은 시작 전에 죽는 게 낫다
@@ -538,7 +552,7 @@ def main():
                       loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
                       dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
                       ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
-                      status=STATUS_ON)
+                      status=STATUS_ON, rest_verb=REST_ON)
         d.lore = lore
     bots = []
     for c in chars:
@@ -612,6 +626,7 @@ def main():
             graves=GRAVES_ON,          # 묘(D22) 여부 — 피처가 늘어나는 세계 물리 메타
             events=EVENTS_ON,          # 사건층(D22) 여부 — obs(목격·기억)를 바꾸는 실행모드 메타
             status=STATUS_ON,          # 상태 태그(D34) 여부 — 몸 물리(걸음·굴림)와 obs 를 바꾸는 메타
+            rest=REST_ON,              # 휴식(D35) 여부 — 메뉴·회복 물리 메타(wait 와 같은 급)
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
@@ -787,7 +802,7 @@ def main():
                               graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
                               wait_verb=WAIT_ON, motion=MOTION_ON,
                               ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
-                              n_gear=N_GEAR, status=STATUS_ON)
+                              n_gear=N_GEAR, status=STATUS_ON, rest_verb=REST_ON)
                 d.lore = lore
                 fresh = True
             # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,

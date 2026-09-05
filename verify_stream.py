@@ -43,6 +43,7 @@ os.environ.update(DUNGEON_GM="0", DUNGEON_TURNS="400", DUNGEON_W="40", DUNGEON_H
                   DUNGEON_EVENTS="0",                  #   사건층 계약은 verify_events 가 따로 지킨다)
                   DUNGEON_STATUS="0",                  # 상태 태그(D34) 무시 → 몸 물리 고정(같은 회귀
                                                        #   그물 — 태그 계약은 verify_status 가 따로 지킨다)
+                  DUNGEON_REST="0",                    # 휴식(D35) 무시 → 메뉴·회복 물리 고정(verify_rest)
                   DUNGEON_STATE_DIR=os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                                  "state_streamverify"))
 # ⚠️ STATE 격리 필수 — 기본 state/ 로 돌리면 마지막 관전 판의 stream.jsonl 을 truncate 한다

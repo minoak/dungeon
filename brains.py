@@ -151,7 +151,7 @@ NOTE_MAX = 5             # 유지 줄 수(합의 5~7 하한) — 넘치면 오�
                          #   사람도 옛 기억부터 바래듯). 판 간 영속은 없음(월드 러너 상 재론).
 NOTE_LEN = 80            # 한 줄 상한 — 수필 방지(say 160 의 절반: 기억은 말보다 압축된다)
 
-_TYPES = {"goto", "attack", "interact", "search", "explore", "follow", "drink", "wait"}
+_TYPES = {"goto", "attack", "interact", "search", "explore", "follow", "drink", "wait", "rest"}
 _BEARINGS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW"}
 
 
@@ -548,6 +548,7 @@ def _last_prose(last, names=None):
                     + (" — 오는 길에 회복 물약도 챙겼다" if last.get("potion") else ""))
         if r == "encounter":
             bits = []
+            head = "쉬다 눈을 떴다 — " if last.get("woke") == "rest" else "걷다 멈췄다 — "
             if last.get("monsters"):
                 bits.append("처음 보는 적: " + ", ".join(
                     m.get("kind", "?") for m in last["monsters"]))
@@ -567,7 +568,7 @@ def _last_prose(last, names=None):
                 bits.append("회복 물약을 챙겼다")
             if last.get("found"):
                 bits.append("발견: " + ", ".join(f.get("name", "?") for f in last["found"]))
-            return "걷다 멈췄다 — " + (" / ".join(bits) or "새로운 것을 봤다")
+            return head + (" / ".join(bits) or "새로운 것을 봤다")
         if r == "blocked":
             if last.get("allies"):
                 return ("가려던 길이 막혔다 — 동료(%s)가 길목에 서 있어 크게 돌아야 한다"
@@ -605,6 +606,16 @@ def _last_prose(last, names=None):
             return "기다림 끝 — %s가 시야에 들어왔다" % (who or "동료")
         if r == "wait_bored":                 # 지루함 상한(D25) — 관찰 사실만(질문·조향 금지)
             return "한참을 기다렸다 — 아무도 오지 않는다"
+        if r == "resting":                    # 휴식 틱(D35 — 스트림용)
+            return "쉬는 중이다 (HP %d)" % last.get("hp", 0)
+        if r == "rested":                     # 휴식 완료 — 관찰 사실만
+            cl = last.get("cleared") or []
+            return "푹 쉬었다 — HP %d 회복%s" % (
+                last.get("healed", 0),
+                (", 몸 상태가 나았다: " + "·".join(cl)) if cl else "")
+        if r == "rest_met":                   # 쉬다 동료가 시야에 — 관찰 사실만(다음은 네 몫)
+            who = ", ".join((names or {}).get(c, "동료") for c in last.get("allies", []))
+            return "쉬다 눈을 떴다 — %s가 시야에 들어왔다" % (who or "동료")
         if r == "reunion":                    # 재회 정지(D21①) — 연결의 발견. 관찰 사실만(조향 금지)
             return ("걷다 멈췄다 — 낯익은 곳이다: %s. 지금 걸어온 길이 아는 곳으로 이어졌다"
                     % last.get("name", "와 본 곳")
@@ -615,6 +626,9 @@ def _last_prose(last, names=None):
                     " 밟았던 자리를 되밟고 있었다")
     if t == "wait":                       # 대기 개시(D25) — 자기 행동의 결과
         return "이 자리에서 기다리기로 했다 — 동료가 오거나 새 일이 생기면 깨어난다"
+    if t == "rest":                       # 휴식 개시(D35) — 자기 행동의 결과
+        return ("이 자리에서 쉬기로 했다 — 틱마다 HP가 차고, 다 나으면 몸 상태가 낫는다."
+                " 맞거나 새것을 보거나 말을 걸어오면 깬다")
     if t == "hail":                       # 말 걸림 정지(07-24 D24) — 관찰 사실만(판단은 네 몫)
         who = ", ".join((names or {}).get(c, "동료") for c in last.get("froms", [])) or "동료"
         return "%s의 말에 걸음을 멈췄다 — 걷던 길이었다" % who
@@ -895,10 +909,11 @@ def _wire(obs, names=None):
             L.append("- %s %s — %s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
                                          " (와 본 자리)" if f.get("visited") else ""))
         for b in s.get("bots", []):
-            L.append("- %s — 겉보기 %s%s — %s%s"
+            L.append("- %s — 겉보기 %s%s — %s%s%s"
                      % (who(b.get("char", "?")), b.get("condition", "?"),
                         (" · " + " · ".join(b["status"])) if b.get("status") else "",   # D34 상태
-                        at(b), " (이동중)" if b.get("moving") else ""))
+                        at(b), " (이동중)" if b.get("moving") else "",
+                        " (휴식중)" if b.get("resting") else ""))                      # D35 휴식
         for w in s.get("ways", []):
             L.append("- %s쪽으로 트인 길 — 거리 %d, %s%s"
                      % (w.get("bearing", "?"), w.get("dist", 0),
@@ -1117,8 +1132,8 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
                    "say": str(obj.get("say", ""))[:160],
                    "reason": str(obj.get("reason", ""))[:160],
                    "src": "haiku"}
-            if typ in ("search", "drink"):
-                return out                          # search·drink 는 target 불필요
+            if typ in ("search", "drink", "wait", "rest"):
+                return out                          # search·drink·wait·rest 는 target 불필요
             if typ == "explore":                    # 탐색: 방위(N/S/E/W/NE…)만 선택적으로(없으면 엔진 자동)
                 if tgt.upper() in _BEARINGS:
                     out["target"] = tgt.upper()
