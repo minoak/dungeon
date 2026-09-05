@@ -614,6 +614,10 @@ def _last_prose(last, names=None):
             if len(group) == 1:              # 마을 복귀(D29) — 대칭 문법·같은 정직성
                 return "혼자 계단을 올라 마을로 돌아갔다"
             return "다 모여서 — 함께 마을로 올라갔다(%s)" % "·".join(group)
+        if r == "npc_gift":                 # D32 상점 v0 — 받은 것은 사실로(무기는 바로 걸친다, 물약은 소지 +1)
+            item = last.get("item", "?")
+            got = "물약을 받았다(소지 물약 +1)" if item == "물약" else "%s을(를) 받아 걸쳤다" % item
+            return '%s에게 말을 걸었다 — %s. "%s"' % (last.get("npc", "?"), got, last.get("line", "…"))
         if r == "npc_talk":
             return '%s에게 말을 걸었다 — "%s"' % (last.get("npc", "?"), last.get("line", "…"))
         if r == "wait_allies":

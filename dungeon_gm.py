@@ -365,6 +365,8 @@ class Dungeon:
                                    #   전용 긴장 장치) ②계단 어휘가 마을 문맥(던전 입구/복귀).
                                    #   실전은 러너 build_town(from_ascii 손그림)이 켠다.
         self.npc_lines = {}        # NPC 이름→인사 한 줄(town.json 데이터 — lore 선례. 판정 무접촉)
+        self.npc_gifts = {}        # D32(09-05) 상점 v0: NPC 이름→선물({'potions':1}|{'weapon':'단검'}) — build_town 이 채운다
+        self.npc_lines_again = {}  #   두 번째 이후(또는 줄 게 없을 때) 대사 — 정해진 문장만(파트너 확정)
         self.graves = bool(graves) # D22 묘 스위치 — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_GRAVES(기본 1)로 켠다. 쓰러진 자리에 '~의 묘' 피처.
         self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
@@ -439,6 +441,8 @@ class Dungeon:
         d.solo = False             # 솔로 판(07-29) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.town = False             # 마을 층(D29) — 기본 꺼짐(러너 build_town 이 켠다)
         d.npc_lines = {}           # NPC 인사 사전 — build_town 이 채운다(데이터, 판정 무접촉)
+        d.npc_gifts = {}           # D32 상점 v0 — from_ascii 는 __new__ 경유라 여기서도 명시 초기화(함정 계보)
+        d.npc_lines_again = {}
                                    #   ⚠️ from_ascii 는 __new__ 경유라 __init__ 을 안 탄다 —
                                    #   새 스위치는 여기 명시 초기화가 필수(D21·D22·솔로 때 밟은 함정.
                                    #   빼먹으면 AttributeError 로 게이트 15개가 한꺼번에 붉어진다)
@@ -2694,9 +2698,28 @@ class Dungeon:
                 o['order'], o['path'], o['plan'] = None, [], []
             self._witness_use(bots, tx, ty, group, f.name, 'f%d' % f.id)      # D30 — 하강과 대칭
             return {**base, 'result': 'ascend', 'party': sorted(o['char'] for o in group)}
-        if f and f.type == 'npc':                # NPC(D29) — 말 걸기: 한 줄 인사(거래·대화=다음 단계)
+        if f and f.type == 'npc':                # NPC(D29) 말 걸기 + D32(09-05) 상점 v0: 정해진 대사 + 선물
+            gift = (getattr(self, 'npc_gifts', None) or {}).get(f.name) or {}
+            served = bot.setdefault('shop_served', set())   # 방문 단위 — 층 전이의 재스폰이 새 봇 dict 를
+            given = None                                     #   만들므로 마을에 다시 오면 자동으로 비어 있다
+            if gift and f.name not in served:                #   ("살아 돌아오면 또 하나" — 후퇴→재정비 고리)
+                if gift.get('potions'):
+                    bot['potions'] = bot.get('potions', 0) + int(gift['potions'])
+                    given = '물약'
+                elif gift.get('weapon') and not bot.get('weapon'):   # 빈손일 때만 — 스왑·비교는 던전 몫(D28)
+                    nm = str(gift['weapon'])
+                    bot['weapon'] = {'name': nm, 'bonus': GEAR_KINDS.get(nm, 1)}
+                    given = nm
+            if given:
+                served.add(f.name)
+                self._witness(bots, tx, ty,      # 마을=전체 시야 — 챙기는 걸 본 사람은 안다(ally_loot 문법 그대로)
+                              {'kind': 'ally_loot', 'char': bot['char'], 'what': given},
+                              exclude=(bot['char'],))
+                return {**base, 'result': 'npc_gift', 'npc': f.name, 'item': given,
+                        'line': self.npc_lines.get(f.name, '…')}
+            again = (getattr(self, 'npc_lines_again', None) or {}).get(f.name)
             return {**base, 'result': 'npc_talk', 'npc': f.name,
-                    'line': self.npc_lines.get(f.name, '…')}
+                    'line': again if (gift and again) else self.npc_lines.get(f.name, '…')}
         if f and f.type == 'treasure':
             del self.features[f.id]; bot['bag'] += 1
             self._witness(bots, tx, ty,          # 전달층(D22 확장 07-29): 획득도 목격 — 사라진 보물의 행방

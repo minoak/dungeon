@@ -105,6 +105,8 @@ def humanize(e, nm):
             out.append(('fight', f"{who}, 오염된 샘물 — {e.get('dmg', 0)} 피해"))
         elif r == 'equip':
             out.append(('loot', f"{who}, {e.get('item', '장비')} 착용"))
+        elif r == 'npc_gift':
+            out.append(('loot', f"{who}, {e.get('npc', '?')}에게서 {e.get('item', '?')} 받음 — 「{e.get('line', '')}」"))
         elif r == 'npc_talk':
             out.append(('say', f"{e.get('npc', '?')}: 「{e.get('line', '')}」"))
 

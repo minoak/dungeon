@@ -387,6 +387,8 @@ def act_summary(res):
             if len(group) == 1:
                 return "홀로 계단을 올라 마을로"
             return "다 모였다 — 함께 마을로!! (%s)" % "·".join(group)
+        if r == "npc_gift":
+            return '%s — %s 받음 — "%s"' % (res.get("npc", "?"), res.get("item", "?"), res.get("line", "…"))
         if r == "npc_talk":
             return '%s — "%s"' % (res.get("npc", "?"), res.get("line", "…"))
         if r == "wait_allies":
@@ -469,6 +471,10 @@ def build_town():
             raise ValueError("town.json NPC %r 좌표 (%d,%d)가 바닥이 아니다" % (n["name"], x, y))
         d._add_feature("npc", n["name"], x, y)
         d.npc_lines[n["name"]] = n.get("line", "…")
+        if n.get("gift"):                      # D32 상점 v0 — 고정 선물(물약 1/방문·빈손이면 단검)
+            d.npc_gifts[n["name"]] = dict(n["gift"])
+        if n.get("line_again"):                #   두 번째 대사(정해진 문장만)
+            d.npc_lines_again[n["name"]] = n["line_again"]
     d.features[d._exit_fid].name = "던전 입구"   # 같은 '>'라도 마을에선 탈출구가 아니라 입구다
     return d, starts
 
