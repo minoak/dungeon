@@ -6,6 +6,8 @@ chcp 65001 >nul
 cd /d "%~dp0"
 set "PYTHONUTF8=1"
 set "DUNGEON_STATE_DIR="
+rem Demo runs get a fresh dungeon each time (D31, 2026-09-05). Gates/A-B set an integer seed.
+if not defined DUNGEON_SEED set "DUNGEON_SEED=random"
 if not exist state mkdir state
 if not exist runs mkdir runs
 

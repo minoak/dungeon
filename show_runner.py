@@ -73,7 +73,18 @@ os.makedirs(STATE, exist_ok=True)
 
 DUNGEON_W = int(os.environ.get("DUNGEON_W", "56"))
 DUNGEON_H = int(os.environ.get("DUNGEON_H", "20"))
-DUNGEON_SEED = int(os.environ.get("DUNGEON_SEED", "7"))
+def _pick_seed(raw):
+    """DUNGEON_SEED 해석 — 정수 또는 'random'(D31 09-05, 파트너 발제 "데모도 이제 랜덤 시드").
+    'random' 이면 SystemRandom 으로 1~999999 를 뽑는다. 재현성은 그대로다: 뽑힌 값이
+    run_meta.seed 에 기록되므로 "시드+결정 기록=재현"(README·D8)이 불변. 게이트·A/B 는
+    환경변수로 정수를 명시하니 무영향(기본값 7 도 그대로 — live.bat 만 random 을 기본으로 건다)."""
+    if str(raw).strip().lower() == "random":
+        import random
+        return random.SystemRandom().randrange(1, 10 ** 6)
+    return int(raw)
+
+
+DUNGEON_SEED = _pick_seed(os.environ.get("DUNGEON_SEED", "7"))
 MAX_TURNS = int(os.environ.get("DUNGEON_TURNS", "250"))   # 1틱=한 걸음(구 30은 단층·1턴=1행동 시절 값.
                                                           # 2층 관통 더미 실측 ~185틱 → 여유 250)
 N_MON = int(os.environ.get("DUNGEON_MONSTERS", "2"))
@@ -589,8 +600,8 @@ def main():
 
     gmtag = "Sonnet GM" if GM_ON else "GM 없음"
     roster = "·".join((b.get("name") or b["job"]) for b in bots)
-    event("=== TRPG 던전 시작 (%s / Haiku 두뇌 / %s / 구독 과금 0)  %dx%d  지하%d층  몬스터%d 함정%d 매복%d ==="
-          % (roster, gmtag, DUNGEON_W, DUNGEON_H, DEPTHS, N_MON, N_TRAP, N_LURK))
+    event("=== TRPG 던전 시작 (%s / Haiku 두뇌 / %s / 구독 과금 0)  %dx%d  지하%d층  몬스터%d 함정%d 매복%d  seed=%d ==="
+          % (roster, gmtag, DUNGEON_W, DUNGEON_H, DEPTHS, N_MON, N_TRAP, N_LURK, DUNGEON_SEED))
     inbox = {b["char"]: [] for b in bots}   # 봇별 받은편지함 (동료가 지난 턴 한 say).
                                             # 빈 dict 아닌 전 봇 키 — 스트림 tick.inbox 형태 고정(소비자 인덱싱)
     write_map(d, bots, 0)
