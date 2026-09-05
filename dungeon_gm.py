@@ -389,6 +389,7 @@ class Dungeon:
                                    #   (visible_cells=맵 전부 — 고향은 다 아는 곳, 시야 엔진은 던전
                                    #   전용 긴장 장치) ②계단 어휘가 마을 문맥(던전 입구/복귀).
                                    #   실전은 러너 build_town(from_ascii 손그림)이 켠다.
+        self.grave_of = {}         # 묘 피처 id → {char, name}(D22 개정 09-06: 묘 발견=죽음의 사실 태그 재료)
         self.npc_lines = {}        # NPC 이름→인사 한 줄(town.json 데이터 — lore 선례. 판정 무접촉)
         self.npc_gifts = {}        # D32(09-05) 상점 v0: NPC 이름→선물({'potions':1}|{'weapon':'단검'}) — build_town 이 채운다
         self.npc_lines_again = {}  #   두 번째 이후(또는 줄 게 없을 때) 대사 — 정해진 문장만(파트너 확정)
@@ -473,6 +474,7 @@ class Dungeon:
         d.town = False             # 마을 층(D29) — 기본 꺼짐(러너 build_town 이 켠다)
         d.status = False           # 상태 태그(D34) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.rest_verb = False        # 휴식(D35) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.grave_of = {}            # 묘→캐릭터(D22 개정) — __new__ 경유라 명시 초기화
         d.npc_lines = {}           # NPC 인사 사전 — build_town 이 채운다(데이터, 판정 무접촉)
         d.npc_gifts = {}           # D32 상점 v0 — from_ascii 는 __new__ 경유라 여기서도 명시 초기화(함정 계보)
         d.npc_lines_again = {}
@@ -1266,6 +1268,11 @@ class Dungeon:
                              'visited': (f.x, f.y) in self.visited, **bear(f.x, f.y)})
                  for f in self.features.values()
                  if f.type != 'exit' and not f.concealed and (f.x, f.y) in seen]
+        if self.events:                        # D22 개정(09-06 파트너 발제 "두란의 묘지를 발견한다면
+            for f in self.features.values():   #   [두란의 죽음을 발견] 한 줄"): 묘는 공공연한 표지판 —
+                if (f.type == 'grave' and (f.x, f.y) in seen   # 죽음을 못 본 동료도 묘를 본 순간 안다
+                        and f.id in self.grave_of):            #   (시야-온리 그대로: 묘가 눈에 들 때만)
+                    self._remember_grave(bot, f)
         ex, ey = self.exit                                       # v3: 출구 = beacon 아님 → 보일 때만
         exit_obj = ({'id': 'exit', 'type': 'exit',
                      'name': '던전 입구' if self.town else '출구',   # 마을(D29): 같은 '>'라도 입구다
@@ -3105,6 +3112,22 @@ class Dungeon:
                 fact['result'] = result
             self._witness(bots, x, y, fact, exclude=tuple(mm['char'] for mm in movers))
 
+    def _remember_grave(self, bot, f):
+        """묘 발견 기억(D22 개정) — 그 죽음을 이미 아는 봇(목격 fallen·발견 grave_found)은 무등재,
+        아니면 지속 기억 grave_found{char,name,zone,turn} 1회(fallen 문법: 좌표 금지·구역 이름만).
+        당사자(자기 묘 — 부활 판)는 안 온다: 죽은 봇은 view 를 안 받는다."""
+        who = self.grave_of[f.id]['char']
+        if who == bot['char']:
+            return
+        mem = bot.setdefault('memories', [])
+        if any(e.get('char') == who and e.get('kind') in (None, 'fallen', 'grave_found')
+               for e in mem):
+            return                             # 목격했거나 이미 발견했다 — 한 죽음은 한 줄
+        zid = getattr(self, 'zone_at', {}).get((f.x, f.y)) if self.scan else None
+        zone = self._zone_name(bot, zid) if zid is not None else self._zone_label(f.x, f.y)
+        mem.append({'kind': 'grave_found', 'char': who, 'grave': f.name,
+                    'zone': zone, 'turn': self.turn})
+
     def _apply_status(self, bot, tag, by, bots=(), by_kind='hazard'):
         """상태 태그(D34) 부착 — 몹·함정·오브젝트의 특수. 스위치 꺼짐=무동작(기존 판 비트 동일).
         같은 태그 재발=n 만 는다(×N 표시 — 효과 불변, 첫 판 관찰 뒤 재론). 목격(D22 문법): 시야 안
@@ -3138,6 +3161,7 @@ class Dungeon:
             gname = '%s의 묘' % (bot.get('name') or bot['job'])
             fid = self._add_feature('grave', gname, x, y)
             g = {'id': 'f%d' % fid, 'name': gname, 'x': x, 'y': y}
+            self.grave_of[fid] = {'char': bot['char'], 'name': gname}   # 묘 발견(비목격자)의 재료
         if self.events:
             fact = {'kind': 'ally_down', 'char': bot['char'], 'by': by,
                     **({'by_kind': by_kind} if by_kind != 'monster' else {})}

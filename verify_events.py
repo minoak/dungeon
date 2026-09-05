@@ -234,9 +234,9 @@ d._enter_cell(b1, 2, 2, bots)
 o = d.view(b2, bots)
 wire = brains._wire(o)
 check("⑧ 처치 목격 문장(\"쓰러뜨리는 것을\")", '쓰러뜨리는 것을' in wire)
-check("⑧ 전사 목격 문장(\"쓰러지는 것을\")", '쓰러지는 것을' in wire)
-check("⑧ 기억 섹션 '잊지 못할 일' + '쓰러졌다'",
-      '잊지 못할 일' in wire and '쓰러졌다' in wire)
+check("⑧ 전사 목격 문장(\"쓰러져 죽는 것을\")", '쓰러져 죽는 것을' in wire)
+check("⑧ 기억 섹션 '잊지 못할 일' + '[…의 죽음을 목격]'",
+      '잊지 못할 일' in wire and '의 죽음을 목격]' in wire and '죽었다' in wire)
 o2 = d.view(b2, bots)
 wire2 = brains._wire(o2)
 check("⑧ 다음 결정: 목격은 사라지고 기억은 남는다",
@@ -571,6 +571,66 @@ def use_once():
 
 
 check("⑬ 결정론: 같은 장면 2회 = 같은 목격 열", use_once() == use_once())
+
+# ───────────────────── ⑭ 묘 발견 — 죽음을 못 본 사람도 묘를 본 순간 안다(D22 개정 09-06) ─────────────────────
+print("── ⑭ 묘 발견 — [두란의 죽음을 발견]")
+
+
+def grave_scene():
+    """봇2 를 벽 너머 골방(봇3 자리)으로 보내 죽음을 못 보게 하고, 봇1 을 함정으로 죽인 뒤
+    봇2 가 방으로 돌아와 묘를 본다. 봇3 은 방에서 죽음을 목격(fallen)."""
+    d, b1, b2, b3, bots = scene(graves=True, events=True)
+    b1['name'], b2['name'], b3['name'] = '두란', '카야', '피른'
+    b2['x'], b2['y'] = 9, 2                        # 골방(시야 밖)
+    b3['x'], b3['y'] = 6, 3                        # 방 안(목격자)
+    d.turn = 40
+    d._enter_cell(b1, 2, 2, bots)                  # dc99·dmg20 함정 → 확정 전사·묘
+    return d, b1, b2, b3, bots
+
+
+d, b1, b2, b3, bots = grave_scene()
+gid = next(f.id for f in d.features.values() if f.type == 'grave')
+check("⑭ 묘→캐릭터 매핑 grave_of", not b1['alive'] and d.grave_of.get(gid, {}).get('char') == '1')
+check("⑭ 골방의 카야: 죽음도 묘도 못 봤다 — 기억 없음", not b2.get('memories'))
+d.view(b2, bots)
+check("⑭ 시야 밖에서는 view 를 받아도 무등재", not b2.get('memories'))
+b2['x'], b2['y'] = 5, 2                            # 방으로 돌아와 묘가 눈에 든다
+d.turn = 52
+o = d.view(b2, bots)
+mem = b2.get('memories') or []
+check("⑭ 묘가 시야에 든 순간 grave_found{char,grave,zone,turn} 1회",
+      len(mem) == 1 and mem[0]['kind'] == 'grave_found' and mem[0]['char'] == '1'
+      and mem[0]['grave'] == '두란의 묘' and mem[0]['turn'] == 52 and 'zone' in mem[0])
+d.view(b2, bots)
+check("⑭ 재진입·재관측 무중복", len(b2.get('memories') or []) == 1)
+wire = brains._wire(o, {'1': '두란', '2': '카야', '3': '피른'})
+check("⑭ 렌더 '[두란(봇1)의 죽음을 발견] 두란의 묘 — …에서'(파트너 문장)",
+      '[두란(봇1)의 죽음을 발견] 두란의 묘' in wire)
+check("⑭ 파티 명단 '죽었다 — 이번 원정에는 돌아오지 않는다'",
+      '두란(봇1), 전사 — 죽었다 — 이번 원정에는 돌아오지 않는다' in wire)
+m3 = b3.get('memories') or []
+d.view(b3, bots)
+check("⑭ 목격자(피른)는 fallen 만 — 묘를 봐도 grave_found 무등재(한 죽음은 한 줄)",
+      len(m3) == 1 and m3[0]['kind'] == 'fallen' and len(b3.get('memories') or []) == 1)
+w3 = brains._wire(d.view(b3, bots), {'1': '두란', '2': '카야', '3': '피른'})
+check("⑭ 목격 렌더 '[두란(봇1)의 죽음을 목격] 가시 함정에 죽었다'",
+      '[두란(봇1)의 죽음을 목격] 가시 함정에 죽었다' in w3)
+d, b1, b2, b3, bots = scene(graves=True, events=False)
+b2['x'], b2['y'] = 9, 2
+d._enter_cell(b1, 2, 2, bots)
+b2['x'], b2['y'] = 5, 2
+d.view(b2, bots)
+check("⑭ events=0: 묘를 봐도 기억 무등재(스위치 격리)", not b2.get('memories'))
+
+
+def grave_once():
+    d, b1, b2, b3, bots = grave_scene()
+    b2['x'], b2['y'] = 5, 2
+    d.view(b2, bots)
+    return [dict(e) for e in b2['memories']]
+
+
+check("⑭ 결정론", grave_once() == grave_once())
 
 print()
 if C.failed:

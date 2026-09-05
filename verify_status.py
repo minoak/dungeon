@@ -317,10 +317,10 @@ check("목격 문장(몹 원천 — 조사 '로')", brains._witness_prose(
      'by': '그림자거미'}) == "카야(봇2)가 그림자거미로 둔화 상태가 되는 것을")
 check("출혈사 목격 문장", brains._witness_prose(
     {'kind': 'ally_down', 'name': '두란', 'char': '1', 'by': '출혈', 'by_kind': 'status'})
-      == "두란(봇1)가 출혈로 쓰러지는 것을")
+      == "두란(봇1)가 출혈로 쓰러져 죽는 것을")
 check("몹 사인 목격 문장 불변", brains._witness_prose(
     {'kind': 'ally_down', 'name': '두란', 'char': '1', 'by': '고블린'})
-      == "두란(봇1)가 고블린에게 쓰러지는 것을")
+      == "두란(봇1)가 고블린에게 쓰러져 죽는 것을")
 check("자기 관측: 피격+태그", "[둔화]이(가) 붙었다" in brains._last_prose(
     {'type': 'hurt', 'by': '그림자거미', 'by_id': 'm0', 'dmg': 3, 'hp': 9, 'status': '둔화'}))
 check("자기 관측: 함정+태그", "[출혈]이(가) 붙었다" in brains._last_prose(

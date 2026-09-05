@@ -466,7 +466,7 @@ def _witness_prose(w):
     who = "%s(봇%s)" % (w.get("name", "동료"), w.get("char", "?"))
     k = w.get("kind")
     if k == "ally_down":
-        return "%s가 %s 쓰러지는 것을" % (who, _by_phrase(w))
+        return "%s가 %s 쓰러져 죽는 것을" % (who, _by_phrase(w))
     if k == "ally_status":                  # 상태 태그(D34) — 상태는 겉으로 드러난다
         by = w.get("by", "?")
         return "%s가 %s%s %s 상태가 되는 것을" % (who, by, _ro(by), w.get("tag", "?"))
@@ -927,7 +927,7 @@ def _wire(obs, names=None):
         L += ["", "## 파티 명단"]
         for p in pt:
             if not p.get("alive"):
-                st = "쓰러졌다"
+                st = "죽었다 — 이번 원정에는 돌아오지 않는다"   # D22 개정(09-06): 확정성 전달('구하러 올게' 유령 차단)
             elif p.get("won"):
                 st = "먼저 내려갔다"
             elif p.get("visible"):
@@ -984,11 +984,15 @@ def _wire(obs, names=None):
 
     mem = obs.get("memories")
     if mem:                                 # D22 기억층 — 휘발 0: 매 결정 다시 제시된다
-        L += ["", "## 잊지 못할 일 (네가 목격한 중대사)"]
+        L += ["", "## 잊지 못할 일 (네가 목격하거나 알게 된 중대사)"]
         for e in mem:
-            L.append("- %s %s(봇%s)가 %s에게 쓰러졌다 — %s에서"
-                     % (ago(e.get("turn", 0)), e.get("name", "동료"), e.get("char", "?"),
-                        e.get("by", "?"), e.get("zone", "?")))
+            nm_ = "%s(봇%s)" % (e.get("name", "동료"), e.get("char", "?"))
+            if e.get("kind") == "grave_found":      # 묘 발견 — 죽음을 못 봤어도 묘를 본 순간 안다
+                L.append("- [%s의 죽음을 발견] %s — %s에서 (%s)"
+                         % (nm_, e.get("grave", "묘"), e.get("zone", "?"), ago(e.get("turn", 0))))
+            else:                                   # 목격 — 사인·장소(D22 기억층 v0=fallen)
+                L.append("- [%s의 죽음을 목격] %s 죽었다 — %s에서 (%s)"
+                         % (nm_, _by_phrase(e), e.get("zone", "?"), ago(e.get("turn", 0))))
 
     ms = obs.get("messages")
     if ms:
