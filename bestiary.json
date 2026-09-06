@@ -26,6 +26,102 @@
    "depth": 1
   }
  },
+ "라라": {
+  "feature:chest": {
+   "turn": 315,
+   "depth": 1
+  },
+  "monster:고블린": {
+   "turn": 143,
+   "depth": 1
+  },
+  "monster:그림자거미": {
+   "turn": 25,
+   "depth": 1
+  }
+ },
+ "마나": {
+  "monster:그림자거미": {
+   "turn": 23,
+   "depth": 1
+  }
+ },
+ "미나": {
+  "monster:고블린": {
+   "turn": 126,
+   "depth": 1
+  }
+ },
+ "미라": {
+  "monster:그림자거미": {
+   "turn": 16,
+   "depth": 1
+  }
+ },
+ "미래": {
+  "monster:고블린": {
+   "turn": 37,
+   "depth": 1
+  },
+  "monster:그림자거미": {
+   "turn": 18,
+   "depth": 1
+  },
+  "trap:spike": {
+   "turn": 12,
+   "depth": 1
+  }
+ },
+ "수나": {
+  "monster:고블린": {
+   "turn": 120,
+   "depth": 1
+  },
+  "monster:그림자거미": {
+   "turn": 25,
+   "depth": 1
+  }
+ },
+ "수유": {
+  "monster:고블린": {
+   "turn": 93,
+   "depth": 1
+  }
+ },
+ "유나": {
+  "monster:고블린": {
+   "turn": 122,
+   "depth": 1
+  },
+  "monster:그림자거미": {
+   "turn": 25,
+   "depth": 1
+  },
+  "trap:alarm": {
+   "turn": 312,
+   "depth": 1
+  },
+  "trap:dart": {
+   "turn": 20,
+   "depth": 1
+  }
+ },
+ "유라": {
+  "monster:고블린": {
+   "turn": 86,
+   "depth": 1
+  }
+ },
+ "지유": {
+  "monster:고블린": {
+   "turn": 89,
+   "depth": 1
+  },
+  "trap:spike": {
+   "turn": 32,
+   "depth": 1
+  }
+ },
  "카야": {
   "feature:chest": {
    "turn": 165,
@@ -83,6 +179,20 @@
   },
   "trap:spike": {
    "turn": 151,
+   "depth": 1
+  }
+ },
+ "하나": {
+  "feature:chest": {
+   "turn": 123,
+   "depth": 1
+  },
+  "feature:fountain": {
+   "turn": 37,
+   "depth": 1
+  },
+  "monster:고블린": {
+   "turn": 26,
    "depth": 1
   }
  }
