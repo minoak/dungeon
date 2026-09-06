@@ -25,6 +25,14 @@ PERSONA_MAX = 200        # 성격 자유 서술 — 자유 입력 3호(파트너
 PERSONA_TOTAL_MAX = 300  # 키워드 문장+자유 서술 합계 상한 = 러너 FREETEXT_MAX(넘으면 조용히 잘리므로 여기서 거부)
 SEXES = ("남", "여")
 
+# ── 외형(D37, 2026-09-06) — 파츠 스프라이트. 시트가 정하고 러너가 기록하고 뷰어가 그린다.
+#    엔진 판정·프롬프트는 이 값을 절대 안 읽는다(관전 전용 필드).
+LOOKS_FILE = os.path.join(HERE, "looks.json")                 # 색 스와치·기본색(데이터는 코드 밖)
+SPRITES_FILE = os.path.join(HERE, "viewer", "assets", "sprites", "sprites.json")   # 파츠 원장(뷰어 런타임본)
+LOOK_KEYS = ("hair", "skin", "top", "bottom")                 # 재질 4 = sprites.json materials
+_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+_LOOKS = {}                                                   # load_looks 캐시(경로별)
+
 _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _MARK = re.compile(r"[#`<>\[\]]")        # 마크다운 헤더·코드펜스·태그·링크 표식 — 섹션 위장 재료
 _WS = re.compile(r"\s+")
@@ -87,7 +95,79 @@ def sanitize_background(text, limit=BACKGROUND_MAX):
     return s[:limit]
 
 
-def build_sheet(job, traits, name, sex, background=None, data=None, persona_text=None):
+def load_looks(sprites_path=SPRITES_FILE, looks_path=LOOKS_FILE):
+    """외형 사전(D37) — 파츠(머리·몸통)는 sprites.json 에서, 스와치·기본색은 looks.json 에서. 캐시.
+    반환 {heads:{id:{name,group}}, bodies:{id:name}, swatches:{재질:[hex]}, defaults:{재질:hex}}.
+    형식 검증: 재질 4종이 sprites.json materials 와 looks.json 양쪽에 있어야 한다."""
+    key = (sprites_path, looks_path)
+    if key in _LOOKS:
+        return _LOOKS[key]
+    with io.open(sprites_path, encoding="utf-8") as f:
+        spr = json.load(f)
+    with io.open(looks_path, encoding="utf-8") as f:
+        lk = json.load(f)
+    heads = {hid: {"name": h.get("name", hid), "group": h.get("group", "")}
+             for hid, h in (spr.get("heads") or {}).items()}
+    bodies = {bid: b.get("name", bid) for bid, b in (spr.get("bodies") or {}).items()}
+    swatches, defaults = lk.get("swatches") or {}, lk.get("defaults") or {}
+    if not heads or not bodies:
+        raise ValueError("sprites.json: heads/bodies 가 비었다")
+    for k in LOOK_KEYS:
+        if k not in (spr.get("materials") or {}):
+            raise ValueError("sprites.json: 재질 %r 이 없다" % k)
+        if (not swatches.get(k) or not all(isinstance(c, str) and _HEX.match(c) for c in swatches[k])
+                or not _HEX.match(str(defaults.get(k, "")))):
+            raise ValueError("looks.json: 재질 %r 의 스와치/기본색 누락 또는 hex 아님" % k)
+    data = {"heads": heads, "bodies": bodies, "swatches": swatches, "defaults": defaults}
+    _LOOKS[key] = data
+    return data
+
+
+def sanitize_look(look, data=None):
+    """외형 필드 검증·정규화 — {head, body, colors{hair,skin,top,bottom}}.
+    머리·몸통은 sprites.json 등재 id 만, 색은 '#rrggbb' 형식만(스와치 밖 자유 색 허용 — 가정 B),
+    빠진 색은 기본색으로 보충·소문자 정규화. None 이면 None(=시트에 필드 없음 → 러너가 랜덤으로 뽑는다).
+    엔진·프롬프트는 이 값을 절대 안 읽는다 — 그래서 자유 색을 받아도 UGC 관문이 아니다(그림에만 닿는다)."""
+    if look is None:
+        return None
+    data = data or load_looks()
+    if not isinstance(look, dict):
+        raise ValueError("외형(look)은 객체여야 한다")
+    head, body = look.get("head"), look.get("body")
+    if head not in data["heads"]:
+        raise ValueError("등재되지 않은 머리: %r" % (head,))
+    if body not in data["bodies"]:
+        raise ValueError("등재되지 않은 몸통: %r" % (body,))
+    colors = look.get("colors")
+    if colors is None:
+        colors = {}
+    if not isinstance(colors, dict):
+        raise ValueError("외형 colors 는 객체여야 한다")
+    out_c = {}
+    for k in LOOK_KEYS:
+        c = colors.get(k, data["defaults"][k])
+        if not isinstance(c, str) or not _HEX.match(c):
+            raise ValueError("외형 색 %s 는 '#rrggbb' 형식: %r" % (k, c))
+        out_c[k] = c.lower()
+    return {"head": head, "body": body, "colors": out_c}
+
+
+def random_look(rng, sex, data=None):
+    """외형 랜덤(가정 A — 파트너 확정 "기본 파티는 랜덤"): 머리=성별 그룹 안(남→male, 여→female),
+    몸통=남 B1(바지형)·여 B2(치마형), 색 4종=스와치 안. rng 는 호출자가 준 random.Random —
+    러너는 seed·char 로 따로 만들어 던전 난수(dungeon.rng)를 건드리지 않는다(리플레이·결정론 유지).
+    후보는 정렬해서 고른다(dict 순서 무관 = 같은 시드면 어디서나 같은 얼굴)."""
+    data = data or load_looks()
+    group = "male" if sex == "남" else "female"
+    heads = sorted(h for h, v in data["heads"].items() if v["group"] == group) or sorted(data["heads"])
+    body = "B1" if sex == "남" else "B2"
+    if body not in data["bodies"]:
+        body = sorted(data["bodies"])[0]
+    return {"head": rng.choice(heads), "body": body,
+            "colors": {k: rng.choice(list(data["swatches"][k])) for k in LOOK_KEYS}}
+
+
+def build_sheet(job, traits, name, sex, background=None, data=None, persona_text=None, look=None):
     """커스터마이징 입력 → party 시트 dict(load_party 계약 형태).
     job: traits.json jobs 키 / traits: 키워드 0~max_traits / name: 자유 입력(한 줄) /
     sex: '남'|'여' / background: 자유 입력(정제·상한) 또는 None /
@@ -132,6 +212,9 @@ def build_sheet(job, traits, name, sex, background=None, data=None, persona_text
     bg = sanitize_background(background)
     if bg:
         sheet["background"] = bg
+    lk = sanitize_look(look)                     # D37 외형 — 없으면 필드 없음(러너가 랜덤)
+    if lk:
+        sheet["look"] = lk
     return sheet
 
 
@@ -147,7 +230,7 @@ def build_party(slots, data=None):
             raise ValueError("슬롯 %d 형식 오류" % i)
         sheet = build_sheet(s.get("job"), s.get("traits") or [], s.get("name", ""),
                             s.get("sex"), s.get("background"), data=data,
-                            persona_text=s.get("persona"))
+                            persona_text=s.get("persona"), look=s.get("look"))
         if sheet["name"] in names:
             raise ValueError("이름 중복: %s" % sheet["name"])
         names.add(sheet["name"])

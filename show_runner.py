@@ -58,6 +58,7 @@ import glob
 import json
 import time
 import queue
+import random                   # D37(09-06) 외형 랜덤 — seed·char 로 따로 만든 Random(던전 난수 무접촉)
 import threading
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -233,6 +234,9 @@ def load_party(path):
                 if not isinstance(rel, dict):
                     raise ValueError("봇%s relationships 는 객체여야 함" % char)
                 out["relationships"] = {str(o): str(t)[:FREETEXT_MAX] for o, t in rel.items()}
+            lk = s.get("look")                  # D37(09-06) 외형 — 뷰어 전용(엔진·프롬프트 무접촉).
+            if lk is not None:                  #   미등재 파츠·hex 아님 = ValueError = 폴백 경로 그대로
+                out["look"] = sheetkit.sanitize_look(lk)
             sheets[char] = out
         if not sheets:
             raise ValueError("시트가 하나도 없음")
@@ -543,6 +547,10 @@ def main():
         raise SystemExit("솔로+마을(D29 v0)은 아직 함께 못 쓴다 — 행선(위/아래)이 갈리면 "
                          "러너의 현재 층이 하나뿐이라 두 무리를 동시에 못 좇는다(서랍: 다중 층 동시 진행)")
     sheets = load_party(PARTY_FILE)                       # 시트 외부화 — 파티 구성=이 파일이 결정
+    for c in sorted(sheets):                              # D37(09-06): 외형이 없는 시트는 여기서 뽑아 run_meta 에
+        if not sheets[c].get("look"):                     #   적는다(파트너 확정 "기본 파티는 랜덤") — 뷰어가 뽑으면
+            sheets[c] = {**sheets[c], "look": sheetkit.random_look(    # 리플레이마다 얼굴이 바뀐다. 난수는 seed·char
+                random.Random("look:%d:%s" % (DUNGEON_SEED, c)), sheets[c]["sex"])}   # 로 따로(dungeon.rng 무접촉)
     chars = sorted(sheets)
     names = {c: (sheets[c].get("name") or "봇%s" % c) for c in chars}
     lore = bestiary.load_lore(LORE_FILE)                  # 지식 '본문'(D9) — 판정 무접촉, obs 전용
@@ -656,7 +664,8 @@ def main():
                     **({"name": b["name"]} if b.get("name") else {}),   # additive: 보고서·웹의 호칭
                     **{k: b[k] for k in ("speech", "goal", "background")   # D31(09-05) additive —
                        if b.get(k)},                                       #   커스텀 시트 원문(있을 때만)
-                    **({"traits": list(b["traits"])} if b.get("traits") else {})}   # 키워드 원본
+                    **({"traits": list(b["traits"])} if b.get("traits") else {}),   # 키워드 원본
+                    **({"look": b["look"]} if b.get("look") else {})}   # D37(09-06) 외형 — 뷰어 전용
                    for b in bots])
     lvl = {"turn": 0, **d.level_snapshot(),
            "party": [G.bot_snapshot(b) for b in bots]}

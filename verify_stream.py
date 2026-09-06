@@ -69,7 +69,8 @@ TRAP_FIELDS = {"x", "y", "kind", "name", "dc", "dmg", "hidden", "sprung"}
 FEAT_FIELDS = {"id", "type", "name", "x", "y", "room_id", "concealed", "perception_gate"}
 ROOM_FIELDS = {"id", "x", "y", "w", "h", "type", "neighbours"}
 SHEET_FIELDS = {"char", "job", "sex", "maxhp", "str", "dex", "wdmg",
-                "stealth", "search_r", "persona"}
+                "stealth", "search_r", "persona",
+                "look"}          # D37(2026-09-06) additive — 시트에 없어도 러너가 seed·char 로 뽑아 항상 싣는다
 
 
 def run_once():

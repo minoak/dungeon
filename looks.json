@@ -1,0 +1,10 @@
+{
+  "_readme": "캐릭터 외형(D37, 2026-09-06) 색 스와치·기본색 — art/sprites-v1/preview.html 의 DEFAULTS/OPTIONS 그대로. 파츠(머리·몸통) 목록은 viewer/assets/sprites/sprites.json 이 원장이라 여기 중복하지 않는다. 색은 재질(hair/skin/top/bottom)별 기본색이고, 팔레트의 3단 음영은 기본색 대비 비율로 치환된다(viewer/assets/sprites/sprites.js palette()). 론처는 스와치 밖 자유 색도 허용한다(검증=hex 형식만).",
+  "defaults": {"hair": "#945c37", "skin": "#eabb8c", "top": "#42738b", "bottom": "#d7c599"},
+  "swatches": {
+    "hair": ["#945c37", "#352c2c", "#d8ba77", "#a84c32", "#cbc8c3", "#74586f", "#415b73", "#38574e"],
+    "skin": ["#ffe0bd", "#eabb8c", "#cc986d", "#a77450", "#775037", "#513b30"],
+    "top": ["#42738b", "#715169", "#577348", "#a45240", "#c09a45", "#466e69", "#6b728a", "#d3c3a3"],
+    "bottom": ["#d7c599", "#716b5d", "#4d555c", "#754f3f", "#a3afa2", "#494052"]
+  }
+}

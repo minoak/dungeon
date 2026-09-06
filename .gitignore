@@ -19,3 +19,8 @@ claude-memory/
 # 론처(D31, 2026-09-05)가 만드는 사용자 파일·러너 콘솔 덤프 — 개인 저작물이라 커밋 안 함
 party_custom.json
 state/runner.out
+
+# 스프라이트 묶음(D37, 2026-09-06) — 재생성물(합성 PNG 600장+sprites.json)은 커밋 안 함.
+# 런타임 유일본은 viewer/assets/sprites/sprites.json(사본). 원본 시안·도구·README 만 art/ 에 둔다.
+art/sprites-v1/assets/
+*.zip

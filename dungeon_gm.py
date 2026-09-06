@@ -3660,6 +3660,7 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'goal': sheet.get('goal'),
             'background': sheet.get('background'),   # D31(09-05) 배경(자유 입력 — load_party 가 정제) — 프롬프트 전용
             'traits': list(sheet.get('traits') or []),   # 성격 키워드 원본 — run_meta 기록용(프롬프트 미노출)
+            'look': sheet.get('look'),      # D37(09-06) 외형 — run_meta 기록용·뷰어 전용. 엔진·프롬프트 무접촉
             'relationships': dict(sheet.get('relationships') or {}),
             'bag': 0, 'alive': True, 'won': False,
             'potions': 0,                   # 소지 회복 물약(07-17) — 첫 소비 아이템. 층 이월은
