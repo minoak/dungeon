@@ -11,8 +11,8 @@
 시작 → 러너(show_runner.py)를 자식 프로세스로 띄우고 → 관전 뷰어로 이어진다.
 
 API(JSON):
-  GET  /api/presets  traits.json(키워드·직업) + 기본 파티(party.json) 미리보기 + 상태
-  POST /api/party    {"slots":[{job,traits[],name,sex,background?,persona?}, ...]} → sheetkit 조립 →
+  GET  /api/presets  traits.json(키워드·직업) + looks(외형 사전, D37) + 기본 파티(party.json) 미리보기 + 상태
+  POST /api/party    {"slots":[{job,traits[],name,sex,background?,persona?,look?}, ...]} → sheetkit 조립 →
                      러너의 load_party 로 재검증 → party_custom.json 저장 (실패 400 + 이유 한 줄)
   POST /api/start    {"map":"normal|big","town":bool,"brain":"gemini_api|claude_cli|anthropic_api|dummy",
                       "seed":int|null|"random","party":"custom|default"} → 이전 판 보존(live.bat 규칙)
@@ -284,6 +284,7 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/presets":
             p = self.ctx.presets
             return self._json(200, {"traits": p["traits"], "max_traits": p["max_traits"], "jobs": p["jobs"],
+                                    "looks": sheetkit.load_looks(),   # D37(09-06) 외형 사전 — 파츠·스와치·기본색
                                     "default_party": default_party_preview(self.ctx.root),
                                     "custom_saved": os.path.exists(self.ctx.party_path),
                                     "default_brain": self.ctx.default_brain or "gemini_api",

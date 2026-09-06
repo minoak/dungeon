@@ -53,6 +53,17 @@
   .radios label.on, .traits label.on { border-color: #e8c268; color: #e8c268; }
   .traits label.off { opacity: .4; cursor: default; }
   .traits { display: flex; gap: 6px; flex-wrap: wrap; }
+  /* D37 외형 블록 — 미리보기(16px→64px 픽셀 확대)·머리/몸통 칩·재질별 스와치+자유 색·랜덤 */
+  .look { display: flex; gap: 12px; align-items: flex-start; margin-top: 2px; }
+  .lookPrev { width: 64px; height: 64px; image-rendering: pixelated; background: #1a1d25;
+              border: 1px solid #2c303c; border-radius: 6px; flex: none; }
+  .lookBody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+  .swrow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .swlab { width: 30px; font-size: 11.5px; color: #8a8f9c; flex: none; }
+  .sw { width: 18px; height: 18px; border-radius: 4px; border: 2px solid transparent; cursor: pointer; padding: 0; }
+  .sw.on { border-color: #e8c268; }
+  .swrow input[type=color] { width: 24px; height: 20px; padding: 0; border: 1px solid #2c303c; background: none; cursor: pointer; margin-left: 2px; }
+  button.small { align-self: flex-start; font-size: 12px; padding: 4px 10px; }
   .hint { font-size: 11.5px; color: #6a6f7a; margin-top: 4px; }
   .cnt { float: right; }
   .cnt.over { color: #ff8b7a; }
@@ -142,18 +153,61 @@
 </section>
 
 </main>
+<script src="/viewer/assets/sprites/sprites.js"></script>   <!-- D37 파츠 스프라이트 합성기(뷰어와 공용) — 없어도 폼은 산다 -->
 <script>
 /* ═══ 상태 ═══ */
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const COLORS = ['#ffd166', '#6fe3b0', '#c77dff'];
 let presets = null;
-let slots = [
-  { name: '', sex: '남', job: '전사', traits: [], persona: '', background: '' },
-  { name: '', sex: '여', job: '도적', traits: [], persona: '', background: '' },
-  { name: '', sex: '여', job: '궁수', traits: [], persona: '', background: '' },
+let slots = [                                   // look(D37) = {head, body, colors} — 프리셋 로드 때 성별 기준 랜덤으로 채운다
+  { name: '', sex: '남', job: '전사', traits: [], persona: '', background: '', look: null },
+  { name: '', sex: '여', job: '도적', traits: [], persona: '', background: '', look: null },
+  { name: '', sex: '여', job: '궁수', traits: [], persona: '', background: '', look: null },
 ];
 let partyMode = 'custom';
+
+/* ═══ 외형(D37) — 그림에만 닿는다(엔진·프롬프트 무접촉). sheetkit.random_look 과 같은 규칙(가정 A). ═══ */
+const LOOK_KEYS = ['hair', 'skin', 'top', 'bottom'];
+const LOOK_LABELS = { hair: '머리', skin: '피부', top: '상의', bottom: '하의' };
+const pick = a => a[Math.floor(Math.random() * a.length)];
+function randomLook(sex) {                      // 브라우저 난수 — 사용자의 선택이 곧 시트(러너의 seed 랜덤은 시트에 없을 때만)
+  const lk = presets && presets.looks;
+  if (!lk) return null;
+  const group = sex === '남' ? 'male' : 'female';
+  const heads = Object.keys(lk.heads).filter(h => lk.heads[h].group === group);
+  const body = sex === '남' ? 'B1' : 'B2';
+  return { head: pick(heads.length ? heads : Object.keys(lk.heads)),
+           body: lk.bodies[body] ? body : Object.keys(lk.bodies)[0],
+           colors: Object.fromEntries(LOOK_KEYS.map(k => [k, pick(lk.swatches[k] || [lk.defaults[k]])])) };
+}
+async function loadSprites() {                  // 미리보기 합성기 — 실패해도 폼은 산다(미리보기만 빈다)
+  if (!window.WLSprites || WLSprites.ready) return;
+  try { await WLSprites.load('/viewer/assets/sprites/sprites.json'); } catch (e) { /* 미리보기 없음 */ }
+}
+function drawLook(cv, look) {
+  const g = cv.getContext('2d');
+  g.imageSmoothingEnabled = false; g.clearRect(0, 0, cv.width, cv.height);
+  const img = (look && window.WLSprites && WLSprites.ready) ? WLSprites.cell(look, 'front', -1) : null;
+  if (img) g.drawImage(img, 0, 0);
+}
+function lookBlock(s, lk) {
+  const chips = (obj, k) => Object.entries(obj).map(([id, v]) =>
+    `<label class="${s.look[k] === id ? 'on' : ''}" title="${esc(id)}"><input type="radio" value="${esc(id)}">${esc(typeof v === 'string' ? v : v.name)}</label>`).join('');
+  const rows = LOOK_KEYS.map(k => `<div class="swrow"><span class="swlab">${LOOK_LABELS[k]}</span>` +
+    (lk.swatches[k] || []).map(c => `<button type="button" class="sw ${s.look.colors[k] === c ? 'on' : ''}" data-sw="${k}" data-c="${c}" style="background:${c}" title="${c}"></button>`).join('') +
+    `<input type="color" data-sw-free="${k}" value="${esc(s.look.colors[k])}" title="자유 색"></div>`).join('');
+  return `<label class="f">외형 <span class="hint" style="display:inline">— 머리·몸통·색. 그림에만 닿는다(캐릭터는 자기 외모를 모른다)</span></label>
+      <div class="look" data-k="look">
+        <canvas class="lookPrev" width="16" height="16" title="정면"></canvas>
+        <div class="lookBody">
+          <div class="radios" data-lk="head">${chips(lk.heads, 'head')}</div>
+          <div class="radios" data-lk="body">${chips(lk.bodies, 'body')}</div>
+          ${rows}
+          <button type="button" class="small" data-lk-rand title="현재 성별 기준으로 머리·몸통·색을 다시 뽑는다">외형 랜덤</button>
+        </div>
+      </div>`;
+}
 
 async function api(path, body) {
   const r = await fetch(path, body === undefined ? { cache: 'no-store' }
@@ -189,9 +243,12 @@ $('bStop').onclick = async () => { await api('/api/stop', {}); refreshStatus(); 
 async function loadPresets() {
   if (presets) return;
   presets = await api('/api/presets');
+  await loadSprites();                                                 // D37 미리보기 합성기
+  for (const s of slots) if (!s.look) s.look = randomLook(s.sex);      // 처음부터 얼굴이 보인다
   renderCards();
   $('defaultPreview').innerHTML = presets.default_party.map(p =>
-    `<div><b>${esc(p.name)}</b> — ${esc(p.job)}(${esc(p.sex)}) · ${esc(p.persona)}</div>`).join('');
+    `<div><b>${esc(p.name)}</b> — ${esc(p.job)}(${esc(p.sex)}) · ${esc(p.persona)}</div>`).join('') +
+    '<div class="muted" style="margin-top:6px">외형은 판마다 랜덤으로 뽑힌다 — 뽑힌 얼굴은 판 기록에 남아 리플레이에서도 같다.</div>';
 }
 function renderCards() {
   const jobs = Object.keys(presets.jobs), traits = Object.keys(presets.traits);
@@ -206,6 +263,7 @@ function renderCards() {
       <label class="f">직업 <span class="hint" style="display:inline">— 몸 수치를 정한다</span></label>
       <div class="radios" data-k="job">${jobs.map(v =>
         `<label class="${s.job === v ? 'on' : ''}" title="${esc(jobDesc(v))}"><input type="radio" value="${v}">${esc(v)}</label>`).join('')}</div>
+      ${presets.looks && s.look ? lookBlock(s, presets.looks) : ''}
       <label class="f">성격 키워드 <span class="cnt" data-cnt="traits">${s.traits.length}/${presets.max_traits}</span></label>
       <div class="traits" data-k="traits">${traits.map(t =>
         `<label class="${s.traits.includes(t) ? 'on' : ''}" title="${esc(presets.traits[t].persona)}"><input type="checkbox" value="${esc(t)}">${esc(t)}</label>`).join('')}</div>
@@ -242,6 +300,27 @@ function bindCard(card, i) {
         card.querySelectorAll(`[data-k=${k}] label`).forEach(l => l.classList.toggle('on', l === lab));
       };
     }
+  }
+  const lookEl = card.querySelector('[data-k=look]');        // D37 외형 — 칩·스와치·자유 색·랜덤·미리보기
+  if (lookEl) {
+    const paintLook = () => {
+      for (const k of ['head', 'body']) {
+        lookEl.querySelectorAll(`[data-lk=${k}] label`).forEach(l =>
+          l.classList.toggle('on', l.querySelector('input').value === s.look[k]));
+      }
+      lookEl.querySelectorAll('button.sw').forEach(b => b.classList.toggle('on', s.look.colors[b.dataset.sw] === b.dataset.c));
+      lookEl.querySelectorAll('input[type=color]').forEach(i => { i.value = s.look.colors[i.dataset.swFree]; });
+      drawLook(lookEl.querySelector('canvas.lookPrev'), s.look);
+    };
+    for (const k of ['head', 'body']) {
+      for (const lab of lookEl.querySelectorAll(`[data-lk=${k}] label`)) {
+        lab.onclick = (e) => { e.preventDefault(); s.look[k] = lab.querySelector('input').value; paintLook(); };   // 칩=이중 발화 차단(육안 1호 선례)
+      }
+    }
+    lookEl.querySelectorAll('button.sw').forEach(b => { b.onclick = () => { s.look.colors[b.dataset.sw] = b.dataset.c; paintLook(); }; });
+    lookEl.querySelectorAll('input[type=color]').forEach(i => { i.oninput = () => { s.look.colors[i.dataset.swFree] = i.value; paintLook(); }; });
+    lookEl.querySelector('[data-lk-rand]').onclick = () => { s.look = randomLook(s.sex); paintLook(); };
+    paintLook();
   }
   const tl = card.querySelector('[data-k=traits]');
   const paint = () => {

@@ -488,11 +488,11 @@ function hpBar(gx, gy, hp, maxhp) {
 // 봇 한 명 — D37: run_meta 에 외형이 있고 합성기가 살아 있으면 파츠 스프라이트, 아니면 타일셋/글리프(구판 그대로).
 // 방향·이동은 프레임에 파생돼 있다(f.facing/f.moved). 걷기 프레임은 재생 중 이 프레임에서 움직인 봇만 돈다.
 function drawBot(b, f, alpha = 1, rot = 0) {
-  const look = looks[b.char];
-  const phase = (playing && f.moved && f.moved[b.char])
-    ? Math.floor(performance.now() / WLSprites.frameMs()) % 4 : -1;
-  const img = (look && window.WLSprites && WLSprites.ready)
-    ? WLSprites.cell(look, (f.facing && f.facing[b.char]) || 'front', phase) : null;
+  const look = looks[b.char], spr = window.WLSprites;
+  const phase = (spr && playing && f.moved && f.moved[b.char])
+    ? Math.floor(performance.now() / spr.frameMs()) % 4 : -1;
+  const img = (look && spr && spr.ready)
+    ? spr.cell(look, (f.facing && f.facing[b.char]) || 'front', phase) : null;
   if (!img) { drawCell('bot:' + b.job, b.x, b.y, alpha, rot, colors[b.char]); return; }
   const px = b.x * T * S, py = b.y * T * S, sz = T * S;
   ctx.save();
