@@ -736,24 +736,28 @@ def _last_prose(last, names=None):
     return json.dumps(last, ensure_ascii=False)        # 미지 형태 — 정직한 폴백(숨기지 않는다)
 
 
-_TRAIL_RUNS = {"walking": "%d걸음 걸었다", "following": "%d틱 곁을 따라 걸었다",
-               "waiting": "%d틱 기다렸다", "resting": "%d틱 쉬었다"}
+_TRAIL_RUNS = {"walking": "%d걸음", "following": "%d틱 동행",
+               "waiting": "%d틱 대기", "resting": "%d틱 휴식"}
+
+
+def _tag_str(tags):
+    """꼬리표 목록 → '[라벨] 사실 · [라벨] 사실'."""
+    return " · ".join(("[%s] %s" % (lb, s)).rstrip() for _, lb, s in tags)
 
 
 def _trail_prose(trail, names=None):
-    """궤적(D38, 09-06) — 마지막 결정 이후 일어난 일을 순서대로 ' → ' 로 잇는다.
-    연속 걸음·동행·대기·휴식 틱은 'N걸음 걸었다' 꼴로 접고(그 사이 주운 보물·물약은 접미로 살린다),
-    작정 집행 수는 '작정대로 ' 접두, 상한에 잘린 앞부분은 '…(n건 생략)'. 각 항목 문장은 _last_prose
-    재사용 — 어휘 전거가 같아 새 폴백이 안 생긴다(verify_wire ③ 감시 그대로)."""
-    parts, run = [], None                    # run = [result, n, 보물 n, 물약 n]
+    """궤적(D38 → D40 꼬리표식, 09-06 파트너 확정 "꼬리표식으로 바꾸자·픽셀 던전 방식") — 마지막 결정 이후
+    일어난 일을 사건 사전(dungeon_gm.event_tags)의 꼬리표로 ' → ' 이어 찍는다: "[대화] 아이템 상인 → 물약 받음
+    → 작정대로 [이동 시작] f1 쪽 → 3걸음 · [획득] 보물 → [도착] f1 곁 · [출혈] −1 (HP 7)". 연속 걸음·동행·대기·
+    휴식 틱은 'N걸음' 꼴로 접고 그 사이 사건(획득·문 사용·출혈)은 접은 덩어리 뒤에 붙인다. 작정 집행 수는
+    '작정대로 ' 접두, 상한에 잘린 앞부분은 '…(n건 생략)'. 문장형 서술은 관전·스트림·목격 줄에 남는다."""
+    parts, run = [], None                    # run = [result, n, extras(tags)]
 
     def flush():
         if run:
             s = _TRAIL_RUNS[run[0]] % run[1]
             if run[2]:
-                s += " — 길에서 보물을 주웠다" + (("(%d개)" % run[2]) if run[2] > 1 else "")
-            if run[3]:
-                s += " — 회복 물약도 챙겼다"
+                s += " · " + _tag_str(run[2])
             parts.append(s)
     for e in trail:
         if not isinstance(e, dict):
@@ -762,17 +766,17 @@ def _trail_prose(trail, names=None):
             flush(); run = None
             parts.append("…(%d건 생략)" % int(e.get("n") or 0))
             continue
-        r = e.get("result")
-        if e.get("type") == "walk" and r in _TRAIL_RUNS:
+        tags = G.event_tags(e, names)
+        if tags and tags[0][0] == "move":
+            r = tags[0][1]                       # 라벨 자리에 result(walking/following/…)가 온다
             if run and run[0] == r:
                 run[1] += 1
             else:
-                flush(); run = [r, 1, 0, 0]
-            run[2] += 1 if e.get("treasure") else 0
-            run[3] += 1 if e.get("potion") else 0
+                flush(); run = [r, 1, []]
+            run[2].extend(tags[1:])
             continue
         flush(); run = None
-        parts.append(("작정대로 " if e.get("plan") else "") + _last_prose(e, names))
+        parts.append(("작정대로 " if e.get("plan") else "") + _tag_str(tags))
     flush()
     return " → ".join(parts)
 
@@ -1038,11 +1042,10 @@ def _wire(obs, names=None):
             L.append(line)
             if it.get("say"):
                 L.append('  그때 동료에게 한 말: "%s"' % it["say"])
-        if len(trail) > 1:                    # 다건 = 궤적 체인. 1건이면 아래 구판 문장 그대로(핀 보호)
+        if len(trail) > 1:                    # 다건 = 꼬리표 체인(D40). 출혈은 꼬리표가 실어 별도 줄 없음
             L.append("- 그 뒤 일어난 일: " + _trail_prose(trail, names))
-            bl = [e for e in trail if isinstance(e, dict) and e.get("bleed")]
-            if bl:                            # 출혈(D34) — 걷는 동안 흘린 피(사실만), 마지막 값
-                L.append("- 걷는 동안 출혈로 피를 흘렸다 — 남은 HP %d" % bl[-1]["bleed"].get("hp", 0))
+        elif trail:                           # 1건 — 궤적 판은 1건도 꼬리표(파트너 확정 "꼬리표식으로 바꾸자")
+            L.append("- 그 결과: " + _trail_prose(trail, names))
         elif la:
             L.append("- 그 결과: %s" % _last_prose(la, names))
             if la.get("bleed"):                   # 출혈(D34) — 걷는 동안 흘린 피(사실만)

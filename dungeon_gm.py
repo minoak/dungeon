@@ -22,6 +22,7 @@
   · 시드 RNG 스트림 일원화(self.rng) — 모든 굴림 경유, 마스터→깊이별 파생 = 재현성.
 """
 
+import json                     # 사건 사전(D40) 폴백 — 모르는 결과 형태는 JSON 으로 정직 노출
 import math
 import os
 import random
@@ -163,6 +164,192 @@ def _tagsfx(f):
         return ''
     return ' — %s ×%d%s' % (t.get('verb', '?'), int(t.get('n', 0)),
                              (' (%s)' % t['note']) if t.get('note') else '')
+
+
+# ── 사건 사전(D40, 2026-09-06 파트너 확정 "꼬리표식으로 바꾸자·픽셀 던전 방식·위급은 4분의 1") ──
+# 픽셀 던전의 GLog 처럼 사건마다 짧은 꼬리표 하나 — "[발견] 고블린 m3", "[피격] 고블린(m3) −2 (HP 8)", "[출혈] 걸림".
+# 궤적(D38)·층 집계·결산이 **같은 사전**을 센다(STATUS_KINDS·BONES 선례 — 사전 하나). 값=(집계 여부).
+# 문장형 서술(_last_prose·act_summary·_witness_prose)은 관전·스트림·목격 줄에 남는다 — 캐릭터 자기 궤적만 꼬리표다.
+EVENT_KINDS = {
+    'spot': True, 'hit': True, 'kill': True, 'miss': True, 'hurt': True, 'status': True,
+    'critical': True, 'recovered': True, 'trap': True, 'trap_safe': True, 'loot': True, 'use': True,
+    'door': True, 'talk': True, 'rest_done': True, 'hail': True, 'lost': True, 'reunion': True,
+    'wander': True, 'enter': True, 'descend': True, 'ascend': True, 'plan_broken': True,
+    'wait_allies': True, 'search': True, 'exhausted': True,
+    'move': False, 'start': False, 'arrive': False, 'blocked': False, 'swap': False, 'misc': False,
+}
+WITNESS_LABELS = {              # 목격 사건(witnessed kind) → 집계 라벨. 문장은 brains._witness_prose 그대로
+    'ally_hurt': '동료 피격', 'ally_down': '동료 전사', 'ally_hit': '동료 명중', 'ally_kill': '동료 처치',
+    'ally_trap': '동료 함정', 'ally_heal': '동료 회복', 'ally_loot': '동료 획득', 'ally_spot': '동료 발견',
+    'ally_mishap': '동료 사고', 'ally_use': '동료 사용', 'mon_use': '몹 문 사용', 'ally_status': '동료 상태',
+}
+_RUN_RESULTS = {'walking': '걸음', 'following': '틱 동행', 'waiting': '틱 대기', 'resting': '틱 휴식'}
+
+
+def event_tags(rec, names=None):
+    """사건 사전 투영(D40): 엔진 결과 dict 하나 → [(키, 라벨, 짧은 사실)]. 한 결과가 여러 사실을 담으면
+    (조우: 적 여럿+함정+발견) 여러 꼬리표. 사실만·해석 없음·조향 없음. 모르는 형태=('misc','기타',JSON).
+    어휘 전거는 STREAM_FORMAT 이벤트 표 — _last_prose 와 같은 결과를 읽되 문장 대신 꼬리표를 낸다."""
+    if not isinstance(rec, dict):
+        return [('misc', '기타', str(rec))]
+    t, r = rec.get('type'), rec.get('result')
+    tgt = str(rec.get('target') or '')
+    nm = lambda c: (names or {}).get(c, '동료')
+    out = []
+    if t == 'state':
+        k = 'critical' if r == 'critical' else 'recovered'
+        return [(k, '위급' if k == 'critical' else '위급 해제', 'HP %d/%d' % (rec.get('hp', 0), rec.get('maxhp', 0)))]
+    if t == 'hurt':
+        s = '%s(%s) −%d (HP %d)%s' % (rec.get('by', '?'), rec.get('by_id', '?'), rec.get('dmg', 0),
+                                      rec.get('hp', 0), ' 기습' if rec.get('surprise') else '')
+        out.append(('hurt', '피격', s))
+        if rec.get('status'):
+            out.append(('status', rec['status'], '걸림'))
+        return out
+    if t == 'hail':
+        who = ', '.join(nm(c) for c in rec.get('froms', [])) or '동료'
+        return [('hail', '부름', '%s의 말에 멈춤' % who)]
+    if t == 'plan_broken':
+        st = rec.get('step') or {}
+        return [('plan_broken', '작정 깨짐', '%s %s — %s' % (st.get('type', '?'), st.get('target', ''), rec.get('why', '?')))]
+    if t == 'attack':
+        if r != 'attack':
+            return [('miss', '헛침', '대상 없음' if r == 'no_target' else '사거리 밖')]
+        who = '%s(%s)' % (rec.get('target', '?'), rec.get('target_id', '?'))
+        if rec.get('killed'):
+            return [('kill', '처치', who)]
+        if rec.get('hit'):
+            return [('hit', '명중', '%s −%d%s' % (who, rec.get('dmg', 0), ' 회심' if rec.get('crit') else ''))]
+        return [('miss', '빗나감', who)]
+    if t == 'drink':
+        return [('use', '사용', '물약 (HP %d, 남은 %d)' % (rec.get('hp', 0), rec.get('potions', 0)))] \
+            if r == 'drink_heal' else [('misc', '기타', '물약 없음')]
+    if t == 'search':
+        f = rec.get('found') or []
+        return [('search', '수색', ('발견 ' + ', '.join(x.get('name', '?') for x in f)) if f else '허탕')]
+    if t == 'wait':
+        return [('start', '대기 시작', '')]
+    if t == 'rest':
+        return [('start', '휴식 시작', '')]
+    if t == 'interact':
+        if r == 'exit':
+            return [('descend', '하강', '함께' if len(rec.get('party') or []) > 1 else '혼자')]
+        if r == 'ascend':
+            return [('ascend', '상행', '마을로')]
+        if r == 'wait_allies':
+            bits = []
+            if rec.get('missing'):
+                bits.append('빠짐 ' + ','.join(nm(c) for c in rec['missing']))
+            if rec.get('busy'):
+                bits.append('딴 일 ' + ','.join(nm(c) for c in rec['busy']))
+            return [('wait_allies', '동료 대기', ' · '.join(bits))]
+        if r == 'treasure':
+            return [('loot', '획득', '보물')]
+        if r == 'potion':
+            return [('loot', '획득', '물약 (소지 %d)' % rec.get('potions', 0))]
+        if r == 'chest_loot':
+            return [('loot', '획득', '상자 → 보물 %d' % rec.get('loot', 0))]
+        if r == 'chest_trap':
+            out.append(('trap', '함정', '상자 독침 −%d (HP %d)' % (rec.get('dmg', 0), rec.get('hp', 0))))
+        elif r == 'fountain_heal':
+            return [('use', '사용', '샘 +%d (HP %d)' % (rec.get('heal', 0), rec.get('hp', 0)))]
+        elif r == 'fountain_harm':
+            out.append(('trap', '함정', '오염된 샘 −1 (HP %d)' % rec.get('hp', 0)))
+        elif r == 'equip':
+            return [('use', '착용', '%s%s' % (rec.get('item', '?'),
+                                             (' (헌것 %s 내려놓음)' % rec['dropped']) if rec.get('dropped') else ''))]
+        elif r == 'npc_gift':
+            return [('talk', '대화', '%s: %s 받음' % (rec.get('npc', '?'), rec.get('item', '?')))]
+        elif r == 'npc_talk':
+            return [('talk', '대화', '%s "%s"' % (rec.get('npc', '?'), (rec.get('line') or '')[:30]))]
+        elif r in ('nothing', 'too_far', 'no_target'):
+            return [('misc', '헛손질', r)]
+        if out:
+            if rec.get('status'):
+                out.append(('status', rec['status'], '걸림'))
+            return out
+        return [('misc', '기타', json.dumps(rec, ensure_ascii=False))]
+    if t in ('goto', 'explore', 'follow'):
+        if r == 'pathed':
+            return [('start', '이동 시작', (tgt + ' 쪽') if tgt and tgt != 'auto' else '새 길')]
+        if r == 'following':
+            return [('start', '동행 시작', nm(tgt[1:]) if tgt.startswith('b') else tgt)]
+        if r == 'arrived':
+            return [('arrive', '도착', tgt + ' — 이미 곁')]
+        if r == 'no_path':
+            return [('exhausted', '막다름', '새 길 없음' if rec.get('exhausted') else '지금 갈 길 없음')]
+        if r == 'blocked':
+            return [('blocked', '길 막힘', ', '.join(a.get('name', '?') for a in (rec.get('allies') or [])) or '동료')]
+    if t == 'walk':
+        extras = []
+        if rec.get('door') and r != 'arrived':
+            extras.append(('door', '문 사용', str(rec['door'])))
+        if rec.get('treasure'):
+            extras.append(('loot', '획득', '보물'))
+        if rec.get('potion'):
+            extras.append(('loot', '획득', '물약'))
+        if rec.get('bleed'):
+            b = rec['bleed']
+            extras.append(('status', '출혈', '−1 (HP %d)%s' % (b.get('hp', 0), ' — 쓰러짐' if b.get('down') else '')))
+        if r in _RUN_RESULTS:
+            return [('move', r, '')] + extras
+        if r == 'arrived':
+            if tgt[:1] == 'd' and tgt[1:].isdigit():
+                return [('door', '문 사용', tgt)] + extras
+            return [('arrive', '도착', (tgt or '목적지') + ' 곁')] + extras
+        if r == 'at_exit':
+            return [('arrive', '도착', '계단')] + extras
+        if r == 'treasure':
+            return [('loot', '획득', '보물')] + [e for e in extras if e[0] != 'loot']
+        if r == 'potion':
+            return [('loot', '획득', '물약')] + [e for e in extras if e[0] != 'loot']
+        if r == 'encounter':
+            for m in rec.get('monsters') or []:
+                out.append(('spot', '발견', '%s(%s)' % (m.get('kind', '?'), m.get('id', '?'))))
+            tr = rec.get('trap')
+            if tr:
+                if tr.get('safe'):
+                    out.append(('trap_safe', '함정 회피', tr.get('name', '함정')))
+                elif tr.get('alarm') is not None:
+                    out.append(('trap', '함정', '%s 울림' % tr.get('name', '경보')))
+                else:
+                    hp = rec.get('hp', tr.get('hp'))
+                    out.append(('trap', '함정', '%s −%d%s' % (tr.get('name', '함정'), tr.get('dmg', 0),
+                                                            (' (HP %d)' % hp) if hp is not None else '')))
+                    if tr.get('status'):
+                        out.append(('status', tr['status'], '걸림'))
+            for f in rec.get('found') or []:
+                out.append(('spot', '발견', f.get('name', '?')))
+            if rec.get('woke') == 'rest':
+                out.insert(0, ('arrive', '휴식 중단', '새 몹'))
+            return (out or [('spot', '발견', '새로운 것')]) + extras
+        if r == 'blocked':
+            who = ', '.join(a.get('name', '?') for a in (rec.get('allies') or [])) or \
+                  ', '.join(m.get('kind', '?') for m in (rec.get('monsters') or [])) or '길'
+            return [('blocked', '길 막힘', who)] + extras
+        if r == 'lost':
+            return [('lost', '놓침', nm(tgt[1:]) if tgt.startswith('b') else tgt)] + extras
+        if r == 'idle':
+            return [('arrive', '동행 끝', nm(tgt[1:]) if tgt.startswith('b') else tgt)] + extras
+        if r == 'reunion':
+            return [('reunion', '낯익은 곳', rec.get('name', '와 본 곳'))] + extras
+        if r == 'wander':
+            return [('wander', '맴돎', '새로 본 것 없음')] + extras
+        if r in ('wait_met', 'rest_met'):
+            return [('arrive', '동료 도착', ', '.join(nm(c) for c in rec.get('allies', [])) or '동료')] + extras
+        if r == 'wait_bored':
+            return [('arrive', '기다림 끝', '아무도 안 옴')] + extras
+        if r == 'rested':
+            cl = rec.get('cleared') or []
+            return [('rest_done', '휴식 완료', 'HP +%d%s' % (rec.get('healed', 0), (', 나음: ' + '·'.join(cl)) if cl else ''))] + extras
+        if r == 'swapped':
+            return [('swap', '자리 교대', rec.get('with', '동료'))] + extras
+        if r == 'entered':
+            zz = rec.get('zone') or {}
+            return [('enter', '새 방', '%s %s' % (zz.get('kind', '공간'), zz.get('id', '')))] + extras
+        if r == 'sighted':
+            return [('spot', '발견', ', '.join(x.get('name', '?') for x in (rec.get('seen') or [])))] + extras
+    return [('misc', '기타', json.dumps(rec, ensure_ascii=False))]
 HAIL_CD = 3              # 말 걸림 정지(07-24 D24) 쿨다운: 같은 발화자는 이 턴 수 안에 다시 말해도
                          #   재정지 없음(메시지 배달은 그대로 — 다음 자연 결정에 읽음). 수다 루프
                          #   (마주 서서 무한 핑퐁) 방어는 내용 아닌 구조로. D23 회의 서랍행으로
@@ -1804,6 +1991,11 @@ class Dungeon:
         작정 집행 틱은 view() 가 없으니 자연히 쌓인다 = 구멍을 메우는 원리. 기록자는 여기 한 곳
         (act·자동보행 걸음·plan_broken·교대·말 걸림·피격 전부 경유). 항목 = {…res, turn, plan?}.
         엔진 판정은 절대 안 읽는다(자기 경험의 기록·노출뿐). 상한 TRAIL_MAX — 넘치면 앞을 버리고 gap 누적."""
+        self._trail_push(bot, rec, plan)
+        self._hp_watch(bot)
+
+    def _trail_push(self, bot, rec, plan=False):
+        """궤적 한 칸 추가(상한·gap 부기). _trail_add 와 _hp_watch 가 쓴다 — 여기선 HP 감시 안 함(재귀 방지)."""
         if not getattr(self, 'trail_on', False):
             return
         tr = bot.setdefault('trail', [])
@@ -1812,6 +2004,20 @@ class Dungeon:
         if len(tr) > TRAIL_MAX:
             bot['trail_gap'] = int(bot.get('trail_gap') or 0) + (len(tr) - TRAIL_MAX)
             del tr[:len(tr) - TRAIL_MAX]
+
+    def _hp_watch(self, bot):
+        """위급(D40, 2026-09-06 파트너 확정 "위급은 4분의 1") — 상태 전이 사건: HP 가 최대의 1/4 이하로 내려가는
+        순간 1회 [위급], 다시 위로 올라오면 1회 [위급 해제]. 매 틱 반복 없음(넘는 순간만) — 사실만, 조향 없음
+        (픽셀 던전이 상태를 사건으로 찍는 방식). 자기 결과가 궤적에 실릴 때마다 살핀다 = HP 를 바꾸는 모든 경로
+        (피격·함정·출혈·물약·샘·휴식)가 _note_last/_trail_add 를 지나므로 빠지지 않는다."""
+        if not getattr(self, 'trail_on', False) or not bot.get('alive', True):
+            return
+        crit = bot['hp'] * 4 <= bot['maxhp']
+        if crit == bool(bot.get('critical')):
+            return
+        bot['critical'] = crit
+        self._trail_push(bot, {'type': 'state', 'result': 'critical' if crit else 'recovered',
+                               'hp': bot['hp'], 'maxhp': bot['maxhp']})
 
     def _feature_by_target(self, target_id):
         """'f<n>' → Feature(없으면 None). D39: 상호작용 전에 잡는다(상자는 열리며 사라진다)."""
@@ -2546,6 +2752,8 @@ class Dungeon:
         base.update(to=[nx, ny])
         if enter.get('bleed'):
             base['bleed'] = enter['bleed']            # 출혈(D34) 걸음 — 이 걸음의 어떤 결과에도 병기
+        if enter.get('door'):
+            base['door'] = enter['door']              # 문 사용(D40) — 이 걸음이 문 타일을 밟았다(스트림 additive)
         if not bot['alive']:                          # 함정 즉사·출혈사 — 시체는 지각하지 않는다(사후 인지굴림 금지:
             bot['order'], bot['path'], bot['plan'] = None, [], []   # 죽은 자의 주사위가 숨은 것을 드러내
                                                       #   산 자 경로를 바꿈. 작정도 죽음과 함께 소멸
@@ -2752,6 +2960,7 @@ class Dungeon:
         if self.scan:                             # D30(09-05) 오브젝트 사용 목격 — 첫 사례=문 타일(+).
             dr = next((dd for dd in self.doors.values() if dd.cell == (nx, ny)), None)
             if dr is not None:                    # 밟는 순간 1회(너머로 내려서는 걸음은 안 온다). 트임
+                out['door'] = dr.id               # D40(09-06): 자기 자신의 문 사용도 같은 순간 — 걸음 결과에 병기
                 self._witness(bots, nx, ny,       #   (cell 없는 문)은 빛을 안 막아 동료가 사라지지 않으니
                               {'kind': 'ally_use', 'char': bot['char'],   # 대상 아님. 교대(swap)로 밀려난
                                'what': '문', 'id': dr.id},                 # 동료는 여기 안 온다(지나간 게
