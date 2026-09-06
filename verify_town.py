@@ -4,6 +4,7 @@
 층 보존(재입장=같은 1층) + 1층 아래 계단=관측 클리어(파트너 확정).
 게이트:
   ① build_town: 맵·NPC 3(장비·아이템·여관주인)·인사·'던전 입구' 개명 / 좌표-그림 어긋남=즉사
+     / **D29 개정(09-06)**: 러너 스위치 미러링(hail·wait·motion·events·graves·ally_sight·social·trail·objtags) — selfstop·dry 는 마을 제외
   ② 전체 시야: visible_cells=전맵 / obs.town / 수색·탐색 옵션 부재(거짓 라벨 방지) / 마을 라벨
   ③ NPC: 몸이 막는다(walkable) / 기존 판(obs)에 town 키 없음 / **D32 상점 v0(09-05)**: 장비 상인=빈손이면
      단검 1회(npc_gift)·무장한 채 첫 방문=인사 / 아이템 상인=물약 1개 / **두 번째부터(09-06 개정, npc_met)=
@@ -65,6 +66,13 @@ def mkbot(char, x, y):
 # ───────────────────── ① build_town ─────────────────────
 print("── ① build_town")
 d, starts = show_runner.build_town()
+check("① D29 개정(09-06): build_town 이 러너 스위치를 미러링(hail·wait·motion·events·graves·ally_sight·social·trail·objtags) · selfstop·dry 는 마을 제외",
+      (d.hail, d.wait_verb, d.motion, d.events, d.graves, d.ally_sight, d.social, d.trail_on, d.objtags)
+      == (show_runner.HAIL_ON, show_runner.WAIT_ON, show_runner.MOTION_ON, show_runner.EVENTS_ON,
+          show_runner.GRAVES_ON, show_runner.ALLY_SIGHT_ON, show_runner.SOCIAL_ON, show_runner.TRAIL_ON,
+          show_runner.OBJTAGS_ON)
+      and d.hail and d.wait_verb and d.events and d.trail_on and d.objtags
+      and d.selfstop is False and d.dry_signal is False)
 npcs = sorted(f.name for f in d.features.values() if f.type == 'npc')
 check("① 마을 로드 — town 스위치·손그림 격자·출발 표기",
       d.town and d.w == 31 and d.h == 12 and starts.get('1') is not None)

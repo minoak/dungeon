@@ -513,6 +513,15 @@ def build_town():
     d.status = STATUS_ON                   # 상태 태그(D34)는 마을에서도 몸에 붙어 있다(걸으면 피가 난다)
     d.rest_verb = REST_ON                  # 휴식(D35)은 마을에서도 된다(여관은 다음 단계)
     d.relations = RELATIONS_ON             # 관계 장부(D36)는 마을 대화도 센다
+    # D29 개정(09-06): 러너 스위치 미러링 — from_ascii 는 __new__ 경유라 아래가 전부 False 였다(마을=스위치 암흑
+    # 지대: 실측 마을 113틱 말 걸림 정지 0회·배달된 말 7%만 읽힘·wait 동사 없음·상인 선물 목격 미배달). 09-05
+    # scenario.py 구멍 ②와 같은 부류(D24~D27 신설 때 여기 미러링 누락). selfstop·dry_signal 은 마을에서 계속
+    # 끈다 — 전체 시야라 seen_cells 증분이 항상 0 이라 맴돎·무발견 신호가 뜻을 잃는다(상인 왕복에 맴돎 정지를
+    # 걸지는 후속 재론).
+    d.hail, d.wait_verb, d.motion = HAIL_ON, WAIT_ON, MOTION_ON       # D24 말 걸림 정지 · D25 wait · D27 이동중
+    d.events, d.graves = EVENTS_ON, GRAVES_ON                          # D22 사건층(상인 선물 목격·입구 사용 목격)
+    d.ally_sight, d.social = ALLY_SIGHT_ON, SOCIAL_ON                  # 동료 시야 면제 · 채널 분리
+    d.trail_on, d.objtags = TRAIL_ON, OBJTAGS_ON                       # D38 궤적 · D39 오브젝트 태그
     for n in spec.get("npcs", []):
         x, y = int(n["x"]), int(n["y"])
         if d.grid[y][x] != G.FLOOR:            # 좌표-그림 어긋남은 시작 전에 죽는 게 낫다
