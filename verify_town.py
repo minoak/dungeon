@@ -6,8 +6,9 @@
   ① build_town: 맵·NPC 3(장비·아이템·여관주인)·인사·'던전 입구' 개명 / 좌표-그림 어긋남=즉사
   ② 전체 시야: visible_cells=전맵 / obs.town / 수색·탐색 옵션 부재(거짓 라벨 방지) / 마을 라벨
   ③ NPC: 몸이 막는다(walkable) / 기존 판(obs)에 town 키 없음 / **D32 상점 v0(09-05)**: 장비 상인=빈손이면
-     단검 1회(npc_gift)·무장했으면 대사만 / 아이템 상인=물약 1개·같은 방문 두 번째는 대사만 / 동료 목격
-     ally_loot / 방문 단위 리셋(재스폰 dict) / 여관주인=인사만
+     단검 1회(npc_gift)·무장한 채 첫 방문=인사 / 아이템 상인=물약 1개 / **두 번째부터(09-06 개정, npc_met)=
+     '아까 왔잖아' line_again + again:true — 선물 여부와 무관, 여관주인 포함** / 동료 목격 ally_loot /
+     방문 단위 리셋(재스폰 dict: shop_served·npc_met 없음)
   ④ 계단 대칭(엔진 장면): stairs_up 모임 규칙(wait_allies→ascend·went=up) / 솔로 혼자 상행
      + 모임 동의=의사(08-09 셔틀 부검): 곁이어도 딴 작정=busy(안 끌려감) / 계단 목표·동행=동의
   ⑤ [러너 풀런] 왕복: 마을→1층→마을→1층→클리어 — ascend 레코드·depth 열·같은 1층(시드·격자·
@@ -104,8 +105,15 @@ check("③ 장비 상인(D32 상점 v0): 빈손이면 첫 말 걸기에 단검 �
       r['result'] == 'npc_gift' and r['npc'] == '장비 상인' and r['item'] == '단검'
       and b_adj.get('weapon') == {'name': '단검', 'bonus': 1} and '단검' in r['line'])
 r2 = d._interact(b_adj, 'f%d' % nf.id, [b_adj])
-check("③ 이미 무장했으면 다시 말 걸어도 대사만(line_again) — 무기 중복 지급 없음",
-      r2['result'] == 'npc_talk' and '무장' in r2['line'] and b_adj['weapon']['name'] == '단검')
+check("③ 두 번째 말 걸기 = '아까 왔잖아' 고정 대사(line_again)·again 표식 — 무기 중복 지급 없음",
+      r2['result'] == 'npc_talk' and '무장' in r2['line'] and '아까 왔잖아' in r2['line']
+      and r2.get('again') is True and b_adj['weapon']['name'] == '단검')
+b_armed = mkbot('9', nf.x, nf.y + 1)
+b_armed['weapon'] = {'name': '장검', 'bonus': 2}
+r2b = d._interact(b_armed, 'f%d' % nf.id, [b_armed])
+check("③ 무장한 채 첫 방문 = 인사(line)·선물 없음·again 없음 — 방문 여부와 선물 여부는 다른 사실(09-06 개정)",
+      r2b['result'] == 'npc_talk' and '아까' not in r2b['line'] and 'again' not in r2b
+      and b_armed['weapon']['name'] == '장검')
 pf = next(ff for ff in d.features.values() if ff.type == 'npc' and ff.name == '아이템 상인')
 b_p = mkbot('2', pf.x, pf.y + 1)
 b_w = mkbot('3', pf.x + 3, pf.y + 1)
@@ -126,6 +134,10 @@ b_i = mkbot('5', nf_inn.x, nf_inn.y + 1)
 r5 = d._interact(b_i, 'f%d' % nf_inn.id, [b_i])
 check("③ 여관주인: 선물 없음 — npc_talk 인사만(회복은 다음 단계)",
       r5['result'] == 'npc_talk' and '방' in r5['line'] and 'shop_served' in b_i and not b_i['shop_served'])
+r6 = d._interact(b_i, 'f%d' % nf_inn.id, [b_i])
+check("③ 여관주인 두 번째 = '아까 왔잖아'(선물 없는 NPC 도 방문 대사) · npc_met 방문 장부는 재스폰에 없다",
+      r6['result'] == 'npc_talk' and '아까 왔잖아' in r6['line'] and r6.get('again') is True
+      and 'npc_met' not in G.spawn(d, '6', [], sheet=G.HEROES['1']))
 d0 = G.Dungeon(seed=7)
 b0 = mkbot('1', 1, 1)
 b0['x'], b0['y'] = next((x, y) for y in range(d0.h) for x in range(d0.w)

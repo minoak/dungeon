@@ -2972,8 +2972,11 @@ class Dungeon:
         if f and f.type == 'npc':                # NPC(D29) 말 걸기 + D32(09-05) 상점 v0: 정해진 대사 + 선물
             gift = (getattr(self, 'npc_gifts', None) or {}).get(f.name) or {}
             served = bot.setdefault('shop_served', set())   # 방문 단위 — 층 전이의 재스폰이 새 봇 dict 를
-            given = None                                     #   만들므로 마을에 다시 오면 자동으로 비어 있다
-            if gift and f.name not in served:                #   ("살아 돌아오면 또 하나" — 후퇴→재정비 고리)
+            met = bot.setdefault('npc_met', set())          #   만들므로 마을에 다시 오면 자동으로 비어 있다
+            again = f.name in met                            #   ("살아 돌아오면 또 하나" — 후퇴→재정비 고리)
+            met.add(f.name)                                  # D32 개정(09-06 파트너 확정): 두 번째부터는 '아까 왔잖아'
+            given = None                                     #   고정 대사(line_again) — 방문 여부 기준, 선물 여부와 무관.
+            if not again and gift and f.name not in served:  #   실측: 이미 받고도 8틱마다 상인 둘을 번갈아 60틱(seed 726984)
                 if gift.get('potions'):
                     bot['potions'] = bot.get('potions', 0) + int(gift['potions'])
                     given = '물약'
@@ -2988,9 +2991,10 @@ class Dungeon:
                               exclude=(bot['char'],))
                 return {**base, 'result': 'npc_gift', 'npc': f.name, 'item': given,
                         'line': self.npc_lines.get(f.name, '…')}
-            again = (getattr(self, 'npc_lines_again', None) or {}).get(f.name)
+            line_again = (getattr(self, 'npc_lines_again', None) or {}).get(f.name)
             return {**base, 'result': 'npc_talk', 'npc': f.name,
-                    'line': again if (gift and again) else self.npc_lines.get(f.name, '…')}
+                    'line': line_again if (again and line_again) else self.npc_lines.get(f.name, '…'),
+                    **({'again': True} if again else {})}    # 스트림 additive — 재방문 계측(부검용)
         if f and f.type == 'treasure':
             del self.features[f.id]; bot['bag'] += 1
             self._witness(bots, tx, ty,          # 전달층(D22 확장 07-29): 획득도 목격 — 사라진 보물의 행방
