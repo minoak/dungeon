@@ -926,7 +926,7 @@ def _wire(obs, names=None):
         for f in s.get("features", []):
             put(f.get("bearing"), f.get("dist", 0),
                 "%s %s %dm%s" % (f.get("name", "?"), f.get("id", "?"), f.get("dist", 0),
-                                 " (와 본 자리)" if f.get("visited") else ""))
+                                 " (와 본 자리)" if f.get("visited") else "") + G._tagsfx(f))   # D39 태그 접미
         for t in s.get("traps", []):
             put(t.get("bearing"), t.get("dist", 0),
                 "%s %dm (발각됨 — 위치를 안다)" % (t.get("name", "함정"), t.get("dist", 0)))
@@ -967,7 +967,7 @@ def _wire(obs, names=None):
                 L.append("  · 네가 아는 습성: %s" % m["lore"])
         for f in s.get("features", []):
             L.append("- %s %s — %s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
-                                         " (와 본 자리)" if f.get("visited") else ""))
+                                         " (와 본 자리)" if f.get("visited") else "") + G._tagsfx(f))   # D39 태그 접미
         for b in s.get("bots", []):
             L.append("- %s — 겉보기 %s%s — %s%s%s"
                      % (who(b.get("char", "?")), b.get("condition", "?"),

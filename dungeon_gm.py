@@ -144,6 +144,25 @@ WAIT_MAX = 15            # wait(D25) 지루함 상한: 이만큼 틱을 기다�
                          #   합의 15~20 중 하한 채택. 튜닝은 큰 판 실측 후(튜닝마라).
 TRAIL_MAX = 12           # 자기 행동 궤적(D38, 09-06) 상한: 마지막 view() 이후 보존할 결과 수. 넘치면 앞을
                          #   버리고 생략 표식 한 칸(gap n) — 결정 사이가 보통 10틱 안이라 실전에선 안 찬다
+OBJ_VERBS = {'npc': '말 걸어 봄'}   # 오브젝트 태그(D39, 09-06): **쓰고도 남아 있는 오브젝트만** — 지금은 NPC 뿐
+                                    #   (샘·상자·보물·물약·장비는 쓰면 사라져 "×N"이 뜻이 없다. 문·몹은 서랍)
+
+
+def _obj_note(res):
+    """오브젝트 태그의 마지막 사실 한 마디(D39) — 상호작용 결과에서. 해석 없음(사실만). None=이전 note 유지."""
+    if res.get('result') == 'npc_gift':
+        return '%s 받음' % res.get('item', '?')
+    return None
+
+
+def _tagsfx(f):
+    """오브젝트 태그 접미(D39) — ' — 말 걸어 봄 ×2 (물약 받음)'. 리모컨 라벨과 wire 시야 줄의 단일 소스(_mfact 선례).
+    태그 없으면 빈 문자열(구판 문자열 그대로)."""
+    t = f.get('tag') if isinstance(f, dict) else None
+    if not t:
+        return ''
+    return ' — %s ×%d%s' % (t.get('verb', '?'), int(t.get('n', 0)),
+                             (' (%s)' % t['note']) if t.get('note') else '')
 HAIL_CD = 3              # 말 걸림 정지(07-24 D24) 쿨다운: 같은 발화자는 이 턴 수 안에 다시 말해도
                          #   재정지 없음(메시지 배달은 그대로 — 다음 자연 결정에 읽음). 수다 루프
                          #   (마주 서서 무한 핑퐁) 방어는 내용 아닌 구조로. D23 회의 서랍행으로
@@ -338,7 +357,8 @@ class Dungeon:
                  scan=False, n_potions=0, loops=False, selfstop=False,
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
                  motion=False, ally_sight=False, social=False, solo=False, n_gear=0,
-                 town=False, status=False, rest_verb=False, relations=False, trail=False):
+                 town=False, status=False, rest_verb=False, relations=False, trail=False,
+                 objtags=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -424,6 +444,8 @@ class Dungeon:
         self.trail_on = bool(trail)   # 자기 행동 궤적(D38, 09-06) — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_TRAIL(기본 1)로 켠다. 마지막 view() 이후 일어난 결과를 순서대로
                                    #   다음 결정에 노출(_trail_add). 판정 무접촉 — 자기 경험의 기록·노출뿐.
+        self.objtags = bool(objtags)   # 오브젝트 태그(D39, 09-06) — 기본 꺼짐. 러너가 DUNGEON_OBJTAGS(기본 1)로 켠다.
+                                   #   나↔오브젝트 상호작용 횟수·마지막 사실을 시야 줄·라벨 접미로(_obj_tag). 판정 무접촉.
         self._talked = set()       # (쌍, 틱) — 같은 틱 양방향 대화를 한 번으로(note_talk 중복 방지)
         self._ring_target = 0      # loops 판에서 주 고리에 배속할 방 수(_carve_rooms 가 굴림)
         self.rooms = self._carve_rooms()
@@ -497,6 +519,7 @@ class Dungeon:
         d.rest_verb = False        # 휴식(D35) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.relations = False        # 관계 장부(D36) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.trail_on = False         # 자기 행동 궤적(D38) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.objtags = False          # 오브젝트 태그(D39) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d._talked = set()
         d.grave_of = {}            # 묘→캐릭터(D22 개정) — __new__ 경유라 명시 초기화
         d.npc_lines = {}           # NPC 인사 사전 — build_town 이 채운다(데이터, 판정 무접촉)
@@ -1289,7 +1312,8 @@ class Dungeon:
                 if m.alive and not m.concealed and (m.x, m.y) in seen]
         feats = [_knowledge('feature:' + f.type,
                             {'id': 'f%d' % f.id, 'type': f.type, 'name': f.name,
-                             'visited': (f.x, f.y) in self.visited, **bear(f.x, f.y)})
+                             'visited': (f.x, f.y) in self.visited, **bear(f.x, f.y),
+                             **self._obj_tag_obs(bot, f)})      # D39 오브젝트 태그(있을 때만)
                  for f in self.features.values()
                  if f.type != 'exit' and not f.concealed and (f.x, f.y) in seen]
         if self.events:                        # D22 개정(09-06 파트너 발제 "두란의 묘지를 발견한다면
@@ -1481,7 +1505,7 @@ class Dungeon:
                          if self.solo else
                          '계단을 올라 마을로 돌아간다 (규칙: 살아있는 일행 전원이 계단 근처에 모이고 저마다 하던 일이 없어야 올라간다)')
                 elif f['type'] == 'npc':       # NPC(D29) — 말 걸기(거래 아님. 사실만)
-                    _add('interact', f['id'], '말 걸기: %s %s (곁)' % (f['name'], f['id']))
+                    _add('interact', f['id'], '말 걸기: %s %s (곁)%s' % (f['name'], f['id'], _tagsfx(f)))   # D39 접미
                 elif f['type'] in ('weapon', 'armor'):
                     # 장비 비교(07-30 파트너 설계): 착용 정보는 시트에 상주(캐싱)하고, **비교는
                     # 입수 결정 시점에만** 여기 라벨로 나온다. 라벨=사실만(수치·지금 착용·스왑 물리).
@@ -1492,7 +1516,7 @@ class Dungeon:
                     _add('interact', f['id'], '장비: %s %s (발밑/인접) — 걸치면 %s +%d (지금: %s)'
                          % (f['name'], f['id'], word, GEAR_KINDS.get(f['name'], 0), now))
                 else:
-                    _add('interact', f['id'], '상호작용: %s %s (발밑/인접)' % (f['name'], f['id']))
+                    _add('interact', f['id'], '상호작용: %s %s (발밑/인접)%s' % (f['name'], f['id'], _tagsfx(f)))
         if bot.get('potions'):                 # 물약(07-17): 소지 중일 때만 어휘가 된다 — 즉시행동군.
             _add('drink', None,                #   주석=사실만(만피 낭비 경고는 '이미 살폈다' 선례)
                  '회복 물약을 마신다 — 상처가 전부 아문다 (한 턴 소모, 소지 %d병)%s'
@@ -1504,8 +1528,8 @@ class Dungeon:
                     exit_obj['bearing'], exit_obj['dist']))
         for f in feats:
             if not f['adj']:
-                _add('goto', f['id'], '이동: %s %s — %s, 거리 %d'
-                     % (f['name'], f['id'], f['bearing'], f['dist']))
+                _add('goto', f['id'], '이동: %s %s — %s, 거리 %d%s'
+                     % (f['name'], f['id'], f['bearing'], f['dist'], _tagsfx(f)))   # D39 접미
         if zone_obs is not None:               # D19 정정: 문 = 본 적 있는 것만 어휘가 된다(시야+기억)
             for dr in zone_obs['doors']:       # 출처 딱지=사실만(어디로 이어지는지는 안 준다 — 층 지도 아님)
                 tag = (' (문 너머는 가 본 곳)' if dr['been']
@@ -1745,7 +1769,9 @@ class Dungeon:
         if typ == 'attack':
             res = self._attack(bot, tgt, bots)
         elif typ == 'interact':
+            f_pre = self._feature_by_target(tgt)      # D39: 상호작용 전에 피처를 잡는다(상자는 열리며 사라진다)
             res = self._interact(bot, tgt, bots)
+            self._obj_tag(bot, f_pre, res)             # D39 오브젝트 태그(횟수·마지막 사실) — 판정 무접촉
         elif typ == 'search':
             res = self._search(bot, bots)
         elif typ == 'drink':
@@ -1786,6 +1812,38 @@ class Dungeon:
         if len(tr) > TRAIL_MAX:
             bot['trail_gap'] = int(bot.get('trail_gap') or 0) + (len(tr) - TRAIL_MAX)
             del tr[:len(tr) - TRAIL_MAX]
+
+    def _feature_by_target(self, target_id):
+        """'f<n>' → Feature(없으면 None). D39: 상호작용 전에 잡는다(상자는 열리며 사라진다)."""
+        s = str(target_id or '')
+        if s[:1] == 'f' and s[1:].isdigit():
+            return self.features.get(int(s[1:]))
+        return None
+
+    def _obj_tag(self, bot, f, res):
+        """오브젝트 태그(D39, 2026-09-06 파트너 발제 "태그 시스템에 궤적을 쌓자" → 합의 "궤적의 짝 —
+        태그=지금 참인 사실과 횟수, 궤적=순서"): 이 봇이 그 오브젝트와 상호작용한 횟수와 마지막 사실
+        한 마디를 기계가 센다(나↔오브젝트 사이의 사실 — D36 뼈의 오브젝트판. 몸 태그 D34 는 몸 상태로).
+        수명=봇 dict(층 재스폰이면 초기화 — shop_served 리듬). 엔진 판정은 절대 안 읽는다(시야 줄·라벨 접미뿐)."""
+        if not getattr(self, 'objtags', False) or f is None or f.type not in OBJ_VERBS:
+            return
+        if res.get('result') in ('no_target', 'too_far'):
+            return                                  # 닿지 않은 시도는 상호작용이 아니다
+        e = bot.setdefault('obj_tags', {}).setdefault(f.id, {'n': 0})
+        e['n'] += 1
+        note = _obj_note(res)
+        if note:
+            e['note'] = note
+
+    def _obj_tag_obs(self, bot, f):
+        """view() 용(D39): 피처 항목에 얹을 {'tag': {verb, n, note?}} — 태그 없으면 {} (구판 obs 그대로)."""
+        if not getattr(self, 'objtags', False) or f.type not in OBJ_VERBS:
+            return {}
+        e = (bot.get('obj_tags') or {}).get(f.id)
+        if not e or not e.get('n'):
+            return {}
+        return {'tag': {'verb': OBJ_VERBS[f.type], 'n': int(e['n']),
+                        **({'note': e['note']} if e.get('note') else {})}}
 
     def plan_step(self, bot, bots):
         """작정(D16)의 다음 수 활성화 — **착수 시점 재검증**(D16 유일한 신규 규칙).
@@ -3727,6 +3785,7 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
                                             #   러너가 발급기(bestiary)의 set 을 꽂는다(획득 즉시 obs 반영)
             'last': None,                   # 직전 행동/피격 결과 메모(D1 개정) — view 가 obs.last 로 노출
             'trail': [], 'trail_gap': 0,    # 자기 행동 궤적(D38, 09-06) — 마지막 view() 이후 결과 목록(노출 후 소거)
+            'obj_tags': {},                 # 오브젝트 태그(D39, 09-06) — fid→{n, note?}. 층 재스폰=초기화
             'witnessed': [],                # 목격(D18 A-3): 시야 내 동료 피격/전사 사실 축적 —
                                             # view 가 1회성 노출·소거. 스냅샷 화이트리스트 밖(계약 불변)
             'memories': [],                 # 기억(D22): 목격한 중대사(v0=fallen 전사) — 휘발 0,

@@ -76,7 +76,7 @@ def build(spec):
                       ("motion", "DUNGEON_MOTION"), ("selfstop", "DUNGEON_SELFSTOP"),   #   라이브 판과 같은
                       ("dry_signal", "DUNGEON_DRY"), ("status", "DUNGEON_STATUS"),      #   조건이어야 프로브가
                       ("rest_verb", "DUNGEON_REST"), ("relations", "DUNGEON_RELATIONS"),   # 참말을 한다)
-                      ("trail_on", "DUNGEON_TRAIL")):                                       # D38 궤적(09-06)
+                      ("trail_on", "DUNGEON_TRAIL"), ("objtags", "DUNGEON_OBJTAGS")):       # D38 궤적·D39 태그(09-06)
         setattr(d, attr, os.environ.get(env, "1") != "0")   # 전부 러너 기본 1 — 끄려면 env 로
     try:
         with open(os.path.join(HERE, "lore.json"), encoding="utf-8") as f:
@@ -125,6 +125,8 @@ def build(spec):
             b["last"] = dict(ov["last"])
         if "trail" in ov:                      # 궤적(D38 09-06) 프리셋 — 마지막 결정 이후 일어난 일(순서). 프로브용
             b["trail"] = [dict(x) for x in ov["trail"]]
+        if "obj_tags" in ov:                   # 오브젝트 태그(D39 09-06) 프리셋 — {"f<n>"|n: {n, note?}}
+            b["obj_tags"] = {int(str(k).lstrip("f")): dict(v) for k, v in ov["obj_tags"].items()}
         if "alive" in ov and not ov["alive"]:  # 죽은 동료 프리셋 — 명단 '죽었다'(D22 개정), 시야엔 안 나간다
             b["alive"] = False
         if ov.get("won"):                      # 먼저 내려간 동료 프리셋(D30 계단 프로브) — 명단 "먼저 내려갔다"
@@ -198,6 +200,7 @@ def play(spec, brain, state_dir):
             scan=SCAN_ON,                      # 스캐너(D19) 여부 — 정지 물리가 달라진다(비교 전제)
             ally_sight=ALLY_SIGHT_ON,          # 동료 시야 면제(07-26) — 시야 물리 메타(A/B 전제)
             trail=os.environ.get("DUNGEON_TRAIL", "1") != "0",   # 자기 행동 궤적(D38) — 표현층 메타
+            objtags=os.environ.get("DUNGEON_OBJTAGS", "1") != "0",   # 오브젝트 태그(D39) — 표현층 메타
             backend=brains.backend_name(),     # 두뇌 백엔드(2026-07-25 additive) — show_runner 와
                                                #   같은 필드명. 프로브도 어느 배관으로 잰 건지
                                                #   사후 판독돼야 한다(속도 실측이 이 파일도 쓴다)
