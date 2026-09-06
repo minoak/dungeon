@@ -45,6 +45,9 @@
   .pc { margin-bottom: 8px; }
   .pcHead { display: flex; align-items: baseline; gap: 6px; }
   .pcHead .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; align-self: center; }
+  .pcHead .face { width: 32px; height: 32px; image-rendering: pixelated; flex: none; align-self: center;
+                  background: #1a1d25; border-radius: 4px; }   /* D37 초상화 */
+  .pc.dead .face { filter: grayscale(1); opacity: .55; }
   .pcHead b { font-size: 13.5px; }
   .pcHead .job { color: #8a8f9c; font-size: 11.5px; }
   .pcHead .stat { margin-left: auto; font-size: 11.5px; color: #b9bec9; white-space: nowrap; }
@@ -112,6 +115,7 @@
   <span id="tlabel">—</span>
 </footer>
 
+<script src="assets/sprites/sprites.js"></script>   <!-- D37 파츠 스프라이트 합성기(론처와 공용) — 없어도 뷰어는 산다 -->
 <script>
 'use strict';
 /* ════════════════════════════════════════════════════════════════
@@ -125,6 +129,8 @@
    - 관전자 등급 진실: 숨은 함정·매복몹·숨은 보물을 반투명으로 **그린다**
      (극적 아이러니의 계승 — 이 화면은 봇에게 보여주면 안 된다)
    - 모르는 kind → 제네릭 폴백 스프라이트 (정보 소실 방지)
+   - 봇 외형(D37, 2026-09-06) = run_meta.party[].look → 파츠 스프라이트(assets/sprites/, 방향=직전 프레임과의
+     좌표 차, 걷기=재생 중 움직인 봇만). look 이 없는 구판 스트림·미로드 = 타일셋/글리프 그대로
    ════════════════════════════════════════════════════════════════ */
 
 const T = 16;          // 타일 원본 px
@@ -147,8 +153,8 @@ function iga(word) {
 
 /* ── 전역 상태 ── */
 let meta = null, endLine = null, frames = [], feedGroups = [];
-let names = {}, colors = {}, jobs = {}, deathTurn = {};
-let curIdx = 0, playing = false, speedIdx = 0, playTimer = null;
+let names = {}, colors = {}, jobs = {}, deathTurn = {}, looks = {};   // looks = D37 외형(run_meta.party[].look)
+let curIdx = 0, playing = false, speedIdx = 0, playTimer = null, animTimer = null;   // animTimer = D37 걷기 애니
 let curRun = null, isLive = false, liveTimer = null;
 let tilesets = { glyph: { label: '글리프 (tmux 계승)', builtin: true } };
 let curTs = 'glyph';
@@ -202,13 +208,33 @@ function parseStream(text) {
     // 모르는 kind: 조용히 무시 (additive 계약)
   }
 
-  // 명단·색·사망 시점 — meta 가 없으면(파일 머리 미도착) 스냅샷에서 유도
-  names = {}; colors = {}; jobs = {}; deathTurn = {};
+  // D37 방향·이동(파생 규칙): 직전 프레임과의 좌표 차로 바라보는 방향 — 안 움직이면 이전 방향 유지, 처음은 front.
+  // 새 층(level 프레임)은 재스폰이라 좌표 연속성이 없다 → 이동으로 안 센다(방향은 유지).
+  const face = {};
+  let prev = {};
+  for (const f of frames) {
+    f.facing = {}; f.moved = {};
+    if (f.kind === 'level') prev = {};
+    for (const b of f.bots) {
+      const p = prev[b.char];
+      if (p && (p[0] !== b.x || p[1] !== b.y)) {
+        const dx = b.x - p[0], dy = b.y - p[1];
+        face[b.char] = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'back' : 'front');
+        f.moved[b.char] = true;
+      }
+      f.facing[b.char] = face[b.char] || 'front';
+      prev[b.char] = [b.x, b.y];
+    }
+  }
+
+  // 명단·색·외형·사망 시점 — meta 가 없으면(파일 머리 미도착) 스냅샷에서 유도
+  names = {}; colors = {}; jobs = {}; deathTurn = {}; looks = {};
   const party = (meta && meta.party) || [];
   party.forEach((p, i) => {
     names[p.char] = p.name || p.job || ('봇' + p.char);
     jobs[p.char] = p.job || '?';
     colors[p.char] = BOT_COLORS[i % BOT_COLORS.length];
+    if (p.look) looks[p.char] = p.look;        // D37 — 구판 스트림엔 없다(→ 타일셋/글리프 폴백)
   });
   for (const f of frames) {
     for (const b of f.bots) {
@@ -459,6 +485,24 @@ function hpBar(gx, gy, hp, maxhp) {
   ctx.fillRect(x, y, Math.round(w * r), 2);
 }
 
+// 봇 한 명 — D37: run_meta 에 외형이 있고 합성기가 살아 있으면 파츠 스프라이트, 아니면 타일셋/글리프(구판 그대로).
+// 방향·이동은 프레임에 파생돼 있다(f.facing/f.moved). 걷기 프레임은 재생 중 이 프레임에서 움직인 봇만 돈다.
+function drawBot(b, f, alpha = 1, rot = 0) {
+  const look = looks[b.char];
+  const phase = (playing && f.moved && f.moved[b.char])
+    ? Math.floor(performance.now() / WLSprites.frameMs()) % 4 : -1;
+  const img = (look && window.WLSprites && WLSprites.ready)
+    ? WLSprites.cell(look, (f.facing && f.facing[b.char]) || 'front', phase) : null;
+  if (!img) { drawCell('bot:' + b.job, b.x, b.y, alpha, rot, colors[b.char]); return; }
+  const px = b.x * T * S, py = b.y * T * S, sz = T * S;
+  ctx.save();
+  ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false;
+  if (rot) { ctx.translate(px + sz / 2, py + sz / 2); ctx.rotate(rot); ctx.translate(-sz / 2, -sz / 2); }
+  else ctx.translate(px, py);
+  ctx.drawImage(img, 0, 0, sz, sz);
+  ctx.restore();
+}
+
 function render() {
   const f = frames[curIdx];
   if (!f) return;
@@ -536,7 +580,7 @@ function render() {
     ctx.beginPath();
     ctx.ellipse((b.x + 0.5) * T * S, (b.y + 0.62) * T * S, T * S * 0.42, T * S * 0.28, 0, 0, Math.PI * 2);
     ctx.fill();
-    drawCell('bot:' + b.job, b.x, b.y, 0.55, Math.PI / 2, colors[b.char]);
+    drawBot(b, f, 0.55, Math.PI / 2);
     badge('☠', b.x, b.y, '#c8ccd6');
   }
   for (const b of f.bots) {
@@ -545,7 +589,7 @@ function render() {
     ctx.beginPath();
     ctx.ellipse((b.x + 0.5) * T * S, (b.y + 0.85) * T * S, T * S * 0.38, T * S * 0.16, 0, 0, Math.PI * 2);
     ctx.stroke(); ctx.restore();
-    drawCell('bot:' + b.job, b.x, b.y, 1, 0, colors[b.char]);
+    drawBot(b, f, 1, 0);
     hpBar(b.x, b.y, b.hp, b.maxhp);
     badge(b.char, b.x, b.y, colors[b.char] || '#fff', 0.16, 0.16);
   }
@@ -594,11 +638,18 @@ function renderParty() {
       if (c in deathTurn && deathTurn[c] <= f.turn) { cls += ' dead'; ord = `☠ 전사 (t${deathTurn[c]})`; }
       else ord = '—';
     }
-    rows.push(`<div class="${cls}"><div class="pcHead"><span class="dot" style="background:${col}"></span>` +
+    const face = looks[c] ? `<canvas class="face" width="16" height="16" data-face="${esc(c)}"></canvas>` : '';
+    rows.push(`<div class="${cls}"><div class="pcHead">${face}<span class="dot" style="background:${col}"></span>` +
       `<b>${esc(names[c])}</b><span class="job">${esc(jobs[c])}</span><span class="stat">${stat}</span></div>` +
       hpHtml + `<div class="ord">${ord}</div></div>`);
   }
   $('party').innerHTML = rows.join('');
+  if (window.WLSprites && WLSprites.ready) {            // D37 초상화 — 정면 정지 프레임(32px 로 확대)
+    for (const cv2 of $('party').querySelectorAll('canvas.face')) {
+      const img = WLSprites.cell(looks[cv2.dataset.face], 'front', -1);
+      if (img) { const g = cv2.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(img, 0, 0); }
+    }
+  }
 }
 
 function renderFeed() {
@@ -664,6 +715,10 @@ function setPlaying(p) {
   playing = p;
   $('bPlay').textContent = p ? '⏸' : '▶';
   if (p) schedule(); else clearTimeout(playTimer);
+  // D37 걷기 애니 — 재생 중엔 frame_ms(140ms)마다 다시 그린다(1× 틱 700ms 안에 4프레임이 돈다). 멈추면 정지 프레임.
+  clearInterval(animTimer); animTimer = null;
+  if (p && window.WLSprites && WLSprites.ready) animTimer = setInterval(render, WLSprites.frameMs());
+  else if (!p) render();
 }
 
 function buildSpeedButtons() {
@@ -745,6 +800,13 @@ async function loadTilesets() {
   };
 }
 
+// D37 파츠 스프라이트 — 합성기(sprites.js)나 sprites.json 이 없으면 봇은 타일셋/글리프로. 뷰어는 그림 없이도 죽지 않는다.
+async function loadSprites() {
+  if (!window.WLSprites) return;
+  try { await WLSprites.load('assets/sprites/sprites.json'); }
+  catch (e) { /* 미로드 = 폴백 */ }
+}
+
 /* ════════════════ 7. 배선 ════════════════ */
 
 $('bStart').onclick = () => setIdx(0);
@@ -763,6 +825,7 @@ document.addEventListener('keydown', e => {
 (async function init() {
   buildSpeedButtons();
   await loadTilesets();
+  await loadSprites();
   await buildRunList();
   const q = new URLSearchParams(location.search);
   const run = q.get('run') || 'state/stream.jsonl';
