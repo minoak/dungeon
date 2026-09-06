@@ -350,6 +350,17 @@ def event_tags(rec, names=None):
         if r == 'sighted':
             return [('spot', '발견', ', '.join(x.get('name', '?') for x in (rec.get('seen') or [])))] + extras
     return [('misc', '기타', json.dumps(rec, ensure_ascii=False))]
+
+
+def floor_freeze(bot, depth, turn):
+    """결산(D40 ②, 파트너 확정 "층이 끝나면 결산"): 층을 떠나는 순간 그 층의 집계를 얼려 지난 층 목록에 붙인 것을
+    돌려준다(러너가 재스폰 직전에 부른다 — 마을↔던전 왕복 모두). 뼈=기계가 센 횟수, 살=캐릭터가 다음 층 첫 결정에서
+    남기는 한 줄(`floor_line`, D26/D36 피기백 — 추가 콜 0, invite 는 그 결정 1회). 시스템 LLM 요약은 안 한다(요약자가
+    해석을 섞는다 — D15 저작권 원칙). 봇 dict 는 안 건드린다(순수 함수)."""
+    fl = bot.get('floor') or {}
+    entry = {'depth': int(depth), 't0': int(fl.get('since') or 0), 't1': int(turn),
+             'n': dict(fl.get('n') or {}), 'w': dict(fl.get('w') or {}), 'line': None, 'invite': True}
+    return [dict(x) for x in (bot.get('floors') or [])] + [entry]
 HAIL_CD = 3              # 말 걸림 정지(07-24 D24) 쿨다운: 같은 발화자는 이 턴 수 안에 다시 말해도
                          #   재정지 없음(메시지 배달은 그대로 — 다음 자연 결정에 읽음). 수다 루프
                          #   (마주 서서 무한 핑퐁) 방어는 내용 아닌 구조로. D23 회의 서랍행으로
@@ -545,7 +556,7 @@ class Dungeon:
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
                  motion=False, ally_sight=False, social=False, solo=False, n_gear=0,
                  town=False, status=False, rest_verb=False, relations=False, trail=False,
-                 objtags=False):
+                 objtags=False, floor=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -633,6 +644,8 @@ class Dungeon:
                                    #   다음 결정에 노출(_trail_add). 판정 무접촉 — 자기 경험의 기록·노출뿐.
         self.objtags = bool(objtags)   # 오브젝트 태그(D39, 09-06) — 기본 꺼짐. 러너가 DUNGEON_OBJTAGS(기본 1)로 켠다.
                                    #   나↔오브젝트 상호작용 횟수·마지막 사실을 시야 줄·라벨 접미로(_obj_tag). 판정 무접촉.
+        self.floor_on = bool(floor)    # 층 집계·결산(D40 ②, 09-06) — 기본 꺼짐. 러너가 DUNGEON_FLOOR(기본 1)로 켠다.
+                                   #   사건 사전으로 자기·목격 사건을 층 단위로 세고(bot['floor']) 층을 떠날 때 얼린다(floors).
         self._talked = set()       # (쌍, 틱) — 같은 틱 양방향 대화를 한 번으로(note_talk 중복 방지)
         self._ring_target = 0      # loops 판에서 주 고리에 배속할 방 수(_carve_rooms 가 굴림)
         self.rooms = self._carve_rooms()
@@ -707,6 +720,7 @@ class Dungeon:
         d.relations = False        # 관계 장부(D36) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.trail_on = False         # 자기 행동 궤적(D38) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.objtags = False          # 오브젝트 태그(D39) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.floor_on = False         # 층 집계·결산(D40) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d._talked = set()
         d.grave_of = {}            # 묘→캐릭터(D22 개정) — __new__ 경유라 명시 초기화
         d.npc_lines = {}           # NPC 인사 사전 — build_town 이 채운다(데이터, 판정 무접촉)
@@ -1886,6 +1900,7 @@ class Dungeon:
                 **({'trail': trail} if (getattr(self, 'trail_on', False) and trail) else {}),
                                               # 자기 행동 궤적(D38, 09-06) — 마지막 결정 이후 일어난 일의 순서,
                                               #   있을 때만(intent 선례). last 는 그 마지막 항목과 같다
+                **self._floor_obs(bot),       # 층 집계·지난 층 결산(D40 ②) — 있을 때만
                 'last': bot.get('last'),      # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의
                                               #   결과를 관측할 수 있어야 한다". 자기 경험=시야-온리 무위반
                 'order': ('explore' if str(bot.get('order') or '')[:1] == '@'
@@ -1992,7 +2007,28 @@ class Dungeon:
         (act·자동보행 걸음·plan_broken·교대·말 걸림·피격 전부 경유). 항목 = {…res, turn, plan?}.
         엔진 판정은 절대 안 읽는다(자기 경험의 기록·노출뿐). 상한 TRAIL_MAX — 넘치면 앞을 버리고 gap 누적."""
         self._trail_push(bot, rec, plan)
+        self._floor_count(bot, rec)
         self._hp_watch(bot)
+
+    def _floor_count(self, bot, rec):
+        """층 집계(D40 ②): 같은 사전(event_tags)으로 자기 사건을 센다 — 집계 여부 True 인 키만(걸음·이동 시작·도착
+        제외). 라벨이 키(표시용). 숫자만 늘지 줄은 안 는다(파트너 "나열 말고 집계")."""
+        if not getattr(self, 'floor_on', False):
+            return
+        fl = bot.setdefault('floor', {'since': self.turn, 'n': {}, 'w': {}})
+        for k, label, _ in event_tags(rec):
+            if EVENT_KINDS.get(k):
+                fl['n'][label] = fl['n'].get(label, 0) + 1
+
+    def _floor_count_w(self, bot, fact):
+        """층 집계(D40 ②) — 목격 사건(witnessed kind)을 WITNESS_LABELS 로 w 에 센다."""
+        if not getattr(self, 'floor_on', False):
+            return
+        label = WITNESS_LABELS.get(fact.get('kind'))
+        if not label:
+            return
+        fl = bot.setdefault('floor', {'since': self.turn, 'n': {}, 'w': {}})
+        fl['w'][label] = fl['w'].get(label, 0) + 1
 
     def _trail_push(self, bot, rec, plan=False):
         """궤적 한 칸 추가(상한·gap 부기). _trail_add 와 _hp_watch 가 쓴다 — 여기선 HP 감시 안 함(재귀 방지)."""
@@ -2010,14 +2046,16 @@ class Dungeon:
         순간 1회 [위급], 다시 위로 올라오면 1회 [위급 해제]. 매 틱 반복 없음(넘는 순간만) — 사실만, 조향 없음
         (픽셀 던전이 상태를 사건으로 찍는 방식). 자기 결과가 궤적에 실릴 때마다 살핀다 = HP 를 바꾸는 모든 경로
         (피격·함정·출혈·물약·샘·휴식)가 _note_last/_trail_add 를 지나므로 빠지지 않는다."""
-        if not getattr(self, 'trail_on', False) or not bot.get('alive', True):
+        if not (getattr(self, 'trail_on', False) or getattr(self, 'floor_on', False)) or not bot.get('alive', True):
             return
         crit = bot['hp'] * 4 <= bot['maxhp']
         if crit == bool(bot.get('critical')):
             return
         bot['critical'] = crit
-        self._trail_push(bot, {'type': 'state', 'result': 'critical' if crit else 'recovered',
-                               'hp': bot['hp'], 'maxhp': bot['maxhp']})
+        rec = {'type': 'state', 'result': 'critical' if crit else 'recovered',
+               'hp': bot['hp'], 'maxhp': bot['maxhp']}
+        self._trail_push(bot, rec)
+        self._floor_count(bot, rec)
 
     def _feature_by_target(self, target_id):
         """'f<n>' → Feature(없으면 None). D39: 상호작용 전에 잡는다(상자는 열리며 사라진다)."""
@@ -2040,6 +2078,22 @@ class Dungeon:
         note = _obj_note(res)
         if note:
             e['note'] = note
+
+    def _floor_obs(self, bot):
+        """view() 용(D40 ②): {'floor': {since, turns, n, w, rooms}}(이 층 집계 — 셀 게 있을 때만) +
+        {'floors': [...]}(지난 층 결산 — 있을 때만). 꺼진 판엔 키 자체가 없다."""
+        if not getattr(self, 'floor_on', False):
+            return {}
+        out = {}
+        fl = bot.get('floor') or {}
+        if fl.get('n') or fl.get('w'):
+            since = int(fl.get('since') or 0)
+            out['floor'] = {'since': since, 'turns': max(0, self.turn - since),
+                            'n': dict(fl.get('n') or {}), 'w': dict(fl.get('w') or {}),
+                            'rooms': len(bot.get('zones_entered') or ())}
+        if bot.get('floors'):
+            out['floors'] = [dict(x) for x in bot['floors']]
+        return out
 
     def _obj_tag_obs(self, bot, f):
         """view() 용(D39): 피처 항목에 얹을 {'tag': {verb, n, note?}} — 태그 없으면 {} (구판 obs 그대로)."""
@@ -3544,6 +3598,7 @@ class Dungeon:
                 continue
             if (x, y) in self.visible_cells(o['x'], o['y']):
                 o.setdefault('witnessed', []).append(dict(fact))
+                self._floor_count_w(o, fact)          # D40 ② 층 집계 — 목격도 센다(같은 사전의 목격 라벨)
 
     def _witness_use(self, bots, x, y, movers, what, fid=None, result=None):
         """D30 오브젝트 사용 목격 — 사용한 사람마다 한 줄(문·계단·상자…). 동사는 '사용' 하나, what 은
@@ -3995,6 +4050,9 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'last': None,                   # 직전 행동/피격 결과 메모(D1 개정) — view 가 obs.last 로 노출
             'trail': [], 'trail_gap': 0,    # 자기 행동 궤적(D38, 09-06) — 마지막 view() 이후 결과 목록(노출 후 소거)
             'obj_tags': {},                 # 오브젝트 태그(D39, 09-06) — fid→{n, note?}. 층 재스폰=초기화
+            'floor': {'since': dungeon.turn, 'n': {}, 'w': {}},   # 층 집계(D40 ②) — 이 층의 자기 사건·목격 횟수(라벨→n)
+            'floors': [],                   # 지난 층 결산 목록(D40 ②) — 러너가 층 전이 때 얼려 이월
+            'critical': False,              # 위급(D40) 상태 플래그 — 전이 사건의 기준. 러너가 층 넘어 이월
             'witnessed': [],                # 목격(D18 A-3): 시야 내 동료 피격/전사 사실 축적 —
                                             # view 가 1회성 노출·소거. 스냅샷 화이트리스트 밖(계약 불변)
             'memories': [],                 # 기억(D22): 목격한 중대사(v0=fallen 전사) — 휘발 0,

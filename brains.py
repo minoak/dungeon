@@ -745,6 +745,17 @@ def _tag_str(tags):
     return " · ".join(("[%s] %s" % (lb, s)).rstrip() for _, lb, s in tags)
 
 
+def _floor_counts(counts):
+    """층 집계(D40 ②) 렌더 — '[처치] ×2 · [피격] ×3' (횟수 내림차순, 같으면 라벨순)."""
+    return " · ".join("[%s] ×%d" % (k, v) for k, v in
+                      sorted(counts.items(), key=lambda kv: (-int(kv[1]), str(kv[0]))))
+
+
+def _floor_name(depth):
+    d = int(depth or 0)
+    return "마을" if d == 0 else "%d층" % d
+
+
 def _trail_prose(trail, names=None):
     """궤적(D38 → D40 꼬리표식, 09-06 파트너 확정 "꼬리표식으로 바꾸자·픽셀 던전 방식") — 마지막 결정 이후
     일어난 일을 사건 사전(dungeon_gm.event_tags)의 꼬리표로 ' → ' 이어 찍는다: "[대화] 아이템 상인 → 물약 받음
@@ -785,7 +796,8 @@ def _trail_prose(trail, names=None):
 _WIRE_KEYS = frozenset((
     "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "potions",
     "depth", "turn",
-    "zone", "known", "witnessed", "memories", "dry", "last", "trail", "order", "ascii_view", "legend",
+    "zone", "known", "witnessed", "memories", "dry", "last", "trail", "floor", "floors",
+    "order", "ascii_view", "legend",
     "sights", "party", "options", "messages", "intent", "notes",
     "status",  # 상태 태그(D34): 아래 _wire "## 네 몸 상태" 절이 그린다
     "relations",   # 관계 장부(D36): 뼈 횟수·초대는 _wire, 살(한 줄)은 _sheet 가 그린다
@@ -1055,6 +1067,33 @@ def _wire(obs, names=None):
         if dry:                       # 무발견 신호(07-24) — 관찰 사실만(질문·조향 금지), 도달 1회
             L.append("- 한참을 걸었는데 새로 보이는 것이 없다 — 아는 자리만 이어진다")
 
+    fl = obs.get("floor")                   # D40 ② 층 집계 — 세계가 센 횟수(숫자만 늘지 줄은 안 는다)
+    if fl and (fl.get("n") or fl.get("w")):
+        L += ["", "## 이 층에서 지금까지 (t%s 진입, %d틱째 — 세계가 센 횟수)"
+              % (fl.get("since", "?"), int(fl.get("turns") or 0))]
+        if fl.get("n"):
+            L.append("- " + _floor_counts(fl["n"]))
+        if fl.get("w"):
+            L.append("- 목격: " + _floor_counts(fl["w"]))
+        if fl.get("rooms"):
+            L.append("- 가 본 곳: 방·통로 %d" % int(fl["rooms"]))
+    fls = obs.get("floors")                 # D40 ② 지난 층 결산 — 뼈(횟수)+살(네가 남긴 한 줄)
+    if fls:
+        L += ["", "## 지난 층 (결산 — 세계가 센 횟수 + 네가 남긴 한 줄)"]
+        for f in fls:
+            body = _floor_counts(f.get("n") or {}) or "특별한 일 없음"
+            if f.get("w"):
+                body += " — 목격: " + _floor_counts(f["w"])
+            if f.get("line"):
+                body += ' — "%s"' % f["line"]
+            L.append("- %s (t%d~t%d, %d틱): %s" % (_floor_name(f.get("depth")), int(f.get("t0") or 0),
+                                                  int(f.get("t1") or 0),
+                                                  int(f.get("t1") or 0) - int(f.get("t0") or 0), body))
+        last = fls[-1]
+        if last.get("invite") and not last.get("line"):
+            L.append("- 방금 떠난 %s을(를) 한 줄로 남기려면 응답 JSON 의 `floor_line` 필드"
+                     " (선택, 80자 — 다음 층들에서도 다시 본다)" % _floor_name(last.get("depth")))
+
     nts = obs.get("notes")
     if nts:                                 # D26 의미 기억 — 스스로 남긴 한 줄들(주관, 엔진 불가침)
         L += ["", "## 네가 기억해두기로 한 것 (스스로 남긴 한 줄 — 오래된 것부터 바랜다)"]
@@ -1203,6 +1242,10 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
         rline = (str(obj.get("relation_line", "") or "").strip()[:NOTE_LEN]   # D36 살 — 초대가 있을 때만
                  if inv else "")                                             #   받는다(에지 없는 콜은 무시)
         rel = {"relation": {"to": inv["char"], "line": rline}} if rline else {}
+        fline = (str(obj.get("floor_line", "") or "").strip()[:NOTE_LEN]     # D40 ② 결산 한 줄 — 초대(새 층
+                 if any(f.get("invite") for f in (obs.get("floors") or [])) else "")   #   첫 결정)에서만 받는다
+        if fline:
+            rel = {**rel, "floor_line": fline}
         if MENU:
             act = _pick(obj, obs)
             if act:
@@ -1375,6 +1418,11 @@ def think_all(d, bots, inbox=None):
             ns = by[c].setdefault("notes", [])
             ns.append(dec["note"])
             del ns[:-NOTE_MAX]           # 넘치면 오래된 것부터 바랜다
+        fls = by[c].get("floors")        # D40 ② 결산 살 — 초대는 실 결정 1회(답이 없어도 닫힌다), 엔진 불가침
+        if fls:
+            if dec.get("floor_line"):
+                fls[-1]["line"] = dec["floor_line"]
+            fls[-1]["invite"] = False
     if os.environ.get("DUNGEON_STREAM_OBS") == "1":
         # 스트림 opt-in: 결정에 '그때 그 봇이 본 것'(obs)을 병합 — think 시점 캡처.
         # 사후 d.view() 재호출로 얻으면 안 된다(시점 오염 + _perceive 부수효과).

@@ -76,7 +76,8 @@ def build(spec):
                       ("motion", "DUNGEON_MOTION"), ("selfstop", "DUNGEON_SELFSTOP"),   #   라이브 판과 같은
                       ("dry_signal", "DUNGEON_DRY"), ("status", "DUNGEON_STATUS"),      #   조건이어야 프로브가
                       ("rest_verb", "DUNGEON_REST"), ("relations", "DUNGEON_RELATIONS"),   # 참말을 한다)
-                      ("trail_on", "DUNGEON_TRAIL"), ("objtags", "DUNGEON_OBJTAGS")):       # D38 궤적·D39 태그(09-06)
+                      ("trail_on", "DUNGEON_TRAIL"), ("objtags", "DUNGEON_OBJTAGS"),        # D38 궤적·D39 태그(09-06)
+                      ("floor_on", "DUNGEON_FLOOR")):                                        # D40 층 집계·결산
         setattr(d, attr, os.environ.get(env, "1") != "0")   # 전부 러너 기본 1 — 끄려면 env 로
     try:
         with open(os.path.join(HERE, "lore.json"), encoding="utf-8") as f:
@@ -127,6 +128,11 @@ def build(spec):
             b["trail"] = [dict(x) for x in ov["trail"]]
         if "obj_tags" in ov:                   # 오브젝트 태그(D39 09-06) 프리셋 — {"f<n>"|n: {n, note?}}
             b["obj_tags"] = {int(str(k).lstrip("f")): dict(v) for k, v in ov["obj_tags"].items()}
+        if "floor" in ov:                      # 층 집계(D40 ②) 프리셋 — {since, n{라벨:n}, w{라벨:n}}
+            b["floor"] = {"since": int(ov["floor"].get("since", 0)), "n": dict(ov["floor"].get("n") or {}),
+                          "w": dict(ov["floor"].get("w") or {})}
+        if "floors" in ov:                     # 지난 층 결산(D40 ②) 프리셋 — [{depth,t0,t1,n,w,line,invite}]
+            b["floors"] = [dict(x) for x in ov["floors"]]
         if "alive" in ov and not ov["alive"]:  # 죽은 동료 프리셋 — 명단 '죽었다'(D22 개정), 시야엔 안 나간다
             b["alive"] = False
         if ov.get("won"):                      # 먼저 내려간 동료 프리셋(D30 계단 프로브) — 명단 "먼저 내려갔다"
@@ -201,6 +207,7 @@ def play(spec, brain, state_dir):
             ally_sight=ALLY_SIGHT_ON,          # 동료 시야 면제(07-26) — 시야 물리 메타(A/B 전제)
             trail=os.environ.get("DUNGEON_TRAIL", "1") != "0",   # 자기 행동 궤적(D38) — 표현층 메타
             objtags=os.environ.get("DUNGEON_OBJTAGS", "1") != "0",   # 오브젝트 태그(D39) — 표현층 메타
+            floor=os.environ.get("DUNGEON_FLOOR", "1") != "0",       # 층 집계·결산(D40) — 표현층 메타
             backend=brains.backend_name(),     # 두뇌 백엔드(2026-07-25 additive) — show_runner 와
                                                #   같은 필드명. 프로브도 어느 배관으로 잰 건지
                                                #   사후 판독돼야 한다(속도 실측이 이 파일도 쓴다)
@@ -320,7 +327,7 @@ def probe(spec, n, jobs):
         elif dec.get("reason"):
             line += "  | " + dec.get("reason", "")[:60]
         print(line)
-        for k in ("say", "note"):                    # 말·남긴 한 줄도 프로브의 답이다(09-06)
+        for k in ("say", "note", "floor_line"):      # 말·남긴 한 줄·결산 한 줄(D40)도 프로브의 답이다(09-06)
             if dec.get(k):
                 print("         %s: %s" % (k, dec[k]))
         if dec.get("relation"):                      # 관계 살(D36) — 초대 받은 결정의 relation_line

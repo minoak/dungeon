@@ -166,6 +166,9 @@ TRAIL_ON = os.environ.get("DUNGEON_TRAIL", "1") != "0"       # 자기 행동 궤
 OBJTAGS_ON = os.environ.get("DUNGEON_OBJTAGS", "1") != "0"   # 오브젝트 태그(D39, 09-06) — 러너 기본 1,
                                                              #   엔진 기본 0. 상인·샘과의 상호작용 횟수·마지막
                                                              #   사실을 시야 줄·라벨 접미로("말 걸어 봄 ×2")
+FLOOR_ON = os.environ.get("DUNGEON_FLOOR", "1") != "0"       # 층 집계·결산(D40 ②, 09-06) — 러너 기본 1,
+                                                             #   엔진 기본 0. "이 층에서 지금까지" 꼬리표 ×N +
+                                                             #   층 전이 때 얼려 "지난 층"(캐릭터 한 줄 피기백)
 LORE_FILE = os.path.join(HERE, "lore.json")
 STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적용 후 맵이 보이게(헤들리스=0)
 
@@ -522,6 +525,7 @@ def build_town():
     d.events, d.graves = EVENTS_ON, GRAVES_ON                          # D22 사건층(상인 선물 목격·입구 사용 목격)
     d.ally_sight, d.social = ALLY_SIGHT_ON, SOCIAL_ON                  # 동료 시야 면제 · 채널 분리
     d.trail_on, d.objtags = TRAIL_ON, OBJTAGS_ON                       # D38 궤적 · D39 오브젝트 태그
+    d.floor_on = FLOOR_ON                                              # D40 층 집계·결산(마을도 한 층)
     for n in spec.get("npcs", []):
         x, y = int(n["x"]), int(n["y"])
         if d.grid[y][x] != G.FLOOR:            # 좌표-그림 어긋남은 시작 전에 죽는 게 낫다
@@ -587,7 +591,7 @@ def main():
                       loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
                       dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
                       ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
-                      status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON)
+                      status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON)
         d.lore = lore
     bots = []
     for c in chars:
@@ -665,6 +669,7 @@ def main():
             relations=RELATIONS_ON,    # 관계 장부(D36) 여부 — obs(뼈·초대)와 시트(살)를 바꾸는 메타
             trail=TRAIL_ON,            # 자기 행동 궤적(D38) 여부 — obs(trail·intent turn)를 바꾸는 표현층 메타
             objtags=OBJTAGS_ON,        # 오브젝트 태그(D39) 여부 — obs(sights.features[].tag)·라벨을 바꾸는 표현층 메타
+            floor=FLOOR_ON,            # 층 집계·결산(D40 ②) 여부 — obs(floor·floors)·decisions.floor_line 표현층 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
@@ -829,6 +834,8 @@ def main():
                                 "aware_of": b.get("aware_of"),
                                 "ledger": b.get("ledger")}
                     for b in survivors}}
+            frozen = ({b["char"]: G.floor_freeze(b, d.depth, turn) for b in survivors}   # D40 ② 결산: 떠나는
+                      if FLOOR_ON else {})                                            #   층의 집계를 얼린다
             nd = d.depth - 1 if up else d.depth + 1
             sw.emit("ascend" if up else "descend", turn=turn, to_depth=nd,
                     party=[{"char": b["char"], "hp": b["hp"], "bag": b["bag"],
@@ -848,7 +855,7 @@ def main():
                               wait_verb=WAIT_ON, motion=MOTION_ON,
                               ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
                               n_gear=N_GEAR, status=STATUS_ON, rest_verb=REST_ON,
-                              relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON)
+                              relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON)
                 d.lore = lore
                 fresh = True
             # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,
@@ -880,6 +887,9 @@ def main():
                                                           # 사건(장부=층의 기억과 대비. 구역 이름은
                                                           # 그 층의 것 — 층수 없인 모호하나 v0 수용)
                 n["notes"] = list(b.get("notes") or [])   # 남긴 한 줄도 이월(D26) — 같은 원정의 기억
+                n["floors"] = frozen.get(b["char"], [dict(x) for x in (b.get("floors") or [])])   # 결산(D40 ②) 이월
+                n["floor"] = {"since": turn, "n": {}, "w": {}}   # 새 층의 집계는 지금부터(스폰 시각이 아니라 이 틱)
+                n["critical"] = bool(b.get("critical"))   # 위급 플래그(D40) — 몸은 층을 넘어도 그 몸이다
                 n["known"] = iss.known(names[b["char"]])  # 도감은 층을 넘어도 그대로(지식=영속층)
                 if LEDGER_ON:
                     n["ledger"] = G.new_ledger()          # 장부는 새 원장(층의 기억 — id 층-로컬, D17)
