@@ -104,8 +104,8 @@ check("③ 솔로 obs 에 party 명단 없음", o_s['party'] == [])
 check("③ 파티 obs 는 종전대로 명단 있음", len(o_p['party']) == 2)
 check("④ 솔로: 안 보이는 사람 핑 불가(D18 파티 감각 무효)",
       not any(str(t).startswith('b') for t in brains._valid_targets(o_s)))
-check("④ 파티: 안 보여도 핑 가능(종전 동작 무손상)",
-      {'b2', 'b3'} <= brains._valid_targets(o_p))
+check("④ 파티: 보이는 동료만 핑 가능(D18 개정 09-06 — 시야 밖 동료는 사라진 것, 파티 감각 폐지)",
+      brains._valid_targets(o_p) & {'b2', 'b3'} == {'b%s' % a['char'] for a in o_p['sights']['bots']})
 
 # 보이는 사람은 솔로에서도 핑이 돼야 한다 — 눈에 보이는 걸 못 부르면 그건 다른 버그다
 d_m, b_m = stage(True)

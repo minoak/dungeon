@@ -269,11 +269,39 @@ obs = d.view(b1, bots)
 check("⑤ 리모컨: 보이는 동료마다 동행 옵션 열거",
       any(o['type'] == 'follow' and o.get('target') == 'b2' for o in obs['options']))
 d = arena()
-b1, b2 = mkbot('1', 2, 2), mkbot('2', 8, 2, job='도적')   # 시야 밖(거리 6)
-obs = d.view(b1, [b1, b2])
-check("⑤ 리모컨: 안 보이는 동료는 동행 없음(시야-온리 — 찾아가기만)",
-      not any(o['type'] == 'follow' for o in obs['options'])
-      and any(o['label'].startswith('찾아가기') for o in obs['options']))
+b1, b2 = mkbot('1', 2, 2), mkbot('2', 8, 2, job='도적')   # 시야 밖(거리 6), 본 적도 없음
+bots = [b1, b2]
+obs = d.view(b1, bots)
+check("⑤ 리모컨: 안 보이는 동료는 동행 없음(시야-온리)",
+      not any(o['type'] == 'follow' for o in obs['options']))
+# D18 개정(2026-09-06 파트너 "거리를 무시하고 동료에게 돌아가도록 한 건 내 의도가 아니야 — 시야 밖에서
+# 사라지면 말 그대로 사라지는 거야"): 옛 '찾아가기(파티 감각)'=안 보이는 동료의 산 좌표로 홈잉 → 폐지.
+check("⑤ D18 개정: 본 적 없는 안 보이는 동료 = 찾아가기 항목 없음(갈 곳을 모른다)",
+      not any(o.get('target') == 'b2' or o['label'].startswith(('찾아가기', '마지막 본 자리로'))
+              for o in obs['options']))
+check("⑤ D18 개정: 시야 밖 동료 핑은 해석 불가(b2→None) · brains 도 b2 를 유효 대상에서 제외",
+      d._resolve_target('b2', bots, b1) is None and 'b2' not in brains._valid_targets(obs))
+r = d.act(b1, {'type': 'goto', 'target': 'b2'}, bots)     # order = 목표 문자열, last = 결과
+check("⑤ D18 개정: 자유서술 goto b2(시야 밖) 도 동료 좌표로 안 간다(홈잉 0 — 탐색 폴백)",
+      r['type'] == 'explore' and '@8,2' not in str(b1.get('order')))
+r = d.act(b1, {'type': 'follow', 'target': 'b2'}, bots)
+check("⑤ D18 개정: 시야 밖 동료 follow 개시 불가(탐색 폴백)", r['type'] != 'follow')
+d = arena()
+b1, b2 = mkbot('1', 2, 2), mkbot('2', 4, 2, job='도적')   # 본다(거리 2) → 장부 last_seen b2@(4,2)
+b1['ledger'] = G.new_ledger()                                      # 공간 장부(D17) — 러너가 봇마다 붙이는 것
+bots = [b1, b2]
+d.view(b1, bots)
+b2['x'] = 9                                                # 모퉁이 너머로 사라짐(거리 7)
+d.turn += 3
+obs = d.view(b1, bots)
+opt = [o for o in obs['options'] if o['label'].startswith('마지막 본 자리로')]
+check("⑤ D18 개정: 본 뒤 놓친 동료 = '마지막 본 자리로'(장부 칸 핑 @4,2 · 어디서·언제·방위·거리 사실만)",
+      len(opt) == 1 and opt[0]['type'] == 'goto' and opt[0]['target'] == '@4,2'
+      and '턴 전' in opt[0]['label'] and '칸' in opt[0]['label']
+      and '보장은 없다' in opt[0]['label'])
+check("⑤ D18 개정: 그때도 산 좌표 핑(b2)은 옵션·유효 대상 어디에도 없다",
+      not any(o.get('target') == 'b2' for o in obs['options'])
+      and 'b2' not in brains._valid_targets(obs))
 
 # ───────────────────── ⑥ 사회적 대우회(A-0) ─────────────────────
 print("── ⑥ 사회적 대우회(A-0)")

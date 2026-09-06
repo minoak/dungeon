@@ -111,9 +111,9 @@ explore  : {"reason":"안 가본 길이 북쪽이다","type":"explore","target":
 follow   : {"reason":"카야 곁을 지킨다","type":"follow","target":"b2","say":"같이 가자"}
 ```
 <!--PARTY-->
-- `goto`/`attack`/`interact`의 `target`은 **반드시 보이는 id**여야 한다. **예외 둘: 동료
-  `b<번호>`는 안 보여도 허용**(파티 감각), **기억(장부)에 id 가 있는 제자리 물건은 `goto`로
-  귀환 허용.** `explore`의 `target`은 방위(생략 가능).
+- `goto`/`attack`/`interact`의 `target`은 **반드시 보이는 id**여야 한다. 동료 `b<번호>`도
+  **보일 때만** — 시야 밖 동료는 어디 있는지 모른다(마지막으로 본 자리만 안다). **예외 하나:
+  기억(장부)에 id 가 있는 제자리 물건은 `goto`로 귀환 허용.** `explore`의 `target`은 방위(생략 가능).
 <!--/PARTY-->
 <!--SOLO-->
 - `goto`/`attack`/`interact`의 `target`은 **반드시 보이는 id**여야 한다. **예외 하나:

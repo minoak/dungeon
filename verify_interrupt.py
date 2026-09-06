@@ -249,9 +249,11 @@ for _ in range(10):
 check("⑩ 몹이 그대로면 여전히 arrived(회귀)", r10b['result'] == 'arrived')
 
 # (c) 동료 유령 합류: 걷는 사이 동료가 딴 데로 → lost
+#     D18 개정(09-06): 개시 때는 동료가 **보여야** 한다(거리 4 ≤ SIGHT) — 시야 밖 동료 goto 는
+#     이제 파티 감각 홈잉이 아니라 탐색 폴백이라 유령 합류 자체가 성립하지 않는다.
 d10c = arena(seed=12)
 b1c = mkbot('1', 3, 5)
-b2c = mkbot('2', 9, 5)
+b2c = mkbot('2', 7, 5)
 bots10c = [b1c, b2c]
 d10c.act(b1c, {'type': 'goto', 'target': 'b2'}, bots10c)
 b2c['x'], b2c['y'] = 16, 9

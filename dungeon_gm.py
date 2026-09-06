@@ -608,14 +608,15 @@ class Dungeon:
                                    #   증발해 follow 가 유령 추적→lost→되찾기 셔틀로 굴렀다(실측:
                                    #   문 낀 이동의 단절률 28% vs 그 외 2%, 결정의 50%가 동료 찾기).
                                    #   사람의 인지에 맞춘 것 — 벽 하나 돌아섰다고 일행 위치를 통째로
-                                   #   잃지는 않는다(발소리·기척·직전 기억). D18 '파티 감각'(안 보여도
-                                   #   b<char> 핑 허용)의 표시층 확장이지 새 원칙이 아니다.
+                                   #   잃지는 않는다(발소리·기척·직전 기억). 09-06 D18 개정으로 옛
+                                   #   '파티 감각'(안 보여도 b<char> 핑)은 폐지 — 이 반경 면제만 남는다:
+                                   #   반경 안=보임, 밖=말 그대로 사라짐(파트너 지시).
                                    #   ⚠️ **동료 한정** — 몹·피처·구조는 LOS 그대로다(D19 문 광학·
                                    #   매복·인식 매트릭스 대칭 전부 무손상). 반경 밖은 여전히 안 보인다.
         self.solo = bool(solo)     # 솔로 판(2026-07-29 파트너 발제) — 기본 꺼짐. 켜면 **파티라는
                                    #   전제 자체가 빠진다**: 셋은 서로 모르는 별개의 인물로 흩어져
                                    #   출발하고(spawn apart), 서로의 명단을 obs 로 받지 않으며(안 보이는
-                                   #   동료 핑 불가 — D18 '파티 감각' 무효), 각자 계단에 닿으면 혼자
+                                   #   사람 핑 불가 — 09-06 D18 개정 뒤엔 파티도 같다), 각자 계단에 닿으면 혼자
                                    #   내려간다(EXIT_GATHER 면제). 마주치면 그 다음은 자유 — 동행하든
                                    #   갈라서든 엔진이 규정하지 않는다(말·hail·say 는 그대로 열려 있다).
                                    #   왜: 파티 판에서 follow 가 결정의 36~39%(궁수는 67%)를 먹었는데,
@@ -1553,12 +1554,12 @@ class Dungeon:
                   for b in bots
                   if b['alive'] and not b['won'] and b['char'] != bot['char']
                   and self._ally_seen(bot, b, seen)]
-        # party = 파티 명단(좌표 없음 — 시야-온리 유지). 안 보여도 'b<char>' 핑은 허용(파티 감각):
-        # TRPG에서 일행의 대략적 방향은 안다는 통념. 하강 조율(동료 데리러 가기)의 통로.
+        # party = 파티 명단(좌표 없음 — 시야-온리 유지). 누가 살았고 내려갔나의 사실뿐이다.
+        # D18 개정(09-06): 옛 '파티 감각'(안 보여도 'b<char>' 핑 허용=산 좌표로 홈잉)은 폐지 —
+        # 파트너 "시야 밖에서 사라지면 말 그대로 사라지는 거야". 안 보이는 동료를 향하는 길은
+        # 리모컨 '마지막 본 자리로'(장부 last_seen 칸 핑)뿐이고, 'b<char>' 핑은 보일 때만 해석된다.
         # 솔로 판(self.solo)에서는 명단 자체가 없다 — 남남끼리는 서로 몇이고 누가 살았는지
-        # 모른다. 빈 리스트라 _valid_targets 의 party 루프도 자연히 비고(brains 무수정),
-        # 리모컨 메뉴에서 '안 보이는 동료 찾아가기' 항목도 사라진다. 보이는 사람은
-        # sights.bots 로 여전히 나가고 핑도 된다 — 눈에 보이면 지칭할 수 있는 게 맞다.
+        # 모른다. 보이는 사람은 sights.bots 로 여전히 나가고 핑도 된다 — 눈에 보이면 지칭할 수 있다.
         party = [] if self.solo else [
                  {'char': o['char'], 'job': o['job'], 'alive': o['alive'],
                   'won': o['won'], 'visible': self._ally_seen(bot, o, seen)}
@@ -1771,11 +1772,23 @@ class Dungeon:
             _add('goto', a['id'], '합류: %s(봇%s) — %s, %s, 거리 %d'
                  % (names.get(a['char'], _unknown), a['char'], a['condition'],
                     a['bearing'], a['dist']))          # 등급 병기(A-4) — 빈사 동료가 눈에 밟히게
+        # D18 개정(09-06 파트너 "시야 밖에서 사라지면 말 그대로 사라지는 거야"): 옛 '찾아가기
+        # (파티 감각으로 접근)'=안 보이는 동료의 산 좌표로 걷는 홈잉 — 폐지. 남는 길은 **장부의
+        # 마지막 본 자리**(이 층에서 본 적 있을 때만) — 칸 핑(@x,y)이라 걸어가 봐도 거기 있단
+        # 보장이 없다(가서야 안다 = 돌아가기·lost 와 같은 진실). 본 적 없으면 항목 자체가 없다.
+        led_mv = (bot.get('ledger') or {}).get('moving') or {}
         for p in party:
             if p['alive'] and not p['won'] and p['char'] not in vis_allies:
-                _add('goto', 'b%s' % p['char'],        # 안 보이는 동료 = 등급 미병기(시야-온리)
-                     '찾아가기: %s(봇%s) — 지금 안 보임(파티 감각으로 접근)'
-                     % (names.get(p['char'], _unknown), p['char']))
+                e = led_mv.get('b%s' % p['char'])
+                if not e:
+                    continue                           # 이 층에서 본 적 없는 동료 = 갈 곳을 모른다
+                ago = self.turn - e['turn']
+                _add('goto', '@%d,%d' % (e['x'], e['y']),
+                     '마지막 본 자리로: %s(봇%s) — %s에서 봄(%s), %s %d칸 (지금도 거기 있단 보장은 없다)'
+                     % (names.get(p['char'], _unknown), p['char'], e['zone'],
+                        ('%d턴 전' % ago) if ago > 0 else '방금',
+                        self._bearing(e['x'] - bot['x'], e['y'] - bot['y']),
+                        max(abs(e['x'] - bot['x']), abs(e['y'] - bot['y']))))
         for a in allies:                               # 동행(D18 A-5) — 보이는 동료마다 지속 order
             ob = next(o for o in bots if o['char'] == a['char'])
             mutual = str(ob.get('order') or '') == 'follow:b%s' % bot['char']
@@ -2149,19 +2162,19 @@ class Dungeon:
                                                       #   이 정직 보고. 시야-온리 정합: search 선례)
         elif typ == 'goto':
             e = ((bot.get('ledger') or {}).get('statics') or {}).get(str(tgt))
-            if self._resolve_target(tgt, bots) is None and not (e and e.get('id')):
+            if self._resolve_target(tgt, bots, bot) is None and not (e and e.get('id')):
                 why = '대상 소멸'                 # 작정의 goto 는 explore 폴백 안 탄다 —
                 # (장부 귀환 목표(id 있는 것만 — trap@ 정보 항목 제외, 리뷰 픽스)는 통과:
                 #  '없다'는 보지 않고는 모른다 — 가서 lost 로 확인(D17).
                 #  여기서 '대상 소멸'을 알려주면 안 본 사실의 누설이다)
         elif typ == 'attack':                     #   대상이 사라졌으면 그건 새 정보다(재결정)
-            res = self._resolve_target(tgt, bots)
+            res = self._resolve_target(tgt, bots, bot)
             if res is None or res[0] != 'monster':
                 why = '대상 소멸'
             elif abs(bot['x'] - res[1][0]) + abs(bot['y'] - res[1][1]) != 1:
                 why = '인접 아님'
         elif typ == 'interact':
-            res = self._resolve_target(tgt, bots)
+            res = self._resolve_target(tgt, bots, bot)
             if res is None:
                 why = '대상 소멸'
             elif abs(bot['x'] - res[1][0]) + abs(bot['y'] - res[1][1]) > 1:
@@ -2210,7 +2223,15 @@ class Dungeon:
             return ('cell', (x, y))
         if s[:1] == 'b' and bots is not None:              # 동료 핑(합류) — bots 필요
             o = next((o for o in bots if o['char'] == s[1:] and o['alive'] and not o['won']), None)
-            return ('bot', (o['x'], o['y'])) if o else None
+            if o is None:
+                return None
+            if bot is not None and not self._ally_seen(bot, o, self.visible_cells(bot['x'], bot['y'])):
+                return None                                # D18 개정(09-06): 시야 밖 동료 = 사라진 것.
+                # 파트너 "거리를 무시하고 동료에게 돌아가도록 한 건 내 의도가 아니야 — 시야 밖에서
+                # 사라지면 말 그대로 사라지는 거야". 옛 '파티 감각'(안 보여도 산 좌표 해석)은 폐지 —
+                # 남는 길은 장부의 마지막 본 자리(리모컨 '마지막 본 자리로', @x,y 칸 핑)뿐이다.
+                # bot 없이 부르는 곳(자동보행 재조준·장부 소비 판정)은 엔진 내부 좌표 해석 — 그대로.
+            return ('bot', (o['x'], o['y']))
         return None
 
     @staticmethod
@@ -2310,12 +2331,13 @@ class Dungeon:
         곁이면 이 틱은 대기부터(following), 아니면 대상 현재 좌표로 경로. 매 틱 재경로는
         _step_order 의 A-2 블록이 공유 담당. 무효/도달불가 대상은 goto 와 대칭(explore 폴백).
         · 곁 대기 중 대상이 모퉁이 너머로 사라지면(잔여 path 없음) 즉시 lost — 정직 보고.
-          재개는 에이전트의 몫('찾아가기' goto b<char> = 파티 감각 통로가 이미 있다).
+          재개는 에이전트의 몫 — D18 개정(09-06) 뒤엔 '마지막 본 자리로'(장부 칸 핑)뿐이다.
+          파티 감각(안 보여도 찾아감)은 폐지 — 시야 밖 동료는 사라진 것.
         · 상호 동행(둘이 서로 follow)은 제자리 대기 고착 — 인터럽트(몹 출현·피격)와 max_turns 가
           종결을 보장하나, 관찰되면 재론 카드(사회층에서 '누가 이끄나'로 풀 문제)."""
         s = str(target_id or '')
         tid = s if s[:1] == 'b' else 'b%s' % s           # 'b2'/'2' 관용(자유서술 흔들림 흡수)
-        resolved = self._resolve_target(tid, bots)
+        resolved = self._resolve_target(tid, bots, bot)  # bot=시야 밖 동료면 None(D18 개정)
         if resolved is None or resolved[0] != 'bot':
             return self._set_explore(bot, None, bots)    # 무효 대상 → 탐색(무효 핑과 대칭)
         tx, ty = resolved[1]

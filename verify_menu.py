@@ -4,7 +4,7 @@
   ① 옵션 불변식 스윕(시드 20 × 전 재결정 시점): n 연속(1..K) / search 정확 1개 / explore ≥1
   ② 전수성: sights ↔ options 1:1 — 인접 몹=attack·비인접 몹=goto / 피처 adj=interact·비adj=goto /
      출구 보임(adj=interact, 비adj=goto)·안 보임=옵션 없음 / 보이는 비인접 동료=합류·인접 동료=없음 /
-     안 보이는 생존 동료=찾아가기
+     안 보이는 생존 동료=장부에 마지막 본 자리가 있을 때만 그 칸 핑(D18 개정 09-06), 없으면 항목 없음
   ③ 시야-온리: concealed 몹·피처 id 가 어떤 option target 에도 없음
   ④ 순수성: view() 가 rng 상태를 안 건드림 + 2회 호출 options 동일
   ⑤ _pick 왕복: 모든 n 에 대해 type/target == options[n] + 관용("3.0"/"옵션 3")·기각(3.5/0/999)
@@ -98,9 +98,12 @@ def census_ok(obs, bots, me):
         if not a['adj']:
             want.add(('goto', a['id']))                    # 인접 동료 합류는 no-op → 미노출
     vis = {a['char'] for a in s['bots']}
+    led_mv = (me.get('ledger') or {}).get('moving') or {}
     for p in obs['party']:
         if p['alive'] and not p['won'] and p['char'] not in vis:
-            want.add(('goto', 'b%s' % p['char']))
+            e = led_mv.get('b%s' % p['char'])         # D18 개정(09-06): 파티 감각 폐지 — 장부의
+            if e:                                     #   마지막 본 자리(칸 핑)만, 본 적 없으면 없음
+                want.add(('goto', '@%d,%d' % (e['x'], e['y'])))
     got = {(o['type'], o.get('target')) for o in obs['options']
            if o['type'] in ('attack', 'goto', 'interact')}
     return got == want

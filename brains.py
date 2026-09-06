@@ -157,7 +157,7 @@ _BEARINGS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW"}
 
 def _valid_targets(obs, verb="goto"):
     """obs 에 실제로 보이는 오브젝트 id 집합 — 환각 타겟 차단. 출구는 *보일 때만*(beacon 폐기).
-    동료(b<char>)는 안 보여도 허용(파티 감각) — 하강 조율(데리러 가기)의 통로. 좌표는 여전히 비공개.
+    동료(b<char>)는 보일 때만(D18 개정 09-06 — 시야 밖 동료는 사라진 것, 좌표 감각 없음). 좌표는 여전히 비공개.
     장부(known.statics) 귀환 id 는 **goto 전용**(D17) — interact/attack 에 허용하면 too_far vs
     no_target 응답 차이로 '가보지 않고 소멸 여부를 아는' 누설이 생긴다(리뷰 픽스)."""
     s = obs.get("sights", {})
@@ -170,9 +170,9 @@ def _valid_targets(obs, verb="goto"):
     if isinstance(z.get("doors"), list):    # D19(scan): 문 = 핑 종점. 정정(07-15): obs 에 실리는
         if verb == "goto":                  # 문 자체가 '본 적 있는 것'뿐 — 여기서 더 거를 것 없음.
             ids |= {d["id"] for d in z["doors"]}   # 계단은 여기 없다 — 내용물('보일 때만') 규칙 그대로
-    for p in obs.get("party", []):          # 살아있는(안 내려간) 동료는 시야 밖이어도 핑 가능
-        if p.get("alive") and not p.get("won"):
-            ids.add("b%s" % p["char"])
+    # D18 개정(2026-09-06 파트너 "시야 밖에서 사라지면 말 그대로 사라지는 거야"): 동료는 **보일 때만**(sights.bots)
+    # 지칭할 수 있다 — 파티 명단(party)은 누가 살았나의 사실일 뿐 좌표 감각이 아니다. 안 보이는 동료는
+    # 리모컨의 '마지막 본 자리로'(장부 last_seen 의 칸 핑)로만 향한다.
     if verb == "goto":
         for e in (obs.get("known") or {}).get("statics", []):
             if e.get("id"):                 # 공간 장부(D17-1) 귀환 핑 — 본 적 있는 제자리 물건은
@@ -677,7 +677,7 @@ def _last_prose(last, names=None):
             verb = "올라가려" if last.get("dir") == "up" else "내려가려"
             parts = []                     # 멀다/딴 작정은 다른 사실 — 섞어 말하면 곁의 동료를
             if last.get("missing"):        # "데리러 가라"는 거짓 지시가 된다(08-09 정직화)
-                parts.append("아직 안 모였다(빠진 동료: 봇%s) — 기다리거나 데리러 가라"
+                parts.append("아직 안 모였다(빠진 동료: 봇%s) — 기다리거나, 마지막으로 본 자리로 가 보라"
                              % "·".join(last["missing"]))
             if last.get("busy"):
                 parts.append("곁의 봇%s는 하던 일(탐색·다른 목표)이 있다 —"
@@ -1037,7 +1037,7 @@ def _wire(obs, names=None):
             elif p.get("visible"):
                 st = "시야 안(위 목록에 있다)"
             else:
-                st = "시야 밖 — 말은 안 닿고, 찾아갈 수는 있다(파티 감각)"
+                st = "시야 밖 — 말은 안 닿는다. 어디 있는지 모른다(마지막 본 자리만 안다)"   # D18 개정(09-06)
             L.append("- %s, %s — %s" % (nm(p.get("char", "?")), p.get("job", "?"), st))
 
     rels = obs.get("relations") or []
