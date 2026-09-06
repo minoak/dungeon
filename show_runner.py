@@ -160,6 +160,9 @@ REST_ON = os.environ.get("DUNGEON_REST", "1") != "0"         # 휴식(D35, 09-06
 RELATIONS_ON = os.environ.get("DUNGEON_RELATIONS", "1") != "0"   # 관계 장부(D36, 09-06) — 러너 기본 1,
                                                              #   엔진 기본 0. 뼈 5종+문턱 초대, 살은
                                                              #   결정 응답 relation_line(엔진 불가침)
+TRAIL_ON = os.environ.get("DUNGEON_TRAIL", "1") != "0"       # 자기 행동 궤적(D38, 09-06) — 러너 기본 1,
+                                                             #   엔진 기본 0. 마지막 결정 이후 일어난 일을
+                                                             #   순서대로 다음 결정에(작정 집행 틱의 공백 보전)
 LORE_FILE = os.path.join(HERE, "lore.json")
 STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적용 후 맵이 보이게(헤들리스=0)
 
@@ -572,7 +575,7 @@ def main():
                       loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
                       dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
                       ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
-                      status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON)
+                      status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON)
         d.lore = lore
     bots = []
     for c in chars:
@@ -648,6 +651,7 @@ def main():
             status=STATUS_ON,          # 상태 태그(D34) 여부 — 몸 물리(걸음·굴림)와 obs 를 바꾸는 메타
             rest=REST_ON,              # 휴식(D35) 여부 — 메뉴·회복 물리 메타(wait 와 같은 급)
             relations=RELATIONS_ON,    # 관계 장부(D36) 여부 — obs(뼈·초대)와 시트(살)를 바꾸는 메타
+            trail=TRAIL_ON,            # 자기 행동 궤적(D38) 여부 — obs(trail·intent turn)를 바꾸는 표현층 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
@@ -831,7 +835,7 @@ def main():
                               wait_verb=WAIT_ON, motion=MOTION_ON,
                               ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
                               n_gear=N_GEAR, status=STATUS_ON, rest_verb=REST_ON,
-                              relations=RELATIONS_ON)
+                              relations=RELATIONS_ON, trail=TRAIL_ON)
                 d.lore = lore
                 fresh = True
             # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,

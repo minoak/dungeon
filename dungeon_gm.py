@@ -142,6 +142,8 @@ WAIT_MAX = 15            # wait(D25) 지루함 상한: 이만큼 틱을 기다�
                          #   말한 이가 죽거나 길을 잃었을 때 영원히 서 있는 봇이 남는다. 숫자
                          #   인자는 안 둔다(사람은 틱을 세며 기다리지 않는다 — 파트너 확정안).
                          #   합의 15~20 중 하한 채택. 튜닝은 큰 판 실측 후(튜닝마라).
+TRAIL_MAX = 12           # 자기 행동 궤적(D38, 09-06) 상한: 마지막 view() 이후 보존할 결과 수. 넘치면 앞을
+                         #   버리고 생략 표식 한 칸(gap n) — 결정 사이가 보통 10틱 안이라 실전에선 안 찬다
 HAIL_CD = 3              # 말 걸림 정지(07-24 D24) 쿨다운: 같은 발화자는 이 턴 수 안에 다시 말해도
                          #   재정지 없음(메시지 배달은 그대로 — 다음 자연 결정에 읽음). 수다 루프
                          #   (마주 서서 무한 핑퐁) 방어는 내용 아닌 구조로. D23 회의 서랍행으로
@@ -336,7 +338,7 @@ class Dungeon:
                  scan=False, n_potions=0, loops=False, selfstop=False,
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
                  motion=False, ally_sight=False, social=False, solo=False, n_gear=0,
-                 town=False, status=False, rest_verb=False, relations=False):
+                 town=False, status=False, rest_verb=False, relations=False, trail=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -419,6 +421,9 @@ class Dungeon:
         self.relations = bool(relations)   # 관계 장부(D36, 09-06) — 기본 꺼짐(기존 verify 비트 동일).
                                    #   러너가 DUNGEON_RELATIONS(기본 1)로 켠다. 뼈 5종(대화·함께 싸움·
                                    #   기다려 줌·나를 구함·죽을 때 곁)+문턱 초대. 엔진은 살(line)을 안 읽는다.
+        self.trail_on = bool(trail)   # 자기 행동 궤적(D38, 09-06) — 기본 꺼짐(기존 verify 비트 동일). 러너가
+                                   #   DUNGEON_TRAIL(기본 1)로 켠다. 마지막 view() 이후 일어난 결과를 순서대로
+                                   #   다음 결정에 노출(_trail_add). 판정 무접촉 — 자기 경험의 기록·노출뿐.
         self._talked = set()       # (쌍, 틱) — 같은 틱 양방향 대화를 한 번으로(note_talk 중복 방지)
         self._ring_target = 0      # loops 판에서 주 고리에 배속할 방 수(_carve_rooms 가 굴림)
         self.rooms = self._carve_rooms()
@@ -491,6 +496,7 @@ class Dungeon:
         d.status = False           # 상태 태그(D34) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.rest_verb = False        # 휴식(D35) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.relations = False        # 관계 장부(D36) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.trail_on = False         # 자기 행동 궤적(D38) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d._talked = set()
         d.grave_of = {}            # 묘→캐릭터(D22 개정) — __new__ 경유라 명시 초기화
         d.npc_lines = {}           # NPC 인사 사전 — build_town 이 채운다(데이터, 판정 무접촉)
@@ -1609,6 +1615,12 @@ class Dungeon:
         if wit:
             bot['witnessed'] = []
             wit = [_mask(w) for w in wit]
+        trail = list(bot.get('trail') or [])     # D38 궤적 — 노출 후 소거(witnessed 문법: 다음 결정 1회)
+        gap = int(bot.get('trail_gap') or 0)
+        if trail or gap:
+            bot['trail'], bot['trail_gap'] = [], 0
+        if gap:
+            trail = [{'type': 'gap', 'n': gap}] + trail   # 상한에 잘린 앞부분 — 생략 표식 한 칸
         dry_out = bot.get('dry', 0) if bot.get('dry_hit') else 0
         if dry_out:
             bot['dry_hit'] = False    # 1회성 배달(witnessed 문법 — 이번 결정에 한 번, 비운다)
@@ -1660,6 +1672,9 @@ class Dungeon:
                    if (self.status and bot.get('status')) else {}),   # 상태 태그(D34) — 자기 몸의 사실
                 **({'relations': rel_obs} if rel_obs else {}),   # 관계 장부(D36) — 뼈 횟수·살·초대
                 **({'exhausted': True} if exhausted else {}),   # 탐색 소진(D19 개정) — 새 길·기억의 계단·안 가 본 문 없음
+                **({'trail': trail} if (getattr(self, 'trail_on', False) and trail) else {}),
+                                              # 자기 행동 궤적(D38, 09-06) — 마지막 결정 이후 일어난 일의 순서,
+                                              #   있을 때만(intent 선례). last 는 그 마지막 항목과 같다
                 'last': bot.get('last'),      # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의
                                               #   결과를 관측할 수 있어야 한다". 자기 경험=시야-온리 무위반
                 'order': ('explore' if str(bot.get('order') or '')[:1] == '@'
@@ -1745,14 +1760,32 @@ class Dungeon:
             res = self._set_follow(bot, tgt, bots)    # 동행(D18 A-5) — 곁 유지 지속 order
         else:
             res = self._set_order(bot, tgt, bots)     # goto(기본)
-        self._note_last(bot, res)
+        self._note_last(bot, res, plan=(action.get('src') == 'plan'))   # D38: 작정 집행 결과엔 표식
         return res
 
-    @staticmethod
-    def _note_last(bot, res):
+    def _note_last(self, bot, res, plan=False):
         """봇 자기 행동의 최신 결과 메모 — 원칙 "봇은 자기 행동의 결과를 관측할 수 있어야 한다".
-        view()가 obs['last']로 노출. 자기 경험만 담으므로 시야-온리 무위반(세계 정보 아님)."""
+        view()가 obs['last']로 노출. 자기 경험만 담으므로 시야-온리 무위반(세계 정보 아님).
+        D38(09-06): 같은 줄을 궤적(bot['trail'])에도 잇는다 — _trail_add 참조(기록은 한 번, 보기 둘)."""
         bot['last'] = {k: v for k, v in res.items() if k != 'char'}
+        self._trail_add(bot, bot['last'], plan=plan)
+
+    def _trail_add(self, bot, rec, plan=False):
+        """자기 행동 궤적(D38, 2026-09-06 파트너 확정 "자기 행동에 대한 정보가 많이 부족했던 거네"):
+        **마지막 view() 이후** 이 봇에게 일어난 결과를 순서대로 보존한다. last 는 한 칸이라 작정(D16)이
+        붙은 결정은 다음 틱의 plan goto·걸음이 상인 대사·전투 결과를 덮었다(09-06 마을 판: 미나가 상인의
+        '이미 줬어'를 결정 시점에 0/7 봄). view() 가 노출 후 비운다(witnessed 선례 — 휘발=다음 결정 1회).
+        작정 집행 틱은 view() 가 없으니 자연히 쌓인다 = 구멍을 메우는 원리. 기록자는 여기 한 곳
+        (act·자동보행 걸음·plan_broken·교대·말 걸림·피격 전부 경유). 항목 = {…res, turn, plan?}.
+        엔진 판정은 절대 안 읽는다(자기 경험의 기록·노출뿐). 상한 TRAIL_MAX — 넘치면 앞을 버리고 gap 누적."""
+        if not getattr(self, 'trail_on', False):
+            return
+        tr = bot.setdefault('trail', [])
+        tr.append({**{k: v for k, v in rec.items() if k != 'char'}, 'turn': self.turn,
+                   **({'plan': True} if plan else {})})
+        if len(tr) > TRAIL_MAX:
+            bot['trail_gap'] = int(bot.get('trail_gap') or 0) + (len(tr) - TRAIL_MAX)
+            del tr[:len(tr) - TRAIL_MAX]
 
     def plan_step(self, bot, bots):
         """작정(D16)의 다음 수 활성화 — **착수 시점 재검증**(D16 유일한 신규 규칙).
@@ -2600,9 +2633,11 @@ class Dungeon:
             # 작정 파기 직후 follow 46% vs 평상시 29%. 사교 콜이 그 결합을 푼다.
             bot['hailed'] = list(froms)
             bot['last'] = {'type': 'hail', 'result': 'heard', 'froms': list(froms)}
+            self._trail_add(bot, bot['last'])   # D38 궤적 — 말 걸림도 자기 경험
             return fresh
         bot['order'], bot['path'], bot['plan'] = None, [], []   # 인터럽트 문법(D16) — 작정 파기
         bot['last'] = {'type': 'hail', 'result': 'hailed', 'froms': list(froms)}
+        self._trail_add(bot, bot['last'])       # D38 궤적 — 말 걸림도 자기 경험
         return fresh
 
     def _order_done(self, bot, bots, base):
@@ -3401,6 +3436,7 @@ class Dungeon:
                 if self._apply_status(b, st, m.kind, bots, by_kind='monster'):
                     ev['status'] = st
                     b['last']['status'] = st     # 자기 관측(D1-4): "맞았다 — 둔화가 생겼다"
+            self._trail_add(b, b['last'])        # D38 궤적 — status 병기까지 끝난 뒤 한 번(자기 피격도 궤적에)
             # 목격 주입(A-3): 자기 피격은 last 가 담당 — 중복 금지. 다음 view() 가 1회성 노출·소거.
             fact = {'kind': 'ally_down' if not b['alive'] else 'ally_hurt',
                     'char': b['char'], 'by': m.kind, 'by_id': 'm%d' % m.id}
@@ -3690,6 +3726,7 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'known': None,                  # 도감(D9): 아는 종키 set — None=게이팅 끔(하위호환).
                                             #   러너가 발급기(bestiary)의 set 을 꽂는다(획득 즉시 obs 반영)
             'last': None,                   # 직전 행동/피격 결과 메모(D1 개정) — view 가 obs.last 로 노출
+            'trail': [], 'trail_gap': 0,    # 자기 행동 궤적(D38, 09-06) — 마지막 view() 이후 결과 목록(노출 후 소거)
             'witnessed': [],                # 목격(D18 A-3): 시야 내 동료 피격/전사 사실 축적 —
                                             # view 가 1회성 노출·소거. 스냅샷 화이트리스트 밖(계약 불변)
             'memories': [],                 # 기억(D22): 목격한 중대사(v0=fallen 전사) — 휘발 0,

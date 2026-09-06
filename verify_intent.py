@@ -7,7 +7,8 @@
   ④ 폴백 결정도 기억된다(src=fallback — [폴백] reason 이 그대로 남아 정직)
   ⑤ 스트림 계약 불변: bot_snapshot 에 intent 없음(화이트리스트 밖)
   ⑥ 러너 통합(STREAM_OBS=1 스텁 판): decisions[].obs.intent == 같은 층 그 캐릭터의 직전
-     decision 파생값(스트림에서 재구성 가능 = 새 원천 없음) / 층 첫 결정 intent 없음(강하 리셋)
+     decision 파생값(스트림에서 재구성 가능 = 새 원천 없음 — D38 궤적 판은 직전 **실** 결정+그 turn)
+     / 층 첫 결정 intent 없음(강하 리셋)
      / 2회 실행 결정론(started 제외 라인 동일)
   ⑦ 강하 재스폰 봇에 intent 없음(층 전이 리셋 경로)
 (기존 verify 10종은 별도 실행.)
@@ -148,27 +149,40 @@ def normalized(raw):
 
 
 def audit_stream(raw):
-    """층 세그먼트별 직전 결정 지도로 obs.intent 전수 감사 — 스트림만으로 재구성."""
-    prev = {}                      # char -> 직전 decision (층 내)
+    """층 세그먼트별 직전 결정 지도로 obs.intent 전수 감사 — 스트림만으로 재구성.
+    D38(09-06, run_meta.trail=true 판): 작정 수(src=plan)는 intent 를 덮지 않는다 — 직전 '실' 결정이
+    기준이고, 그 결정의 tick turn 이 intent.turn 으로 붙는다(궤적 판의 저장 규칙 미러)."""
+    prev = {}                      # char -> (직전 decision, 그 turn) (층 내)
+    trail = False
     n_dec = n_with = bad = first_bad = 0
     for line in raw.splitlines():
         r = json.loads(line)
+        if r["kind"] == "run_meta":
+            trail = bool(r.get("trail"))
+            continue
         if r["kind"] == "level":
             prev = {}              # 강하 = 재스폰 = intent 리셋
             continue
         if r["kind"] != "tick":
             continue
         for c, dec in sorted((r.get("decisions") or {}).items()):
+            if dec.get("src") == "plan" and "obs" not in dec:
+                continue           # 작정 집행 수 = view() 없음(obs 없음) — 되먹임 비교 대상 아님(D16)
             o = dec.get("obs") or {}
             n_dec += 1
             if c in prev:
                 n_with += 1
-                if o.get("intent") != derive(prev[c]):
+                pd, pt = prev[c]
+                want = derive(pd)
+                if trail:
+                    want["turn"] = pt
+                if o.get("intent") != want:
                     bad += 1
             else:
                 if "intent" in o:
                     first_bad += 1
-            prev[c] = dec
+            if not (trail and dec.get("src") == "plan"):   # 궤적 판: 작정 수는 intent 를 안 덮는다
+                prev[c] = (dec, r["turn"])
     return n_dec, n_with, bad, first_bad
 
 

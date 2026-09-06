@@ -736,11 +736,52 @@ def _last_prose(last, names=None):
     return json.dumps(last, ensure_ascii=False)        # 미지 형태 — 정직한 폴백(숨기지 않는다)
 
 
+_TRAIL_RUNS = {"walking": "%d걸음 걸었다", "following": "%d틱 곁을 따라 걸었다",
+               "waiting": "%d틱 기다렸다", "resting": "%d틱 쉬었다"}
+
+
+def _trail_prose(trail, names=None):
+    """궤적(D38, 09-06) — 마지막 결정 이후 일어난 일을 순서대로 ' → ' 로 잇는다.
+    연속 걸음·동행·대기·휴식 틱은 'N걸음 걸었다' 꼴로 접고(그 사이 주운 보물·물약은 접미로 살린다),
+    작정 집행 수는 '작정대로 ' 접두, 상한에 잘린 앞부분은 '…(n건 생략)'. 각 항목 문장은 _last_prose
+    재사용 — 어휘 전거가 같아 새 폴백이 안 생긴다(verify_wire ③ 감시 그대로)."""
+    parts, run = [], None                    # run = [result, n, 보물 n, 물약 n]
+
+    def flush():
+        if run:
+            s = _TRAIL_RUNS[run[0]] % run[1]
+            if run[2]:
+                s += " — 길에서 보물을 주웠다" + (("(%d개)" % run[2]) if run[2] > 1 else "")
+            if run[3]:
+                s += " — 회복 물약도 챙겼다"
+            parts.append(s)
+    for e in trail:
+        if not isinstance(e, dict):
+            continue
+        if e.get("type") == "gap":
+            flush(); run = None
+            parts.append("…(%d건 생략)" % int(e.get("n") or 0))
+            continue
+        r = e.get("result")
+        if e.get("type") == "walk" and r in _TRAIL_RUNS:
+            if run and run[0] == r:
+                run[1] += 1
+            else:
+                flush(); run = [r, 1, 0, 0]
+            run[2] += 1 if e.get("treasure") else 0
+            run[3] += 1 if e.get("potion") else 0
+            continue
+        flush(); run = None
+        parts.append(("작정대로 " if e.get("plan") else "") + _last_prose(e, names))
+    flush()
+    return " → ".join(parts)
+
+
 # _wire 가 아는 obs 키 전부 — 밖의 키는 '그 밖의 정보' JSON 으로 정직하게 노출(조용한 누락 금지).
 _WIRE_KEYS = frozenset((
     "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "potions",
     "depth", "turn",
-    "zone", "known", "witnessed", "memories", "dry", "last", "order", "ascii_view", "legend",
+    "zone", "known", "witnessed", "memories", "dry", "last", "trail", "order", "ascii_view", "legend",
     "sights", "party", "options", "messages", "intent", "notes",
     "status",  # 상태 태그(D34): 아래 _wire "## 네 몸 상태" 절이 그린다
     "relations",   # 관계 장부(D36): 뼈 횟수·초대는 _wire, 살(한 줄)은 _sheet 가 그린다
@@ -984,10 +1025,12 @@ def _wire(obs, names=None):
 
     it, la, wit = obs.get("intent"), obs.get("last"), obs.get("witnessed")
     dry = obs.get("dry")
-    if it or la or wit or dry:
+    trail = obs.get("trail") or []            # D38 궤적 — 마지막 결정 이후 일어난 일(순서). 1건이면 last 와 같다
+    if it or la or wit or dry or trail:
         L += ["", "## 네 직전 판단과 그 결과 (네 자신의 기억)"]
         if it:
-            line = "- 직전 판단: %s" % it.get("type", "?")
+            line = "- 직전 판단%s: %s" % (("(t%d)" % it["turn"]) if it.get("turn") is not None else "",
+                                          it.get("type", "?"))    # (tN) = D38 궤적 판만(얼마나 전의 판단인지)
             if it.get("target"):
                 line += " %s" % it["target"]
             if it.get("reason"):
@@ -995,7 +1038,12 @@ def _wire(obs, names=None):
             L.append(line)
             if it.get("say"):
                 L.append('  그때 동료에게 한 말: "%s"' % it["say"])
-        if la:
+        if len(trail) > 1:                    # 다건 = 궤적 체인. 1건이면 아래 구판 문장 그대로(핀 보호)
+            L.append("- 그 뒤 일어난 일: " + _trail_prose(trail, names))
+            bl = [e for e in trail if isinstance(e, dict) and e.get("bleed")]
+            if bl:                            # 출혈(D34) — 걷는 동안 흘린 피(사실만), 마지막 값
+                L.append("- 걷는 동안 출혈로 피를 흘렸다 — 남은 HP %d" % bl[-1]["bleed"].get("hp", 0))
+        elif la:
             L.append("- 그 결과: %s" % _last_prose(la, names))
             if la.get("bleed"):                   # 출혈(D34) — 걷는 동안 흘린 피(사실만)
                 L.append("- 걷는 동안 출혈로 피를 흘렸다 — 남은 HP %d" % la["bleed"].get("hp", 0))
@@ -1301,11 +1349,18 @@ def think_all(d, bots, inbox=None):
         _brainlog(kind="tick", backend=backend_name(), n=len(thinkers),
                   ms=int((time.time() - _t0) * 1000))
     by = {b["char"]: b for b in live}
+    trail_on = bool(getattr(d, "trail_on", False))
     for c, dec in out.items():          # 이번 판단을 자기 기억으로 저장 → 다음 결정의 obs.intent.
+        if trail_on and dec.get("src") == "plan":
+            continue                     # D38(09-06): 작정 수는 궤적(trail)에 남는다 — 직전 판단은 마지막
+                                         #   **실** 결정을 유지(09-06 마을 판: 미나의 '직전 판단'이 매번
+                                         #   "[작정] 미리 정한 다음 수"라 자기 결정·결과가 두 수 전으로 사라졌다)
         it = {"type": dec.get("type", "")}   # bot_snapshot 화이트리스트 밖 = 스트림 계약 불변
         for k in ("target", "say", "reason", "src"):   # (직전 decisions에서 파생 가능한 값).
-            if dec.get(k):                   # 작정 수(src='plan')도 자기 판단의 연속이라 intent 갱신
+            if dec.get(k):                   # (궤적 끈 판) 작정 수도 자기 판단의 연속이라 intent 갱신
                 it[k] = dec[k]
+        if trail_on:
+            it["turn"] = d.turn              # D38: "(tN)" — 얼마나 전의 판단인지
         by[c]["intent"] = it
         rl = dec.get("relation")
         if rl and rl.get("line"):        # D36 살 — 그 상대 항목에 한 줄 겹쳐쓰기(옛 줄은 스트림 decisions 에)
