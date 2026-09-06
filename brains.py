@@ -1024,17 +1024,19 @@ def _wire(obs, names=None):
     k = obs.get("known")
     if k and (k.get("statics") or k.get("last_seen") or k.get("zones")):
         L += ["", "## 네가 기억하는 것 (이 층에서 직접 봄 — 지금은 시야 밖)"]
+        def far(e):                          # 09-06: 얼마나 먼지(방위+직선 칸) — 문(D19)과 같은 자, 좌표 아님
+            return (", %s %d칸" % (e["bearing"], e["dist"])) if e.get("bearing") and e.get("dist") is not None else ""
         for e in k.get("statics", []):
-            L.append("- %s%s — %s에서 %s 봄%s"
+            L.append("- %s%s — %s에서 %s 봄%s%s"
                      % (e.get("name", "?"),
                         (" %s" % e["id"]) if e.get("id") else "",
-                        e.get("zone", "?"), ago(e.get("turn", 0)),
+                        e.get("zone", "?"), ago(e.get("turn", 0)), far(e),
                         "" if e.get("id") else " (위치만 기억해 둔 것)"))
         for e in k.get("last_seen", []):
             who = nm(e["char"]) if e.get("char") else (
                 "%s %s" % (e.get("kind", "?"), e.get("id", "?")))
-            L.append("- %s — %s에서 %s 마지막으로 봄 (지금도 거기 있단 보장은 없다)"
-                     % (who, e.get("zone", "?"), ago(e.get("turn", 0))))
+            L.append("- %s — %s에서 %s 마지막으로 봄%s (지금도 거기 있단 보장은 없다)"
+                     % (who, e.get("zone", "?"), ago(e.get("turn", 0)), far(e)))
         zs = k.get("zones", [])
         if zs:
             L.append("- 가 본 방: " + ", ".join(x.get("id", "?") for x in zs))

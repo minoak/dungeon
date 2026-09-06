@@ -1573,7 +1573,11 @@ class Dungeon:
                                                        # 비대칭 방지(리뷰 픽스): 중복이 아니다
                                                        # (D19 scan 판은 sights.traps 가 생겨 예외 불요)
                 ent = {'type': e['type'], 'name': e['name'],
-                       'zone': e['zone'], 'turn': e['turn']}
+                       'zone': e['zone'], 'turn': e['turn'],
+                       # 09-06 파트너 관찰 "기억 속 사물로 길을 고르는데 가끔 한참 먼 곳을 핑" → 방위+직선 거리
+                       # (좌표 아님 — 문의 D19 문법과 같은 자. 걸음 수(경로)는 안 본 칸을 지나므로 안 준다)
+                       'bearing': self._bearing(e['x'] - cx, e['y'] - cy),
+                       'dist': max(abs(e['x'] - cx), abs(e['y'] - cy))}
                 if 'id' in e:
                     ent['id'] = e['id']                # id 있는 것만 '돌아가기' 핑 대상
                 ks.append(ent)
@@ -1584,7 +1588,9 @@ class Dungeon:
                     o = next((o for o in bots if o['char'] == e['char']), None)   # 감각) — 같은
                     if not (o and o['alive'] and not o['won']):   # obs 안 모순 신호 제거(리뷰 픽스)
                         continue
-                ent = {'id': e['id'], 'zone': e['zone'], 'turn': e['turn']}
+                ent = {'id': e['id'], 'zone': e['zone'], 'turn': e['turn'],
+                       'bearing': self._bearing(e['x'] - cx, e['y'] - cy),   # 마지막 본 자리까지 방위+직선 거리
+                       'dist': max(abs(e['x'] - cx), abs(e['y'] - cy))}      # (09-06 — statics 와 같은 자)
                 if 'kind' in e:
                     kk = e['kind']                     # 도감 마스킹 — sights 와 같은 규칙(D9 정합)
                     if known is not None and ('monster:' + kk) not in known:
@@ -1786,9 +1792,10 @@ class Dungeon:
                 if 'id' not in e:
                     continue                           # 함정 항목(정보만) — 핑 대상 아님
                 ago = self.turn - e['turn']
-                _add('goto', e['id'], '돌아가기: %s — %s에서 봄(%s), 지금은 시야 밖'
+                _add('goto', e['id'], '돌아가기: %s — %s에서 봄(%s), %s %d칸, 지금은 시야 밖'
                      % (e['name'], e['zone'],       # '안 보임'은 '사라짐'으로 오독됨(프로브 실측)
-                        ('%d턴 전' % ago) if ago > 0 else '방금'))
+                        ('%d턴 전' % ago) if ago > 0 else '방금',
+                        e['bearing'], e['dist']))   # 09-06: 얼마나 먼지(직선 칸) — 먼 핑을 알고 고르게
         # 수색 라벨 — 지금 살필 반경이 전부 '이미 살핀 곳'이면 그 사실을 붙인다(자기 행동 기억).
         # A/B 실측에서 이 주석 없이는 같은 자리 수색 반복 평균 70회(수색 합창 루프)로 판이 죽었다.
         # 마을(D29)에선 수색·탐색 동사가 안 열린다 — 전부 보이는 곳에서 "벽 뒤·시야 밖" 라벨은
@@ -1808,8 +1815,16 @@ class Dungeon:
                 if e['kind'] == '막다른 곳' and not e['been']:
                     _add('explore', e['bearing'], '탐색: %s쪽 막다른 곳까지 가 본다 — %dm'
                          % (e['bearing'], e['dist']))
-            if self._explore_plan(bot, None, bots) is not None:   # D19 개정: 갈 곳이 있을 때만 어휘가 된다
-                _add('explore', None, '탐색: 아직 못 본 곳/새 길을 찾아 나선다 (엔진에 맡긴다)')
+            plan = self._explore_plan(bot, None, bots)   # D19 개정: 갈 곳이 있을 때만 어휘가 된다
+            if plan is not None:
+                _o, _p, _r = plan              # 09-06 파트너: 엔진이 고를 종점이 어디쯤·얼마나 먼지 라벨에(먼 핑을 알고 고른다)
+                whither = ('%s쪽 새 길' % _r['bearing'] if _r.get('bearing')
+                           else '기억 속 계단 쪽' if _r.get('to_exit')
+                           else '기억 속 안 가 본 문 쪽' if _r.get('door')
+                           else '기억 속 안 본 가장자리 쪽' if _r.get('frontier')
+                           else '새 길')
+                _add('explore', None, '탐색: 아직 못 본 곳/새 길을 찾아 나선다 — %s, 약 %d칸 (엔진에 맡긴다)'
+                     % (whither, len(_p)))
             else:
                 exhausted = True               #   없으면 라벨 대신 사실 한 줄(obs.exhausted — 조향 없음)
         else:

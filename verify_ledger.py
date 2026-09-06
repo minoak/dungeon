@@ -117,11 +117,12 @@ d3.turn = 9
 obs3 = d3.view(b3, bots3)
 ent = next((e for e in obs3['known']['statics'] if e.get('id') == chest3), None)
 ret = [o for o in obs3['options'] if o['type'] == 'goto' and o.get('target') == chest3]
-check("③ 시야 밖 상자 = known.statics 노출(구역·turn, 좌표 없음)",
-      ent is not None and set(ent) <= {'id', 'type', 'name', 'zone', 'turn'})
-check("③ 돌아가기 옵션(사실 라벨: 어디서·언제 봤나)",
+check("③ 시야 밖 상자 = known.statics 노출(구역·turn·방위·직선 거리 — 좌표 없음, 09-06 거리 추가)",
+      ent is not None and set(ent) <= {'id', 'type', 'name', 'zone', 'turn', 'bearing', 'dist'}
+      and 'x' not in ent and isinstance(ent.get('dist'), int) and ent['dist'] > 0 and ent.get('bearing'))
+check("③ 돌아가기 옵션(사실 라벨: 어디서·언제 봤나·얼마나 먼지)",
       len(ret) == 1 and ret[0]['label'].startswith('돌아가기')
-      and '6턴 전' in ret[0]['label'])
+      and '6턴 전' in ret[0]['label'] and ('%s %d칸' % (ent['bearing'], ent['dist'])) in ret[0]['label'])
 check("③ _valid_targets 가 장부 id 허용(brains 계약)",
       chest3 in brains._valid_targets(obs3))
 r = d3.act(b3, {'type': 'goto', 'target': chest3}, bots3)
