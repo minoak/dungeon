@@ -1,0 +1,106 @@
+{
+  "name": "궤적A",
+  "about": "D38 궤적+D39 오브젝트 태그 프로브(09-06). 미나형 고리 재현: 두란(1)이 아이템 상인 f2 에게 물약을 받고(t25, 실 결정) 작정대로 장비 상인 f1 곁에 도착한(t30) 첫 결정. 이미 단검 착용·두 상인 모두 '말 걸어 봄 ×1'. A=궤적·태그 켬(러너 기본): 직전 판단(t25)=interact f2 + '그 뒤 일어난 일' 체인 + 라벨 접미. 질문: 곁의 장비 상인에게 다시 말을 거는가, 아니면 상인은 끝났다고 읽고 입구/다른 일로 가는가. B(궤적B.json, 스위치 끔)와 1콜씩 대조.",
+  "seed": 7,
+  "turns": 2,
+  "turn_now": 30,
+  "map": [
+    "############",
+    "#..........#",
+    "#.........1#",
+    "#.........>#",
+    "############"
+  ],
+  "features": [
+    {
+      "type": "npc",
+      "name": "장비 상인",
+      "x": 10,
+      "y": 1,
+      "line": "아까 왔잖아. 이미 무장했으니 줄 건 없어 — 더 좋은 물건은 아직 들여오는 중이야."
+    },
+    {
+      "type": "npc",
+      "name": "아이템 상인",
+      "x": 2,
+      "y": 2,
+      "line": "아까 왔잖아. 이번 원정 몫은 이미 줬어 — 살아 돌아오면 또 하나 주지."
+    }
+  ],
+  "bots": {
+    "1": {
+      "hp": 12,
+      "weapon": {
+        "name": "단검",
+        "bonus": 1
+      },
+      "intent": {
+        "type": "interact",
+        "target": "f2",
+        "reason": "던전에 들어가기 전에는 물자부터 챙기는 게 상식이지",
+        "turn": 25
+      },
+      "last": {
+        "type": "walk",
+        "result": "arrived",
+        "target": "f1"
+      },
+      "trail": [
+        {
+          "type": "interact",
+          "target": "f2",
+          "result": "npc_gift",
+          "npc": "아이템 상인",
+          "item": "물약",
+          "line": "물약 하나 가져가게. 한 사람에 하나씩이야 — 던전에선 그게 목숨값이지.",
+          "turn": 25
+        },
+        {
+          "type": "goto",
+          "target": "f1",
+          "result": "pathed",
+          "len": 7,
+          "plan": true,
+          "turn": 26
+        },
+        {
+          "type": "walk",
+          "target": "f1",
+          "result": "walking",
+          "turn": 27
+        },
+        {
+          "type": "walk",
+          "target": "f1",
+          "result": "walking",
+          "turn": 28
+        },
+        {
+          "type": "walk",
+          "target": "f1",
+          "result": "walking",
+          "turn": 29
+        },
+        {
+          "type": "walk",
+          "target": "f1",
+          "result": "arrived",
+          "turn": 30
+        }
+      ],
+      "obj_tags": {
+        "f1": {
+          "n": 1,
+          "note": "단검 받음"
+        },
+        "f2": {
+          "n": 1,
+          "note": "물약 받음"
+        }
+      }
+    }
+  },
+  "probe": {
+    "bot": "1"
+  }
+}
