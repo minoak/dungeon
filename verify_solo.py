@@ -239,8 +239,8 @@ for _nm, _party, _solo in PAIRS:
           not [w for w in FALSE_IN_SOLO if w in _solo])
     check("⑪ %s: 두 판본이 실제로 다르다(갈림이 살아 있다)" % _nm,
           bool(_party) and _party != _solo)
-check("⑪ 파티 판본 무손상 — 계단 규칙이 그대로 있다",
-      "파티가 함께" in brains.MENU_PROMPT and "동료와 의논" in brains.MENU_PROMPT)
+check("⑪ 파티 판본 무손상 — 계단 규칙·동료 절이 그대로 있다",
+      "파티가 함께" in brains.MENU_PROMPT and "## 동료" in brains.MENU_PROMPT)
 check("⑪ 솔로 판본이 혼자임을 명시한다",
       "혼자" in brains.MENU_PROMPT_SOLO and "## 혼자다" in brains.MENU_PROMPT_SOLO)
 # 상수만 비교하면 헛돈다(자기 자신과의 비교) — 실제로 조립돼 나가는 프롬프트를 붙잡는다.
@@ -257,7 +257,7 @@ finally:
 check("⑪ 실제로 나가는 솔로 프롬프트에 '## 혼자다' 가 있고 파티 규칙은 없다",
       "## 혼자다" in _solo_prompt and "모여야" not in _solo_prompt)
 check("⑪ 실제로 나가는 파티 프롬프트는 종전 그대로",
-      "동료와 의논" in _party_prompt and "파티가 함께" in _party_prompt)
+      "## 동료" in _party_prompt and "파티가 함께" in _party_prompt)
 
 # ── 결정론 ───────────────────────────────────────────────────────────────
 print("\n⑩ 결정론")

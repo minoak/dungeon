@@ -261,8 +261,11 @@ src = io.open(os.path.join(HERE, "show_runner.py"), encoding="utf-8").read()
 check("러너 스위치·메타·요약 코드 존재",
       'DUNGEON_REST' in src and 'rest=REST_ON' in src and 'rest_verb=REST_ON' in src
       and '휴식 끝' in src)
-lab = io.open(os.path.join(HERE, "adventurer_prompt_menu.md"), encoding="utf-8").read()
-check("프롬프트 물리 절에 휴식 사실 문장", "휴식뿐이다" in lab and "말을 걸어오면 깬다" in lab)
+gsrc = io.open(os.path.join(HERE, "dungeon_gm.py"), encoding="utf-8").read()
+check("휴식 사실은 선택지 라벨이 말한다(D42: 지침은 조작법만 — 회복량·상태 회복은 그 순간 라벨에)",
+      "틱마다 HP %d 회복" in gsrc and "다 나으면 몸 상태" in gsrc)
+pm = io.open(os.path.join(HERE, "adventurer_prompt_menu.md"), encoding="utf-8").read()
+check("지침에 휴식 규칙 없음(D42 — 세계 세부는 상황에서 준다)", "틱마다 HP" not in pm and "휴식뿐" not in pm)
 
 print()
 print(("RESULT: ALL PASS" if not C.failed else "RESULT: %d FAIL" % C.failed)
