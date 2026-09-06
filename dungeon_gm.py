@@ -2550,20 +2550,38 @@ class Dungeon:
                 return plan
         seen = self.visible_cells(bot['x'], bot['y'])
         scells = bot.get('seen_cells') if self.scan else None
+        bx, by = bot['x'], bot['y']
+
+        def _unseen_edge(c):
+            # D19 델타: '새 길'의 기준은 발자국이 아니라 기억 — 너머에 *한 번도 본 적 없는*
+            # 칸이 있어야 발견이다. 발자국 기준은 '봤지만 안 밟은' 다 본 방 구석을 영원히
+            # 새 길로 남겨 문을 나가고도 되밟으러 온다(미로 v3 육안 재론, 스폰 방 30/30 실측)
+            x, y = c
+            return any(0 <= x + dx < self.w and 0 <= y + dy < self.h
+                       and (x + dx, y + dy) not in scells
+                       for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0)))
+        buckets = {}                                  # 방위 → 프런티어 칸들(종점 후보 — D19 개정 3)
+        for c in self._frontier_cells(bx, by, seen):
+            buckets.setdefault(self._bearing(c[0] - bx, c[1] - by), []).append(c)
         fresh = []
-        for w in self._ways(bot['x'], bot['y'], seen):
+        for w in self._ways(bx, by, seen):
             if w['visited']:
                 continue                              # 발자국 있는 길은 '새 발견'이 아니다(왕복/진동 차단)
-            if scells is not None:
-                # D19 델타: '새 길'의 기준은 발자국이 아니라 기억 — 너머에 *한 번도 본 적 없는*
-                # 칸이 있어야 발견이다. 발자국 기준은 '봤지만 안 밟은' 다 본 방 구석을 영원히
-                # 새 길로 남겨 문을 나가고도 되밟으러 온다(미로 v3 육안 재론, 스폰 방 30/30 실측)
-                x, y = w['cell']
-                if not any(0 <= x + dx < self.w and 0 <= y + dy < self.h
-                           and (x + dx, y + dy) not in scells
-                           for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0))):
-                    continue
-            p = self.path_to(bot['x'], bot['y'], w['cell'][0], w['cell'][1], bots)
+            if scells is not None and not _unseen_edge(w['cell']):
+                continue
+            # D19 개정 3(2026-09-06, 파트너 "탐색은 좀 더 길게 해도 될 것 같고"): 종점 = 그 방위의 **보이는
+            # 가장 먼** 안 밟은 프런티어 칸("빈 복도는 끝까지 걷는다"의 열린 공간판). 구판은 방위 대표칸
+            # (가장 가까운 것)이라 큰 방에선 시야 6칸에 2~3칸씩 종종걸음(실측 536184 판: 탐색 경로 중앙
+            # 2칸·콜당 1칸). 새것이 보이면 D19 정지가 세우므로 멀리 잡아도 안 본 곳으로 뛰어들진 않는다.
+            # 방향 선택은 그대로(_ways 순서=안 밟은 것·가까운 길 우선), 먼 칸이 못 가는 칸이면 차선·대표칸.
+            far = [c for c in buckets.get(w['bearing'], [])
+                   if c not in self.visited and (scells is None or _unseen_edge(c))]
+            far.sort(key=lambda c: (-max(abs(c[0] - bx), abs(c[1] - by)), c))
+            p = None
+            for c in far[:3] + [w['cell']]:
+                p = self.path_to(bx, by, c[0], c[1], bots)
+                if p:
+                    break
             if p:
                 fresh.append((w, p))
         if fresh:
@@ -2576,8 +2594,8 @@ class Dungeon:
                 dirmatch = exact or [rp for rp in fresh if set(d) & set(rp[0]['bearing'])]
                 if dirmatch:
                     fresh = dirmatch
-            w, path = min(fresh, key=lambda rp: (len(rp[1]), rp[0]['cell']))
-            tx, ty = w['cell']
+            w, path = fresh[0]                        # _ways 순서(안 밟은 것·가까운 길 우선) = 구판 방향 선호 유지
+            tx, ty = path[-1]                         # 종점 = 실제 경로 끝(먼 프런티어 칸 또는 물러선 칸)
             return '@%d,%d' % (tx, ty), path, {**base, 'result': 'pathed', 'len': len(path),
                                                'bearing': w['bearing']}
         # 새로 트인 길이 (도달 가능하겐) 없다 — 걷는 곳은 캐릭터가 아는 곳뿐(D19 개정).

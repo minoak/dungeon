@@ -27,7 +27,10 @@ import json
 import contextlib
 
 os.environ.update(DUNGEON_GM="0", DUNGEON_TURNS="120", DUNGEON_W="40", DUNGEON_H="16",
-                  DUNGEON_SEED="7", DUNGEON_MONSTERS="3", DUNGEON_TRAPS="3",
+                  # 09-06 D19 개정 3(탐색 종점=보이는 가장 먼 가장자리) 뒤 ⑨ 표본(plan 집행 ≥5)이 15→4 로 떨어짐:
+                  # 스텁은 늘 마지막 선택지(탐색)를 고르고 안 싸우므로 긴 다리가 몹 방에 일찍 닿아 t65 전멸.
+                  # 몹 3→1 = 표본 크기 손잡이(연속성 감사는 전투와 무관 — 위반 0 은 그대로). 시드·맵은 유지.
+                  DUNGEON_SEED="7", DUNGEON_MONSTERS="1", DUNGEON_TRAPS="3",
                   DUNGEON_LURKERS="1", DUNGEON_DEPTHS="2",
                   DUNGEON_MENU="1", DUNGEON_STEP_DELAY="0",
                   DUNGEON_PARTY_FILE="/nonexistent",     # 내장 2인 고정(회귀 그물)
