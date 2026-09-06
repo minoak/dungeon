@@ -352,6 +352,14 @@ def event_tags(rec, names=None):
     return [('misc', '기타', json.dumps(rec, ensure_ascii=False))]
 
 
+def addressed_to(msg, char):
+    """지목(D41, 2026-09-06 파트너 발제 "말 걸림에 say 대상을 넣자"): 이 말이 나(char)에게 한 말인가 —
+    `to` 가 내 번호이거나 'all'. 대상 없는 말 = 혼잣말·방송(들리긴 하지만 나를 부른 게 아니다).
+    배달(들림)은 러너가 시야로 정하고, 정지(말 걸림)·대화 뼈는 이 판정을 지난 말만 센다."""
+    to = (msg or {}).get('to')
+    return to == 'all' or (to is not None and str(to) == str(char))
+
+
 def floor_freeze(bot, depth, turn):
     """결산(D40 ②, 파트너 확정 "층이 끝나면 결산"): 층을 떠나는 순간 그 층의 집계를 얼려 지난 층 목록에 붙인 것을
     돌려준다(러너가 재스폰 직전에 부른다 — 마을↔던전 왕복 모두). 뼈=기계가 센 횟수, 살=캐릭터가 다음 층 첫 결정에서

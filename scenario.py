@@ -327,7 +327,7 @@ def probe(spec, n, jobs):
         elif dec.get("reason"):
             line += "  | " + dec.get("reason", "")[:60]
         print(line)
-        for k in ("say", "note", "floor_line"):      # 말·남긴 한 줄·결산 한 줄(D40)도 프로브의 답이다(09-06)
+        for k in ("say", "to", "note", "floor_line"):   # 말·상대(D41)·남긴 한 줄·결산 한 줄(D40)도 프로브의 답이다(09-06)
             if dec.get(k):
                 print("         %s: %s" % (k, dec[k]))
         if dec.get("relation"):                      # 관계 살(D36) — 초대 받은 결정의 relation_line

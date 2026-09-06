@@ -756,6 +756,34 @@ def _floor_name(depth):
     return "마을" if d == 0 else "%d층" % d
 
 
+_TO_ALL = ("all", "모두", "다들", "전원", "모두에게", "다같이", "everyone")
+
+
+def _parse_to(raw, char, roster=None, obs=None):
+    """말의 상대(D41 `to`, 응답 JSON 정식 필드 — 자유 텍스트 이름 파싱(07-24 기각 뒷문)이 아니다):
+    봇 번호('2'·'b2'·'봇2') 또는 이름('카야') → 봇 번호 / all·모두·다들·전원 → 'all' / 자기 자신·미등재·빈 값 → None
+    (=혼잣말). 이름은 로스터(파티)로만 푼다 — 솔로 판(로스터 없음)은 시야 안 번호만 통한다(통성명 안 했으니)."""
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    if s.lower() in _TO_ALL:
+        return "all"
+    others = {str(o.get("char")) for o in (roster or []) if str(o.get("char")) != str(char)}
+    if not others:                                   # 솔로: 로스터 없음 → 시야 안 번호
+        others = {str(b.get("char")) for b in ((obs or {}).get("sights") or {}).get("bots", [])}
+    core = re.sub(r"^(봇|b|bot)\s*", "", s, flags=re.I)
+    if core.isdigit():
+        return core if core in others else None
+    for o in (roster or []):
+        nm_ = str(o.get("name") or "")
+        oc = str(o.get("char"))
+        if nm_ and oc in others and (s == nm_ or s.startswith(nm_) or nm_.startswith(s.rstrip("!?.,~ "))):
+            return oc
+    return None
+
+
 def _trail_prose(trail, names=None):
     """궤적(D38 → D40 꼬리표식, 09-06 파트너 확정 "꼬리표식으로 바꾸자·픽셀 던전 방식") — 마지막 결정 이후
     일어난 일을 사건 사전(dungeon_gm.event_tags)의 꼬리표로 ' → ' 이어 찍는다: "[대화] 아이템 상인 → 물약 받음
@@ -1130,9 +1158,12 @@ def _wire(obs, names=None):
 
     ms = obs.get("messages")
     if ms:
-        L += ["", "## 동료가 네게 한 말 (지난 턴)"]
+        L += ["", "## 동료가 한 말 (지난 턴 — 들린 것 전부. 너를 부른 말만 걸음이 멈췄다)"]
         for m in ms:
-            L.append('- %s: "%s"' % (nm(m.get("from", "?")), m.get("text", "")))
+            to = m.get("to")                     # D41 지목 표식 — 누구에게 한 말인지(혼잣말은 아무도 안 멈춘다)
+            tag = (" (모두에게)" if to == "all" else " (너에게)" if m.get("to_me")
+                   else (" (%s에게)" % nm(to)) if to else " (혼잣말)")
+            L.append('- %s: "%s"%s' % (nm(m.get("from", "?")), m.get("text", ""), tag))
 
     extra = {kk: v for kk, v in obs.items() if kk not in _WIRE_KEYS}
     if extra:                       # 미래 additive 필드 — 조용한 누락 대신 정직한 노출
@@ -1248,6 +1279,9 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
                  if any(f.get("invite") for f in (obs.get("floors") or [])) else "")   #   첫 결정)에서만 받는다
         if fline:
             rel = {**rel, "floor_line": fline}
+        to_ = _parse_to(obj.get("to"), char, roster, obs)   # D41 지목 — 말의 상대(없으면 혼잣말)
+        if to_ and str(obj.get("say", "") or "").strip():
+            rel = {**rel, "to": to_}
         if MENU:
             act = _pick(obj, obs)
             if act:
@@ -1374,7 +1408,8 @@ def think_all(d, bots, inbox=None):
     obss = {}
     for b in thinkers:
         o = d.view(b, bots)
-        o["messages"] = inbox.get(b["char"], [])
+        o["messages"] = [{**m, **({"to_me": True} if (G.addressed_to(m, b["char"]) and m.get("to") != "all") else {})}
+                         for m in inbox.get(b["char"], [])]   # D41: 나를 지목한 말 표식(렌더용, 스트림 무접촉)
         if b.get("intent"):
             o["intent"] = b["intent"]   # 판단 되먹임(D15①): 자기 직전 판단의 기억 — inbox와 같은
         if NOTES_ON and b.get("notes"):
@@ -1404,7 +1439,7 @@ def think_all(d, bots, inbox=None):
                                          #   **실** 결정을 유지(09-06 마을 판: 미나의 '직전 판단'이 매번
                                          #   "[작정] 미리 정한 다음 수"라 자기 결정·결과가 두 수 전으로 사라졌다)
         it = {"type": dec.get("type", "")}   # bot_snapshot 화이트리스트 밖 = 스트림 계약 불변
-        for k in ("target", "say", "reason", "src"):   # (직전 decisions에서 파생 가능한 값).
+        for k in ("target", "say", "to", "reason", "src"):   # (직전 decisions에서 파생 가능한 값). to=D41 지목
             if dec.get(k):                   # (궤적 끈 판) 작정 수도 자기 판단의 연속이라 intent 갱신
                 it[k] = dec[k]
         if trail_on:

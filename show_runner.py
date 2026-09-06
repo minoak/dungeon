@@ -166,6 +166,9 @@ TRAIL_ON = os.environ.get("DUNGEON_TRAIL", "1") != "0"       # 자기 행동 궤
 OBJTAGS_ON = os.environ.get("DUNGEON_OBJTAGS", "1") != "0"   # 오브젝트 태그(D39, 09-06) — 러너 기본 1,
                                                              #   엔진 기본 0. 상인·샘과의 상호작용 횟수·마지막
                                                              #   사실을 시야 줄·라벨 접미로("말 걸어 봄 ×2")
+SAYTO_ON = os.environ.get("DUNGEON_SAYTO", "1") != "0"       # 지목(D41, 09-06) — 러너 기본 1. 말 걸림 정지·대화
+                                                             #   뼈는 `to` 로 지목된 사람만(대상 없는 말=혼잣말:
+                                                             #   들리지만 아무도 안 선다). off=구판(들리면 전원 정지)
 FLOOR_ON = os.environ.get("DUNGEON_FLOOR", "1") != "0"       # 층 집계·결산(D40 ②, 09-06) — 러너 기본 1,
                                                              #   엔진 기본 0. "이 층에서 지금까지" 꼬리표 ×N +
                                                              #   층 전이 때 얼려 "지난 층"(캐릭터 한 줄 피기백)
@@ -540,6 +543,38 @@ def build_town():
     return d, starts
 
 
+def deliver_and_hail(d, bots, says, say_to):
+    """사회층 한 틱(러너 소유) — ①배달: 말한 사람이 시야 안이면 들린다(전원, `to` 무관 — 귀는 못 닫는다)
+    ②대화 뼈(D36 talk): ③말 걸림 정지(D24 hail_stop): **지목(D41, 2026-09-06 파트너 확정 "대상 없음=혼잣말,
+    아무도 안 멈춤")**이 켜진 판은 ②③ 둘 다 `to` 로 나를 지목한 말(또는 all)만 센다 — 07-24 큰 판·09-06 17091
+    판의 3인 회전 공명(한마디에 둘이 서고 둘이 답하면 셋이 서는 되먹임)의 뿌리를 캐릭터의 의도로 돌린다.
+    SAYTO_ON=0 이면 구판(들리면 전원 정지·배달 쌍 전부 뼈). 반환 (inbox, hails) — inbox 메시지 `{from, text, to?}`."""
+    inbox = {}
+    for b in bots:
+        seen = d.visible_cells(b["x"], b["y"]) if b["alive"] else set()
+        inbox[b["char"]] = [{"from": oc, "text": t, **({"to": say_to[oc]} if say_to.get(oc) else {})}
+                            for oc, t in says.items()
+                            if oc != b["char"]
+                            and any(o["char"] == oc and (o["x"], o["y"]) in seen for o in bots)]
+    by_char = {o["char"]: o for o in bots}
+
+    def counts(m, b):
+        return (not SAYTO_ON) or G.addressed_to(m, b["char"])
+    for b in bots:                         # 이야기를 나눔(D36 뼈) — 지목된 말마다 쌍당 틱당 1(엔진이 중복 제거)
+        for m in inbox.get(b["char"], []):
+            ob = by_char.get(m["from"])
+            if ob is not None and b["alive"] and ob["alive"] and counts(m, b):
+                d.note_talk(b, ob)
+    hails = {}                             # 말 걸림 정지(07-24 D24): 나를 부른 말이 있는 '걷던' 동료는 멈춰서
+    for b in bots:                         #   다음 틱 결정권을 받는다(지목 판 — 혼잣말·남에게 한 말엔 안 선다)
+        if b["alive"] and not b["won"] and inbox.get(b["char"]):
+            froms = [m["from"] for m in inbox[b["char"]] if counts(m, b)]
+            got = d.hail_stop(b, froms) if froms else []
+            if got:
+                hails[b["char"]] = got
+    return inbox, hails
+
+
 def arrive_cells(d, ax, ay, k):
     """(ax,ay) 곁의 자유 칸 k개 — BFS 순(결정론). 계단을 내려선 사람들이 계단 곁에 선다."""
     seen, out, frontier = {(ax, ay)}, [], [(ax, ay)]
@@ -670,6 +705,8 @@ def main():
             trail=TRAIL_ON,            # 자기 행동 궤적(D38) 여부 — obs(trail·intent turn)를 바꾸는 표현층 메타
             objtags=OBJTAGS_ON,        # 오브젝트 태그(D39) 여부 — obs(sights.features[].tag)·라벨을 바꾸는 표현층 메타
             floor=FLOOR_ON,            # 층 집계·결산(D40 ②) 여부 — obs(floor·floors)·decisions.floor_line 표현층 메타
+            sayto=SAYTO_ON,            # 지목(D41) 여부 — 말 걸림 정지·대화 뼈가 `to` 지목만 세는 사회층 물리 메타
+                                       #   (정지 물리를 바꾸므로 리플레이·판 비교의 전제 — hail 과 같은 급)
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
@@ -719,6 +756,7 @@ def main():
         event("-- tick %d --  (사고:%s / 나머지 자동보행)" % (turn, thinkers))
         turn_events = []
         says = dict(social)                  # 걸으면서 한 말도 같은 배달 규칙을 탄다
+        say_to = {}                          # D41 지목 — 이번 틱 말의 상대(봇 번호 | all), 없으면 혼잣말
         for b in bots:
             if not b["alive"] or b["won"]:
                 dec = decisions.get(b["char"])
@@ -740,7 +778,10 @@ def main():
                 append(botlog[b["char"]], "        -> %s  <%s>" % (act_summary(res), src))
                 if dec.get("say"):
                     says[b["char"]] = dec["say"]
-                    append(botlog[b["char"]], '        \U0001f4ac "%s"' % dec["say"])
+                    if dec.get("to"):                     # D41 지목 — 말의 상대(봇 번호 | all)
+                        say_to[b["char"]] = dec["to"]
+                    append(botlog[b["char"]], '        \U0001f4ac "%s"%s'
+                           % (dec["say"], (" → %s" % dec["to"]) if dec.get("to") else ""))
                     event('   봇%s \U0001f4ac "%s"' % (b["char"], dec["say"]))
             res["job"] = b["job"]
             turn_events.append(res)
@@ -762,28 +803,9 @@ def main():
         turn_events += mon_events
 
         # 의논 핑퐁: say -> 동료가 *볼 수 있을 때만*(근접/시야) 다음 틱 받은편지함
-        inbox = {}
-        for b in bots:
-            seen = d.visible_cells(b["x"], b["y"]) if b["alive"] else set()
-            inbox[b["char"]] = [{"from": oc, "text": t} for oc, t in says.items()
-                                if oc != b["char"]
-                                and any(o["char"] == oc and (o["x"], o["y"]) in seen for o in bots)]
-        by_char = {o["char"]: o for o in bots}
-        for b in bots:                         # 이야기를 나눔(D36 뼈) — 배달된 말마다 쌍당 틱당 1(엔진이 중복 제거)
-            for m in inbox.get(b["char"], []):
-                ob = by_char.get(m["from"])
-                if ob is not None and b["alive"] and ob["alive"]:
-                    d.note_talk(b, ob)
-
-        # 말 걸림 정지(07-24 D24, 여섯 번째 정지 신호): 방금 배달된 말이 있는 '걷던' 동료는
-        # 멈춰서 다음 틱 결정권을 받는다(들리는 전원 — 기존 시야 배달 규칙에 그대로 올라탐).
-        hails = {}
-        for b in bots:
-            if b["alive"] and not b["won"] and inbox.get(b["char"]):
-                got = d.hail_stop(b, [m["from"] for m in inbox[b["char"]]])
-                if got:
-                    hails[b["char"]] = got
-                    event("   봇%s 멈칫 — 말을 걸어온 동료 쪽을 돌아본다" % b["char"])
+        inbox, hails = deliver_and_hail(d, bots, says, say_to)   # 사회층 한 틱(배달·대화 뼈·말 걸림 — D24·D36·D41)
+        for c in hails:
+            event("   봇%s 멈칫 — 말을 걸어온 동료 쪽을 돌아본다" % c)
 
         # 스트림 tick — 빈 틱 포함 매 반복(turn 연속 불변식). GM 블록 *앞*에서 emit:
         # 여기서 즉시 직렬화되므로 GM 지연·이후 dict 변경과 독립(공유 오염 방어).

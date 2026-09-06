@@ -43,7 +43,7 @@ def check(name, cond):
         C.failed += 1
 
 
-INTENT_KEYS = ("target", "say", "reason", "src")
+INTENT_KEYS = ("target", "say", "to", "reason", "src")   # to = D41 지목(09-06 additive)
 
 
 def derive(dec):
