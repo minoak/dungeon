@@ -1,6 +1,6 @@
 {
   "name": "반복자각",
-  "about": "D38 개정 2 프로브(09-07). 복도에서 두란(1)이 보물 f0 를 t81·83·85·87 네 번 핑했으나 매번 카야(2)의 말에 멈췄고(걸음 1·0·2·0), 직전(t89)에도 f0 핑 직후 멈춤. 이번 턴에도 카야가 지목해 말을 건다. 질문: 최근 판단 장부(네 줄)를 읽고 (a) 같은 핑을 또 내는가·다른 수를 내는가 (b) 말(say)에 '그만 말 걸어' 류의 조율이 나오는가(파트너 가설). 몹0·함정0.",
+  "about": "D38 개정 2-b 프로브(09-07). 복도에서 두란(1)이 보물 f0 를 t81·83·85·87·89 다섯 번 핑했으나 매번 카야(2)의 말에 멈췄다(직전 t89 의 결과만 상세: [이동 시작] → [부름]). 이번 턴에도 카야가 지목해 말을 건다. 최근 판단 한 줄 '이동 f0 (t81) · … · 이동 f0 (t89)'을 읽고 (a) 같은 핑을 또 내는가·다른 수를 내는가 (b) 말(say)에 조율('그만 말 걸어' 류)이 나오는가. 몹0·함정0. 09-07 1차(결과 포함 형식): 켬 2콜 follow/goto b2 · 끔 1콜 follow b2 — 장면이 지목 말·시트 관계에 지배.",
   "seed": 7,
   "turns": 2,
   "turn_now": 91,
@@ -14,25 +14,15 @@
       "hp": 14,
       "intent": {"type": "goto", "target": "f0", "turn": 89, "reason": "보물부터 챙기고 간다", "say": "", "src": "haiku"},
       "trail": [
-        {"type": "goto", "result": "pathed", "target": "f0", "len": 7, "turn": 89},
+        {"type": "goto", "result": "pathed", "target": "f0", "len": 5, "turn": 89},
         {"type": "hail", "result": "hailed", "froms": ["2"], "turn": 89}
       ],
       "history": [
-        {"turn": 81, "type": "goto", "target": "f0",
-         "trail": [{"type": "goto", "result": "pathed", "target": "f0", "len": 7, "turn": 81},
-                   {"type": "walk", "result": "walking", "turn": 82},
-                   {"type": "hail", "result": "hailed", "froms": ["2"], "turn": 82}]},
-        {"turn": 83, "type": "goto", "target": "f0",
-         "trail": [{"type": "goto", "result": "pathed", "target": "f0", "len": 6, "turn": 83},
-                   {"type": "hail", "result": "hailed", "froms": ["2"], "turn": 83}]},
-        {"turn": 85, "type": "goto", "target": "f0",
-         "trail": [{"type": "goto", "result": "pathed", "target": "f0", "len": 6, "turn": 85},
-                   {"type": "walk", "result": "walking", "turn": 86},
-                   {"type": "walk", "result": "walking", "turn": 87},
-                   {"type": "hail", "result": "hailed", "froms": ["2"], "turn": 87}]},
-        {"turn": 87, "type": "goto", "target": "f0",
-         "trail": [{"type": "goto", "result": "pathed", "target": "f0", "len": 7, "turn": 87},
-                   {"type": "hail", "result": "hailed", "froms": ["2"], "turn": 87}]}
+        {"turn": 81, "type": "goto", "target": "f0", "src": "haiku"},
+        {"turn": 83, "type": "goto", "target": "f0", "src": "haiku"},
+        {"turn": 85, "type": "goto", "target": "f0", "src": "haiku"},
+        {"turn": 87, "type": "goto", "target": "f0", "src": "haiku"},
+        {"turn": 89, "type": "goto", "target": "f0", "src": "haiku"}
       ]
     },
     "2": {"hp": 10}

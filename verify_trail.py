@@ -17,9 +17,9 @@
   ⑧ 결정론: 같은 시드·같은 수순 두 번 = 같은 궤적
   ⑨ 위급(D40, HP ≤ 1/4): 넘는 순간 1회 [위급], 머무는 동안 반복 없음, 올라오면 1회 [위급 해제] — 원인 사건 뒤에 선다
   ⑩ 자기 문 사용(D40): 문 타일을 밟은 걸음에 door 병기(스트림 additive) → "[문 사용] d9"
-  ⑪ 최근 판단 장부(D38 개정 2, 09-07 파트너 "과거 로그를 좀 더 제공… 멈춘 이유까지"): think_all 이 결정 때 직전 판단+그 뒤
-     궤적을 결정 단위로 접어 두고 직전보다 앞선 결정 ≤5 를 obs.history 로 — 길이 min(k−2,5)·항목=그 결정의 intent+다음 결정 때
-     보인 궤적 원본·오래된 것부터·상한·끈 판 무흔적·결정론·렌더 "(t81) 이동 f0 → [이동 시작] f0 쪽 → 1걸음 → [부름] …"
+  ⑪ 최근 판단 장부(D38 개정 2-b, 09-07 파트너 "캐릭터의 선택만 — 엔진 결과가 들어가면 유의미한 정보를 못 가져간다"): think_all 이
+     결정마다(실 결정·작정 수·폴백) 선택 한 항목을 접어 두고 최근 ≤10 을 obs.history 로 — 길이 min(k−1,10)·항목=그 결정의
+     turn·type·target·src·오래된 것부터·상한·끈 판 무흔적·결정론·렌더 한 줄 "이동 f0 (t81) · 탐색 W (t85) · 이동 exit (t87, 작정)…"
 (기존 verify 는 별도 실행.)
 """
 import copy
@@ -314,10 +314,10 @@ db, bb, botsb = scene()
 run_seq(db, bb, botsb)
 check("⑧ 같은 시드·같은 수순 = 같은 궤적", ba['trail'] == bb['trail'])
 
-# ───────────────────── ⑪ 최근 판단 장부(D38 개정 2, 2026-09-07) ─────────────────────
-print("── ⑪ 최근 판단 장부 — 직전보다 앞선 결정들이 선택+궤적 한 줄로 돌아온다")
-check("⑪ 스위치: brains.HISTORY_ON 기본 켬(표현층·notes 선례) · HISTORY_MAX=5(임시 가정)",
-      brains.HISTORY_ON is True and brains.HISTORY_MAX == 5)
+# ───────────────────── ⑪ 최근 판단 장부(D38 개정 2-b, 2026-09-07 — 선택만) ─────────────────────
+print("── ⑪ 최근 판단 장부 — 최근 선택들이 한 줄로 돌아온다(작정·폴백 표식, 엔진 결과 없음)")
+check("⑪ 스위치: brains.HISTORY_ON 기본 켬(표현층·notes 선례) · HISTORY_MAX=10(임시 가정)",
+      brains.HISTORY_ON is True and brains.HISTORY_MAX == 10)
 
 
 def _hist_run(seed=11, ticks=80, on=True):
@@ -352,31 +352,41 @@ def _hist_run(seed=11, ticks=80, on=True):
 d1, bots1, seen1 = _hist_run()
 s1 = [o for c, o in seen1 if c == '1']
 n1 = len(s1)
-check("⑪ 결정 k 의 obs.history 길이 = min(k−2, 5) · 첫 두 결정엔 키 없음 (%d결정)" % n1,
-      n1 >= 8 and 'history' not in s1[0] and 'history' not in s1[1]
-      and all(len(o.get('history') or []) == min(k - 2, brains.HISTORY_MAX) for k, o in enumerate(s1, 1) if k >= 3))
+check("⑪ 결정 k 의 obs.history 길이 = min(k−1, 10) · 첫 결정엔 키 없음 (%d결정)" % n1,
+      n1 >= 12 and 'history' not in s1[0]
+      and all(len(o.get('history') or []) == min(k - 1, brains.HISTORY_MAX) for k, o in enumerate(s1, 1) if k >= 2))
 
 
 def _match(k):
     o = s1[k - 1]
     hist = o.get('history') or []
-    base = k - 2 - len(hist)                 # hist[0] = 결정 (base+1)
+    base = k - 1 - len(hist)                 # hist[0] = 결정 (base+1)
     for j, h in enumerate(hist):
-        i = base + j + 1                     # 결정 번호(1부터) → 그 다음 obs = s1[i]
+        i = base + j + 1                     # 결정 번호(1부터) → 그 결정의 intent 는 다음 obs = s1[i]
         it = s1[i].get('intent') if i < len(s1) else None
         if (not it or h.get('turn') != it.get('turn') or h.get('type') != it.get('type')
-                or h.get('target') != it.get('target') or h.get('trail') != s1[i].get('trail')):
+                or h.get('target') != it.get('target') or h.get('src') != 'fallback'):   # 스텁 판=전부 폴백
             return False
     return True
 
 
-check("⑪ 항목 = 그 결정의 intent(turn·type·target) + 다음 결정 때 보인 궤적 원본 그대로",
-      n1 >= 8 and all(_match(k) for k in range(3, n1 + 1)))
-check("⑪ 오래된 것부터(turn 단조)",
+check("⑪ 항목 = 그 결정의 turn·type·target + src(스텁 판=폴백) — 엔진 결과 키 없음",
+      n1 >= 12 and all(_match(k) for k in range(2, n1 + 1))
+      and all(set(h) == {'turn', 'type', 'target', 'src'} for o in s1 for h in (o.get('history') or [])))
+check("⑪ 오래된 것부터(turn 단조) · 상한 10(한 봇은 10 도달)",
       all([h['turn'] for h in (o.get('history') or [])] == sorted(h['turn'] for h in (o.get('history') or []))
-          for o in s1))
-check("⑪ 봇 장부 상한 = HISTORY_MAX+1(직전 포함)",
-      all(len(b.get('history') or []) <= brains.HISTORY_MAX + 1 for b in bots1))
+          for o in s1)
+      and all(len(b.get('history') or []) <= brains.HISTORY_MAX for b in bots1)
+      and any(len(b.get('history') or []) == brains.HISTORY_MAX for b in bots1))
+dp, stp = Dungeon.from_ascii(ROWS, seed=7)
+dp.trail_on = True
+bp = mkbot('1', *stp['1'])
+bp['plan'] = [{'type': 'goto', 'target': 'exit'}]
+dp.turn = 7
+outp = brains.think_all(dp, [bp])
+check("⑪ 작정 수(src=plan)도 항목으로 — {turn 7, goto exit, src plan}",
+      outp.get('1', {}).get('src') == 'plan'
+      and bp.get('history') == [{'turn': 7, 'type': 'goto', 'target': 'exit', 'src': 'plan'}])
 d0, bots0, seen0 = _hist_run(on=False)
 check("⑪ 끈 판: obs 에 history 없음 · 봇 장부 안 쌓임",
       all('history' not in o for _, o in seen0) and not any(b.get('history') for b in bots0))
@@ -385,22 +395,20 @@ check("⑪ 결정론: 같은 시드 두 번 = 같은 장부",
       [b.get('history') for b in bots1] == [b.get('history') for b in bots2])
 ho = {"pos": [1, 1], "hp": 14, "maxhp": 14, "job": "전사", "sights": {}, "party": [], "options": [],
       "intent": {"type": "goto", "target": "f0", "turn": 89},
-      "history": [{"turn": 81, "type": "goto", "target": "f0",
-                   "trail": [{"type": "goto", "result": "pathed", "target": "f0", "len": 5, "turn": 81},
-                             {"type": "walk", "result": "walking", "turn": 82},
-                             {"type": "hail", "result": "hailed", "froms": ["2"], "turn": 82}]},
-                  {"turn": 83, "type": "follow", "target": "b2",
-                   "trail": [{"type": "follow", "result": "following", "target": "b2", "turn": 83},
-                             {"type": "walk", "result": "following", "turn": 84},
-                             {"type": "walk", "result": "following", "turn": 85}]}]}
+      "history": [{"turn": 81, "type": "goto", "target": "f0", "src": "haiku"},
+                  {"turn": 83, "type": "explore", "target": None, "src": "haiku"},
+                  {"turn": 85, "type": "explore", "target": "W", "src": "haiku"},
+                  {"turn": 87, "type": "goto", "target": "exit", "src": "plan"},
+                  {"turn": 88, "type": "follow", "target": "b2", "src": "fallback"},
+                  {"turn": 89, "type": "goto", "target": "f0", "src": "haiku"}]}
 w = brains._wire(ho, {"2": "수나"})
-hl = [l for l in w.splitlines() if l.startswith("- (t")]
-check("⑪ 렌더: '## 네 최근 판단들' 절 + 결정마다 한 줄(선택 → 꼬리표 체인, 멈춘 이유 포함)",
-      "## 네 최근 판단들" in w and len(hl) == 2
-      and hl[0] == "- (t81) 이동 f0 → [이동 시작] f0 쪽 → 1걸음 → [부름] 수나의 말에 멈춤"
-      and hl[1] == "- (t83) 동행 b2 → [동행 시작] 수나 → 2틱 동행")
-check("⑪ 렌더: history 없으면 절 없음",
-      "## 네 최근 판단들" not in brains._wire({k: v for k, v in ho.items() if k != "history"}, {"2": "수나"}))
+hl = next((l for l in w.splitlines() if l.startswith("- 최근 판단")), "")
+check("⑪ 렌더: 직전 절 안 한 줄 '최근 판단(오래된 것부터, 직전까지): 이동 f0 (t81) · 탐색 (t83) · 탐색 W (t85) · 이동 exit (t87, 작정) · 동행 b2 (t88, 폴백) · 이동 f0 (t89)'",
+      hl == "- 최근 판단(오래된 것부터, 직전까지): 이동 f0 (t81) · 탐색 (t83) · 탐색 W (t85) · 이동 exit (t87, 작정) · 동행 b2 (t88, 폴백) · 이동 f0 (t89)"
+      and "## 네 최근 판단들" not in w and "[이동 시작]" not in hl
+      and w.index("- 최근 판단") < w.index("- 직전 판단"))
+check("⑪ 렌더: history 없으면 줄 없음",
+      "- 최근 판단" not in brains._wire({k: v for k, v in ho.items() if k != "history"}, {"2": "수나"}))
 
 print()
 if C.failed:
