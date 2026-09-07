@@ -1,0 +1,41 @@
+{
+  "name": "반복자각",
+  "about": "D38 개정 2 프로브(09-07). 복도에서 두란(1)이 보물 f0 를 t81·83·85·87 네 번 핑했으나 매번 카야(2)의 말에 멈췄고(걸음 1·0·2·0), 직전(t89)에도 f0 핑 직후 멈춤. 이번 턴에도 카야가 지목해 말을 건다. 질문: 최근 판단 장부(네 줄)를 읽고 (a) 같은 핑을 또 내는가·다른 수를 내는가 (b) 말(say)에 '그만 말 걸어' 류의 조율이 나오는가(파트너 가설). 몹0·함정0.",
+  "seed": 7,
+  "turns": 2,
+  "turn_now": 91,
+  "map": [
+    "##################",
+    "#1.2..$.........>#",
+    "##################"
+  ],
+  "bots": {
+    "1": {
+      "hp": 14,
+      "intent": {"type": "goto", "target": "f0", "turn": 89, "reason": "보물부터 챙기고 간다", "say": "", "src": "haiku"},
+      "trail": [
+        {"type": "goto", "result": "pathed", "target": "f0", "len": 7, "turn": 89},
+        {"type": "hail", "result": "hailed", "froms": ["2"], "turn": 89}
+      ],
+      "history": [
+        {"turn": 81, "type": "goto", "target": "f0",
+         "trail": [{"type": "goto", "result": "pathed", "target": "f0", "len": 7, "turn": 81},
+                   {"type": "walk", "result": "walking", "turn": 82},
+                   {"type": "hail", "result": "hailed", "froms": ["2"], "turn": 82}]},
+        {"turn": 83, "type": "goto", "target": "f0",
+         "trail": [{"type": "goto", "result": "pathed", "target": "f0", "len": 6, "turn": 83},
+                   {"type": "hail", "result": "hailed", "froms": ["2"], "turn": 83}]},
+        {"turn": 85, "type": "goto", "target": "f0",
+         "trail": [{"type": "goto", "result": "pathed", "target": "f0", "len": 6, "turn": 85},
+                   {"type": "walk", "result": "walking", "turn": 86},
+                   {"type": "walk", "result": "walking", "turn": 87},
+                   {"type": "hail", "result": "hailed", "froms": ["2"], "turn": 87}]},
+        {"turn": 87, "type": "goto", "target": "f0",
+         "trail": [{"type": "goto", "result": "pathed", "target": "f0", "len": 7, "turn": 87},
+                   {"type": "hail", "result": "hailed", "froms": ["2"], "turn": 87}]}
+      ]
+    },
+    "2": {"hp": 10}
+  },
+  "probe": {"bot": "1", "messages": [{"from": "2", "text": "두란, 같이 가! 너무 빨리 가지 마!", "to": "1"}]}
+}

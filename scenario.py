@@ -106,6 +106,10 @@ def build(spec):
             b["plan"] = [dict(s) for s in ov["plan"]][:G.PLAN_MAX]
         if "intent" in ov:
             b["intent"] = dict(ov["intent"])
+        if "trail" in ov:                     # 궤적(D38) 프리셋 — 직전 판단 뒤 일어난 일(다음 view 1회 노출)
+            b["trail"] = [dict(e) for e in ov["trail"]]
+        if "history" in ov:                   # 최근 판단 장부(D38 개정 2) 프리셋 — 반복 자각 프로브용
+            b["history"] = [dict(h) for h in ov["history"]]
         if "weapon" in ov:                     # 장비(07-30) 프리셋 — 착용 상태 장면 저작
             b["weapon"] = dict(ov["weapon"]) if ov["weapon"] else None
         if "armor" in ov:
@@ -299,9 +303,12 @@ def probe(spec, n, jobs):
     char = pspec.get("bot") or bots[0]["char"]
     b = next(bb for bb in bots if bb["char"] == char)
     obs = d.view(b, bots)
-    obs["messages"] = pspec.get("messages") or []
+    obs["messages"] = [{**m, **({"to_me": True} if (G.addressed_to(m, char) and m.get("to") != "all") else {})}
+                       for m in (pspec.get("messages") or [])]   # D41 지목 표식 — think_all 과 같은 렌더(09-07)
     if b.get("intent"):
         obs["intent"] = b["intent"]
+    if b.get("history") and brains.HISTORY_ON:       # 스위치 존중 — DUNGEON_HISTORY=0 이면 대조군(장부 없이)
+        obs["history"] = list(b["history"])   # 장면이 준 장부 그대로(think_all 의 '직전 제외'는 저작 시점에 반영)
     print("== 프로브: %s / 봇%s(%s) / %d콜 (jobs %d) — %s ==" %
           (spec.get("name", "?"), char, b["job"], n, jobs, spec.get("about", "")))
     print("   (실Haiku 콜 — 다른 실판이 도는 중이면 경합 오염 주의)")

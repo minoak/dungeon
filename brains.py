@@ -147,6 +147,9 @@ def _brainlog(**f):
 # (obs dict 계약·엔진 코드 불변·결정론 무사 — 스트림 decisions.note 는 additive 파생).
 # 프롬프트 캐싱 구조(파트너 발제)와 수렴: 시트=불변 프리픽스 + 기억=append 로그.
 NOTES_ON = os.environ.get("DUNGEON_NOTES", "1") != "0"
+HISTORY_ON = os.environ.get("DUNGEON_HISTORY", "1") != "0"   # 최근 판단 장부(D38 개정 2, 09-07 파트너 "과거 로그를
+                                                                #   좀 더 제공… 멈춘 이유까지") — 표현층 스위치(notes 선례, 기본 켬)
+HISTORY_MAX = 5           # 되돌려줄 결정 수(직전 판단 제외) — 파트너 미확정 임시 가정(09-07)
 NOTE_MAX = 5             # 유지 줄 수(합의 5~7 하한) — 넘치면 오래된 것부터 바랜다(FIFO,
                          #   사람도 옛 기억부터 바래듯). 판 간 영속은 없음(월드 러너 상 재론).
 NOTE_LEN = 80            # 한 줄 상한 — 수필 방지(say 160 의 절반: 기억은 말보다 압축된다)
@@ -738,6 +741,8 @@ def _last_prose(last, names=None):
 
 _TRAIL_RUNS = {"walking": "%d걸음", "following": "%d틱 동행",
                "waiting": "%d틱 대기", "resting": "%d틱 휴식"}
+_VERB_KR = {"goto": "이동", "follow": "동행", "explore": "탐색", "attack": "공격", "interact": "상호작용",
+            "search": "수색", "wait": "기다림", "rest": "휴식", "drink": "물약"}   # 최근 판단 장부 줄의 동사(D38 개정 2)
 
 
 def _tag_str(tags):
@@ -824,7 +829,7 @@ def _trail_prose(trail, names=None):
 _WIRE_KEYS = frozenset((
     "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "potions",
     "depth", "turn",
-    "zone", "known", "witnessed", "memories", "dry", "last", "trail", "floor", "floors",
+    "zone", "known", "witnessed", "memories", "dry", "last", "trail", "floor", "floors", "history",
     "order", "ascii_view", "legend",
     "sights", "party", "options", "messages", "intent", "notes",
     "status",  # 상태 태그(D34): 아래 _wire "## 네 몸 상태" 절이 그린다
@@ -1076,6 +1081,13 @@ def _wire(obs, names=None):
         if zs:
             L.append("- 가 본 방: " + ", ".join(x.get("id", "?") for x in zs))
 
+    hist = obs.get("history") or []          # D38 개정 2(09-07): 직전보다 앞선 결정들 — 결정 한 줄 = 무엇을 골랐나 + 그 뒤
+    if hist:                                  #   일어난 일(꼬리표 체인, 멈춘 이유 포함). 사실만·해석 없음(반복인지는 캐릭터가 읽는다)
+        L += ["", "## 네 최근 판단들 (직전 판단보다 앞선 것 — 오래된 것부터, 무엇을 골랐고 그 뒤 무슨 일이 있었나)"]
+        for h in hist:
+            L.append("- (t%s) %s%s → %s" % (h.get("turn", "?"), _VERB_KR.get(h.get("type"), h.get("type", "?")),
+                                             (" %s" % h["target"]) if h.get("target") else "",
+                                             _trail_prose(h.get("trail") or [], names)))
     it, la, wit = obs.get("intent"), obs.get("last"), obs.get("witnessed")
     dry = obs.get("dry")
     trail = obs.get("trail") or []            # D38 궤적 — 마지막 결정 이후 일어난 일(순서). 1건이면 last 와 같다
@@ -1419,6 +1431,16 @@ def think_all(d, bots, inbox=None):
                          for m in inbox.get(b["char"], [])]   # D41: 나를 지목한 말 표식(렌더용, 스트림 무접촉)
         if b.get("intent"):
             o["intent"] = b["intent"]   # 판단 되먹임(D15①): 자기 직전 판단의 기억 — inbox와 같은
+        if HISTORY_ON and b.get("intent") and o.get("trail"):
+            # D38 개정 2(09-07): 직전 판단 + 그 뒤 궤적(이번 obs.trail 그대로)을 결정 단위로 장부에 접어 넣는다.
+            # obs.history 는 그보다 앞선 결정들(직전은 '직전 판단과 그 결과' 절이 상세히 보인다). 궤적 판에서만 쌓인다.
+            it0 = b["intent"]
+            hist = b.setdefault("history", [])
+            hist.append({"turn": it0.get("turn"), "type": it0.get("type", ""), "target": it0.get("target"),
+                         "trail": list(o["trail"])})
+            del hist[:-(HISTORY_MAX + 1)]                       # 직전 1 + 되돌려줄 HISTORY_MAX
+        if HISTORY_ON and len(b.get("history") or []) > 1:
+            o["history"] = list(b["history"][:-1])          # 마지막 항목 = 직전 판단(중복 노출 금지)
         if NOTES_ON and b.get("notes"):
             o["notes"] = list(b["notes"])   # D26 의미 기억 — 스스로 남긴 한 줄들(자기 것=시야-온리 무관)
         obss[b["char"]] = o             # 주입 솔기. 세계 정보가 아니라 자기 것이라 시야-온리 무관.
