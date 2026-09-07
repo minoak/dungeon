@@ -152,6 +152,9 @@ HISTORY_ON = os.environ.get("DUNGEON_HISTORY", "1") != "0"   # 최근 판단 장
                                                                 #   2-b(같은 날 밤): 선택만 — "엔진 결과가 들어가면 캐릭터는
                                                                 #   유의미한 정보를 못 가져간다"(컨텍스트 걱정) → 결과 없이 창을 늘림
 HISTORY_MAX = 10          # 되돌려줄 선택 수(직전 포함) — 파트너 미확정 임시 가정(09-07 밤, 5→10: 선택만이라 짧다)
+DIALOGUE_ON = os.environ.get("DUNGEON_DIALOGUE", "1") != "0"   # 대화 기억(D43, 09-07 파트너 "대화 내용도 과거로 조금만 더
+                                                                  #   확장") — 표현층 스위치(notes 선례, 기본 켬). 들은 말+내 말
+DIALOGUE_MAX = 6          # 되돌려줄 마디 수 — 파트너 미확정 임시 가정(09-07 밤). 한 마디 ~40자 → 250자 안팎(+6%)
 NOTE_MAX = 5             # 유지 줄 수(합의 5~7 하한) — 넘치면 오래된 것부터 바랜다(FIFO,
                          #   사람도 옛 기억부터 바래듯). 판 간 영속은 없음(월드 러너 상 재론).
 NOTE_LEN = 80            # 한 줄 상한 — 수필 방지(say 160 의 절반: 기억은 말보다 압축된다)
@@ -756,6 +759,17 @@ def _hist_item(h):
                              (" %s" % h["target"]) if h.get("target") else "", h.get("turn", "?"), tag)
 
 
+def _dlg_who(m, nm):
+    """대화 한 마디의 화자→상대(D43): '카야(봇2)→나' / '나→카야(봇2)' / '미나(봇3)→모두' / '카야(봇2)(혼잣말)'. 이름은 wire 의 nm."""
+    who = "나" if m.get("mine") else nm(m.get("from", "?"))
+    to = m.get("to")
+    if to == "all":
+        return "%s→모두" % who
+    if to:
+        return "%s→%s" % (who, "나" if (m.get("to_me") and not m.get("mine")) else nm(to))
+    return "%s(혼잣말)" % who
+
+
 def _tag_str(tags):
     """꼬리표 목록 → '[라벨] 사실 · [라벨] 사실'."""
     return " · ".join(("[%s] %s" % (lb, s)).rstrip() for _, lb, s in tags)
@@ -840,7 +854,7 @@ def _trail_prose(trail, names=None):
 _WIRE_KEYS = frozenset((
     "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "potions",
     "depth", "turn",
-    "zone", "known", "witnessed", "memories", "dry", "last", "trail", "floor", "floors", "history",
+    "zone", "known", "witnessed", "memories", "dry", "last", "trail", "floor", "floors", "history", "dialogue",
     "order", "ascii_view", "legend",
     "sights", "party", "options", "messages", "intent", "notes",
     "status",  # 상태 태그(D34): 아래 _wire "## 네 몸 상태" 절이 그린다
@@ -1183,6 +1197,11 @@ def _wire(obs, names=None):
                      % (inv["line"], "시트" if inv.get("line_src") == "sheet"
                         else "네가 %s턴에 남긴 말" % inv.get("line_turn", "?")))
 
+    dlg = obs.get("dialogue") or []           # D43 대화 기억(09-07): 지난 결정까지 들은 말과 내가 한 말 — 오래된 것부터.
+    if dlg:                                   #   이번 턴 새로 들린 말은 아래 절(중복 없음 — 장부엔 다음 결정부터 실린다)
+        L += ["", "## 최근 대화 (오래된 것부터 — 이번 턴에 새로 들린 말은 아래 절에)"]
+        for m in dlg:
+            L.append('- %s (t%s): "%s"' % (_dlg_who(m, nm), m.get("turn", "?"), m.get("text", "")))
     ms = obs.get("messages")
     if ms:
         L += ["", "## 동료가 한 말 (지난 턴 — 들린 것 전부. 너를 부른 말만 걸음이 멈췄다)"]
@@ -1441,6 +1460,16 @@ def think_all(d, bots, inbox=None):
             o["intent"] = b["intent"]   # 판단 되먹임(D15①): 자기 직전 판단의 기억 — inbox와 같은
         if HISTORY_ON and b.get("history"):
             o["history"] = list(b["history"][-HISTORY_MAX:])   # D38 개정 2-b: 최근 선택들(작정·폴백 포함, 직전까지)
+        if DIALOGUE_ON:
+            # D43 대화 기억(09-07 파트너 "대화 내용도 과거로 조금만 더 확장"): 지난 결정까지의 대화(들은 말+내 말)를 되돌려주고,
+            # 이번 틱에 읽은 인박스는 장부에 잇는다(다음 결정부터 보인다 — 아래 '동료가 한 말' 절과 중복 없음). 지난 틱의 말이라 turn-1.
+            if b.get("dialogue"):
+                o["dialogue"] = list(b["dialogue"][-DIALOGUE_MAX:])
+            dl = b.setdefault("dialogue", [])
+            for m in inbox.get(b["char"], []):
+                dl.append({"turn": d.turn - 1, "from": m.get("from"), "to": m.get("to"), "text": m.get("text", ""),
+                           **({"to_me": True} if (G.addressed_to(m, b["char"]) and m.get("to") != "all") else {})})
+            del dl[:-DIALOGUE_MAX]
         if NOTES_ON and b.get("notes"):
             o["notes"] = list(b["notes"])   # D26 의미 기억 — 스스로 남긴 한 줄들(자기 것=시야-온리 무관)
         obss[b["char"]] = o             # 주입 솔기. 세계 정보가 아니라 자기 것이라 시야-온리 무관.
@@ -1468,6 +1497,10 @@ def think_all(d, bots, inbox=None):
             hist.append({"turn": d.turn, "type": dec.get("type", ""), "target": dec.get("target"),
                          "src": dec.get("src", "")})          #   엔진이 걷고 멈춘 결과는 안 담는다(직전 절·궤적의 몫)
             del hist[:-HISTORY_MAX]
+        if DIALOGUE_ON and dec.get("say"):     # D43: 내가 한 말도 대화 장부에(들은 말과 한 흐름 — 한쪽만 있으면 독백 기록)
+            dl = by[c].setdefault("dialogue", [])
+            dl.append({"turn": d.turn, "from": c, "to": dec.get("to"), "text": dec.get("say", ""), "mine": True})
+            del dl[:-DIALOGUE_MAX]
         if trail_on and dec.get("src") == "plan":
             continue                     # D38(09-06): 작정 수는 궤적(trail)에 남는다 — 직전 판단은 마지막
                                          #   **실** 결정을 유지(09-06 마을 판: 미나의 '직전 판단'이 매번

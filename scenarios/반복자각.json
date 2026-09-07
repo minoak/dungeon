@@ -23,6 +23,14 @@
         {"turn": 85, "type": "goto", "target": "f0", "src": "haiku"},
         {"turn": 87, "type": "goto", "target": "f0", "src": "haiku"},
         {"turn": 89, "type": "goto", "target": "f0", "src": "haiku"}
+      ],
+      "dialogue": [
+        {"turn": 82, "from": "2", "to": "1", "text": "두란, 같이 가!", "to_me": true},
+        {"turn": 83, "from": "1", "to": "2", "text": "알겠어, 간다", "mine": true},
+        {"turn": 84, "from": "2", "to": "1", "text": "기다려, 같이 가자니까!", "to_me": true},
+        {"turn": 85, "from": "1", "to": "2", "text": "그래, 뒤에 붙어", "mine": true},
+        {"turn": 87, "from": "2", "to": "1", "text": "두란! 잠깐만!", "to_me": true},
+        {"turn": 89, "from": "1", "to": "2", "text": "알았다니까", "mine": true}
       ]
     },
     "2": {"hp": 10}

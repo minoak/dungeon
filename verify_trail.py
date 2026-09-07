@@ -20,6 +20,9 @@
   ⑪ 최근 판단 장부(D38 개정 2-b, 09-07 파트너 "캐릭터의 선택만 — 엔진 결과가 들어가면 유의미한 정보를 못 가져간다"): think_all 이
      결정마다(실 결정·작정 수·폴백) 선택 한 항목을 접어 두고 최근 ≤10 을 obs.history 로 — 길이 min(k−1,10)·항목=그 결정의
      turn·type·target·src·오래된 것부터·상한·끈 판 무흔적·결정론·렌더 한 줄 "이동 f0 (t81) · 탐색 W (t85) · 이동 exit (t87, 작정)…"
+  ⑫ 대화 기억(D43, 09-07 파트너 "대화 내용도 과거로 조금만 더 확장"): 결정 때 지난 결정까지 읽은 말(turn-1·to_me)+내 말(mine)을
+     obs.dialogue 로(≤6, 오래된 것부터) — 이번 틱 인박스는 장부에만(다음 결정부터, '동료가 한 말' 절과 중복 없음)·상한·끈 판·
+     결정론·렌더 "- 카야(봇2)→나 (t82): …" / "- 나→카야(봇2) …" / "→모두" / "(혼잣말)"
 (기존 verify 는 별도 실행.)
 """
 import copy
@@ -409,6 +412,90 @@ check("⑪ 렌더: 직전 절 안 한 줄 '최근 판단(오래된 것부터, �
       and w.index("- 최근 판단") < w.index("- 직전 판단"))
 check("⑪ 렌더: history 없으면 줄 없음",
       "- 최근 판단" not in brains._wire({k: v for k, v in ho.items() if k != "history"}, {"2": "수나"}))
+
+# ───────────────────── ⑫ 대화 기억(D43, 2026-09-07) ─────────────────────
+print("── ⑫ 대화 기억 — 지난 결정까지 들은 말과 내가 한 말 여섯 마디")
+check("⑫ 스위치: brains.DIALOGUE_ON 기본 켬 · DIALOGUE_MAX=6(임시 가정)",
+      brains.DIALOGUE_ON is True and brains.DIALOGUE_MAX == 6)
+
+
+def _dlg_run(seed=11, ticks=60, on=True):
+    """생성 던전 봇 둘, 스텁 LLM 이 매 결정 1번을 고르며 '간다'를 2에게 말함, 틱마다 봇2→봇1 인박스 한 마디 —
+    think_all 이 받은 obs 와 봇 장부를 기록(집행은 _hist_run 과 같은 루프)."""
+    d = G.Dungeon(seed=seed, w=40, h=16, n_monsters=0, n_traps=0, n_lurkers=0, scan=True, trail=True)
+    bots = []
+    bots.append(G.spawn(d, '1', bots))
+    bots.append(G.spawn(d, '2', bots))
+    seen = []
+    orig_brain, orig_call = brains.claude_brain, brains._call_claude
+    brains.claude_brain = lambda obs, char, bot, roster, solo: (
+        seen.append((char, d.turn, copy.deepcopy(obs))), orig_brain(obs, char, bot, roster, solo))[1]
+    brains._call_claude = lambda prompt, model="haiku": '{"reason": "r", "choice": 1, "say": "간다", "to": "2"}'
+    old = brains.DIALOGUE_ON
+    brains.DIALOGUE_ON = on
+    try:
+        for t in range(1, ticks + 1):
+            d.turn = t
+            inbox = {'1': [{'from': '2', 'text': '같이 가 %d' % (t - 1), 'to': '1'}], '2': []}
+            out = brains.think_all(d, bots, inbox)
+            by = {b['char']: b for b in bots}
+            for c, dec in out.items():
+                d.act(by[c], dec, bots)
+            for b in bots:
+                if b.get('order') and b['char'] not in out:
+                    d.step_order(b, bots)
+            d.monster_turn(bots)
+    finally:
+        brains.claude_brain, brains._call_claude = orig_brain, orig_call
+        brains.DIALOGUE_ON = old
+    return d, bots, seen
+
+
+dd1, dbots1, dseen1 = _dlg_run()
+ds1 = [(t, o) for c, t, o in dseen1 if c == '1']          # (결정 틱, obs)
+dn = len(ds1)
+
+
+def _dlg_expect(k):
+    """결정 k 의 obs.dialogue 기대값 — 앞선 결정 j 마다 [읽은 말(turn_j−1, to_me), 내 말(turn_j, mine)] 의 마지막 6."""
+    exp = []
+    for tj, o in ds1[:k - 1]:
+        exp.append({'turn': tj - 1, 'from': '2', 'to': '1', 'text': '같이 가 %d' % (tj - 1), 'to_me': True})
+        exp.append({'turn': tj, 'from': '1', 'to': '2', 'text': '간다', 'mine': True})
+    return exp[-brains.DIALOGUE_MAX:]
+
+
+check("⑫ 결정 k 의 obs.dialogue = 앞선 결정들의 [읽은 말(turn−1·to_me)·내 말(mine)] 마지막 6 · 첫 결정엔 키 없음 (%d결정)" % dn,
+      dn >= 6 and 'dialogue' not in ds1[0][1]
+      and all((o.get('dialogue') or []) == _dlg_expect(k) for k, (t, o) in enumerate(ds1, 1) if k >= 2))
+check("⑫ 이번 틱 인박스는 obs.dialogue 에 없고(중복 없음) messages 절에만",
+      all(all(m.get('turn') != t - 1 or m.get('mine') for m in (o.get('dialogue') or [])) for t, o in ds1)
+      and all(o.get('messages') and o['messages'][0]['text'] == '같이 가 %d' % (t - 1) for t, o in ds1))
+check("⑫ 봇2(인박스 없음)는 내 말만 · 상한 6",
+      all(m.get('mine') for m in (dbots1[1].get('dialogue') or []))
+      and all(len(b.get('dialogue') or []) <= brains.DIALOGUE_MAX for b in dbots1)
+      and len(dbots1[0].get('dialogue') or []) == brains.DIALOGUE_MAX)
+dd0, dbots0, dseen0 = _dlg_run(on=False)
+check("⑫ 끈 판: obs 에 dialogue 없음 · 봇 장부 안 쌓임",
+      all('dialogue' not in o for _, _, o in dseen0) and not any(b.get('dialogue') for b in dbots0))
+dd2, dbots2, dseen2 = _dlg_run()
+check("⑫ 결정론: 같은 시드 두 번 = 같은 장부",
+      [b.get('dialogue') for b in dbots1] == [b.get('dialogue') for b in dbots2])
+do = {"pos": [1, 1], "hp": 14, "maxhp": 14, "job": "전사", "sights": {}, "party": [], "options": [],
+      "dialogue": [{"turn": 82, "from": "2", "to": "1", "text": "두란, 같이 가!", "to_me": True},
+                   {"turn": 83, "from": "1", "to": "2", "text": "알겠어, 간다", "mine": True},
+                   {"turn": 85, "from": "3", "to": "all", "text": "이쪽 문 아직 안 가봤어~"},
+                   {"turn": 86, "from": "2", "to": "3", "text": "미나, 천천히"},
+                   {"turn": 87, "from": "2", "text": "후우..."}]}
+dw = brains._wire(do, {"2": "카야", "3": "미나"})
+dl = [l for l in dw.splitlines() if l.startswith("- ") and "(t8" in l]
+check("⑫ 렌더: '## 최근 대화' 절 + 카야(봇2)→나 / 나→카야(봇2) / 미나(봇3)→모두 / 카야(봇2)→미나(봇3) / 카야(봇2)(혼잣말)",
+      "## 최근 대화" in dw and dl == [
+          '- 카야(봇2)→나 (t82): "두란, 같이 가!"', '- 나→카야(봇2) (t83): "알겠어, 간다"',
+          '- 미나(봇3)→모두 (t85): "이쪽 문 아직 안 가봤어~"', '- 카야(봇2)→미나(봇3) (t86): "미나, 천천히"',
+          '- 카야(봇2)(혼잣말) (t87): "후우..."'])
+check("⑫ 렌더: dialogue 없으면 절 없음",
+      "## 최근 대화" not in brains._wire({k: v for k, v in do.items() if k != "dialogue"}, {"2": "카야"}))
 
 print()
 if C.failed:
