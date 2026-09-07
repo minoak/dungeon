@@ -77,7 +77,8 @@ def build(spec):
                       ("dry_signal", "DUNGEON_DRY"), ("status", "DUNGEON_STATUS"),      #   조건이어야 프로브가
                       ("rest_verb", "DUNGEON_REST"), ("relations", "DUNGEON_RELATIONS"),   # 참말을 한다)
                       ("trail_on", "DUNGEON_TRAIL"), ("objtags", "DUNGEON_OBJTAGS"),        # D38 궤적·D39 태그(09-06)
-                      ("floor_on", "DUNGEON_FLOOR")):                                        # D40 층 집계·결산
+                      ("floor_on", "DUNGEON_FLOOR"),                                         # D40 층 집계·결산
+                      ("explore_dirs", "DUNGEON_EXPLORE_DIRS")):                             # D19 개정 4 방향 탐색 열거(09-07)
         setattr(d, attr, os.environ.get(env, "1") != "0")   # 전부 러너 기본 1 — 끄려면 env 로
     try:
         with open(os.path.join(HERE, "lore.json"), encoding="utf-8") as f:

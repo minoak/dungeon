@@ -543,6 +543,11 @@ class Zone:
         self.deadends = []    # 막다른 칸(통로 전용: 직교 이웃 바닥 1)
 
 
+BEAR_KR = {'N': '북쪽', 'NE': '북동쪽', 'E': '동쪽', 'SE': '남동쪽',
+           'S': '남쪽', 'SW': '남서쪽', 'W': '서쪽', 'NW': '북서쪽'}   # 라벨의 방위 한국어 — brains wire 와 같은 표
+BEAR_ORDER = ('N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW')   # 열거 순서(시계 방향) — wire 방향 절(order8)과 같은 순서
+
+
 class Door:
     """문(D19) = 구역과 구역의 경계. 두 형태(D19 정정 2026-07-15):
     ① cell 있는 문 = 격자에 실재하는 문 타일(+) — 벽처럼 빛을 막는다(광학).
@@ -564,7 +569,7 @@ class Dungeon:
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
                  motion=False, ally_sight=False, social=False, solo=False, n_gear=0,
                  town=False, status=False, rest_verb=False, relations=False, trail=False,
-                 objtags=False, floor=False):
+                 objtags=False, floor=False, explore_dirs=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -653,6 +658,10 @@ class Dungeon:
                                    #   다음 결정에 노출(_trail_add). 판정 무접촉 — 자기 경험의 기록·노출뿐.
         self.objtags = bool(objtags)   # 오브젝트 태그(D39, 09-06) — 기본 꺼짐. 러너가 DUNGEON_OBJTAGS(기본 1)로 켠다.
                                    #   나↔오브젝트 상호작용 횟수·마지막 사실을 시야 줄·라벨 접미로(_obj_tag). 판정 무접촉.
+        self.explore_dirs = bool(explore_dirs)   # 방향 탐색 열거(D19 개정 4, 09-07) — 기본 꺼짐(기존 verify 비트 동일).
+                                   #   러너가 DUNGEON_EXPLORE_DIRS(기본 1)로 켠다. scan 판 메뉴에 트인 방위마다
+                                   #   '탐색' 한 줄(target=방위) — 갈 방향의 선택은 에이전트가(D19 ② 원문 복원).
+                                   #   목록은 계획기(_explore_ways)와 같은 논리 한 벌(라벨=사실).
         self.floor_on = bool(floor)    # 층 집계·결산(D40 ②, 09-06) — 기본 꺼짐. 러너가 DUNGEON_FLOOR(기본 1)로 켠다.
                                    #   사건 사전으로 자기·목격 사건을 층 단위로 세고(bot['floor']) 층을 떠날 때 얼린다(floors).
         self._talked = set()       # (쌍, 틱) — 같은 틱 양방향 대화를 한 번으로(note_talk 중복 방지)
@@ -730,6 +739,7 @@ class Dungeon:
         d.trail_on = False         # 자기 행동 궤적(D38) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.objtags = False          # 오브젝트 태그(D39) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.floor_on = False         # 층 집계·결산(D40) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.explore_dirs = False     # 방향 탐색 열거(D19 개정 4) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d._talked = set()
         d.grave_of = {}            # 묘→캐릭터(D22 개정) — __new__ 경유라 명시 초기화
         d.npc_lines = {}           # NPC 인사 사전 — build_town 이 채운다(데이터, 판정 무접촉)
@@ -1836,8 +1846,26 @@ class Dungeon:
                 if e['kind'] == '막다른 곳' and not e['been']:
                     _add('explore', e['bearing'], '탐색: %s쪽 막다른 곳까지 가 본다 — %dm'
                          % (e['bearing'], e['dist']))
-            plan = self._explore_plan(bot, None, bots)   # D19 개정: 갈 곳이 있을 때만 어휘가 된다
-            if plan is not None:
+            listed = 0
+            if self.explore_dirs:
+                # D19 개정 4(2026-09-07, 파트너 "탐색 방향을 주는 정보가 비대칭"): D19 ② 원문 "방향 탐색"의 복원 —
+                # 문장이 '트여 있다'고 말하는 방위마다 '탐색' 한 줄(target=방위). 갈 방향의 선택은 에이전트가.
+                # 제외 = 이미 다른 줄이 그 방위를 대표하는 것(1:1 원칙): 막다른 곳(위 explore) · 보이는 문(위 goto —
+                # 그 방위의 문장도 '문'이지 '트여 있다'가 아니다) · 종점이 문 칸인 길. 목록·종점은 계획기와 한 벌.
+                covered = {o['target'] for o in options if o['type'] == 'explore'}
+                covered |= {dr['bearing'] for dr in zone_obs['doors'] if dr['seen'] and dr['dist'] > 0}
+                doorc = {dr.cell for dr in self.doors.values() if dr.cell}
+                doorc |= {c for dr in self.doors.values() for c in dr.sides.values()}
+                for w, p in sorted(self._explore_ways(bot, bots),          # 시계 방향 — 문장과 같은 순서로 읽힌다
+                                   key=lambda wp: BEAR_ORDER.index(wp[0]['bearing'])):
+                    if w['bearing'] in covered or p[-1] in doorc:
+                        continue
+                    _add('explore', w['bearing'], '탐색: %s — 트여 있다, 너머는 안 보인다 — 약 %d칸'
+                         % (BEAR_KR.get(w['bearing'], w['bearing']), len(p)))
+                    covered.add(w['bearing'])
+                    listed += 1
+            plan = None if listed else self._explore_plan(bot, None, bots)   # D19 개정: 갈 곳이 있을 때만 어휘가 된다
+            if plan is not None:                   #   (열거가 있으면 '엔진에 맡긴다' 줄은 중복 — 뺀다)
                 _o, _p, _r = plan              # 09-06 파트너: 엔진이 고를 종점이 어디쯤·얼마나 먼지 라벨에(먼 핑을 알고 고른다)
                 whither = ('%s쪽 새 길' % _r['bearing'] if _r.get('bearing')
                            else '기억 속 계단 쪽' if _r.get('to_exit')
@@ -1846,7 +1874,7 @@ class Dungeon:
                            else '새 길')
                 _add('explore', None, '탐색: 아직 못 본 곳/새 길을 찾아 나선다 — %s, 약 %d칸 (엔진에 맡긴다)'
                      % (whither, len(_p)))
-            else:
+            elif not listed:
                 exhausted = True               #   없으면 라벨 대신 사실 한 줄(obs.exhausted — 조향 없음)
         else:
             fresh_ways = [w for w in ways if not w['visited']]
@@ -2579,20 +2607,9 @@ class Dungeon:
                 return '@%d,%d' % (x, y), p, {**base, 'result': 'pathed', 'len': len(p), 'frontier': True}
         return None
 
-    def _explore_plan(self, bot, direction, bots):
-        """탐색 계획(순수 — 봇 order 무변경): (order, path, res) 또는 None(갈 곳 없음). _set_explore 가
-        집행하고 view() 가 '탐색' 어휘의 유무를 이걸로 정한다(같은 논리 한 벌 — 라벨=사실).
-        순서: ①D19 명사 종점(현 구역의 안 가 본 문·막다른 곳) ②보이는 새 길(프런티어) ③**계단은 본 적
-        있을 때만**(기억의 계단) ④기억 속 안 가 본 문 ⑤기억 속 안 본 가장자리 ⑥없음. **D19 개정(2026-09-06, 파트너 확정 "계단을
-        찾는 게 목적인데 이미 핑이 찍혀서 계속 가게 된다")**: 구판은 ②가 비면 안 본 계단으로 best-effort
-        행군했다 — 머리는 모르는데 발이 아는 떠먹임(09-05 판 실측: 반경 안에 든 적 없는 계단 좌표가 order 로
-        46·52틱, 뷰어엔 계단 핑으로 보임). scan 없는 판(평생 시야 장부 없음 — 구판 장부만·더미 장면)만
-        구 폴백 유지(프런티어 소진=종결을 표현할 장부가 없다; 러너는 scan 기본 1)."""
-        base = {'char': bot['char'], 'type': 'explore', 'target': direction or 'auto'}
-        if self.scan:                                 # '새로 등장' 판정은 이제 order 종류 무관 —
-            plan = self._explore_scan_plan(bot, direction, bots, base)   # _sighted_stop(봇 평생 장부)
-            if plan is not None:
-                return plan
+    def _explore_ways(self, bot, bots):
+        """보이는 새 길 목록 — [(way, path)] 방위별 한 줄(D19 ②·개정 3의 종점 규칙 그대로, `_explore_plan` ②에서
+        추출 — 순수 리팩터). 메뉴(D19 개정 4 방향 탐색 열거)와 계획기가 같은 목록을 본다(라벨=사실). 순수: 봇·세계 무변경."""
         seen = self.visible_cells(bot['x'], bot['y'])
         scells = bot.get('seen_cells') if self.scan else None
         bx, by = bot['x'], bot['y']
@@ -2629,6 +2646,31 @@ class Dungeon:
                     break
             if p:
                 fresh.append((w, p))
+        return fresh
+
+    def _explore_plan(self, bot, direction, bots):
+        """탐색 계획(순수 — 봇 order 무변경): (order, path, res) 또는 None(갈 곳 없음). _set_explore 가
+        집행하고 view() 가 '탐색' 어휘의 유무를 이걸로 정한다(같은 논리 한 벌 — 라벨=사실).
+        순서: ①D19 명사 종점(현 구역의 안 가 본 문·막다른 곳) ②보이는 새 길(프런티어) ③**계단은 본 적
+        있을 때만**(기억의 계단) ④기억 속 안 가 본 문 ⑤기억 속 안 본 가장자리 ⑥없음. **D19 개정(2026-09-06, 파트너 확정 "계단을
+        찾는 게 목적인데 이미 핑이 찍혀서 계속 가게 된다")**: 구판은 ②가 비면 안 본 계단으로 best-effort
+        행군했다 — 머리는 모르는데 발이 아는 떠먹임(09-05 판 실측: 반경 안에 든 적 없는 계단 좌표가 order 로
+        46·52틱, 뷰어엔 계단 핑으로 보임). scan 없는 판(평생 시야 장부 없음 — 구판 장부만·더미 장면)만
+        구 폴백 유지(프런티어 소진=종결을 표현할 장부가 없다; 러너는 scan 기본 1)."""
+        base = {'char': bot['char'], 'type': 'explore', 'target': direction or 'auto'}
+        if self.explore_dirs and direction:           # D19 개정 4(09-07): 메뉴가 열거한 방위 = 그 방위의 트인 길이
+            d = str(direction).upper()                #   정확히 있으면 그것이 종점(라벨=사실 — 명사 종점의 성분
+            exact = [rp for rp in self._explore_ways(bot, bots) if rp[0]['bearing'] == d]   # 겹침(N→NW)에 뺏기지 않게).
+            if exact:                                 #   없으면 구판 순서 그대로(명사 종점 → 새 길 → 기억).
+                w, path = exact[0]
+                tx, ty = path[-1]
+                return '@%d,%d' % (tx, ty), path, {**base, 'result': 'pathed', 'len': len(path),
+                                                   'bearing': w['bearing']}
+        if self.scan:                                 # '새로 등장' 판정은 이제 order 종류 무관 —
+            plan = self._explore_scan_plan(bot, direction, bots, base)   # _sighted_stop(봇 평생 장부)
+            if plan is not None:
+                return plan
+        fresh = self._explore_ways(bot, bots)
         if fresh:
             if direction:
                 d = str(direction).upper()

@@ -160,6 +160,9 @@ REST_ON = os.environ.get("DUNGEON_REST", "1") != "0"         # 휴식(D35, 09-06
 RELATIONS_ON = os.environ.get("DUNGEON_RELATIONS", "1") != "0"   # 관계 장부(D36, 09-06) — 러너 기본 1,
                                                              #   엔진 기본 0. 뼈 5종+문턱 초대, 살은
                                                              #   결정 응답 relation_line(엔진 불가침)
+EXPLORE_DIRS_ON = os.environ.get("DUNGEON_EXPLORE_DIRS", "1") != "0"   # 방향 탐색 열거(D19 개정 4, 09-07) — 러너
+                                                             #   기본 1, 엔진 기본 0. scan 판 메뉴에 트인 방위마다
+                                                             #   '탐색' 한 줄(갈 방향의 선택은 에이전트가)
 TRAIL_ON = os.environ.get("DUNGEON_TRAIL", "1") != "0"       # 자기 행동 궤적(D38, 09-06) — 러너 기본 1,
                                                              #   엔진 기본 0. 마지막 결정 이후 일어난 일을
                                                              #   순서대로 다음 결정에(작정 집행 틱의 공백 보전)
@@ -626,7 +629,7 @@ def main():
                       loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
                       dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
                       ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
-                      status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON)
+                      status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON)
         d.lore = lore
     bots = []
     for c in chars:
@@ -705,6 +708,7 @@ def main():
             trail=TRAIL_ON,            # 자기 행동 궤적(D38) 여부 — obs(trail·intent turn)를 바꾸는 표현층 메타
             objtags=OBJTAGS_ON,        # 오브젝트 태그(D39) 여부 — obs(sights.features[].tag)·라벨을 바꾸는 표현층 메타
             floor=FLOOR_ON,            # 층 집계·결산(D40 ②) 여부 — obs(floor·floors)·decisions.floor_line 표현층 메타
+            explore_dirs=EXPLORE_DIRS_ON,   # 방향 탐색 열거(D19 개정 4) 여부 — 메뉴(options)를 바꾸는 표현층 메타(rest 와 같은 급)
             sayto=SAYTO_ON,            # 지목(D41) 여부 — 말 걸림 정지·대화 뼈가 `to` 지목만 세는 사회층 물리 메타
                                        #   (정지 물리를 바꾸므로 리플레이·판 비교의 전제 — hail 과 같은 급)
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
@@ -877,7 +881,7 @@ def main():
                               wait_verb=WAIT_ON, motion=MOTION_ON,
                               ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
                               n_gear=N_GEAR, status=STATUS_ON, rest_verb=REST_ON,
-                              relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON)
+                              relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON)
                 d.lore = lore
                 fresh = True
             # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,

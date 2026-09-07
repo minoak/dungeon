@@ -983,17 +983,24 @@ def _wire(obs, names=None):
             L.append("- 발밑: " + " / ".join(under))
         KR = {"N": "북쪽", "NE": "북동쪽", "E": "동쪽", "SE": "남동쪽",
               "S": "남쪽", "SW": "남서쪽", "W": "서쪽", "NW": "북서쪽"}
+        door_b = {d.get("bearing") for d in z.get("doors", [])       # 보이는 문이 선 방위 — 그 너머는 '트임'이
+                  if d.get("seen") and d.get("dist", 0) > 0}         #   아니라 '문'이다(메뉴도 그 방위는 안 연다)
         for b in order8:
             items = sorted(slots[b], key=lambda it: (it[0], it[1]))
-            if items:
-                L.append("- %s: %s" % (KR[b], ", ".join(t for _, t in items)))
-                continue
             # 빈 방향의 정직화(07-15 정정): 전지 시절엔 침묵=벽이었지만, 이제 안 본 곳은
             # 벽이 아니라 미지다 — 시야 내 '미지로 트인' 방위(ways)는 트임으로 발화.
             wv = next((w for w in s.get("ways", []) if w.get("bearing") == b), None)
-            if wv:
-                L.append("- %s: 트여 있다 — 너머는 안 보인다%s"
-                         % (KR[b], " (발자국 있는 길)" if wv.get("visited") else ""))
+            opened = (("트여 있다 — 너머는 안 보인다%s" % (" (발자국 있는 길)" if wv.get("visited") else ""))
+                      if wv else None)
+            if items:
+                # D19 개정 4(09-07): 물건이 선 방위도 그 너머가 트였으면 말한다 — 메뉴의 '탐색: <방위> — 트여 있다'와
+                #   같은 말(문장↔메뉴 1:1, verify_menu ⑧). 07-15 판은 빈 방위에서만 발화라 보물·몹·동료가 선 쪽의
+                #   트임은 침묵했다(20시드 스윕 실측: 열거 방위 751 중 356 이 문장에선 무언).
+                L.append("- %s: %s%s" % (KR[b], ", ".join(t for _, t in items),
+                                        (" · " + opened) if (opened and b not in door_b) else ""))
+                continue
+            if opened:
+                L.append("- %s: %s" % (KR[b], opened))
             else:
                 L.append("- %s: 벽" % KR[b])
         for m in s.get("monsters", []):

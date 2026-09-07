@@ -11,6 +11,10 @@
   ⑥ explore 방위 존중: 메뉴가 준 정확 방위가 도달가능하면 _set_explore 가 그 방위로 간다(정확일치 우선)
   ⑦ 러너 통합(고정 스텁 LLM): decisions 에 choice:int·src=haiku / run_meta.menu=true /
      2회 실행 결정론(started 제외 라인 동일)
+  ⑧ 방향 탐색 열거(D19 개정 4, 09-07 — scan 판 + explore_dirs, 시드 20 스윕): 열거 집합 = 독립 오라클
+     (방위별 unvisited 대표칸·너머 안 본·경로 있음 − 막다른 곳 − 보이는 문 방위 − 문 칸 종점)·칸 수=라벨 /
+     열거 방위 집행=라벨(방위·칸) / (type,target) 중복 0 / 열거 방위의 wire 줄이 '트여 있다' /
+     열거 시 '엔진에 맡긴다' 0 / 스위치 끄면 구판 메뉴(탐색 줄 외 동일·'트여 있다' 0)
 (기존 verify 6종은 별도 실행 — 게이트 명령이 연쇄한다.)
 """
 import io
@@ -155,6 +159,99 @@ def explore_dir_ok(d, bot, bots, obs):
     return n, ok
 
 
+# ───────────────────────── ⑧ 방향 탐색 열거(D19 개정 4, 09-07) — 문장↔메뉴 1:1 ─────────────────────────
+def fresh_oracle(d, b, bots):
+    """독립 오라클: 계획기(_explore_ways)를 안 부르고 같은 사실을 다시 센다 — 방위별 (unvisited 대표칸·너머 안 본·
+    경로 있음) → 경로. 종점 = 그 방위의 보이는 가장 먼 안 밟은·너머 안 본 프런티어(3개 시도) → 대표칸."""
+    seen = d.visible_cells(b['x'], b['y'])
+    sc = b.get('seen_cells') or set()
+    bx, by = b['x'], b['y']
+
+    def unseen_edge(c):
+        x, y = c
+        return any(0 <= x + dx < d.w and 0 <= y + dy < d.h and (x + dx, y + dy) not in sc
+                   for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0)))
+    fr = d._frontier_cells(bx, by, seen)
+    out = {}
+    for w in d._ways(bx, by, seen):
+        if w['visited'] or not unseen_edge(w['cell']):
+            continue
+        far = [c for c in fr if d._bearing(c[0] - bx, c[1] - by) == w['bearing']
+               and c not in d.visited and unseen_edge(c)]
+        far.sort(key=lambda c: (-max(abs(c[0] - bx), abs(c[1] - by)), c))
+        for c in far[:3] + [w['cell']]:
+            p = d.path_to(bx, by, c[0], c[1], bots)
+            if p:
+                out[w['bearing']] = p
+                break
+    return out
+
+
+def sweep_dirs():
+    st = {"views": 0, "listed": 0, "set_ok": 0, "exec_ok": 0, "exec_n": 0, "dup_ok": 0,
+          "wire_ok": 0, "wire_n": 0, "generic_ok": 0, "off_ok": 0}
+    for seed in range(1, 21):
+        d = G.Dungeon(seed=seed, w=40, h=16, n_monsters=3, n_traps=3, n_lurkers=1,
+                      scan=True, explore_dirs=True)
+        bots = []
+        bots.append(G.spawn(d, '1', bots))
+        bots.append(G.spawn(d, '2', bots))
+        for tick in range(1, 121):
+            for b in bots:
+                if not b['alive'] or b['won']:
+                    continue
+                if b.get('order'):
+                    d.step_order(b, bots)
+                    continue
+                obs = d.view(b, bots)
+                opts = obs['options']
+                st["views"] += 1
+                dirs = [o for o in opts if o['type'] == 'explore' and '트여 있다' in o['label']]
+                generic = [o for o in opts if o['type'] == 'explore' and not o.get('target')]
+                # ⓐ 열거 집합 = 오라클 − 막다른 곳 − 보이는 문 방위 − 문 칸 종점, 칸 수 = 라벨
+                covered = {o['target'] for o in opts if o['type'] == 'explore' and '막다른 곳' in o['label']}
+                covered |= {dr['bearing'] for dr in ((obs.get('zone') or {}).get('doors') or [])
+                            if dr.get('seen') and dr.get('dist', 0) > 0}
+                doorc = {dr.cell for dr in d.doors.values() if dr.cell}
+                doorc |= {c for dr in d.doors.values() for c in dr.sides.values()}
+                orc = fresh_oracle(d, b, bots)
+                want = {bb: p for bb, p in orc.items() if bb not in covered and p[-1] not in doorc}
+                got = {o['target']: o for o in dirs}
+                st["set_ok"] += (set(got) == set(want)
+                                 and all(('약 %d칸' % len(want[bb])) in got[bb]['label'] for bb in want))
+                st["listed"] += bool(dirs)
+                keys = [(o['type'], o.get('target')) for o in opts]
+                st["dup_ok"] += (len(keys) == len(set(keys)))
+                st["generic_ok"] += (not generic) if dirs else 1
+                # ⓓ 열거 방위의 문장 줄 = '트여 있다'(wire 와 메뉴가 같은 말)
+                wire = brains._wire(obs, {})
+                for o in dirs:
+                    st["wire_n"] += 1
+                    line = next((l for l in wire.splitlines()
+                                 if l.startswith('- %s: ' % G.BEAR_KR[o['target']])), '')
+                    st["wire_ok"] += ('트여 있다' in line)
+                # ⓑ 집행 = 라벨(방위·칸 수) — order/path/plan 복원(세계 무변경)
+                save = (b.get('order'), list(b.get('path') or []), list(b.get('plan') or []))
+                for o in dirs:
+                    st["exec_n"] += 1
+                    r = d._set_explore(b, o['target'], bots)
+                    st["exec_ok"] += (r.get('result') == 'pathed' and r.get('bearing') == o['target']
+                                      and ('약 %d칸' % r.get('len', -1)) in o['label'])
+                b['order'], b['path'], b['plan'] = save
+                # ⓔ 스위치 끄면 구판: 탐색 줄 외 동일 + '트여 있다' 줄 0
+                d.explore_dirs = False
+                off = d.view(b, bots)['options']
+                d.explore_dirs = True
+                nonx = lambda os_: [(o['type'], o.get('target'), o['label']) for o in os_ if o['type'] != 'explore']
+                st["off_ok"] += (nonx(off) == nonx(opts)
+                                 and all('트여 있다' not in o['label'] for o in off if o['type'] == 'explore'))
+                d.act(b, G.dummy_brain(obs, b['char']), bots)
+            d.monster_turn(bots)
+            if all(b['won'] or not b['alive'] for b in bots):
+                break
+    return st
+
+
 # ───────────────────────── ⑦ 러너 통합(고정 스텁) ─────────────────────────
 def stub(prompt, model="haiku"):
     """결정론 스텁 LLM: 1번이 즉시행동(공격/계단/상호작용)이면 1번, 아니면 마지막(explore)."""
@@ -199,6 +296,18 @@ def main():
     check("⑤ _pick 왕복+관용+기각", st["pick"] == v)
     check("⑥ explore 방위 존중 %d/%d" % (st["exp_dir_ok"], st["exp_dir_n"]),
           st["exp_dir_n"] > 0 and st["exp_dir_ok"] == st["exp_dir_n"])
+
+    st8 = sweep_dirs()
+    v8 = st8["views"]
+    check("⑧ 방향 탐색 열거(scan+explore_dirs) 집합=오라클·칸 수=라벨 (%d뷰, 열거 %d뷰)" % (v8, st8["listed"]),
+          st8["listed"] > 0 and st8["set_ok"] == v8)
+    check("⑧ 열거 방위 집행=라벨(방위·칸) %d/%d" % (st8["exec_ok"], st8["exec_n"]),
+          st8["exec_n"] > 0 and st8["exec_ok"] == st8["exec_n"])
+    check("⑧ (type,target) 중복 0", st8["dup_ok"] == v8)
+    check("⑧ 열거 방위의 문장 줄='트여 있다' %d/%d" % (st8["wire_ok"], st8["wire_n"]),
+          st8["wire_n"] > 0 and st8["wire_ok"] == st8["wire_n"])
+    check("⑧ 열거 시 '엔진에 맡긴다' 0", st8["generic_ok"] == v8)
+    check("⑧ 스위치 끄면 구판 메뉴(탐색 줄 외 동일·'트여 있다' 0)", st8["off_ok"] == v8)
 
     brains._call_claude = stub
     raw1 = run_stub_game()
