@@ -1215,12 +1215,14 @@ def _wire(obs, names=None):
             M.append('- %s (t%s): "%s"' % (_dlg_who(m, nm), m.get("turn", "?"), m.get("text", "")))
     ms = obs.get("messages")
     if ms:
-        L += ["", "## 동료가 한 말 (지난 턴 — 들린 것 전부. 너를 부른 말만 걸음이 멈췄다)"]
+        L += ["", "## 동료가 한 말 (걷는 동안 들린 것까지 — 오래된 것부터. 너를 지목한 말만 걸음이 멈췄다)"]
         for m in ms:
-            to = m.get("to")                     # D41 지목 표식 — 누구에게 한 말인지(혼잣말은 아무도 안 멈춘다)
+            to = m.get("to")                     # D41 지목 표식 — 누구에게 한 말인지(혼잣말·방송은 아무도 안 멈춘다, D46)
             tag = (" (모두에게)" if to == "all" else " (너에게)" if m.get("to_me")
                    else (" (%s에게)" % nm(to)) if to else " (혼잣말)")
-            L.append('- %s: "%s"%s' % (nm(m.get("from", "?")), m.get("text", ""), tag))
+            mt = m.get("turn")                   # D46 배관: 보관된 말 — 지난 턴보다 오래된 말은 얼마나 전인지 병기
+            old = (" — %d턴 전" % (now - mt)) if (now is not None and mt is not None and now - mt >= 2) else ""
+            L.append('- %s: "%s"%s%s' % (nm(m.get("from", "?")), m.get("text", ""), tag, old))
 
     # ── 조립(09-08 D44, 파트너 네 갈래 "시트=나는 누구인가 · 관측=뭘 보고 있나 · 기억=무엇을 기억하나 · 선택지=지금 주어진 것"):
     #   시트·지침은 claude_brain 이 앞에 붙이고 선택지는 뒤에 붙인다. 여기서는 **기억 → 관측** 순 — 내 선택(임시 가정): 지금 보고
@@ -1486,7 +1488,8 @@ def think_all(d, bots, inbox=None):
                 o["dialogue"] = list(b["dialogue"][-DIALOGUE_MAX:])
             dl = b.setdefault("dialogue", [])
             for m in inbox.get(b["char"], []):
-                dl.append({"turn": d.turn - 1, "from": m.get("from"), "to": m.get("to"), "text": m.get("text", ""),
+                # D46(09-08) 배관: 보관된 말은 제 turn(말한 틱)으로 — 없으면 지난 틱(turn−1)
+                dl.append({"turn": m.get("turn", d.turn - 1), "from": m.get("from"), "to": m.get("to"), "text": m.get("text", ""),
                            **({"to_me": True} if (G.addressed_to(m, b["char"]) and m.get("to") != "all") else {})})
             del dl[:-DIALOGUE_MAX]
         if NOTES_ON and b.get("notes"):
