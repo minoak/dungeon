@@ -5,7 +5,7 @@ D18: "상처도 시야를 탄다" — 라이브 22틱 부검(카야 전사 무�
   ① 곁 판정(A-1): 동료=체비셰프≤1(대각 도착=arrived·경로소진 대각=arrived 회귀), 몹=직교 유지
   ② 시야 내 실물 재경로(A-2): 도주몹 꼬리잡기 수렴 + lost 는 전부 시야 밖에서만 + 시야 밖=스냅샷 유지
   ③ 목격 주입(A-3): 시야 유무별 · 1회성 노출·소거 · 자기 피격 비주입 · 처치=ally_down · 도감 마스킹
-  ④ 부상 등급(A-4): _wound_label 경계 고정 · allies condition · 합류 라벨 병기 · party 비노출 · 몹 hp 숫자
+  ④ 동료 상태(09-08 D45): allies hp/maxhp · 합류 라벨 'HP x/y' 병기(겉보기 4단 폐지) · party 비노출 · 몹 hp 숫자
   ⑤ 동행(A-5): 유지(따라 걷기) · 대상 사망 lost · 대기 중 새 몹 encounter 파기 · then 차단(엔진·brains)
   ⑥ 사회적 대우회(A-0, _ally_jam): 문간 동료 대우회 → blocked(allies) / 지형-단독 경로는 무간섭
      (교대 개정 후 잔존 발화 사례 = 동료가 목표의 유일 접근칸 점유 — 이 장면이 정확히 그것)
@@ -182,25 +182,22 @@ w = d.view(b1, bots).get('witnessed')
 check("③ 도감 마스킹(모르는 종=낯선 짐승)", bool(w) and w[-1]['by'] == G.UNKNOWN_BEAST)
 b2['alive'] = True
 
-# ───────────────────── ④ 부상 등급(A-4) ─────────────────────
-print("── ④ 부상 등급(A-4)")
-lab = G._wound_label
-check("④ 경계 고정(멀쩡=만피 / 빈사≤1/3 / 다침≤2/3 / 그 외 가벼운 상처)",
-      lab(10, 10) == '멀쩡' and lab(9, 10) == '가벼운 상처' and lab(7, 10) == '가벼운 상처'
-      and lab(6, 10) == '다침' and lab(4, 10) == '다침'
-      and lab(3, 10) == '빈사' and lab(1, 10) == '빈사')
+# ───────────────────── ④ 동료 상태 = HP 숫자 + 태그(09-08 D45 — 겉보기 4단 폐지) ─────────────────────
+print("── ④ 동료 상태(HP 숫자 + 태그)")
 d = arena()
 b1, b2 = mkbot('1', 5, 5), mkbot('2', 8, 5, job='도적')
-b2['hp'] = 4                                     # 4/14 → 빈사
+b2['hp'] = 4
 bots = [b1, b2]
 m = mkmon(d, 5, 7, state='WANDERING')
 obs = d.view(b1, bots)
 ally = obs['sights']['bots'][0]
 join = next(o for o in obs['options'] if o['label'].startswith('합류'))
-check("④ allies.condition + 합류 라벨 병기",
-      ally['condition'] == '빈사' and '빈사' in join['label'])
+check("④ allies.hp/maxhp 노출(겉보기 등급 없음) + 합류 라벨 'HP 4/max' 병기",
+      ally.get('hp') == 4 and ally.get('maxhp') == b2['maxhp'] and 'condition' not in ally
+      and ('HP 4/%d' % b2['maxhp']) in join['label'] and '빈사' not in join['label']
+      and not hasattr(G, '_wound_label'))
 check("④ party 비노출(시야-온리) + 몹 hp 숫자 계약 유지",
-      all('condition' not in p for p in obs['party'])
+      all('hp' not in p for p in obs['party'])
       and isinstance(obs['sights']['monsters'][0]['hp'], int))
 
 # ───────────────────── ⑤ 동행(A-5) ─────────────────────

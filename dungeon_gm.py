@@ -59,16 +59,8 @@ LURKER, HIDDEN = 'm', '*'       # 관전자 전용(극적 아이러니): 숨은 
 UNKNOWN_BEAST = '낯선 짐승'     # 도감(D9) 미등재 몬스터의 obs 표기 — 보이지만 정체를 모른다.
 
 
-def _wound_label(hp, maxhp):
-    """육안 부상 등급(D18 A-4) — 남의 숫자 HP는 볼 수 없다: 겉보기 어휘 4단 고정(튜닝마라).
-    빈사 경계 1/3 은 몹 도주 경계(FLEE_FRAC)와 같은 눈금 — 세계가 한 자로 잰다. 순수 파생(굴림 없음)."""
-    if hp >= maxhp:
-        return '멀쩡'
-    if hp * 3 <= maxhp:
-        return '빈사'
-    if hp * 3 <= maxhp * 2:
-        return '다침'
-    return '가벼운 상처'
+# (09-08 D45) 겉보기 부상 등급 `_wound_label`(D18 A-4, 멀쩡/가벼운 상처/다침/빈사)은 폐지 — 파트너 "상태 태그 + hp 를 보여주면
+#   되잖아, 위급·부상 이렇게 나눌 필요가 없다". 동료도 몹·나와 같은 자(HP 숫자)로 읽는다. 몹 도주 경계 FLEE_FRAC 은 무관.
 
 
 def _mfact(m):
@@ -1462,9 +1454,13 @@ class Dungeon:
         return False
 
     def _bearing(self, dx, dy):
-        h = 'E' if dx > 0 else ('W' if dx < 0 else '')
-        v = 'S' if dy > 0 else ('N' if dy < 0 else '')
-        return (v + h) or '-'
+        """8방위 — **각도 기준**(09-08 D45, 파트너 "방위를 좀 더 세부적으로 잡자"): 45° 부채꼴, 경계 22.5°. 옛 부호 기준은
+        동쪽 10칸·북쪽 1칸(거의 정동)도 'NE' 였다. 0·0 은 '-'(발밑). 시야·장부·문·트인 길·탐색 방위·리모컨·목격이 전부
+        이 한 함수를 쓴다(문장↔메뉴 1:1 은 그대로). 화면 y 는 아래로 자라므로 북 = −dy."""
+        if dx == 0 and dy == 0:
+            return '-'
+        ang = math.degrees(math.atan2(-dy, dx)) % 360.0
+        return ('E', 'NE', 'N', 'NW', 'W', 'SW', 'S', 'SE')[int(((ang + 22.5) % 360.0) // 45)]
 
     def visible_cells(self, cx, cy, r=SIGHT):
         """(cx,cy)이 지금 보는 칸 집합 — (2r+1)² 중 벽에 안 가린 칸(LOS). 대칭(A↔B).
@@ -1565,7 +1561,7 @@ class Dungeon:
         ways = [{k: w[k] for k in way_keys}            # 미지로 트인 출입구(셀좌표는 엔진만 보유.
                 for w in self._ways(cx, cy, seen)]     #  zone=어느 구역으로 트였나, D17-2)
         allies = [{'id': 'b%s' % b['char'], 'char': b['char'],
-                   'condition': _wound_label(b['hp'], b['maxhp']),   # 겉보기 부상 등급(A-4) —
+                   'hp': b['hp'], 'maxhp': b['maxhp'],              # HP 숫자(09-08 D45 — 겉보기 4단 폐지) —
                    **bear(b['x'], b['y']),                           #   보이는 동료만(시야-온리)
                    **({'moving': True} if (self.motion and b.get('order')   # 이동중(D27) — 몸짓도
                        and b.get('path')) else {}),                  #   시야를 탄다. 깃발 하나뿐
@@ -1791,9 +1787,10 @@ class Dungeon:
         for a in allies:
             if a['adj']:
                 continue        # 이미 곁(직교 인접)의 동료 '합류'는 no-op — 다른 adj 분기와 대칭
-            _add('goto', a['id'], '합류: %s(봇%s) — %s, %s, 거리 %d'
-                 % (names.get(a['char'], _unknown), a['char'], a['condition'],
-                    a['bearing'], a['dist']))          # 등급 병기(A-4) — 빈사 동료가 눈에 밟히게
+            _add('goto', a['id'], '합류: %s(봇%s) — HP %d/%d%s, %s, 거리 %d'
+                 % (names.get(a['char'], _unknown), a['char'], a['hp'], a['maxhp'],
+                    (' · ' + ' · '.join(a['status'])) if a.get('status') else '',   # 09-08 D45: 숫자+태그 병기(겉보기 4단 폐지)
+                    a['bearing'], a['dist']))
         # D18 개정(09-06 파트너 "시야 밖에서 사라지면 말 그대로 사라지는 거야"): 옛 '찾아가기
         # (파티 감각으로 접근)'=안 보이는 동료의 산 좌표로 걷는 홈잉 — 폐지. 남는 길은 **장부의
         # 마지막 본 자리**(이 층에서 본 적 있을 때만) — 칸 핑(@x,y)이라 걸어가 봐도 거기 있단

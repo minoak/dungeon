@@ -308,7 +308,7 @@ ally = next(a for a in obs2['sights']['bots'] if a['char'] == '1')
 check("동료 항목 status=['출혈'] (겉으로 드러난다)", ally.get('status') == ['출혈'])
 names = {'1': '두란', '2': '카야', '3': '피른'}
 txt2 = brains._wire(obs2, names)
-check("동료 줄 '겉보기 … · 출혈'", "겉보기 다침 · 출혈" in txt2 or "겉보기 가벼운 상처 · 출혈" in txt2)
+check("동료 줄 'HP x/y · 출혈'(09-08 D45 — 겉보기 4단 폐지)", ("HP %d/%d · 출혈" % (b1['hp'], b1['maxhp'])) in txt2)
 check("목격 문장", brains._witness_prose(
     {'kind': 'ally_status', 'name': '두란', 'char': '1', 'tag': '출혈',
      'by': '가시 함정', 'by_kind': 'trap'}) == "두란(봇1)가 가시 함정으로 출혈 상태가 되는 것을")

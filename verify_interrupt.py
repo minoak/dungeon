@@ -144,8 +144,8 @@ r7 = d7.step_order(b7, bots7)
 check("⑦ goto 몹: 직교 인접 도달 시 arrived + order 클리어(무한 추격 궤도 차단)",
       r7['result'] == 'arrived' and 'to' not in r7 and b7['order'] is None
       and abs(b7['x'] - prey.x) + abs(b7['y'] - prey.y) == 1)
-ally = mkbot('2', 12, 5)
-bots7b = [b7, ally]
+ally = mkbot('2', 11, 5)                          # 시야 안(체비셰프 5) — 09-08 D45 전엔 (12,5)=시야 밖이라 goto b2 가 탐색 폴백으로
+bots7b = [b7, ally]                               #   바뀌었는데 폴백 종점이 우연히 곁이었다(방위 각도화로 우연이 깨져 드러남)
 d7.act(b7, {'type': 'goto', 'target': 'b2'}, bots7b)
 steps = 0
 r7b = None

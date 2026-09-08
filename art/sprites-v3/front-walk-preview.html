@@ -1,0 +1,15 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>전사 정면 걷기</title>
+<style>body{background:#20242c;color:#eadfcf;font:16px/1.6 system-ui;margin:0}main{max-width:1000px;margin:auto;padding:28px}h1{font-size:25px}p{color:#b7c2d0}button,input{font:inherit}button{background:#384557;color:inherit;border:1px solid #718198;border-radius:6px;padding:8px 16px}.stage{display:flex;align-items:end;gap:40px;padding:30px;background:#292f3b;border-radius:12px}canvas{image-rendering:pixelated}#strip{width:100%;image-rendering:pixelated}.bar{display:flex;gap:20px;align-items:center;margin:20px 0;flex-wrap:wrap}a{color:#e3bd81}</style>
+<main><h1>전사 · 정면 걷기 4프레임</h1><p>승인한 외형을 참고해 이미지 생성으로 만든 첫 걷기 시안입니다.</p>
+<div class="stage"><div><canvas id="big" width="256" height="384"></canvas><div>확대</div></div><div><canvas id="small" width="64" height="96"></canvas><div>작은 표시</div></div></div>
+<div class="bar"><button id="play">일시정지</button><label>프레임 간격 <input id="speed" type="range" min="100" max="300" step="20" value="160"> <span id="ms">160ms</span></label><label>프레임 <input id="frame" type="range" min="0" max="3" value="0"></label><span id="num">1 / 4</span></div>
+<p>표시할 때만 각 칸을 같은 크기로 잘라 재생합니다. 원본 배경과 그림은 그대로 보존했습니다. 정확한 16×16 게임 에셋은 아닙니다.</p><img id="strip" src="warrior-front-walk-generated.png" alt="생성한 정면 걷기 네 프레임"><p><a href="warrior-front-walk-generated.png" download>원본 시트 저장</a></p></main>
+<script>
+const img=document.querySelector('#strip'),q=s=>document.querySelector(s);let playing=true,phase=0,previous=0;
+function draw(){if(!img.complete||!img.naturalWidth)return;const w=img.naturalWidth,h=img.naturalHeight;
+// 생성 스트립의 네 캐릭터 중심 간격에 맞춘 동일 크기 창. 픽셀 재작성은 하지 않는다.
+const x=(30+426*phase)*w/1774,y=150*h/887,sw=413*w/1774,sh=550*h/887;
+for(const id of ['#big','#small']){const c=q(id),g=c.getContext('2d');g.imageSmoothingEnabled=false;g.clearRect(0,0,c.width,c.height);const scale=Math.min(c.width/sw,c.height/sh);g.drawImage(img,x,y,sw,sh,(c.width-sw*scale)/2,(c.height-sh*scale)/2,sw*scale,sh*scale)}q('#frame').value=phase;q('#num').textContent=(phase+1)+' / 4'}
+function loop(t){if(playing&&t-previous>=Number(q('#speed').value)){phase=(phase+1)%4;previous=t;draw()}requestAnimationFrame(loop)}
+q('#play').onclick=()=>{playing=!playing;q('#play').textContent=playing?'일시정지':'재생'};q('#speed').oninput=()=>q('#ms').textContent=q('#speed').value+'ms';q('#frame').oninput=e=>{playing=false;q('#play').textContent='재생';phase=Number(e.target.value);draw()};img.onload=draw;draw();requestAnimationFrame(loop);
+</script></html>

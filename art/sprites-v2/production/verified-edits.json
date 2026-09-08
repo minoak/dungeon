@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "kind": "wonderland-parts-edits",
+  "edits": {
+    "M1-warrior-front--1": {
+      "version": 1,
+      "size": 16,
+      "palette": {
+        ".": "#00000000",
+        "#": "#292329",
+        "h": "#905432",
+        "H": "#b87845",
+        "s": "#f2c599",
+        "E": "#201b20",
+        "A": "#aebbc2",
+        "a": "#657989",
+        "b": "#384a65",
+        "g": "#c3934e",
+        "l": "#604631",
+        "G": "#a5793b",
+        "W": "#e2ebed",
+        "P": "#597b45",
+        "p": "#36513a",
+        "R": "#786077",
+        "r": "#483b50"
+      },
+      "rows": [
+        ".....#####......",
+        "...##hhhhH##....",
+        "..#hhHHHhhhh#...",
+        "..#hHHhhhhhH#...",
+        ".#hhhhhhHhhhh#..",
+        ".#hhhHhsshhhh#..",
+        ".#hsssssssshh#..",
+        ".#sssEsssEsss#..",
+        "..#ssEsssEss#...",
+        "...#sssssss#....",
+        "....#######.....",
+        ".###AaAAAaA#....",
+        ".#Gs#AaaaA#s#...",
+        "##WG#bbgbb###...",
+        "#W###bb#bb#.....",
+        "W##.#ll#ll#....."
+      ],
+      "reference": [
+        ".....#####......",
+        "...##hhhhH##....",
+        "..#hhHHHhhhh#...",
+        "..#hHHhhhhhH#...",
+        ".#hhhhhhHhhhh#..",
+        ".#hhhHhsshhhh#..",
+        ".#hsssssssshh#..",
+        ".#sssEsssEsss#..",
+        "..#ssEsssEss#...",
+        "...#sssssss#....",
+        "....#######.....",
+        ".###AaAAAaA#....",
+        ".#Gs#AaaaA#s#...",
+        "##WG#bbgbb###...",
+        "#W###bb#bb#.....",
+        "W##.#ll#ll#....."
+      ]
+    }
+  }
+}

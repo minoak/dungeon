@@ -1014,9 +1014,12 @@ def _wire(obs, names=None):
                 "%s %dm (발각됨 — 위치를 안다)" % (t.get("name", "함정"), t.get("dist", 0)))
         for b in s.get("bots", []):
             put(b.get("bearing"), b.get("dist", 0),
-                "%s(겉보기 %s) %dm%s" % (who(b.get("char", "?")),
-                                         b.get("condition", "?"), b.get("dist", 0),
-                                         " (이동중)" if b.get("moving") else ""))
+                "%s(HP %s/%s%s) %dm%s%s" % (who(b.get("char", "?")),
+                                            b.get("hp", "?"), b.get("maxhp", "?"),          # 09-08 D45: 숫자+태그(겉보기 4단 폐지)
+                                            (" · " + " · ".join(b["status"])) if b.get("status") else "",   # D34 — scan 분기 누락 수선
+                                            b.get("dist", 0),
+                                            " (이동중)" if b.get("moving") else "",
+                                            " (휴식중)" if b.get("resting") else ""))       # D35 — scan 분기 누락 수선
         if under:
             L.append("- 발밑: " + " / ".join(under))
         KR = {"N": "북쪽", "NE": "북동쪽", "E": "동쪽", "SE": "남동쪽",
@@ -1058,8 +1061,8 @@ def _wire(obs, names=None):
             L.append("- %s %s — %s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
                                          " (와 본 자리)" if f.get("visited") else "") + G._tagsfx(f))   # D39 태그 접미
         for b in s.get("bots", []):
-            L.append("- %s — 겉보기 %s%s — %s%s%s"
-                     % (who(b.get("char", "?")), b.get("condition", "?"),
+            L.append("- %s — HP %s/%s%s — %s%s%s"                                    # 09-08 D45: 숫자+태그(겉보기 4단 폐지)
+                     % (who(b.get("char", "?")), b.get("hp", "?"), b.get("maxhp", "?"),
                         (" · " + " · ".join(b["status"])) if b.get("status") else "",   # D34 상태
                         at(b), " (이동중)" if b.get("moving") else "",
                         " (휴식중)" if b.get("resting") else ""))                      # D35 휴식

@@ -70,6 +70,8 @@ state/stream.jsonl (append-only JSONL 스트림 — 진실의 원장)
 실LLM 판 실측: 파티 판(80×30, 207틱 전원 탈출)·솔로 판(239틱 전원 탈출)·마을 왕복 판.
 지난 판 스트림은 `runs/`에 보존되어 있고 전부 리플레이 가능하다.
 
+관측 표현 A/B 실험(사전등록): [docs/D19_experiment_summary.md](docs/D19_experiment_summary.md) (원본 로그: [design/EXP_D19_MAZE.md](design/EXP_D19_MAZE.md))
+
 **다음 단계** — 게임 루프 완성(회복·조우 밀도), 월드 러너(N파티 방치형), 캐릭터 시트 UGC
 (프롬프트 인젝션 검증 포함). 설계 정본과 미결 목록은 [`design/HARNESS_DESIGN.md`](design/HARNESS_DESIGN.md).
 

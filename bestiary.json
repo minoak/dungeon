@@ -1,5 +1,15 @@
 {
  "_readme": "도감 원장 — 캐릭터의 죽어도 남는 지식(D4·D9). 획득 규칙=bestiary.py(스트림 소비자), 본문=lore.json(수정해도 여기 불침).",
+ "다희": {
+  "monster:고블린": {
+   "turn": 54,
+   "depth": 1
+  },
+  "trap:spike": {
+   "turn": 54,
+   "depth": 1
+  }
+ },
  "두란": {
   "feature:fountain": {
    "turn": 7,
@@ -50,6 +60,18 @@
   "monster:고블린": {
    "turn": 126,
    "depth": 1
+  },
+  "monster:그림자거미": {
+   "turn": 48,
+   "depth": 1
+  },
+  "trap:dart": {
+   "turn": 357,
+   "depth": 1
+  },
+  "trap:spike": {
+   "turn": 352,
+   "depth": 1
   }
  },
  "미라": {
@@ -72,13 +94,63 @@
    "depth": 1
   }
  },
+ "민아": {
+  "feature:chest": {
+   "turn": 74,
+   "depth": 1
+  },
+  "monster:고블린": {
+   "turn": 13,
+   "depth": 1
+  }
+ },
+ "사라": {
+  "monster:고블린": {
+   "turn": 32,
+   "depth": 1
+  }
+ },
+ "사야": {
+  "monster:그림자거미": {
+   "turn": 47,
+   "depth": 1
+  }
+ },
+ "사유": {
+  "monster:고블린": {
+   "turn": 47,
+   "depth": 1
+  }
+ },
  "수나": {
+  "feature:chest": {
+   "turn": 64,
+   "depth": 1
+  },
   "monster:고블린": {
    "turn": 120,
    "depth": 1
   },
   "monster:그림자거미": {
    "turn": 25,
+   "depth": 1
+  },
+  "trap:alarm": {
+   "turn": 94,
+   "depth": 1
+  },
+  "trap:dart": {
+   "turn": 75,
+   "depth": 1
+  },
+  "trap:spike": {
+   "turn": 197,
+   "depth": 1
+  }
+ },
+ "수아": {
+  "monster:고블린": {
+   "turn": 22,
    "depth": 1
   }
  },
@@ -89,6 +161,14 @@
   }
  },
  "유나": {
+  "feature:chest": {
+   "turn": 66,
+   "depth": 1
+  },
+  "feature:fountain": {
+   "turn": 93,
+   "depth": 2
+  },
   "monster:고블린": {
    "turn": 122,
    "depth": 1
@@ -104,11 +184,35 @@
   "trap:dart": {
    "turn": 20,
    "depth": 1
+  },
+  "trap:spike": {
+   "turn": 67,
+   "depth": 1
   }
  },
  "유라": {
   "monster:고블린": {
    "turn": 86,
+   "depth": 1
+  }
+ },
+ "유진": {
+  "monster:고블린": {
+   "turn": 120,
+   "depth": 1
+  },
+  "monster:그림자거미": {
+   "turn": 48,
+   "depth": 1
+  },
+  "trap:spike": {
+   "turn": 400,
+   "depth": 1
+  }
+ },
+ "지나": {
+  "monster:고블린": {
+   "turn": 114,
    "depth": 1
   }
  },
@@ -119,6 +223,12 @@
   },
   "trap:spike": {
    "turn": 32,
+   "depth": 1
+  }
+ },
+ "진아": {
+  "monster:고블린": {
+   "turn": 13,
    "depth": 1
   }
  },
