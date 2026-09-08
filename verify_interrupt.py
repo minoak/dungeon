@@ -156,6 +156,46 @@ check("⑦ goto 동료: 직교 인접 도달 시 arrived(합류 완료)",
       r7b and r7b['result'] == 'arrived'
       and abs(b7['x'] - ally['x']) + abs(b7['y'] - ally['y']) == 1)
 
+# ── ⑦-b 알고 지나는 계단은 안 세운다(09-08 D45 부검: verify_stage2b 시드 217 livelock의 엔진 수선) ──
+def _exit_to(dd, x, y):
+    ef = dd.features[dd._exit_fid]
+    ef.x, ef.y = x, y
+    if not isinstance(type(dd).__dict__.get('exit'), property):
+        dd.exit = (x, y)
+
+
+def _walk_out(dd, bot, bots, cap=12):
+    out, n = [], 0
+    while bot.get('order') and n < cap:
+        out.append(dd.step_order(bot, bots)); n += 1
+    return out
+
+
+d7c = arena(seed=7); _exit_to(d7c, 8, 5)                     # 계단을 봇(5,5)과 동료(10,5) 사이 직선 위에
+b7c, ally7c = mkbot('1', 5, 5), mkbot('2', 10, 5)
+bots7c = [b7c, ally7c]
+r7c = d7c.act(b7c, {'type': 'goto', 'target': 'b2'}, bots7c)   # 결정 순간 계단(거리 3)이 눈에 있다
+res7c = _walk_out(d7c, b7c, bots7c)
+check("⑦-b 결정 때 보이던 계단을 딴 목표(동료)로 지나면 at_exit 로 안 선다 → 곁 도착",
+      r7c['result'] == 'pathed' and b7c.get('exit_seen_at_order') is True
+      and res7c and all(x['result'] != 'at_exit' for x in res7c) and res7c[-1]['result'] == 'arrived'
+      and abs(b7c['x'] - ally7c['x']) + abs(b7c['y'] - ally7c['y']) == 1)
+d7d = arena(seed=7); _exit_to(d7d, 18, 10)                   # 계단은 멀리(시야 밖)
+b7d, ally7d = mkbot('1', 5, 5), mkbot('2', 10, 5)
+bots7d = [b7d, ally7d]
+d7d.act(b7d, {'type': 'goto', 'target': 'b2'}, bots7d)        # 결정 순간 계단은 안 보였다
+_exit_to(d7d, 8, 5)                                          # 걷는 중 길 위에 '못 본 계단'(최소 재현)
+res7d = _walk_out(d7d, b7d, bots7d)
+check("⑦-b 못 본 계단을 밟으면 선다(at_exit 유지)",
+      b7d.get('exit_seen_at_order') is False and any(x['result'] == 'at_exit' for x in res7d))
+d7e = arena(seed=7); _exit_to(d7e, 8, 5)
+b7e = mkbot('1', 5, 5)
+bots7e = [b7e]
+d7e.act(b7e, {'type': 'goto', 'target': 'exit'}, bots7e)
+res7e = _walk_out(d7e, b7e, bots7e)
+check("⑦-b goto exit 는 도착이라 선다(at_exit) — 계단 위",
+      res7e and res7e[-1]['result'] == 'at_exit' and (b7e['x'], b7e['y']) == (8, 5))
+
 # ── ⑧ 경로 경합: 보이는 몹 점거 = blocked+monsters / concealed = 조용한 재경로 ──
 d8 = arena(seed=8)
 for x in range(1, 19):                                  # 외길 복도 y=5

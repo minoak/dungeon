@@ -2037,6 +2037,10 @@ class Dungeon:
         typ = (action or {}).get('type', 'goto')
         tgt = (action or {}).get('target')
         bot['wander'] = None                      # 새 결정 = '계속 이동'의 단절(D21 맴돎 창 리셋)
+        bot['exit_seen_at_order'] = self.exit in self.visible_cells(bot['x'], bot['y'])
+        #   ↑ 09-08 D45 부검: 결정 순간 계단이 눈에 있었나 — at_exit 정지의 dedupe 재료(아래 step_order). 시드 217 livelock:
+        #   f3 가 계단 너머라 goto f3 마다 계단 칸에서 at_exit 로 서고, 계단 위 동료는 자리 교대로 밀려나 다시 goto f3 — 무한.
+        #   D19 '개시 때 이미 보이던 계단은 새것이 아니다'와 같은 규율: 알고 지나는 계단은 안 세운다(goto exit 는 도착이라 선다).
         if 'then' in (action or {}):              # 작정 접수 — 저작 검증(시야-온리)은 brains 소관,
             bot['plan'] = ([] if typ in ('follow', 'wait', 'rest')   # 동행·대기·휴식=열린 결말 — 뒤수 부적합
                            else [dict(s) for s in (action.get('then') or [])
@@ -2933,7 +2937,8 @@ class Dungeon:
             if enter.get('potion'):
                 res['potion'] = True
             return res
-        if enter.get('at_exit'):                      # 계단 도착 — 하강/탈출은 interact(파티 조율)로
+        if enter.get('at_exit') and (str(bot.get('order') or '') == 'exit'      # 계단 도착 — 하강/탈출은 interact(파티 조율)로.
+                                     or not bot.get('exit_seen_at_order')):   #   09-08 D45: 결정 때 보이던 계단을 딴 목표로 지나는 건 안 선다
             self._perceive(bot)                       # 계단 위에서도 눈은 뜨고 있다(생략하면 뻔히 보이는
             bot['order'], bot['path'] = None, []      #   적의 공격이 '매복' 판정되는 거짓 they-ambush)
             return {**base, 'result': 'at_exit'}
