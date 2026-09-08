@@ -862,8 +862,7 @@ _WIRE_KEYS = frozenset((
     "depth", "turn",
     "zone", "known", "witnessed", "memories", "dry", "last", "trail", "floor", "floors", "history", "dialogue",
     "order", "ascii_view", "legend",
-    "sights", "party", "options", "messages", "intent", "notes",   # party: 09-08 D44 뒤 wire 는 안 그린다(명단 폐지) —
-                                                                  #   알려진 키로 남겨 fallback 덤프 방지
+    "sights", "party", "options", "messages", "intent", "notes",   # party: 파티 명단 — 기억 갈래 첫 절(09-08 D44 정정으로 존치)
     "status",  # 상태 태그(D34): 아래 _wire "## 네 몸 상태" 절이 그린다
     "relations",   # 관계 장부(D36): 뼈 횟수·초대는 _wire, 살(한 줄)은 _sheet 가 그린다
     "exhausted",   # 탐색 소진(D19 개정 09-06): '탐색' 어휘 대신 사실 한 줄
@@ -1072,10 +1071,19 @@ def _wire(obs, names=None):
         if len(L) == n0:
             L.append("- (아무것도 안 보인다)")
 
-    # (09-08 D44, 파트너 확정) '## 파티 명단' 절은 폐지 — 보이는 동료는 관측(장소)이, 안 보이는 동료는 기억(마지막 본 자리·리모컨)이,
-    #   죽음은 기억(목격 D18·묘 발견 D22)이 말한다. 명단이 혼자 갖던 '못 본 죽음·먼저 내려감'(시야-온리의 유일한 전지 창,
-    #   09-06 D22 개정의 유령 차단용)도 뺐다 — 못 본 죽음을 모르는 건 시야-온리대로면 맞는 행동이다. obs.party 는 스트림·BYO
-    #   계약이라 그대로(_WIRE_KEYS 에 남겨 fallback 덤프 방지). 계단 하강은 엔진이 산 사람만 센다.
+    pt = obs.get("party") or []
+    if pt:                                  # 파티 명단 — **기억 갈래 첫 절**(09-08 D44 정정, 파트너 "파티 명단은 같이 하는 데 필요"):
+        M += ["", "## 파티 명단"]           #   함께 온 사람이 누구고(직업 — 동료 직업의 유일한 출처) 살았는지·먼저 내려갔는지·지금 보이는지.
+        for p in pt:                        #   못 본 죽음·하강도 안다 = 시야-온리의 유일한 전지 창(09-06 D22 개정 '구하러 올게' 유령 차단).
+            if not p.get("alive"):         #   내가 폐지를 권했다가 파트너 정정으로 존치 — 같이 하기의 재료.
+                st = "죽었다 — 이번 원정에는 돌아오지 않는다"   # D22 개정(09-06): 확정성 전달('구하러 올게' 유령 차단)
+            elif p.get("won"):
+                st = "먼저 내려갔다"
+            elif p.get("visible"):
+                st = "시야 안(관측 목록에 있다)"     # D44 뒤 관측은 기억 뒤에 온다 — '위 목록' 대신 자리 중립 표현
+            else:
+                st = "시야 밖 — 말은 안 닿는다. 어디 있는지 모른다(마지막 본 자리만 안다)"   # D18 개정(09-06)
+            M.append("- %s, %s — %s" % (nm(p.get("char", "?")), p.get("job", "?"), st))
 
     rels = obs.get("relations") or []
     if rels:                                # 관계 장부(D36) — 뼈 횟수(사실). 살은 시트에 산다
