@@ -792,6 +792,17 @@ def _floor_name(depth):
     return "마을" if d == 0 else "%d층" % d
 
 
+_KIND_PROPOSE = ("제안", "요청", "부탁", "proposal", "propose", "request", "ask", "suggest", "offer")
+
+
+def _parse_kind(raw):
+    """말의 종류(D47 `say_kind`, 2026-09-08 파트너 "'말한다'를 목적에 맞게 쪼갠다" — 응답 JSON 정식 필드):
+    제안(상대의 선택을 요청 — 상대가 멈춰 답한다) / 잡담(기본 — 전하기만, 아무도 안 멈춘다).
+    빈 값·모르는 값 = 잡담(파트너 "기본값은 잡담으로 가볍게"). 말한 캐릭터의 자기 신고이지 엔진의 내용 해석이 아니다(D5)."""
+    s = str(raw or "").strip().lower()
+    return "제안" if any(s.startswith(k) for k in _KIND_PROPOSE) else "잡담"
+
+
 _TO_ALL = ("all", "모두", "다들", "전원", "모두에게", "다같이", "everyone")
 
 
@@ -1135,7 +1146,7 @@ def _wire(obs, names=None):
                 line += ' — 이유: "%s"' % it["reason"]
             M.append(line)
             if it.get("say"):
-                M.append('  그때 동료에게 한 말: "%s"' % it["say"])
+                M.append('  그때 동료에게 한 말%s: "%s"' % (" (제안)" if it.get("say_kind") == "제안" else "", it["say"]))
         if len(trail) > 1:                    # 다건 = 꼬리표 체인(D40). 출혈은 꼬리표가 실어 별도 줄 없음
             M.append("- 그 뒤 일어난 일: " + _trail_prose(trail, names))
         elif trail:                           # 1건 — 궤적 판은 1건도 꼬리표(파트너 확정 "꼬리표식으로 바꾸자")
@@ -1212,15 +1223,22 @@ def _wire(obs, names=None):
     if dlg:                                   #   이번 턴 새로 들린 말은 아래 절(중복 없음 — 장부엔 다음 결정부터 실린다)
         M += ["", "## 최근 대화 (오래된 것부터 — 이번 턴에 새로 들린 말은 관측의 '동료가 한 말'에)"]
         for m in dlg:
-            M.append('- %s (t%s): "%s"' % (_dlg_who(m, nm), m.get("turn", "?"), m.get("text", "")))
+            M.append('- %s (t%s%s): "%s"' % (_dlg_who(m, nm), m.get("turn", "?"),
+                                              ", 제안" if m.get("kind") == "제안" else "", m.get("text", "")))
     ms = obs.get("messages")
     if ms:
-        L += ["", "## 동료가 한 말 (지난 턴 — 들린 것 전부. 너를 부른 말만 걸음이 멈췄다)"]
+        L += ["", "## 동료가 한 말 (걷는 동안 들린 것까지 — 오래된 것부터. 너를 세운 건 제안뿐이다)"]
         for m in ms:
             to = m.get("to")                     # D41 지목 표식 — 누구에게 한 말인지(혼잣말은 아무도 안 멈춘다)
-            tag = (" (모두에게)" if to == "all" else " (너에게)" if m.get("to_me")
-                   else (" (%s에게)" % nm(to)) if to else " (혼잣말)")
-            L.append('- %s: "%s"%s' % (nm(m.get("from", "?")), m.get("text", ""), tag))
+            if m.get("kind") == "제안":          # D47 말의 종류 — 제안만 세운다(대상 없는 제안=회의)
+                tag = (" (모두에게 제안 — 회의)" if to in (None, "all") else " (너에게 제안)" if m.get("to_me")
+                       else " (%s에게 제안)" % nm(to))
+            else:
+                tag = (" (모두에게)" if to == "all" else " (너에게)" if m.get("to_me")
+                       else (" (%s에게)" % nm(to)) if to else " (혼잣말)")
+            mt = m.get("turn")                   # D47 배관: 보관된 말 — 지난 턴보다 오래된 말은 얼마나 전인지 병기
+            old = (" — %d턴 전" % (now - mt)) if (now is not None and mt is not None and now - mt >= 2) else ""
+            L.append('- %s: "%s"%s%s' % (nm(m.get("from", "?")), m.get("text", ""), tag, old))
 
     # ── 조립(09-08 D44, 파트너 네 갈래 "시트=나는 누구인가 · 관측=뭘 보고 있나 · 기억=무엇을 기억하나 · 선택지=지금 주어진 것"):
     #   시트·지침은 claude_brain 이 앞에 붙이고 선택지는 뒤에 붙인다. 여기서는 **기억 → 관측** 순 — 내 선택(임시 가정): 지금 보고
@@ -1345,8 +1363,11 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
         if fline:
             rel = {**rel, "floor_line": fline}
         to_ = _parse_to(obj.get("to"), char, roster, obs)   # D41 지목 — 말의 상대(없으면 혼잣말)
-        if to_ and str(obj.get("say", "") or "").strip():
+        said = bool(str(obj.get("say", "") or "").strip())
+        if to_ and said:
             rel = {**rel, "to": to_}
+        if said:                                            # D47 말의 종류 — 말이 있을 때만(잡담|제안, 기본 잡담)
+            rel = {**rel, "say_kind": _parse_kind(obj.get("say_kind"))}
         if MENU:
             act = _pick(obj, obs)
             if act:
@@ -1486,8 +1507,10 @@ def think_all(d, bots, inbox=None):
                 o["dialogue"] = list(b["dialogue"][-DIALOGUE_MAX:])
             dl = b.setdefault("dialogue", [])
             for m in inbox.get(b["char"], []):
-                dl.append({"turn": d.turn - 1, "from": m.get("from"), "to": m.get("to"), "text": m.get("text", ""),
-                           **({"to_me": True} if (G.addressed_to(m, b["char"]) and m.get("to") != "all") else {})})
+                # D47 배관: 보관된 말은 제 turn(말한 틱)으로 — 없으면 지난 틱(turn−1). 제안은 종류 표식을 함께
+                dl.append({"turn": m.get("turn", d.turn - 1), "from": m.get("from"), "to": m.get("to"), "text": m.get("text", ""),
+                           **({"to_me": True} if (G.addressed_to(m, b["char"]) and m.get("to") != "all") else {}),
+                           **({"kind": "제안"} if m.get("kind") == "제안" else {})})
             del dl[:-DIALOGUE_MAX]
         if NOTES_ON and b.get("notes"):
             o["notes"] = list(b["notes"])   # D26 의미 기억 — 스스로 남긴 한 줄들(자기 것=시야-온리 무관)
@@ -1518,14 +1541,15 @@ def think_all(d, bots, inbox=None):
             del hist[:-HISTORY_MAX]
         if DIALOGUE_ON and dec.get("say"):     # D43: 내가 한 말도 대화 장부에(들은 말과 한 흐름 — 한쪽만 있으면 독백 기록)
             dl = by[c].setdefault("dialogue", [])
-            dl.append({"turn": d.turn, "from": c, "to": dec.get("to"), "text": dec.get("say", ""), "mine": True})
+            dl.append({"turn": d.turn, "from": c, "to": dec.get("to"), "text": dec.get("say", ""), "mine": True,
+                       **({"kind": "제안"} if dec.get("say_kind") == "제안" else {})})
             del dl[:-DIALOGUE_MAX]
         if trail_on and dec.get("src") == "plan":
             continue                     # D38(09-06): 작정 수는 궤적(trail)에 남는다 — 직전 판단은 마지막
                                          #   **실** 결정을 유지(09-06 마을 판: 미나의 '직전 판단'이 매번
                                          #   "[작정] 미리 정한 다음 수"라 자기 결정·결과가 두 수 전으로 사라졌다)
         it = {"type": dec.get("type", "")}   # bot_snapshot 화이트리스트 밖 = 스트림 계약 불변
-        for k in ("target", "say", "to", "reason", "src"):   # (직전 decisions에서 파생 가능한 값). to=D41 지목
+        for k in ("target", "say", "to", "say_kind", "reason", "src"):   # (직전 decisions에서 파생 가능한 값). to=D41 지목·say_kind=D47
             if dec.get(k):                   # (궤적 끈 판) 작정 수도 자기 판단의 연속이라 intent 갱신
                 it[k] = dec[k]
         if trail_on:

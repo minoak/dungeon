@@ -339,7 +339,7 @@ def probe(spec, n, jobs):
         elif dec.get("reason"):
             line += "  | " + dec.get("reason", "")[:60]
         print(line)
-        for k in ("say", "to", "note", "floor_line"):   # 말·상대(D41)·남긴 한 줄·결산 한 줄(D40)도 프로브의 답이다(09-06)
+        for k in ("say", "say_kind", "to", "note", "floor_line"):   # 말·종류(D47)·상대(D41)·남긴 한 줄·결산 한 줄(D40)도 프로브의 답이다(09-06)
             if dec.get(k):
                 print("         %s: %s" % (k, dec[k]))
         if dec.get("relation"):                      # 관계 살(D36) — 초대 받은 결정의 relation_line
@@ -347,6 +347,8 @@ def probe(spec, n, jobs):
     print("── 분포 ──")
     for k, v in acts.most_common():
         print("  %2d/%d  %s" % (v, n, k))
+    kinds = Counter(dec.get("say_kind") or ("(말 없음)" if not dec.get("say") else "?") for _, dec in rows)   # D47 말의 종류
+    print("  말 종류: " + " · ".join("%s %d" % kv for kv in kinds.most_common()))
     print("  " + " · ".join("%s %d" % kv for kv in thens.most_common()))
     print("  src: " + " · ".join("%s %d" % kv for kv in srcs.most_common()))
     print("  지연: 최소 %.1fs / 중간 %.1fs / 최대 %.1fs"

@@ -92,6 +92,15 @@ def main(path):
     dec_types = Counter(d.get("type") for r in ticks for d in (r.get("decisions") or {}).values() if not d.get("skipped"))
     says = sum(1 for r in ticks for d in (r.get("decisions") or {}).values() if d.get("say") and not d.get("skipped"))
     n_dec = sum(dec_types.values())
+    kinds, meetings = Counter(), 0             # D47 말의 종류(잡담/제안)·회의(대상 없는 제안)·제안 응답률(tick.answers)
+    for r in ticks:
+        for dd in (r.get("decisions") or {}).values():
+            if dd.get("say") and not dd.get("skipped"):
+                k = dd.get("say_kind") or "(종류 없음)"
+                kinds[k] += 1
+                if k == "제안" and dd.get("to") in (None, "all"):
+                    meetings += 1
+    answers = [v for r in ticks for m in (r.get("answers") or {}).values() for v in m.values()]
 
     print("  말 걸림 정지 %d회(%.2f/틱) · 전원 제자리 %d틱(%.0f%%) · 최장 정체 %d틱 · 결정 %d(say %.0f%%)"
           % (hails, hails / max(n, 1), len(stall_turns), 100.0 * len(stall_turns) / max(n, 1), longest,
@@ -101,6 +110,9 @@ def main(path):
     print("  lost %d회 %s" % (len(lost), lost[:10]))
     print("  5틱 내 되밟기: " + " · ".join("%s %d/%d" % (names.get(c, c), back[c], moves[c]) for c in sorted(moves)))
     print("  커버리지 %d칸(%.2f칸/틱)" % (len(visited), len(visited) / max(n, 1)))
+    if kinds:
+        print("  말 종류 %s · 회의 %d · 제안 응답 %d/%d(%.0f%%)"
+              % (dict(kinds.most_common()), meetings, sum(answers), len(answers), 100.0 * sum(answers) / max(len(answers), 1)))
 
     # 저체력 결정 / 물약
     low = defaultdict(Counter)

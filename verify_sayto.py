@@ -10,6 +10,8 @@
   ⑤ all: 시야 안 전원 정지·뼈
   ⑥ 스위치 off(SAYTO_ON=False) = 구판(들리면 전원 정지·배달 쌍 전부 뼈)
   ⑦ wire: "(너에게)"/"(모두에게)"/"(혼잣말)" 표식 · think_all 이 dec.to 를 intent 에 남김 · 스트림 decisions.to
+⚠️ 2026-09-08 D47(말의 종류) 뒤: 이 게이트는 `SAYKIND_ON=False`(D41 판)로 고정해 지목 물리를 잰다 — 종류별 정지·회의·
+반응 뼈·배관은 verify_saykind(41번째)가 잰다.
 (기존 verify 39종은 별도 실행.)
 """
 import os
@@ -26,6 +28,7 @@ import dungeon_gm as G                               # noqa: E402
 from dungeon_gm import Dungeon                       # noqa: E402
 import show_runner                                   # noqa: E402
 show_runner.STEP_DELAY = 0
+show_runner.SAYKIND_ON = False                       # D41 판 고정(D47 종류 물리는 verify_saykind)
 
 
 class C:

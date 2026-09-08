@@ -172,6 +172,17 @@ OBJTAGS_ON = os.environ.get("DUNGEON_OBJTAGS", "1") != "0"   # 오브젝트 태�
 SAYTO_ON = os.environ.get("DUNGEON_SAYTO", "1") != "0"       # 지목(D41, 09-06) — 러너 기본 1. 말 걸림 정지·대화
                                                              #   뼈는 `to` 로 지목된 사람만(대상 없는 말=혼잣말:
                                                              #   들리지만 아무도 안 선다). off=구판(들리면 전원 정지)
+SAYKIND_ON = os.environ.get("DUNGEON_SAYKIND", "1") != "0"   # 말의 종류(D47, 09-08 파트너 "제안은 캐릭터를 멈추게 하고
+                                                             #   명확한 요구를 한다 — 일반 대화는 굳이 멈출 필요가 없다")
+                                                             #   — 러너 기본 1. 응답 say_kind ∈ 잡담(기본)|제안. 세우는 건
+                                                             #   제안뿐: to=번호 → 그 사람 / 대상 없음·all → 회의(시야 안
+                                                             #   전원). 잡담은 들리기만(지목·방송 잡담은 talk 뼈). 같은
+                                                             #   사람의 재제안은 상대가 답하기 전엔 안 세운다(open 장부).
+                                                             #   off=D41 판(지목이면 종류 무관 정지). SAYTO 가 꺼지면 무효.
+PENDING_ON = os.environ.get("DUNGEON_PENDING", "1") != "0"   # 들은 말 보관(D47 배관 — 437987d 재사용) — 러너 기본 1.
+                                                             #   걷는 중 들린(안 세운) 말을 그 봇의 다음 결정까지 보관해
+                                                             #   함께 읽힌다. 옛 판: 결정 없는 틱의 말은 증발.
+PENDING_MAX = 6                                              #   보관 상한(오래된 것부터 바랜다 — D43 DIALOGUE_MAX 와 같은 자)
 FLOOR_ON = os.environ.get("DUNGEON_FLOOR", "1") != "0"       # 층 집계·결산(D40 ②, 09-06) — 러너 기본 1,
                                                              #   엔진 기본 0. "이 층에서 지금까지" 꼬리표 ×N +
                                                              #   층 전이 때 얼려 "지난 층"(캐릭터 한 줄 피기백)
@@ -546,36 +557,110 @@ def build_town():
     return d, starts
 
 
-def deliver_and_hail(d, bots, says, say_to):
+def deliver_and_hail(d, bots, says, say_to, say_kind=None, open_props=None):
     """사회층 한 틱(러너 소유) — ①배달: 말한 사람이 시야 안이면 들린다(전원, `to` 무관 — 귀는 못 닫는다)
     ②대화 뼈(D36 talk): ③말 걸림 정지(D24 hail_stop): **지목(D41, 2026-09-06 파트너 확정 "대상 없음=혼잣말,
     아무도 안 멈춤")**이 켜진 판은 ②③ 둘 다 `to` 로 나를 지목한 말(또는 all)만 센다 — 07-24 큰 판·09-06 17091
     판의 3인 회전 공명(한마디에 둘이 서고 둘이 답하면 셋이 서는 되먹임)의 뿌리를 캐릭터의 의도로 돌린다.
-    SAYTO_ON=0 이면 구판(들리면 전원 정지·배달 쌍 전부 뼈). 반환 (inbox, hails) — inbox 메시지 `{from, text, to?}`."""
+    SAYTO_ON=0 이면 구판(들리면 전원 정지·배달 쌍 전부 뼈).
+    **말의 종류(D47, 2026-09-08 파트너 "제안은 멈추게 하고 명확한 요구를, 일반 대화는 안 멈춘다")** — SAYKIND_ON 판:
+    ③정지는 **제안만**(say_kind=제안: to=나 → 나만, 대상 없음·all → 회의=시야 안 전원), 잡담은 종류 무관 들리기만.
+    ②뼈는 잡담=talk(D41 그대로 지목·방송만), 제안=proposed/asked(제안 장부 `open_props[받는 봇][한 봇]=turn` — 상대가
+    답하기 전 같은 사람의 재제안은 정지도 뼈도 없이 들리기만: 파트너 "같은 제안이 반복돼 계속 세우는 문제 방지").
+    반환 (inbox, hails) — inbox 메시지 `{from, text, turn, to?, kind?}`(kind 는 제안일 때만)."""
+    say_kind = say_kind or {}
+    open_props = open_props if open_props is not None else {}
+    kind_on = SAYKIND_ON and SAYTO_ON
     inbox = {}
     for b in bots:
         seen = d.visible_cells(b["x"], b["y"]) if b["alive"] else set()
-        inbox[b["char"]] = [{"from": oc, "text": t, **({"to": say_to[oc]} if say_to.get(oc) else {})}
+        inbox[b["char"]] = [{"from": oc, "text": t, "turn": d.turn,
+                             **({"to": say_to[oc]} if say_to.get(oc) else {}),
+                             **({"kind": "제안"} if (kind_on and say_kind.get(oc) == "제안") else {})}
                             for oc, t in says.items()
                             if oc != b["char"]
                             and any(o["char"] == oc and (o["x"], o["y"]) in seen for o in bots)]
     by_char = {o["char"]: o for o in bots}
 
+    def proposal_to(m, b):
+        # D47: 이 말이 나를 세울 제안인가 — 지목(to=나) 또는 회의(대상 없음·all)
+        to = m.get("to")
+        return kind_on and m.get("kind") == "제안" and (to in (None, "all") or str(to) == str(b["char"]))
+
     def counts(m, b):
-        return (not SAYTO_ON) or G.addressed_to(m, b["char"])
+        # 대화 뼈(talk): 구판은 전부, 지목 판은 나를 지목·방송한 말만. 제안은 제 뼈(proposed/asked)로 따로 센다(D47)
+        if not SAYTO_ON:
+            return True
+        if kind_on and m.get("kind") == "제안":
+            return False
+        return G.addressed_to(m, b["char"])
     for b in bots:                         # 이야기를 나눔(D36 뼈) — 지목된 말마다 쌍당 틱당 1(엔진이 중복 제거)
         for m in inbox.get(b["char"], []):
             ob = by_char.get(m["from"])
             if ob is not None and b["alive"] and ob["alive"] and counts(m, b):
                 d.note_talk(b, ob)
+    fresh = {}                             # D47 제안 장부: 이번 틱 새로 접수된 제안 {받는 봇: [한 봇, …]} = 정지 후보
+    for b in bots:
+        if not (b["alive"] and not b["won"]):
+            continue
+        for m in inbox.get(b["char"], []):
+            ob = by_char.get(m["from"])
+            if ob is None or not ob["alive"] or not proposal_to(m, b):
+                continue
+            opened = open_props.setdefault(b["char"], {})
+            if m["from"] in opened:
+                continue                   # 응답 전 재제안 = 무효(들리기만 — 반복 방지)
+            opened[m["from"]] = d.turn
+            d.note_proposal(ob, b)         # 시도의 뼈 — 한 쪽 proposed, 받는 쪽 asked
+            fresh.setdefault(b["char"], []).append(m["from"])
+
+    def stops(m, b):
+        if not kind_on:
+            return counts(m, b)            # D41 판: 지목·방송이면 종류 무관 정지
+        return m["from"] in fresh.get(b["char"], []) and proposal_to(m, b)
     hails = {}                             # 말 걸림 정지(07-24 D24): 나를 부른 말이 있는 '걷던' 동료는 멈춰서
     for b in bots:                         #   다음 틱 결정권을 받는다(지목 판 — 혼잣말·남에게 한 말엔 안 선다)
         if b["alive"] and not b["won"] and inbox.get(b["char"]):
-            froms = [m["from"] for m in inbox[b["char"]] if counts(m, b)]
+            froms = [m["from"] for m in inbox[b["char"]] if stops(m, b)]
             got = d.hail_stop(b, froms) if froms else []
             if got:
                 hails[b["char"]] = got
     return inbox, hails
+
+
+def settle_proposals(d, bots, open_props, decisions):
+    """D47 반응 장부 — 제안을 받은 봇이 그 뒤 **첫 결정**을 내리면 제안은 닫힌다(유효기간 = 상대의 다음 결정까지, 파트너
+    "제안을 받았으니 판단을 새로 내리게 하자"). 그 결정에서 제안한 사람(또는 모두)에게 말했으면 '답함' 뼈(answered/replied) —
+    내용(수락·거절)은 안 읽는다. 작정 집행(src=plan)은 읽지 않았으니 열어 둔다. 반환 {받은 봇: {한 봇: 답함 여부}}(계측)."""
+    by = {b["char"]: b for b in bots}
+    out = {}
+    for c, dec in (decisions or {}).items():
+        if not dec or dec.get("src") == "plan" or dec.get("skipped"):
+            continue
+        opened = open_props.get(c)
+        if not opened:
+            continue
+        for a in list(opened):
+            answered = bool(dec.get("say")) and dec.get("to") in (a, "all")
+            if answered and by.get(a) is not None and by.get(c) is not None:
+                d.note_answer(by[a], by[c])
+            out.setdefault(c, {})[a] = answered
+            del opened[a]
+    return out
+
+
+def merge_inbox(pending, inbox, cap=PENDING_MAX):
+    """D47 배관(437987d): 보관된 말 + 이번 틱 말(오래된 것부터, 상한 cap — 새 말이 뒤라 남는다). 순수 함수."""
+    return {c: ((pending.get(c) or []) + (inbox.get(c) or []))[-cap:] for c in inbox}
+
+
+def keep_pending(inbox, decisions, cap=PENDING_MAX):
+    """D47 배관: 이번 틱 결정한 봇(작정 집행은 view() 를 안 불러 못 읽었으니 제외)은 읽었으니 비우고, 걷던 봇은 들린 말을 보관."""
+    out = {}
+    for c in inbox:
+        read = c in decisions and (decisions[c] or {}).get("src") != "plan"
+        out[c] = [] if read else list(inbox[c])[-cap:]
+    return out
 
 
 def arrive_cells(d, ax, ay, k):
@@ -711,6 +796,8 @@ def main():
             explore_dirs=EXPLORE_DIRS_ON,   # 방향 탐색 열거(D19 개정 4) 여부 — 메뉴(options)를 바꾸는 표현층 메타(rest 와 같은 급)
             sayto=SAYTO_ON,            # 지목(D41) 여부 — 말 걸림 정지·대화 뼈가 `to` 지목만 세는 사회층 물리 메타
                                        #   (정지 물리를 바꾸므로 리플레이·판 비교의 전제 — hail 과 같은 급)
+            say_kind=SAYKIND_ON,       # 말의 종류(D47) 여부 — 정지는 제안만·회의·반복 방지·반응 뼈(정지 물리 메타, sayto 와 같은 급)
+            pending=PENDING_ON,        # 들은 말 보관(D47 배관) 여부 — inbox 에 보관된 옛 말(turn 스탬프)이 섞이는 표현층 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
@@ -743,6 +830,8 @@ def main():
           % (roster, gmtag, DUNGEON_W, DUNGEON_H, DEPTHS, N_MON, N_TRAP, N_LURK, DUNGEON_SEED))
     inbox = {b["char"]: [] for b in bots}   # 봇별 받은편지함 (동료가 지난 턴 한 say).
                                             # 빈 dict 아닌 전 봇 키 — 스트림 tick.inbox 형태 고정(소비자 인덱싱)
+    pending = {b["char"]: [] for b in bots}   # D47 배관 — 걷는 동안 들린 말의 보관함(결정 때 함께 읽힘)
+    open_props = {}                         # D47 제안 장부 {받은 봇: {한 봇: turn}} — 상대의 다음 결정까지 열려 있다
     write_map(d, bots, 0)
     time.sleep(1.0)
 
@@ -750,12 +839,18 @@ def main():
     says = {}
     for turn in range(1, MAX_TURNS + 1):
         d.turn = turn       # 장부(D17) 목격 스탬프 — 판정 무관여, "언제 봤나"의 단일 원천
+        if PENDING_ON:                        # D47 배관: 걷는 동안 들은(안 세운) 말을 이번 결정에 함께 읽힌다
+            inbox = merge_inbox(pending, inbox)
         inbox_in = inbox    # 이번 틱 사고에 주입된 받은편지함 — 루프 끝에서 이름이 새 dict 로
                             # 재바인딩되므로(덮어씀) think_all 직전 참조를 잡아 스트림에 남긴다
         # order 없는 봇만 사고(자동보행 중인 봇은 LLM 0콜)
         decisions = brains.think_all(d, bots, inbox)
         # 사교 콜(채널 분리) — 걷는 중에 말을 들은 봇만. 행동은 못 바꾸고 say 만 낸다.
         social = brains.social_all(d, bots, inbox)
+        answers = settle_proposals(d, bots, open_props, decisions) if (SAYKIND_ON and SAYTO_ON) else {}
+                                             # D47 반응 장부: 제안 받은 봇의 첫 결정에서 닫힌다(답했으면 뼈)
+        if PENDING_ON:
+            pending = keep_pending(inbox, decisions)   # 읽은 봇은 비우고, 걷던 봇은 보관(D47 배관)
         for b in bots:
             b.pop("hailed", None)            # 표시 소비 — 한 번 들은 말로 두 번 열리지 않는다
         thinkers = "·".join(sorted(decisions)) if decisions else "-"
@@ -763,6 +858,7 @@ def main():
         turn_events = []
         says = dict(social)                  # 걸으면서 한 말도 같은 배달 규칙을 탄다
         say_to = {}                          # D41 지목 — 이번 틱 말의 상대(봇 번호 | all), 없으면 혼잣말
+        say_kind = {}                        # D47 말의 종류 — 잡담(기본)|제안. 사교 콜의 말은 종류 없음=잡담
         for b in bots:
             if not b["alive"] or b["won"]:
                 dec = decisions.get(b["char"])
@@ -786,8 +882,11 @@ def main():
                     says[b["char"]] = dec["say"]
                     if dec.get("to"):                     # D41 지목 — 말의 상대(봇 번호 | all)
                         say_to[b["char"]] = dec["to"]
-                    append(botlog[b["char"]], '        \U0001f4ac "%s"%s'
-                           % (dec["say"], (" → %s" % dec["to"]) if dec.get("to") else ""))
+                    if dec.get("say_kind"):               # D47 말의 종류(잡담|제안)
+                        say_kind[b["char"]] = dec["say_kind"]
+                    append(botlog[b["char"]], '        \U0001f4ac "%s"%s%s'
+                           % (dec["say"], (" → %s" % dec["to"]) if dec.get("to") else "",
+                              " [제안]" if dec.get("say_kind") == "제안" else ""))
                     event('   봇%s \U0001f4ac "%s"' % (b["char"], dec["say"]))
             res["job"] = b["job"]
             turn_events.append(res)
@@ -809,15 +908,16 @@ def main():
         turn_events += mon_events
 
         # 의논 핑퐁: say -> 동료가 *볼 수 있을 때만*(근접/시야) 다음 틱 받은편지함
-        inbox, hails = deliver_and_hail(d, bots, says, say_to)   # 사회층 한 틱(배달·대화 뼈·말 걸림 — D24·D36·D41)
+        inbox, hails = deliver_and_hail(d, bots, says, say_to, say_kind, open_props)   # 사회층 한 틱(배달·뼈·정지 — D24·D36·D41·D47)
         for c in hails:
-            event("   봇%s 멈칫 — 말을 걸어온 동료 쪽을 돌아본다" % c)
+            event("   봇%s 멈칫 — %s" % (c, "제안을 받고 돌아본다" if (SAYKIND_ON and SAYTO_ON) else "말을 걸어온 동료 쪽을 돌아본다"))
 
         # 스트림 tick — 빈 틱 포함 매 반복(turn 연속 불변식). GM 블록 *앞*에서 emit:
         # 여기서 즉시 직렬화되므로 GM 지연·이후 dict 변경과 독립(공유 오염 방어).
         # 스냅샷은 델타 아닌 전체 — 임의 틱 시킹용. visited 만 제외(파생: 스폰+틱별 봇 좌표 누적).
         tick_rec = {"turn": turn, "inbox": inbox_in, "decisions": decisions,
                     **({"hails": hails} if hails else {}),   # 말 걸림 정지 성사(D24) — additive 계측
+                    **({"answers": answers} if answers else {}),   # 제안 반응(D47) {받은 봇: {한 봇: 답함 여부}} — additive 계측
                     "events": turn_events,
                     "bots": [G.bot_snapshot(b) for b in bots],
                     "monsters": [m.as_dict() for m in d.monsters],
@@ -933,6 +1033,8 @@ def main():
             d.turn = turn
             bots = nb
             inbox = {b["char"]: [] for b in bots}   # 층 전이 = 대화 리셋(형태는 전 봇 키로 고정)
+            pending = {b["char"]: [] for b in bots}   # 보관함도 리셋(D47 배관)
+            open_props = {}                         # 제안 장부도 리셋(D47)
             lvl = {"turn": turn, **d.level_snapshot(),            # descend/ascend 직후 level 불변식
                    "party": [G.bot_snapshot(b) for b in bots]}
             sw.emit("level", **lvl)

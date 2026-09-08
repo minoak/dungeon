@@ -404,7 +404,12 @@ REST_MIN = 5             # 휴식 완료 하한: 만피여도 이만큼은 쉬�
 RELATION_K = 10          # 약한 뼈 합계가 이 배수를 넘는 결정에 한 줄을 청한다(매 스텝 평가 방지)
 FOUGHT_WINDOW = 5        # 같은 몹을 이 틱 안에 둘이 치면 '함께 싸움'(쌍·몹당 1회)
 BONES = {'talk': '이야기를 나눔', 'fought': '함께 싸움', 'waited': '나를 기다려 줌',
-         'rescued': '나를 구함', 'at_death': '죽을 때 곁에 있었음'}
+         'rescued': '나를 구함', 'at_death': '죽을 때 곁에 있었음',
+         # D47(2026-09-08, 파트너 "'말한다'를 목적에 맞게 쪼갠다 — 집계는 종류별로"): 제안은 잡담(talk)과 따로 센다.
+         # 시도와 반응이 짝 — proposed(내가 그에게 제안) ↔ asked(그가 내게 제안) / answered(그가 내 제안에 답함) ↔
+         # replied(내가 그의 제안에 답함). '답함'은 다음 결정에서 그 사람에게 말을 했다는 구조적 사실뿐(수락·거절은 안 읽는다).
+         # ⚠️ 라벨 문구는 세션 임시안 — 파트너 문장 대기.
+         'proposed': '제안함', 'asked': '제안받음', 'answered': '내 제안에 답함', 'replied': '제안에 답해 줌'}
 STRONG_BONES = ('rescued', 'at_death')   # 즉시 청한다 — 한 번이 열 번의 잡담보다 무겁다
 
 
@@ -3768,6 +3773,23 @@ class Dungeon:
         self._talked.add(key)
         self._bone(a, b['char'], 'talk')
         self._bone(b, a['char'], 'talk')
+
+    def note_proposal(self, a, b):
+        """제안(D47 뼈) — a 가 b 에게 제안한 틱에 1회: a 의 장부엔 proposed, b 의 장부엔 asked. 종류는 말한 캐릭터의
+        자기 신고(응답 say_kind)이고 여기는 세기만 한다(내용 무해석 — D5). 같은 제안의 반복(응답 전 재제안)은 러너가
+        거른다(open 장부) — 여기 오면 새 시도다."""
+        if not self.relations:
+            return
+        self._bone(a, b['char'], 'proposed')
+        self._bone(b, a['char'], 'asked')
+
+    def note_answer(self, a, b):
+        """제안에 답함(D47 뼈) — b 가 a 의 제안 뒤 첫 결정에서 a(또는 모두)에게 말했다: a 의 장부엔 answered, b 의 장부엔
+        replied. 답의 내용(수락/거절)은 안 읽는다 — 파트너 "시도했다고 수락까지 자동으로 정하지 않는다"."""
+        if not self.relations:
+            return
+        self._bone(a, b['char'], 'answered')
+        self._bone(b, a['char'], 'replied')
 
     def _remember_grave(self, bot, f):
         """묘 발견 기억(D22 개정) — 그 죽음을 이미 아는 봇(목격 fallen·발견 grave_found)은 무등재,
