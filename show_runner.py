@@ -172,13 +172,6 @@ OBJTAGS_ON = os.environ.get("DUNGEON_OBJTAGS", "1") != "0"   # 오브젝트 태�
 SAYTO_ON = os.environ.get("DUNGEON_SAYTO", "1") != "0"       # 지목(D41, 09-06) — 러너 기본 1. 말 걸림 정지·대화
                                                              #   뼈는 `to` 로 지목된 사람만(대상 없는 말=혼잣말:
                                                              #   들리지만 아무도 안 선다). off=구판(들리면 전원 정지)
-BROADCAST_QUIET = os.environ.get("DUNGEON_BROADCAST_QUIET", "1") != "0"   # 방송 무정지(D46, 09-08 파트너 "말 자체가 행동을
-                                                             #   막지는 않게") — 러너 기본 1. `to: all` 은 들리기만 하고 아무도
-                                                             #   안 세운다(지목만 세움). off=D41 판(all 도 전원 정지). 대화 뼈(D36)는
-                                                             #   그대로 all 도 센다(정지 규칙만 갈라짐).
-PENDING_ON = os.environ.get("DUNGEON_PENDING", "1") != "0"   # 들은 말 보관(D46 배관) — 러너 기본 1. 걷는 중 들린(안 세운) 말을 그
-                                                             #   봇의 다음 결정까지 보관해 함께 읽힌다. 옛 판: 결정 없는 틱의 말은 증발.
-PENDING_MAX = 6                                              #   보관 상한(오래된 것부터 바랜다 — D43 DIALOGUE_MAX 와 같은 자)
 FLOOR_ON = os.environ.get("DUNGEON_FLOOR", "1") != "0"       # 층 집계·결산(D40 ②, 09-06) — 러너 기본 1,
                                                              #   엔진 기본 0. "이 층에서 지금까지" 꼬리표 ×N +
                                                              #   층 전이 때 얼려 "지난 층"(캐릭터 한 줄 피기백)
@@ -562,8 +555,7 @@ def deliver_and_hail(d, bots, says, say_to):
     inbox = {}
     for b in bots:
         seen = d.visible_cells(b["x"], b["y"]) if b["alive"] else set()
-        inbox[b["char"]] = [{"from": oc, "text": t, "turn": d.turn,              # turn=말한 틱(D46 additive — 보관된 말의 나이)
-                             **({"to": say_to[oc]} if say_to.get(oc) else {})}
+        inbox[b["char"]] = [{"from": oc, "text": t, **({"to": say_to[oc]} if say_to.get(oc) else {})}
                             for oc, t in says.items()
                             if oc != b["char"]
                             and any(o["char"] == oc and (o["x"], o["y"]) in seen for o in bots)]
@@ -576,30 +568,14 @@ def deliver_and_hail(d, bots, says, say_to):
             ob = by_char.get(m["from"])
             if ob is not None and b["alive"] and ob["alive"] and counts(m, b):
                 d.note_talk(b, ob)
-    def stops(m, b):                       # 정지(D24)는 **지목만**(D46 방송 무정지, 09-08) — 뼈(counts)와 갈라진다:
-        return counts(m, b) and not (BROADCAST_QUIET and SAYTO_ON and m.get("to") == "all")   #   all=들리기만
     hails = {}                             # 말 걸림 정지(07-24 D24): 나를 부른 말이 있는 '걷던' 동료는 멈춰서
-    for b in bots:                         #   다음 틱 결정권을 받는다(지목 판 — 혼잣말·남에게 한 말·방송엔 안 선다)
+    for b in bots:                         #   다음 틱 결정권을 받는다(지목 판 — 혼잣말·남에게 한 말엔 안 선다)
         if b["alive"] and not b["won"] and inbox.get(b["char"]):
-            froms = [m["from"] for m in inbox[b["char"]] if stops(m, b)]
+            froms = [m["from"] for m in inbox[b["char"]] if counts(m, b)]
             got = d.hail_stop(b, froms) if froms else []
             if got:
                 hails[b["char"]] = got
     return inbox, hails
-
-
-def merge_inbox(pending, inbox, cap=PENDING_MAX):
-    """D46 배관(09-08): 보관된 말 + 이번 틱 말(오래된 것부터, 상한 cap — 새 말이 뒤라 남는다). 순수 함수(verify_sayto ⑨)."""
-    return {c: ((pending.get(c) or []) + (inbox.get(c) or []))[-cap:] for c in inbox}
-
-
-def keep_pending(inbox, decisions, cap=PENDING_MAX):
-    """D46 배관: 이번 틱 결정한 봇(작정 집행은 view() 를 안 불러 못 읽었으니 제외)은 읽었으니 비우고, 걷던 봇은 들린 말을 보관."""
-    out = {}
-    for c in inbox:
-        read = c in decisions and (decisions[c] or {}).get("src") != "plan"
-        out[c] = [] if read else list(inbox[c])[-cap:]
-    return out
 
 
 def arrive_cells(d, ax, ay, k):
@@ -735,8 +711,6 @@ def main():
             explore_dirs=EXPLORE_DIRS_ON,   # 방향 탐색 열거(D19 개정 4) 여부 — 메뉴(options)를 바꾸는 표현층 메타(rest 와 같은 급)
             sayto=SAYTO_ON,            # 지목(D41) 여부 — 말 걸림 정지·대화 뼈가 `to` 지목만 세는 사회층 물리 메타
                                        #   (정지 물리를 바꾸므로 리플레이·판 비교의 전제 — hail 과 같은 급)
-            broadcast_quiet=BROADCAST_QUIET,   # 방송 무정지(D46) 여부 — all 은 안 세움(정지 물리 메타, sayto 와 같은 급)
-            pending=PENDING_ON,        # 들은 말 보관(D46 배관) 여부 — inbox 에 보관된 옛 말(turn 스탬프)이 섞이는 표현층 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
@@ -769,7 +743,6 @@ def main():
           % (roster, gmtag, DUNGEON_W, DUNGEON_H, DEPTHS, N_MON, N_TRAP, N_LURK, DUNGEON_SEED))
     inbox = {b["char"]: [] for b in bots}   # 봇별 받은편지함 (동료가 지난 턴 한 say).
                                             # 빈 dict 아닌 전 봇 키 — 스트림 tick.inbox 형태 고정(소비자 인덱싱)
-    pending = {b["char"]: [] for b in bots}   # D46 배관 — 걷는 동안 들린 말의 보관함(결정 때 함께 읽힘)
     write_map(d, bots, 0)
     time.sleep(1.0)
 
@@ -777,16 +750,12 @@ def main():
     says = {}
     for turn in range(1, MAX_TURNS + 1):
         d.turn = turn       # 장부(D17) 목격 스탬프 — 판정 무관여, "언제 봤나"의 단일 원천
-        if PENDING_ON:                        # D46 배관: 걷는 동안 들은(안 세운) 말을 이번 결정에 함께 읽힌다
-            inbox = merge_inbox(pending, inbox)
         inbox_in = inbox    # 이번 틱 사고에 주입된 받은편지함 — 루프 끝에서 이름이 새 dict 로
                             # 재바인딩되므로(덮어씀) think_all 직전 참조를 잡아 스트림에 남긴다
         # order 없는 봇만 사고(자동보행 중인 봇은 LLM 0콜)
         decisions = brains.think_all(d, bots, inbox)
         # 사교 콜(채널 분리) — 걷는 중에 말을 들은 봇만. 행동은 못 바꾸고 say 만 낸다.
         social = brains.social_all(d, bots, inbox)
-        if PENDING_ON:
-            pending = keep_pending(inbox, decisions)   # 읽은 봇은 비우고, 걷던 봇은 보관(D46)
         for b in bots:
             b.pop("hailed", None)            # 표시 소비 — 한 번 들은 말로 두 번 열리지 않는다
         thinkers = "·".join(sorted(decisions)) if decisions else "-"
@@ -964,7 +933,6 @@ def main():
             d.turn = turn
             bots = nb
             inbox = {b["char"]: [] for b in bots}   # 층 전이 = 대화 리셋(형태는 전 봇 키로 고정)
-            pending = {b["char"]: [] for b in bots}   # 보관함도 리셋(D46)
             lvl = {"turn": turn, **d.level_snapshot(),            # descend/ascend 직후 level 불변식
                    "party": [G.bot_snapshot(b) for b in bots]}
             sw.emit("level", **lvl)

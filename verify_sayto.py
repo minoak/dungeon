@@ -97,32 +97,10 @@ check("④ 대상 없음: 배달 O(1·3) · 정지 0 · 뼈 0",
       inbox["1"] and inbox["3"] and "to" not in inbox["1"][0] and hails == {}
       and bots[0].get("order") == "exit" and talk_n(bots[0], "2") == 0 and talk_n(bots[2], "2") == 0)
 
-print("── ⑤ all (D41 판 = 방송 무정지 off)")
-show_runner.BROADCAST_QUIET = False
+print("── ⑤ all")
 d, bots = scene()
 inbox, hails = show_runner.deliver_and_hail(d, bots, {"2": "다들 모여!"}, {"2": "all"})
-check("⑤ all(off): 시야 안 전원 정지·뼈", hails == {"1": ["2"], "3": ["2"]} and talk_n(bots[0], "2") == 1 and talk_n(bots[2], "2") == 1)
-show_runner.BROADCAST_QUIET = True
-print("── ⑧ 방송 무정지(D46, 09-08 파트너 \"말 자체가 행동을 막지는 않게\") — 러너 기본")
-d, bots = scene()
-inbox, hails = show_runner.deliver_and_hail(d, bots, {"2": "다들 모여!"}, {"2": "all"})
-check("⑧ all(기본): 배달 O(1·3, turn 스탬프) · 정지 0 · 뼈는 그대로(1·3)",
-      inbox["1"] and inbox["3"] and inbox["1"][0].get("turn") == d.turn and hails == {}
-      and bots[0].get("order") == "exit" and talk_n(bots[0], "2") == 1 and talk_n(bots[2], "2") == 1)
-d, bots = scene()
-inbox, hails = show_runner.deliver_and_hail(d, bots, {"2": "두란, 멈춰"}, {"2": "1"})
-check("⑧ 지목은 여전히 세운다(1만)", hails == {"1": ["2"]} and bots[2].get("order") == "exit")
-print("── ⑨ 배관(D46): 걷는 동안 들린 말은 다음 결정까지 보관")
-m_old = {"from": "2", "text": "아까 말", "to": "all", "turn": 3}
-m_new = {"from": "3", "text": "지금 말", "to": "1", "turn": 5}
-m_x = {"from": "1", "text": "걷는 애에게", "to": "all", "turn": 5}
-merged = show_runner.merge_inbox({"1": [m_old]}, {"1": [m_new], "2": [m_x], "3": []})
-check("⑨ 병합: 보관된 말 + 이번 말(오래된 것부터), 없는 봇은 그대로",
-      merged == {"1": [m_old, m_new], "2": [m_x], "3": []})
-kept = show_runner.keep_pending(merged, {"1": {"src": "haiku"}, "2": {"src": "plan"}})
-check("⑨ 소비: 결정한 봇은 비움 · 작정 집행 봇(안 읽음)·걷던 봇은 보관", kept == {"1": [], "2": [m_x], "3": []})
-check("⑨ 상한: 오래된 것부터 바랜다(cap 2)",
-      show_runner.merge_inbox({"1": [m_old, m_old, m_old]}, {"1": [m_new]}, cap=2)["1"] == [m_old, m_new])
+check("⑤ all: 시야 안 전원 정지·뼈", hails == {"1": ["2"], "3": ["2"]} and talk_n(bots[0], "2") == 1 and talk_n(bots[2], "2") == 1)
 
 print("── ⑥ 스위치 off = 구판")
 show_runner.SAYTO_ON = False
@@ -143,10 +121,6 @@ txt = brains._wire(base, NAMES)
 check("⑦ wire: (너에게)/(모두에게)/(혼잣말)/(피른에게) 표식",
       '카야(봇2): "이쪽!" (너에게)' in txt and '피른(봇3): "모여" (모두에게)' in txt
       and '카야(봇2): "어둡네" (혼잣말)' in txt and '카야(봇2): "피른아" (피른(봇3)에게)' in txt)
-txt_old = brains._wire({**base, "turn": 9, "messages": [{"from": "2", "text": "아까", "to": "all", "turn": 5},
-                                                        {"from": "3", "text": "방금", "to": "1", "to_me": True, "turn": 8}]}, NAMES)
-check("⑦ 보관된 말은 '— N턴 전' 병기, 지난 턴 말은 그대로(D46)",
-      '카야(봇2): "아까" (모두에게) — 4턴 전' in txt_old and '피른(봇3): "방금" (너에게)\n' in txt_old + "\n")
 brains._call_claude = lambda prompt, model="haiku": '{"reason": "x", "choice": 1, "say": "카야, 이리 와", "to": "카야"}'
 dt, botst = scene()
 for b in botst:
