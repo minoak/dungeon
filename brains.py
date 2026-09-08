@@ -416,7 +416,7 @@ def _sheet(bot, roster=None):
     roster = 파티 봇 목록(관계·동료를 이름으로 풀이). 선택 필드(name/speech/goal/relationships)는
     있을 때만 줄이 생긴다 — 엔진 판정과 무관한 프롬프트 전용."""
     nm = bot.get("name") or ("모험가 %s" % bot.get("char", "?"))
-    lines = ["## 너의 캐릭터",
+    lines = ["# 시트 — 너는 누구인가",   # (09-08 D44) 갈래 머리글 — 파트너 "시트는 나는 누구인가를 말해"
              "- 번호 %s, 이름 **%s** — %s (%s)"
              % (bot.get("char", "?"), nm, bot.get("job", "모험가"), bot.get("sex", "")),
              "- 성격: %s" % bot.get("persona", "")]
@@ -453,7 +453,8 @@ def _sheet(bot, roster=None):
             lines.append("- %s(봇%s)와의 관계: %s (%s)" % (names[oc], oc, e["line"], src))
         else:
             lines.append("- %s(봇%s)와의 관계: %s" % (names[oc], oc, rel[oc]))
-    lines.append("- 시트의 성격·말투·목표·관계대로 판단하고 말하라.")
+    # (09-08 D44) "시트의 성격·말투·목표·관계대로 판단하고 말하라" 끝줄은 뺐다 — 지침 첫 절(파트너 역할극 문장 "너는 위 시트에
+    #   적힌 인물로서…")과 같은 말. 지침 안의 두 번(동료·혼자다 절)은 문맥 문장에 붙어 있어 존치.
     return "\n".join(lines) + "\n"
 
 
@@ -861,7 +862,8 @@ _WIRE_KEYS = frozenset((
     "depth", "turn",
     "zone", "known", "witnessed", "memories", "dry", "last", "trail", "floor", "floors", "history", "dialogue",
     "order", "ascii_view", "legend",
-    "sights", "party", "options", "messages", "intent", "notes",
+    "sights", "party", "options", "messages", "intent", "notes",   # party: 09-08 D44 뒤 wire 는 안 그린다(명단 폐지) —
+                                                                  #   알려진 키로 남겨 fallback 덤프 방지
     "status",  # 상태 태그(D34): 아래 _wire "## 네 몸 상태" 절이 그린다
     "relations",   # 관계 장부(D36): 뼈 횟수·초대는 _wire, 살(한 줄)은 _sheet 가 그린다
     "exhausted",   # 탐색 소진(D19 개정 09-06): '탐색' 어휘 대신 사실 한 줄
@@ -905,9 +907,11 @@ def _wire(obs, names=None):
         return "방금" if d <= 0 else "%d턴 전에" % d
 
     L = ["## 네 상태"]
-    L.append("- 너는 %s(%s) — HP %d/%d, 힘 +%d, 민첩 +%d, 모은 보물 %d개%s — 지금 %d층"
-             % (obs.get("job", "?"), obs.get("sex", ""), obs.get("hp", 0), obs.get("maxhp", 0),
-                obs.get("str", 0), obs.get("dex", 0), obs.get("inventory", 0),
+    M = []          # (09-08 D44) 기억 절 모음 — 관측(L)과 따로 모아 조립 때 갈래 순서를 정한다
+    # (09-08 D44) 직업·성별·힘·민첩은 '나는 누구'라 시트만 말한다 — 여기는 지금의 몸(관측)만. 파트너 "시트는 나는 누구인가를,
+    #   관측은 뭘 보고 있는지를". HP 는 x/y 그대로(비율=위급 감각의 재료 — 최대치가 시트에 있어도 읽는 값은 관측이다).
+    L.append("- HP %d/%d, 모은 보물 %d개%s — 지금 %d층"
+             % (obs.get("hp", 0), obs.get("maxhp", 0), obs.get("inventory", 0),
                 (", 회복 물약 %d병" % obs["potions"]) if obs.get("potions") else "",
                 obs.get("depth", 1)))
     if obs.get("town"):
@@ -1068,36 +1072,27 @@ def _wire(obs, names=None):
         if len(L) == n0:
             L.append("- (아무것도 안 보인다)")
 
-    pt = obs.get("party") or []
-    if pt:
-        L += ["", "## 파티 명단"]
-        for p in pt:
-            if not p.get("alive"):
-                st = "죽었다 — 이번 원정에는 돌아오지 않는다"   # D22 개정(09-06): 확정성 전달('구하러 올게' 유령 차단)
-            elif p.get("won"):
-                st = "먼저 내려갔다"
-            elif p.get("visible"):
-                st = "시야 안(위 목록에 있다)"
-            else:
-                st = "시야 밖 — 말은 안 닿는다. 어디 있는지 모른다(마지막 본 자리만 안다)"   # D18 개정(09-06)
-            L.append("- %s, %s — %s" % (nm(p.get("char", "?")), p.get("job", "?"), st))
+    # (09-08 D44, 파트너 확정) '## 파티 명단' 절은 폐지 — 보이는 동료는 관측(장소)이, 안 보이는 동료는 기억(마지막 본 자리·리모컨)이,
+    #   죽음은 기억(목격 D18·묘 발견 D22)이 말한다. 명단이 혼자 갖던 '못 본 죽음·먼저 내려감'(시야-온리의 유일한 전지 창,
+    #   09-06 D22 개정의 유령 차단용)도 뺐다 — 못 본 죽음을 모르는 건 시야-온리대로면 맞는 행동이다. obs.party 는 스트림·BYO
+    #   계약이라 그대로(_WIRE_KEYS 에 남겨 fallback 덤프 방지). 계단 하강은 엔진이 산 사람만 센다.
 
     rels = obs.get("relations") or []
     if rels:                                # 관계 장부(D36) — 뼈 횟수(사실). 살은 시트에 산다
-        L += ["", "## 동료와 겪은 일 (횟수 — 세계가 센 사실)"]
+        M += ["", "## 동료와 겪은 일 (횟수 — 세계가 센 사실)"]
         for r in rels:
             bits = ["%s ×%d%s" % (b_.get("label", b_.get("kind", "?")), b_.get("n", 0),
                                  (" (%s)" % ago(b_["last"])) if b_.get("last") is not None else "")
                     for b_ in r.get("bones", [])]
-            L.append("- %s: %s" % (nm(r.get("char", "?")), ", ".join(bits) if bits else "아직 없음"))
+            M.append("- %s: %s" % (nm(r.get("char", "?")), ", ".join(bits) if bits else "아직 없음"))
 
     k = obs.get("known")
     if k and (k.get("statics") or k.get("last_seen") or k.get("zones")):
-        L += ["", "## 네가 기억하는 것 (이 층에서 직접 봄 — 지금은 시야 밖)"]
+        M += ["", "## 네가 기억하는 것 (이 층에서 직접 봄 — 지금은 시야 밖)"]
         def far(e):                          # 09-06: 얼마나 먼지(방위+직선 칸) — 문(D19)과 같은 자, 좌표 아님
             return (", %s %d칸" % (e["bearing"], e["dist"])) if e.get("bearing") and e.get("dist") is not None else ""
         for e in k.get("statics", []):
-            L.append("- %s%s — %s에서 %s 봄%s%s"
+            M.append("- %s%s — %s에서 %s 봄%s%s"
                      % (e.get("name", "?"),
                         (" %s" % e["id"]) if e.get("id") else "",
                         e.get("zone", "?"), ago(e.get("turn", 0)), far(e),
@@ -1105,11 +1100,11 @@ def _wire(obs, names=None):
         for e in k.get("last_seen", []):
             who = nm(e["char"]) if e.get("char") else (
                 "%s %s" % (e.get("kind", "?"), e.get("id", "?")))
-            L.append("- %s — %s에서 %s 마지막으로 봄%s (지금도 거기 있단 보장은 없다)"
+            M.append("- %s — %s에서 %s 마지막으로 봄%s (지금도 거기 있단 보장은 없다)"
                      % (who, e.get("zone", "?"), ago(e.get("turn", 0)), far(e)))
         zs = k.get("zones", [])
         if zs:
-            L.append("- 가 본 방: " + ", ".join(x.get("id", "?") for x in zs))
+            M.append("- 가 본 방: " + ", ".join(x.get("id", "?") for x in zs))
 
     hist = obs.get("history") or []          # D38 개정 2-b(09-07 밤): 최근 **선택**들만 한 줄(오래된 것부터 직전까지, 작정·폴백
                                               #   표식). 엔진 결과는 안 싣는다 — 반복인지는 캐릭터가 읽는다(사실만·해석 없음)
@@ -1117,9 +1112,9 @@ def _wire(obs, names=None):
     dry = obs.get("dry")
     trail = obs.get("trail") or []            # D38 궤적 — 마지막 결정 이후 일어난 일(순서). 1건이면 last 와 같다
     if it or la or wit or dry or trail or hist:
-        L += ["", "## 네 직전 판단과 그 결과 (네 자신의 기억)"]
+        M += ["", "## 네 직전 판단과 그 결과 (네 자신의 기억)"]
         if hist:
-            L.append("- 최근 판단(오래된 것부터, 직전까지): " + " · ".join(_hist_item(h) for h in hist))
+            M.append("- 최근 판단(오래된 것부터, 직전까지): " + " · ".join(_hist_item(h) for h in hist))
         if it:
             line = "- 직전 판단%s: %s" % (("(t%d)" % it["turn"]) if it.get("turn") is not None else "",
                                           it.get("type", "?"))    # (tN) = D38 궤적 판만(얼마나 전의 판단인지)
@@ -1127,65 +1122,65 @@ def _wire(obs, names=None):
                 line += " %s" % G.place_word(it["target"], "decide")   # 칸 핑 '@x,y' → 사람 말(09-08)
             if it.get("reason"):
                 line += ' — 이유: "%s"' % it["reason"]
-            L.append(line)
+            M.append(line)
             if it.get("say"):
-                L.append('  그때 동료에게 한 말: "%s"' % it["say"])
+                M.append('  그때 동료에게 한 말: "%s"' % it["say"])
         if len(trail) > 1:                    # 다건 = 꼬리표 체인(D40). 출혈은 꼬리표가 실어 별도 줄 없음
-            L.append("- 그 뒤 일어난 일: " + _trail_prose(trail, names))
+            M.append("- 그 뒤 일어난 일: " + _trail_prose(trail, names))
         elif trail:                           # 1건 — 궤적 판은 1건도 꼬리표(파트너 확정 "꼬리표식으로 바꾸자")
-            L.append("- 그 결과: " + _trail_prose(trail, names))
+            M.append("- 그 결과: " + _trail_prose(trail, names))
         elif la:
-            L.append("- 그 결과: %s" % _last_prose(la, names))
+            M.append("- 그 결과: %s" % _last_prose(la, names))
             if la.get("bleed"):                   # 출혈(D34) — 걷는 동안 흘린 피(사실만)
-                L.append("- 걷는 동안 출혈로 피를 흘렸다 — 남은 HP %d" % la["bleed"].get("hp", 0))
+                M.append("- 걷는 동안 출혈로 피를 흘렸다 — 남은 HP %d" % la["bleed"].get("hp", 0))
         for w in (wit or []):
-            L.append("- 네 눈으로 봤다: " + _witness_prose(w))
+            M.append("- 네 눈으로 봤다: " + _witness_prose(w))
         if dry:                       # 무발견 신호(07-24) — 관찰 사실만(질문·조향 금지), 도달 1회
-            L.append("- 한참을 걸었는데 새로 보이는 것이 없다 — 아는 자리만 이어진다")
+            M.append("- 한참을 걸었는데 새로 보이는 것이 없다 — 아는 자리만 이어진다")
 
     fl = obs.get("floor")                   # D40 ② 층 집계 — 세계가 센 횟수(숫자만 늘지 줄은 안 는다)
     if fl and (fl.get("n") or fl.get("w")):
-        L += ["", "## 이 층에서 지금까지 (t%s 진입, %d틱째 — 세계가 센 횟수)"
+        M += ["", "## 이 층에서 지금까지 (t%s 진입, %d틱째 — 세계가 센 횟수)"
               % (fl.get("since", "?"), int(fl.get("turns") or 0))]
         if fl.get("n"):
-            L.append("- " + _floor_counts(fl["n"]))
+            M.append("- " + _floor_counts(fl["n"]))
         if fl.get("w"):
-            L.append("- 목격: " + _floor_counts(fl["w"]))
+            M.append("- 목격: " + _floor_counts(fl["w"]))
         if fl.get("rooms"):
-            L.append("- 가 본 곳: 방·통로 %d" % int(fl["rooms"]))
+            M.append("- 가 본 곳: 방·통로 %d" % int(fl["rooms"]))
     fls = obs.get("floors")                 # D40 ② 지난 층 결산 — 뼈(횟수)+살(네가 남긴 한 줄)
     if fls:
-        L += ["", "## 지난 층 (결산 — 세계가 센 횟수 + 네가 남긴 한 줄)"]
+        M += ["", "## 지난 층 (결산 — 세계가 센 횟수 + 네가 남긴 한 줄)"]
         for f in fls:
             body = _floor_counts(f.get("n") or {}) or "특별한 일 없음"
             if f.get("w"):
                 body += " — 목격: " + _floor_counts(f["w"])
             if f.get("line"):
                 body += ' — "%s"' % f["line"]
-            L.append("- %s (t%d~t%d, %d틱): %s" % (_floor_name(f.get("depth")), int(f.get("t0") or 0),
+            M.append("- %s (t%d~t%d, %d틱): %s" % (_floor_name(f.get("depth")), int(f.get("t0") or 0),
                                                   int(f.get("t1") or 0),
                                                   int(f.get("t1") or 0) - int(f.get("t0") or 0), body))
         last = fls[-1]
         if last.get("invite") and not last.get("line"):
-            L.append("- 방금 떠난 %s을(를) 한 줄로 남기려면 응답 JSON 의 `floor_line` 필드"
+            M.append("- 방금 떠난 %s을(를) 한 줄로 남기려면 응답 JSON 의 `floor_line` 필드"
                      " (선택, 80자 — 다음 층들에서도 다시 본다)" % _floor_name(last.get("depth")))
 
     nts = obs.get("notes")
     if nts:                                 # D26 의미 기억 — 스스로 남긴 한 줄들(주관, 엔진 불가침)
-        L += ["", "## 네가 기억해두기로 한 것 (스스로 남긴 한 줄 — 오래된 것부터 바랜다)"]
+        M += ["", "## 네가 기억해두기로 한 것 (스스로 남긴 한 줄 — 오래된 것부터 바랜다)"]
         for s2 in nts:
-            L.append('- "%s"' % s2)
+            M.append('- "%s"' % s2)
 
     mem = obs.get("memories")
     if mem:                                 # D22 기억층 — 휘발 0: 매 결정 다시 제시된다
-        L += ["", "## 잊지 못할 일 (네가 목격하거나 알게 된 중대사)"]
+        M += ["", "## 잊지 못할 일 (네가 목격하거나 알게 된 중대사)"]
         for e in mem:
             nm_ = "%s(봇%s)" % (e.get("name", "동료"), e.get("char", "?"))
             if e.get("kind") == "grave_found":      # 묘 발견 — 죽음을 못 봤어도 묘를 본 순간 안다
-                L.append("- [%s의 죽음을 발견] %s — %s에서 (%s)"
+                M.append("- [%s의 죽음을 발견] %s — %s에서 (%s)"
                          % (nm_, e.get("grave", "묘"), e.get("zone", "?"), ago(e.get("turn", 0))))
             else:                                   # 목격 — 사인·장소(D22 기억층 v0=fallen)
-                L.append("- [%s의 죽음을 목격] %s 죽었다 — %s에서 (%s)"
+                M.append("- [%s의 죽음을 목격] %s 죽었다 — %s에서 (%s)"
                          % (nm_, _by_phrase(e), e.get("zone", "?"), ago(e.get("turn", 0))))
 
     inv = next((r for r in (obs.get("relations") or []) if r.get("invite")), None)
@@ -1194,19 +1189,19 @@ def _wire(obs, names=None):
         why = {"rescued": "%s가 방금 너를 구했다" % who_,
                "at_death": "%s가 죽을 때 네가 곁에 있었다" % who_,
                }.get(inv["invite"], "%s와 그간 겪은 일이 쌓였다" % who_)
-        L += ["", "## %s에 대해 남길 한 줄 (선택)" % who_,
+        M += ["", "## %s에 대해 남길 한 줄 (선택)" % who_,
               "- %s. %s에 대한 네 생각을 한 줄로 고쳐 써도 좋다 — 응답 JSON 의 `relation_line` 필드"
               " (안 써도 된다. 쓰면 이전 줄을 덮어 쓴다)" % (why, who_)]
         if inv.get("line"):
-            L.append('- 지금까지의 한 줄: "%s" (%s)'
+            M.append('- 지금까지의 한 줄: "%s" (%s)'
                      % (inv["line"], "시트" if inv.get("line_src") == "sheet"
                         else "네가 %s턴에 남긴 말" % inv.get("line_turn", "?")))
 
     dlg = obs.get("dialogue") or []           # D43 대화 기억(09-07): 지난 결정까지 들은 말과 내가 한 말 — 오래된 것부터.
     if dlg:                                   #   이번 턴 새로 들린 말은 아래 절(중복 없음 — 장부엔 다음 결정부터 실린다)
-        L += ["", "## 최근 대화 (오래된 것부터 — 이번 턴에 새로 들린 말은 아래 절에)"]
+        M += ["", "## 최근 대화 (오래된 것부터 — 이번 턴에 새로 들린 말은 관측의 '동료가 한 말'에)"]
         for m in dlg:
-            L.append('- %s (t%s): "%s"' % (_dlg_who(m, nm), m.get("turn", "?"), m.get("text", "")))
+            M.append('- %s (t%s): "%s"' % (_dlg_who(m, nm), m.get("turn", "?"), m.get("text", "")))
     ms = obs.get("messages")
     if ms:
         L += ["", "## 동료가 한 말 (지난 턴 — 들린 것 전부. 너를 부른 말만 걸음이 멈췄다)"]
@@ -1216,11 +1211,19 @@ def _wire(obs, names=None):
                    else (" (%s에게)" % nm(to)) if to else " (혼잣말)")
             L.append('- %s: "%s"%s' % (nm(m.get("from", "?")), m.get("text", ""), tag))
 
+    # ── 조립(09-08 D44, 파트너 네 갈래 "시트=나는 누구인가 · 관측=뭘 보고 있나 · 기억=무엇을 기억하나 · 선택지=지금 주어진 것"):
+    #   시트·지침은 claude_brain 이 앞에 붙이고 선택지는 뒤에 붙인다. 여기서는 **기억 → 관측** 순 — 내 선택(임시 가정): 지금 보고
+    #   들은 것(장소·동료가 한 말)이 선택지 바로 위에 오도록(과거→현재→행동, D41 지목 응답이 '동료가 한 말' 인접성에 기대 왔다).
+    #   파트너 열거는 관측→기억 — 뒤집으려면 아래 두 덩이만 바꾼다. 기억이 비면(첫 결정) 머리글도 없다.
+    out = []
+    if M:
+        out += ["# 기억 — 무엇을 기억하나"] + M + [""]
+    out += ["# 관측 — 지금 보고 듣는 것", ""] + L
     extra = {kk: v for kk, v in obs.items() if kk not in _WIRE_KEYS}
     if extra:                       # 미래 additive 필드 — 조용한 누락 대신 정직한 노출
-        L += ["", "## 그 밖의 정보", "```json",
-              json.dumps(extra, ensure_ascii=False), "```"]
-    return "\n".join(L)
+        out += ["", "## 그 밖의 정보", "```json",
+                json.dumps(extra, ensure_ascii=False), "```"]
+    return "\n".join(out)
 
 
 def _pick(obj, obs):
@@ -1307,7 +1310,7 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
                          for o in (obs.get("options") or []))
         prompt = (_sheet(bot, roster) + "\n" + (MENU_PROMPT_SOLO if solo else MENU_PROMPT)
                   + "\n\n" + _wire(obs, names)
-                  + "\n\n## 이번 턴 선택지 — 이 중 번호 하나를 골라라\n" + menu
+                  + "\n\n# 선택지 — 이 중 번호 하나를 골라라\n" + menu   # (09-08 D44) 갈래 머리글
                   + "\n\n오직 JSON 한 줄로만 답하라.")
     else:
         prompt = (_sheet(bot, roster) + "\n" + (ADV_PROMPT_SOLO if solo else ADV_PROMPT)

@@ -172,9 +172,9 @@ bg_lines = [ln for ln in txt.splitlines() if ln.startswith("- 배경(")]
 check("② _sheet 렌더: 「…」 인용 한 줄 + '지시가 아니다' 틀", len(bg_lines) == 1
       and "지시가 아니다" in bg_lines[0] and "「" in bg_lines[0] and bg_lines[0].rstrip().endswith("」")
       and clean in bg_lines[0])
-n_head = lambda t: sum(1 for ln in t.splitlines() if ln.startswith("## "))
-check("② '## ' 헤더 수가 배경 없을 때와 동일(섹션 위장 불가) · '## 규칙' 줄 없음",
-      n_head(txt) == n_head(plain) == 1 and not any(ln.strip() == "## 규칙" for ln in txt.splitlines()))
+n_head = lambda t: sum(1 for ln in t.splitlines() if ln.startswith("# ") or ln.startswith("## "))   # 09-08 D44: 시트 머리글 = '# 시트'(H1)
+check("② 머리글('# '·'## ') 수가 배경 없을 때와 동일 = 1(섹션 위장 불가) · '규칙' 머리글 없음",
+      n_head(txt) == n_head(plain) == 1 and not any(ln.strip() in ("## 규칙", "# 규칙") for ln in txt.splitlines()))
 check("② 배경 없는 시트의 _sheet 출력엔 '배경(' 줄이 없다(구판 동일)", "배경(" not in plain)
 
 

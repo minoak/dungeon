@@ -259,6 +259,35 @@ def coord_leak_checks():
           and G.event_tags({"type": "walk", "target": "f1", "result": "arrived"}) == [("arrive", "도착", "f1 곁")])
 
 
+def layout_checks():
+    """⑨ (09-08 D44, 파트너 네 갈래) 시트(나는 누구) · 기억(무엇을 기억하나) · 관측(지금 보고 듣는 것) · 선택지. 파티 명단 절 폐지,
+    '네 상태'는 시트 재료(직업·성별·힘·민첩) 없이 지금의 몸만, 기억이 비면 머리글도 없다, 시트 머리글·동료 줄·끝줄."""
+    obs, bot = fresh_obs()
+    o = copy.deepcopy(obs)
+    o["party"] = [{"char": "2", "job": "도적", "alive": False, "won": False, "visible": False},
+                  {"char": "3", "job": "궁수", "alive": True, "won": False, "visible": False}]
+    o["history"] = [{"turn": 3, "type": "explore", "target": "W", "src": "haiku"}]
+    o["messages"] = [{"from": "3", "text": "두란, 이쪽이야", "to": "1", "to_me": True}]
+    w = brains._wire(o, NAMES)
+    check("⑨ 파티 명단 절 없음(죽은 동료도 명단으로는 안 알린다)",
+          "## 파티 명단" not in w and "돌아오지 않는다" not in w)
+    st = [l for l in w.split("\n") if l.startswith("- HP ")]
+    check("⑨ '네 상태'=지금의 몸만(HP·보물·층 — 직업·성별·힘·민첩 없음)",
+          len(st) == 1 and "전사" not in st[0] and "힘 +" not in st[0] and "층" in st[0])
+    ig, io_ = w.find("# 기억 — 무엇을 기억하나"), w.find("# 관측 — 지금 보고 듣는 것")
+    check("⑨ 갈래 순서: 기억 → 관측(선택지는 claude_brain 이 뒤에 붙인다)", 0 <= ig < io_ and "# 선택지" not in w)
+    check("⑨ '동료가 한 말'은 관측 쪽(기억 뒤 — 선택지 바로 위 자리)", w.find("## 동료가 한 말") > io_)
+    drop = ("history", "intent", "known", "relations", "notes", "dialogue", "memories", "floor", "floors", "trail",
+            "witnessed", "dry")
+    w2 = brains._wire({k: v for k, v in o.items() if k not in drop}, NAMES)
+    check("⑨ 기억할 게 없으면 '# 기억' 머리글도 없다 — 관측부터 시작", "# 기억" not in w2 and w2.startswith("# 관측"))
+    roster = [dict(bot, name="두란"), dict(bot, char="2", name="카야")]
+    sheet = brains._sheet(dict(bot, name="두란"), roster)
+    check("⑨ 시트: 머리글 '# 시트 — 너는 누구인가' + 동료 줄 유지 + '시트대로' 끝줄 없음",
+          sheet.startswith("# 시트 — 너는 누구인가") and "- 동료: 카야(봇2)" in sheet
+          and "시트의 성격·말투·목표·관계대로" not in sheet)
+
+
 def prompt_checks():
     obs, bot = fresh_obs()
     roster = [dict(bot, name="두란")]
@@ -284,12 +313,12 @@ def prompt_checks():
         brains.MENU = save_menu
     m, f = got["m"], got["f"]
     check("⑦ 메뉴판: obs JSON 덤프 부재(```json 없음)", "```json" not in m)
-    check("⑦ 메뉴판: 번호 목록 존재", "## 이번 턴 선택지" in m
+    check("⑦ 메뉴판: 번호 목록 존재", "# 선택지 — 이 중 번호 하나를 골라라" in m
           and re.search(r"^1\. ", m, re.M) is not None)
     check("⑦ 메뉴판: 문장 obs 존재(상태·시야 섹션)",
           "## 네 상태" in m and "## 지금 보이는 것" in m)
     check("⑦ 자유서술판: obs JSON 덤프 부재 + 선택지 섹션 부재",
-          "```json" not in f and "## 이번 턴 선택지" not in f)
+          "```json" not in f and "# 선택지" not in f)
 
 
 def main():
@@ -308,6 +337,7 @@ def main():
     synth_checks()
     switch_checks()
     coord_leak_checks()
+    layout_checks()
     prompt_checks()
     print("=" * 44)
     if C.failed:

@@ -606,8 +606,8 @@ check("⑭ 재진입·재관측 무중복", len(b2.get('memories') or []) == 1)
 wire = brains._wire(o, {'1': '두란', '2': '카야', '3': '피른'})
 check("⑭ 렌더 '[두란(봇1)의 죽음을 발견] 두란의 묘 — …에서'(파트너 문장)",
       '[두란(봇1)의 죽음을 발견] 두란의 묘' in wire)
-check("⑭ 파티 명단 '죽었다 — 이번 원정에는 돌아오지 않는다'",
-      '두란(봇1), 전사 — 죽었다 — 이번 원정에는 돌아오지 않는다' in wire)
+check("⑭ (09-08 D44) 파티 명단 폐지 — 죽음은 명단이 아니라 기억(묘 발견·목격)으로만 안다",
+      '## 파티 명단' not in wire and '돌아오지 않는다' not in wire and '죽음을 발견' in wire)
 m3 = b3.get('memories') or []
 d.view(b3, bots)
 check("⑭ 목격자(피른)는 fallen 만 — 묘를 봐도 grave_found 무등재(한 죽음은 한 줄)",
