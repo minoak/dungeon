@@ -215,20 +215,48 @@ def fresh_obs():
 def switch_checks():
     obs, _ = fresh_obs()
     base = brains._wire(obs, NAMES)
-    check("④ 기본(ascii 끔·pos 켬 — 07-11 프로브 판정): 그림 부재+좌표 존재",
-          "## 주변 그림" not in base and "```" not in base and "- 좌표:" in base)
+    check("④ 기본(ascii 끔 07-11 판정·pos 끔 09-08 판정): 그림 부재+좌표 줄 부재",
+          "## 주변 그림" not in base and "```" not in base and "- 좌표:" not in base)
     sa, sp = brains.OBS_ASCII, brains.OBS_POS
     try:
         brains.OBS_ASCII = True
         with_a = brains._wire(obs, NAMES)
         check("④ OBS_ASCII=1: 그림 섹션 존재(스위치 살아있음)",
-              "## 주변 그림" in with_a and "- 좌표:" in with_a)
+              "## 주변 그림" in with_a and "- 좌표:" not in with_a)
         brains.OBS_ASCII = False
-        brains.OBS_POS = False
-        no_p = brains._wire(obs, NAMES)
-        check("④ OBS_POS=0: 좌표 줄 부재", "- 좌표:" not in no_p)
+        brains.OBS_POS = True
+        with_p = brains._wire(obs, NAMES)
+        check("④ OBS_POS=1: 좌표 줄 존재(스위치 살아있음 — 옛 판 재현용)", "- 좌표:" in with_p)
     finally:
         brains.OBS_ASCII, brains.OBS_POS = sa, sp
+
+
+def coord_leak_checks():
+    """⑧ (09-08 D17-4 pos 판정) 생좌표는 좌표 줄만이 아니라 칸 핑 id '@x,y' 로도 샜다 — 직전 판단·최근 판단·궤적
+    (이동 시작/도착)·직전 결과(자동보행 도착)·작정 깨짐. 실판 3개에서 '@' 타깃 걷기 사건 140건(도착 11) 확인.
+    문장 어디에도 '@숫자,숫자' 가 없어야 하고, 대신 사람 말(마지막 본 자리·가려던 자리)이 선다."""
+    obs, _ = fresh_obs()
+    o = copy.deepcopy(obs)
+    o["intent"] = {"type": "goto", "target": "@3,4", "turn": 40, "reason": "x", "src": "haiku"}
+    o["history"] = [{"turn": 36, "type": "goto", "target": "@3,4", "src": "haiku"},
+                    {"turn": 38, "type": "explore", "target": "W", "src": "haiku"}]
+    o["trail"] = [{"type": "goto", "target": "@3,4", "result": "pathed", "len": 5, "turn": 40},
+                  {"type": "walk", "target": "@3,4", "to": [2, 4], "result": "walking"},
+                  {"type": "walk", "target": "@3,4", "to": [3, 4], "result": "arrived"}]
+    o["last"] = {"type": "walk", "target": "@3,4", "to": [3, 4], "result": "arrived"}
+    w = brains._wire(o, NAMES)
+    check("⑧ 칸 핑 토큰 비노출: 문장 어디에도 '@x,y' 없음(직전 판단·최근 판단·궤적·직전 결과)",
+          re.search(r"@\d+,\d+", w) is None)
+    check("⑧ 대신 사람 말: '마지막 본 자리'(결정 문맥)·'가려던 자리'(걷기 문맥)",
+          "goto 마지막 본 자리" in w and "이동 마지막 본 자리 (t36)" in w
+          and "[이동 시작] 마지막 본 자리 쪽" in w and "[도착] 가려던 자리 곁" in w)
+    o2 = copy.deepcopy(obs)
+    o2["last"] = {"type": "plan_broken", "why": "no_path", "step": {"type": "goto", "target": "@3,4"}}
+    w2 = brains._wire(o2, NAMES)
+    check("⑧ 작정 깨짐의 못 이룬 수도 사람 말", "@3,4" not in w2 and "goto 마지막 본 자리" in w2)
+    check("⑧ 다른 id 는 그대로(f1 곁·문 d2 — 과교정 없음)",
+          G.place_word("f1") == "f1" and G.place_word("d2", "decide") == "d2" and G.place_word("") == ""
+          and G.event_tags({"type": "walk", "target": "f1", "result": "arrived"}) == [("arrive", "도착", "f1 곁")])
 
 
 def prompt_checks():
@@ -279,6 +307,7 @@ def main():
     print("   (표본: %d뷰, 목격 렌더 %d회)" % (v, st["wit"]))
     synth_checks()
     switch_checks()
+    coord_leak_checks()
     prompt_checks()
     print("=" * 44)
     if C.failed:

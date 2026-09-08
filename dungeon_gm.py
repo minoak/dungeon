@@ -186,6 +186,18 @@ WITNESS_LABELS = {              # 목격 사건(witnessed kind) → 집계 라�
 _RUN_RESULTS = {'walking': '걸음', 'following': '틱 동행', 'waiting': '틱 대기', 'resting': '틱 휴식'}
 
 
+def place_word(tgt, ctx='walk'):
+    """칸 핑 '@x,y' → 사람 말(09-08, 파트너 발제 "좌표가 없어도 위치 판단은 된다" → D17-4 pos 판정과 한 묶음).
+    생좌표는 엔진 내부 id 다 — 프롬프트에 새면 캐릭터가 자기 세계에 없는 숫자를 읽는다(_tgt_name 의 'follow:'
+    선례). 결정 문맥(이동 시작·최근 판단·직전 판단·작정)의 '@'는 리모컨 '마지막 본 자리로'뿐이라 "마지막 본
+    자리", 걷기 문맥(자동보행 도착)의 '@'는 탐색 종점이거나 그 칸 핑이라 "가려던 자리". '@'가 아니면 그대로.
+    ⚠️ 두 문구는 임시 가정(파트너 문장 대기). 관전 로그(act_summary)는 사람용이라 좌표 그대로 둔다."""
+    s = str(tgt or '')
+    if s[:1] != '@':
+        return s
+    return '마지막 본 자리' if ctx == 'decide' else '가려던 자리'
+
+
 def event_tags(rec, names=None):
     """사건 사전 투영(D40): 엔진 결과 dict 하나 → [(키, 라벨, 짧은 사실)]. 한 결과가 여러 사실을 담으면
     (조우: 적 여럿+함정+발견) 여러 꼬리표. 사실만·해석 없음·조향 없음. 모르는 형태=('misc','기타',JSON).
@@ -211,7 +223,7 @@ def event_tags(rec, names=None):
         return [('hail', '부름', '%s의 말에 멈춤' % who)]
     if t == 'plan_broken':
         st = rec.get('step') or {}
-        return [('plan_broken', '작정 깨짐', '%s %s — %s' % (st.get('type', '?'), st.get('target', ''), rec.get('why', '?')))]
+        return [('plan_broken', '작정 깨짐', '%s %s — %s' % (st.get('type', '?'), place_word(st.get('target', ''), 'decide'), rec.get('why', '?')))]
     if t == 'attack':
         if r != 'attack':
             return [('miss', '헛침', '대상 없음' if r == 'no_target' else '사거리 밖')]
@@ -271,11 +283,11 @@ def event_tags(rec, names=None):
         return [('misc', '기타', json.dumps(rec, ensure_ascii=False))]
     if t in ('goto', 'explore', 'follow'):
         if r == 'pathed':
-            return [('start', '이동 시작', (tgt + ' 쪽') if tgt and tgt != 'auto' else '새 길')]
+            return [('start', '이동 시작', (place_word(tgt, 'decide') + ' 쪽') if tgt and tgt != 'auto' else '새 길')]
         if r == 'following':
             return [('start', '동행 시작', nm(tgt[1:]) if tgt.startswith('b') else tgt)]
         if r == 'arrived':
-            return [('arrive', '도착', tgt + ' — 이미 곁')]
+            return [('arrive', '도착', place_word(tgt, 'decide') + ' — 이미 곁')]
         if r == 'no_path':
             return [('exhausted', '막다름', '새 길 없음' if rec.get('exhausted') else '지금 갈 길 없음')]
         if r == 'blocked':
@@ -296,7 +308,7 @@ def event_tags(rec, names=None):
         if r == 'arrived':
             if tgt[:1] == 'd' and tgt[1:].isdigit():
                 return [('door', '문 사용', tgt)] + extras
-            return [('arrive', '도착', (tgt or '목적지') + ' 곁')] + extras
+            return [('arrive', '도착', (place_word(tgt) or '목적지') + ' 곁')] + extras
         if r == 'at_exit':
             return [('arrive', '도착', '계단')] + extras
         if r == 'treasure':

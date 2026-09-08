@@ -71,7 +71,9 @@ if os.environ.get("DUNGEON_MENU", "1") != "0" and not MENU_PROMPT:
 # ascii 기본 0 = 2026-07-11 프로브 판정(조우·궁지·로어주입 ×8콜, 사전등록 "지지만 않으면
 # 채택"): 전 지표 동질 — sights 문장만으로 공간 판단 유지("7×7 그림은 인간용" §8 인사이트 실증).
 OBS_ASCII = os.environ.get("DUNGEON_OBS_ASCII", "0") != "0"   # 7×7 그림+기호 줄(기본 끔)
-OBS_POS = os.environ.get("DUNGEON_OBS_POS", "1") != "0"       # 생좌표 pos 줄(실험 전 — 기본 켬)
+OBS_POS = os.environ.get("DUNGEON_OBS_POS", "0") != "0"       # 생좌표 pos 줄 — 09-08 기본 끔(D17-4 pos 판정: 62판 6,080
+                                                                #   LLM 결정 중 reason·say 좌표 사용 0·notes 5 = 계단·함정
+                                                                #   위치 메모, 지금은 장부가 대신하는 목발. 파트너 발제)
 
 # WSL 인터롭 네이티브 exe. npm 래퍼(claude)는 stdin 대기로 멈추므로 .exe 고정.
 CLAUDE_BIN = "claude.exe"
@@ -550,7 +552,8 @@ def _last_prose(last, names=None):
         st = last.get("step") or {}
         return "작정이 깨졌다(%s) — 못 이룬 수: %s. 남은 계획은 접혔다, 새로 판단하라" % (
             last.get("why", "?"),
-            " ".join(str(st[k]) for k in ("type", "target") if k in st) or "?")
+            " ".join((G.place_word(st[k], "decide") if k == "target" else str(st[k]))
+                     for k in ("type", "target") if k in st) or "?")
     if t == "walk":
         if r == "entered":                    # D19 처음 방 정지 — 구조가 열렸다, 보고 정하라
             zz = last.get("zone") or {}
@@ -609,6 +612,8 @@ def _last_prose(last, names=None):
                 # 문 핑 완결 = 이미 '지나 들어선' 상태(Door 계약) — "곁에 도착"으로 옮기면
                 # 봇이 아직 안 넘었다고 믿고 같은 문을 재핑한다(암 B 2차 문턱 셔틀 패인)
                 return "문 %s를 지나 들어섰다 — 지금 그 너머 공간 안이다" % tgt
+            if tgt[:1] == "@":                    # 칸 핑(탐색 종점·마지막 본 자리) — 생좌표 비노출(09-08 D17-4 pos 판정)
+                return "가려던 자리에 닿았다"
             return "%s 곁에 도착했다" % (tgt or "목적지")
         if r == "at_exit":
             return "계단 앞에 섰다"
@@ -756,7 +761,7 @@ def _hist_item(h):
     src = h.get("src") or ""
     tag = ", 작정" if src == "plan" else (", 폴백" if src == "fallback" else "")
     return "%s%s (t%s%s)" % (_VERB_KR.get(h.get("type"), h.get("type") or "?"),
-                             (" %s" % h["target"]) if h.get("target") else "", h.get("turn", "?"), tag)
+                             (" %s" % G.place_word(h["target"], "decide")) if h.get("target") else "", h.get("turn", "?"), tag)
 
 
 def _dlg_who(m, nm):
@@ -1119,7 +1124,7 @@ def _wire(obs, names=None):
             line = "- 직전 판단%s: %s" % (("(t%d)" % it["turn"]) if it.get("turn") is not None else "",
                                           it.get("type", "?"))    # (tN) = D38 궤적 판만(얼마나 전의 판단인지)
             if it.get("target"):
-                line += " %s" % it["target"]
+                line += " %s" % G.place_word(it["target"], "decide")   # 칸 핑 '@x,y' → 사람 말(09-08)
             if it.get("reason"):
                 line += ' — 이유: "%s"' % it["reason"]
             L.append(line)
