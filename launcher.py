@@ -12,6 +12,9 @@
 
 API(JSON):
   GET  /api/presets  traits.json(키워드·직업) + looks(외형 사전, D37) + 기본 파티(party.json) 미리보기 + 상태
+  GET  /api/characters  저장한 캐릭터 목록 {presets:[{id,label,slot}]} — 규격은 docs/character-presets.md
+  POST /api/characters  {slot,label?,id?} → id 생략 시 새 저장, 있으면 해당 프리셋 덮어쓰기 → {preset}
+  POST /api/characters/delete  {id} → 해당 프리셋 삭제 → {ok:true}
   POST /api/party    {"slots":[{job,traits[],name,sex,background?,persona?,look?}, ...]} → sheetkit 조립 →
                      러너의 load_party 로 재검증 → party_custom.json 저장 (실패 400 + 이유 한 줄)
   POST /api/start    {"map":"normal|big","town":bool,"brain":"gemini_api|claude_cli|anthropic_api|dummy",
@@ -43,6 +46,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import sheetkit                                   # noqa: E402
+from character_presets import PresetStore         # noqa: E402
 
 MAPS = {                                          # 시작 옵션 → 러너 환경변수(wonderland.bat 메뉴 값 그대로)
     "normal": {},
@@ -197,6 +201,9 @@ class Ctx:
         self.default_brain = brain
         self.runner = Runner(root, state_dir, runs_dir)
         self.presets = sheetkit.load_traits()
+        # 커스텀 파티와 같은 위치에 보관한다. 임시 검토·검증 서버의 저장소도 함께 격리된다.
+        self.characters = PresetStore(os.path.join(os.path.dirname(os.path.abspath(party_path)),
+                                                  "character_presets.json"), self.presets)
 
 
 def default_party_preview(root):
@@ -314,6 +321,11 @@ class Handler(SimpleHTTPRequestHandler):
     # ── 라우팅 ──
     def do_GET(self):
         path = urlparse(self.path).path
+        if path == "/api/characters":
+            try:
+                return self._json(200, {"presets": self.ctx.characters.list()})
+            except (OSError, ValueError) as e:
+                return self._json(500, {"error": str(e)})
         if path == "/api/presets":
             p = self.ctx.presets
             return self._json(200, {"traits": p["traits"], "max_traits": p["max_traits"], "jobs": p["jobs"],
@@ -346,6 +358,18 @@ class Handler(SimpleHTTPRequestHandler):
         path = urlparse(self.path).path
         try:
             body = self._body()
+            if path == "/api/characters":
+                try:
+                    entry = self.ctx.characters.save(body.get("slot"), body.get("label"), body.get("id"))
+                except ValueError as e:
+                    raise BadRequest(str(e)) from e
+                return self._json(200, {"preset": entry})
+            if path == "/api/characters/delete":
+                try:
+                    self.ctx.characters.delete(body.get("id"))
+                except ValueError as e:
+                    raise BadRequest(str(e)) from e
+                return self._json(200, {"ok": True})
             if path == "/api/party":
                 return self._json(200, save_party(self.ctx, body.get("slots") or []))
             if path == "/api/start":

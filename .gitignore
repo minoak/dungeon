@@ -18,6 +18,7 @@ claude-memory/
 
 # 론처(D31, 2026-09-05)가 만드는 사용자 파일·러너 콘솔 덤프 — 개인 저작물이라 커밋 안 함
 party_custom.json
+character_presets.json
 state/runner.out
 
 # 스프라이트 묶음(D37, 2026-09-06) — 재생성물(합성 PNG 600장+sprites.json)은 커밋 안 함.

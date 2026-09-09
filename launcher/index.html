@@ -77,6 +77,11 @@
   .preview { font-size: 12.5px; color: #b9bec9; }
   .preview b { color: #d8dbe2; }
   .muted { color: #6a6f7a; font-size: 12px; }
+  .presetBox { border-bottom: 1px solid #2c303c; padding-bottom: 12px; margin-bottom: 12px; }
+  .presetBox .row { gap: 6px; margin-top: 6px; }
+  .presetMessage { min-height: 18px; margin-top: 5px; font-size: 12px; color: #6fe3b0; overflow-wrap: anywhere; }
+  .presetMessage.error { color: #ff8b7a; }
+  button:disabled { opacity: .45; cursor: default; }
 </style>
 </head>
 <body>
@@ -112,6 +117,7 @@
     <span class="muted">성격은 키워드(최대 3개)로 고르거나 직접 쓴다 — 문장이 행동을 만든다. 배경은 자유롭게.</span>
   </div>
   <div class="cards" id="cards"></div>
+  <div id="presetStatus" class="hint" role="status"></div>
   <div class="preview" id="defaultPreview" hidden></div>
   <div id="err"></div>
   <div class="foot">
@@ -170,6 +176,8 @@ let slots = [                                   // look(D37) = {head, body, colo
   { name: '', sex: '여', job: '궁수', traits: [], persona: '', background: '', look: null },
 ];
 let partyMode = 'custom';
+let characterPresets = [];
+const selectedPresets = ['', '', ''], presetLabels = ['', '', ''];
 
 /* ═══ 외형(D37) — 그림에만 닿는다(엔진·프롬프트 무접촉). sheetkit.random_look 과 같은 규칙(가정 A). ═══ */
 const LOOK_KEYS = ['hair', 'skin', 'top', 'bottom'];
@@ -249,7 +257,10 @@ async function refreshStatus() {
     }
   } catch (e) { $('tStatus').textContent = '서버 연결 실패 — launcher.py 가 떠 있나? (' + e.message + ')'; }
 }
-$('bNew').onclick = async () => { await loadPresets(); show('sParty'); };
+$('bNew').onclick = async () => {
+  try { await loadPresets(); show('sParty'); }
+  catch (e) { $('tStatus').textContent = e.message; }
+};
 $('bReplays').onclick = () => { location.href = '/game/'; };                       // 게임 클라이언트가 기본(2026-09-09 파트너 결정) — 판 목록은 화면 안 드롭다운
 $('bWatch').onclick = () => { location.href = '/game/?run=state/stream.jsonl'; };    // 기본 = 게임 클라이언트(2026-09-09 파트너 결정 "계속 새 뷰어로 보려면 불편")
 $('bGame').onclick = () => { location.href = '/viewer/?run=state/stream.jsonl'; };   // 옛 HTML 뷰어 — 은퇴 전까지 보조 진입
@@ -257,7 +268,7 @@ $('bStop').onclick = async () => { await api('/api/stop', {}); refreshStatus(); 
 
 /* ═══ 파티 ═══ */
 async function loadPresets() {
-  if (presets) return;
+  if (presets) { await refreshCharacters(); return; }
   presets = await api('/api/presets');
   await loadSprites();                                                 // D37 미리보기 합성기
   for (const s of slots) if (!s.look) {
@@ -266,6 +277,7 @@ async function loadPresets() {
     if (s.look && art) s.look.sprite = art.id;
   }
   renderCards();
+  await refreshCharacters();
   $('defaultPreview').innerHTML = presets.default_party.map(p =>
     `<div><b>${esc(p.name)}</b> — ${esc(p.job)}(${esc(p.sex)}) · ${esc(p.persona)}</div>`).join('') +
     '<div class="muted" style="margin-top:6px">외형은 판마다 랜덤으로 뽑힌다 — 뽑힌 얼굴은 판 기록에 남아 리플레이에서도 같다.</div>';
@@ -275,6 +287,15 @@ function renderCards() {
   $('cards').innerHTML = slots.map((s, i) => `
     <div class="card" data-i="${i}">
       <h3><span class="dot" style="background:${COLORS[i]}"></span>모험가 ${i + 1}</h3>
+      <div class="presetBox">
+        <label class="f" for="preset-${i}">캐릭터 프리셋</label>
+        <select id="preset-${i}" data-preset-select><option value="">저장된 캐릭터 선택</option></select>
+        <div class="row"><button class="small" data-preset-load disabled>불러오기</button><button class="small danger" data-preset-delete disabled>삭제</button></div>
+        <label class="f" for="preset-label-${i}">저장할 이름</label>
+        <input id="preset-label-${i}" type="text" data-preset-label maxlength="40" value="${esc(presetLabels[i])}" placeholder="비우면 캐릭터 이름으로 저장">
+        <div class="row"><button class="small" data-preset-save>새로 저장</button><button class="small" data-preset-update disabled>덮어쓰기</button></div>
+        <div class="presetMessage" data-preset-message role="status"></div>
+      </div>
       <label class="f">이름</label>
       <input type="text" maxlength="20" data-k="name" value="${esc(s.name)}" placeholder="한 줄, 20자 이내">
       <label class="f">성별</label>
@@ -294,6 +315,81 @@ function renderCards() {
       <textarea maxlength="400" data-k="background" placeholder="예: 광산 마을에서 자랐다. 무너진 갱도에서 혼자 살아 나온 뒤로 어둠을 믿지 않는다.">${esc(s.background)}</textarea>
     </div>`).join('');
   for (const card of $('cards').querySelectorAll('.card')) bindCard(card, +card.dataset.i);
+  paintPresetControls();
+}
+
+async function refreshCharacters() {
+  try {
+    const result = await api('/api/characters');
+    characterPresets = result.presets;
+    $('presetStatus').textContent = characterPresets.length
+      ? `저장된 캐릭터 ${characterPresets.length}명 · 어느 파티 칸에도 불러올 수 있어요.`
+      : '마음에 드는 캐릭터를 저장해 두고 다음 원정에서 다시 불러오세요.';
+    paintPresetControls();
+  } catch (e) {
+    $('presetStatus').textContent = '프리셋을 불러오지 못했어요. 론처가 최신 버전인지 확인해 주세요. ' + e.message;
+  }
+}
+function paintPresetControls() {
+  for (const card of $('cards').querySelectorAll('.card')) {
+    const i = +card.dataset.i, select = card.querySelector('[data-preset-select]');
+    if (!characterPresets.some(p => p.id === selectedPresets[i])) selectedPresets[i] = '';
+    select.replaceChildren(new Option('저장된 캐릭터 선택', ''),
+      ...characterPresets.map(p => new Option(`${p.label} · ${p.slot.job}`, p.id)));
+    select.value = selectedPresets[i];
+    for (const action of ['load', 'update', 'delete']) card.querySelector(`[data-preset-${action}]`).disabled = !select.value;
+  }
+}
+function presetMessage(i, text, error=false) {
+  const el = $('cards').querySelector(`[data-i="${i}"] [data-preset-message]`);
+  el.textContent = text; el.classList.toggle('error', error);
+}
+function bindPresetControls(card, i) {
+  card.querySelector('[data-preset-select]').onchange = e => {
+    selectedPresets[i] = e.target.value;
+    const chosen = characterPresets.find(p => p.id === selectedPresets[i]);
+    presetLabels[i] = chosen ? chosen.label : '';
+    card.querySelector('[data-preset-label]').value = presetLabels[i];
+    presetMessage(i, ''); paintPresetControls();
+  };
+  card.querySelector('[data-preset-label]').oninput = e => { presetLabels[i] = e.target.value; };
+  card.querySelector('[data-preset-load]').onclick = () => {
+    const chosen = characterPresets.find(p => p.id === selectedPresets[i]);
+    if (!chosen) return;
+    // 저장본과 편집 중인 캐릭터를 분리한다. 다른 칸에서 같은 프리셋을 골라도 함께 변하지 않는다.
+    slots[i] = JSON.parse(JSON.stringify(chosen.slot));
+    if (!slots[i].look) slots[i].look = randomLook(slots[i].sex);
+    renderCards(); presetMessage(i, `${chosen.label} 불러옴`);
+  };
+  for (const action of ['save', 'update', 'delete']) {
+    card.querySelector(`[data-preset-${action}]`).onclick = async () => {
+      const chosen = characterPresets.find(p => p.id === selectedPresets[i]);
+      if (action !== 'save' && !chosen) return;
+      if (action === 'delete' && !confirm(`“${chosen.label}” 프리셋을 삭제할까요?`)) return;
+      const box = card.querySelector('.presetBox');
+      box.querySelectorAll('button, input, select').forEach(el => { el.disabled = true; });
+      try {
+        if (action === 'delete') {
+          await api('/api/characters/delete', {id: chosen.id});
+          selectedPresets[i] = ''; presetLabels[i] = '';
+          card.querySelector('[data-preset-label]').value = '';
+          presetMessage(i, '프리셋 삭제됨');
+        } else {
+          const body = {label: presetLabels[i], slot: slots[i]};
+          if (action === 'update') body.id = chosen.id;
+          const result = await api('/api/characters', body);
+          selectedPresets[i] = result.preset.id; presetLabels[i] = result.preset.label;
+          card.querySelector('[data-preset-label]').value = result.preset.label;
+          presetMessage(i, action === 'update' ? '프리셋 수정 저장됨' : '새 프리셋 저장됨');
+        }
+        await refreshCharacters();
+      } catch (e) { presetMessage(i, e.message, true); }
+      finally {
+        box.querySelectorAll('button, input, select').forEach(el => { el.disabled = false; });
+        paintPresetControls();
+      }
+    };
+  }
 }
 function jobDesc(j) { const b = presets.jobs[j]; return `HP ${b.hp} · 힘 ${b.str} · 민첩 ${b.dex} · 은신 ${b.stealth} · 인지 ${b.search_r} · 사거리 ${b.atk_range}`; }
 function personaOf(s) {
@@ -302,6 +398,7 @@ function personaOf(s) {
   return parts.join(' ') || '키워드를 고르거나 문장을 쓰면 성격이 여기 조립된다.';
 }
 function bindCard(card, i) {
+  bindPresetControls(card, i);
   const s = slots[i];
   card.querySelector('[data-k=name]').oninput = e => { s.name = e.target.value; };
   const pt = card.querySelector('[data-k=persona]');

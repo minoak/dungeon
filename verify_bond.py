@@ -18,6 +18,7 @@
 (기존 verify 42종은 별도 실행.)
 """
 import os
+import json
 import tempfile
 
 os.environ.update(DUNGEON_GM="0", DUNGEON_TURNS="4", DUNGEON_W="40", DUNGEON_H="16",
@@ -81,16 +82,20 @@ print("── ① 상수·스위치")
 check("① BONES bond='친목행위'(쌍이 같이) · EVENT_KINDS bond/bonded · WITNESS_LABELS ally_bond · 상한들",
       G.BONES.get("bond") == "친목행위" and "bond" not in G.STRONG_BONES
       and G.EVENT_KINDS.get("bond") is True and G.EVENT_KINDS.get("bonded") is True
-      and G.WITNESS_LABELS.get("ally_bond") == "동료 친목" and G.BOND_LEN == 30 and G.ACTS_MAX == 8 and G.ACTS_SHOW == 4)
+      and G.WITNESS_LABELS.get("ally_bond") == "동료 친목" and G.BOND_LEN == 120 and G.ACTS_MAX == 8 and G.ACTS_SHOW == 4)
 d_def = Dungeon(seed=7, w=30, h=12)
 d_asc, _ = Dungeon.from_ascii(ROWS, seed=7)
 check("① 엔진 기본 꺼짐(__init__·from_ascii) · 러너 기본 켬", d_def.bond_verb is False and d_asc.bond_verb is False and show_runner.BOND_ON is True)
 
 print("── ② _clean_form")
 cf = brains._clean_form
-check("② 공백 접기·따옴표 제거·상한 30·빈 값",
-      cf('  "머리  쓰다듬기" ') == "머리 쓰다듬기" and cf("'포옹'\n해줌") == "포옹 해줌" and len(cf("가" * 50)) == 30
+check("② 공백 접기·따옴표 제거·상한 120·빈 값",
+      cf('  "머리  쓰다듬기" ') == "머리 쓰다듬기" and cf("'포옹'\n해줌") == "포옹 해줌" and len(cf("가" * 150)) == 120
       and cf(None) == "" and cf("") == "")
+scene_form = ("카야의 옷자락을 살짝 잡고 시선을 피한다. 평소처럼 재촉하려다 말을 삼키고, "
+              "카야가 걸음을 뗄 때까지 곁에서 기다린다. 다친 팔에 손이 닿지 않도록 몸을 조금 옆으로 기울인다.")
+check("② 30자가 넘는 행동 장면과 정확히 120자인 서술을 끝까지 보존",
+      30 < len(scene_form) <= 120 and cf(scene_form) == scene_form and cf("가" * 120) == "가" * 120)
 
 print("── ③ 메뉴")
 d, bots = scene()
@@ -125,8 +130,8 @@ check("④ 상세 기록 양쪽: {t5, 친목, 머리 쓰다듬기, mine, reply N
 check("④ 층 집계: 두란 [친목] ×1 · 카야 [친목 받음] ×1 · 피른 목격 [동료 친목] ×1",
       b1["floor"]["n"].get("친목") == 1 and b2["floor"]["n"].get("친목 받음") == 1 and b3["floor"]["w"].get("동료 친목") == 1)
 r_empty = d.act(b1, {"type": "bond", "target": "b2"}, bots)
-r_long = d.act(b1, {"type": "bond", "target": "b2", "form": "가" * 50}, bots)
-check("④ form 없음=몸짓 · 긴 문구는 30자", r_empty.get("form") == "몸짓" and len(r_long.get("form")) == 30)
+r_long = d.act(b1, {"type": "bond", "target": "b2", "form": "가" * 150}, bots)
+check("④ form 없음=몸짓 · 긴 문구는 120자", r_empty.get("form") == "몸짓" and len(r_long.get("form")) == 120)
 
 print("── ⑤ 실패·정지")
 d, bots = scene()
@@ -242,6 +247,22 @@ check("⑨ 메뉴 번호+form → dec {bond, b2, form 정제} · intent/history 
       and b1["intent"].get("form") == "어깨 두드리기" and (b1.get("history") or [{}])[-1].get("form") == "어깨 두드리기")
 res = d.act(b1, out["1"], bots)
 check("⑨ 집행: done · 카야 bonded", res.get("result") == "done" and (b2.get("last") or {}).get("form") == "어깨 두드리기")
+
+# 과거에는 30자 뒤가 잘려 행동의 맥락이 사라졌다. 실제 응답부터 상대의 관측까지 긴 문장을 따라간다.
+d, bots = scene()
+b1, b2, b3 = bots
+brains._call_claude = lambda prompt, model="haiku": json.dumps(
+    {"reason": "곁에서 기다려주고 싶다.", "choice": n_bond, "say": "", "form": scene_form}, ensure_ascii=False)
+out = brains.think_all(d, bots)
+res = d.act(b1, out["1"], bots)
+received = d.view(b2, bots)
+check("⑨ 긴 친목 서술: 응답·판단 기록·집행·상대 사건·양쪽 관계 기록·다음 프롬프트까지 보존",
+      out["1"].get("form") == scene_form and b1["intent"].get("form") == scene_form
+      and b1["history"][-1].get("form") == scene_form and res.get("form") == scene_form
+      and received["last"].get("form") == scene_form
+      and acts(b1, "2")[-1]["what"] == scene_form and acts(b2, "1")[-1]["what"] == scene_form
+      and scene_form in brains._wire(received, NAMES))
+
 brains._call_claude = lambda prompt, model="haiku": '{"reason": "x", "choice": %d, "say": "고마워", "to": "2"}' % n_bond
 d, bots = scene()
 out = brains.think_all(d, bots)
@@ -256,9 +277,11 @@ check("⑨ 친목이 아닌 선택엔 form 이 안 실린다", "form" not in out
 print("── ⑩ 지침·배선(소스)")
 import io as _io                                     # noqa: E402
 mp = brains.MENU_PROMPT
-check("⑩ 지침: 친목 절(어깨 두드리기·머리 쓰다듬기·포옹) · `form` 필드 설명 · 반응은 상대 몫 · 내 문장 제거",
-      "- **친목**: 어깨 두드리기, 손잡기, 머리 쓰다듬기, 포옹처럼 곁에서 하는 몸짓" in mp
-      and "`form` = **친목의 몸짓**" in mp and "시도했다고 상대의 반응까지 정해지진 않는다" in mp and "답이 필요할 때만" not in mp)
+check("⑩ 지침: 친목 자유 서술·120자 안내 · 고정 몸짓 예시 없음 · 반응은 상대 몫",
+      "- **친목**: 곁의 상대에게 어떤 행동을 시도하는지 응답 `form`에 자유롭게 서술하라." in mp
+      and "`form` = **친목 행동의 서술**" in mp and "120자 이내" in mp
+      and not any(example in mp for example in ("어깨 두드리기", "손잡기", "머리 쓰다듬기", "포옹"))
+      and "시도했다고 상대의 반응까지 정해지진 않는다" in mp and "답이 필요할 때만" not in mp)
 rsrc = _io.open(os.path.join(HERE, "show_runner.py"), encoding="utf-8").read()
 check("⑩ 러너: DUNGEON_BOND · bond=BOND_ON · build_town 미러링 · act_summary bond",
       'DUNGEON_BOND' in rsrc and 'bond=BOND_ON' in rsrc and 'd.give_verb, d.bond_verb = GIVE_ON, BOND_ON' in rsrc

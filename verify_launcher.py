@@ -74,12 +74,22 @@ check("① 직업 3종 수치 = party.json 두란·카야·피른의 몸 세트 
 
 sheet = sheetkit.build_sheet("도적", ["신중한", "겁 많은", "과묵한"], "테스", "여",
                              "어릴 적 광산 마을에서 자랐다. 무너진 갱도에서 혼자 살아 나온 뒤로 어둠을 믿지 않는다.")
-check("① 조립: persona/speech = 키워드 문장 3개 이어붙임, goal=직업 기본, traits 원본 보존",
+check("① 조립: persona/speech = 키워드 문장 3개 이어붙임, 자동 목표 없음, traits 원본 보존",
       all(data["traits"][t]["persona"] in sheet["persona"] for t in ("신중한", "겁 많은", "과묵한"))
       and all(data["traits"][t]["speech"] in sheet["speech"] for t in ("신중한", "겁 많은", "과묵한"))
-      and sheet["goal"] == data["jobs"]["도적"]["goal"] and sheet["traits"] == ["신중한", "겁 많은", "과묵한"]
+      and "goal" not in sheet and sheet["traits"] == ["신중한", "겁 많은", "과묵한"]
       and sheet["name"] == "테스" and sheet["sex"] == "여" and sheet["hp"] == 10 and sheet["dex"] == 3
       and sheet["background"].startswith("어릴 적 광산 마을"))
+check("① 직업 사전은 목표를 제공하지 않는다", all("goal" not in j for j in data["jobs"].values()))
+# 과거 사전을 넘겨도 직업 목표가 다시 섞이지 않아야 한다(오래 켜 둔 론처의 사전 포함).
+legacy_data = {**data, "jobs": {j: {**v, "goal": "사용자가 입력하지 않은 직업 목표"}
+                              for j, v in data["jobs"].items()}}
+for job in data["jobs"]:
+    clean_sheet = sheetkit.build_sheet(job, [], "검증", "여", data=legacy_data,
+                                      persona_text="낯을 가리지만 장난기가 있다.")
+    check("① %s: 직업 목표를 무시하고 사용자 성격만 조립" % job,
+          "goal" not in clean_sheet and clean_sheet["persona"] == "낯을 가리지만 장난기가 있다."
+          and "speech" not in clean_sheet)
 custom_path = os.path.join(TMP, "party_custom.json")
 sheetkit.write_party(sheetkit.build_party([
     {"job": "도적", "traits": ["신중한", "겁 많은", "과묵한"], "name": "테스", "sex": "여",
@@ -176,6 +186,10 @@ n_head = lambda t: sum(1 for ln in t.splitlines() if ln.startswith("# ") or ln.s
 check("② 머리글('# '·'## ') 수가 배경 없을 때와 동일 = 1(섹션 위장 불가) · '규칙' 머리글 없음",
       n_head(txt) == n_head(plain) == 1 and not any(ln.strip() in ("## 규칙", "# 규칙") for ln in txt.splitlines()))
 check("② 배경 없는 시트의 _sheet 출력엔 '배경(' 줄이 없다(구판 동일)", "배경(" not in plain)
+for char, s in loaded.items():
+    rendered = brains._sheet(G.spawn(d0, char, [], sheet=s), None)
+    check("② %s: 생성 → 저장 → 로드 → 프롬프트에 자동 목표 없음, 능력 정보는 유지" % s["job"],
+          "goal" not in s and "- 목표:" not in rendered and "- 능력:" in rendered)
 
 
 def run_once(party_path):
@@ -192,7 +206,8 @@ p2 = next(p for p in meta["party"] if p["char"] == "2")
 check("② 러너 통합: run_meta.party 에 speech/goal/background/traits additive(있을 때만)",
       meta["kind"] == "run_meta" and len(meta["party"]) == 3
       and p1["background"] == "어릴 적 광산 마을에서 자랐다." and p1["traits"] == ["신중한", "겁 많은", "과묵한"]
-      and p1["speech"] and p1["goal"] and "background" not in p2 and p2["traits"] == ["용맹한"])
+      and p1["speech"] and all("goal" not in p for p in meta["party"])
+      and "background" not in p2 and p2["traits"] == ["용맹한"])
 check("② 러너 통합: 배너에 seed 표시", "seed=7" in io.open(os.path.join(show_runner.STATE, "events.log"),
                                                              encoding="utf-8").read())
 check("② 러너 통합(D37): 시트 look 은 run_meta.party 에 그대로 · look 없는 시트는 러너가 랜덤으로 채운다(성별 그룹·스와치)",
@@ -202,6 +217,18 @@ check("② 러너 통합(D37): 시트 look 은 run_meta.party 에 그대로 · l
 meta2 = json.loads(run_once(custom_path).splitlines()[0])
 check("② 랜덤 외형은 seed·char 결정론: 같은 시드 재실행 = 같은 look(던전 난수 무접촉)",
       [p["look"] for p in meta2["party"]] == [p["look"] for p in meta["party"]])
+
+# 자동 주입을 막되, 작성자가 시트에 직접 적은 목표까지 지우면 안 된다.
+authored_goal = "마을에서 잃어버린 편지를 찾아 돌아간다."
+authored_path = os.path.join(TMP, "party_authored_goal.json")
+sheetkit.write_party({**loaded, "1": {**loaded["1"], "goal": authored_goal}}, authored_path)
+authored = show_runner.load_party(authored_path)
+authored_prompt = brains._sheet(G.spawn(d0, "1", [], sheet=authored["1"]), None)
+authored_meta = json.loads(run_once(authored_path).splitlines()[0])
+check("② 직접 작성한 목표는 로드·프롬프트·run_meta에 보존, 다른 캐릭터에 자동 목표 없음",
+      authored["1"]["goal"] == authored_goal and ("- 목표: " + authored_goal) in authored_prompt
+      and authored_meta["party"][0]["goal"] == authored_goal
+      and all("goal" not in p for p in authored_meta["party"][1:]))
 show_runner.PARTY_FILE = os.path.join(HERE, "party.json")
 
 # ───────────────────── ④ 시드 ─────────────────────
@@ -280,6 +307,8 @@ else:
     check("③ POST /api/party: 200 저장 → party_web.json 3인(load_party 재검증 통과) · 자유 성격이 persona 에 이어붙음",
           st == 200 and res.get("ok") and sorted(k for k in saved if not k.startswith("_")) == ["1", "2", "3"]
           and saved["3"]["persona"].endswith("화살보다 말이 빠르다."))
+    check("③ 실제 론처 저장 결과에도 직업별 자동 목표 없음",
+          all("goal" not in s for c, s in saved.items() if not c.startswith("_")))
     check("③ 저장된 시트의 look(D37): 정규화(색 보충·소문자) · look 없는 슬롯엔 필드 없음(러너가 랜덤)",
           saved["1"]["look"] == {"head": "F3", "body": "B2", "colors": {**looks["defaults"], "hair": "#352c2c"}}
           and "look" not in saved["2"])

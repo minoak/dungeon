@@ -232,8 +232,8 @@ def build_sheet(job, traits, name, sex, background=None, data=None, persona_text
     if len(sheet["persona"]) > PERSONA_TOTAL_MAX:
         raise ValueError("성격 문장 합계가 %d자를 넘는다(%d자) — 키워드를 줄이거나 문장을 줄여라"
                          % (PERSONA_TOTAL_MAX, len(sheet["persona"])))
-    if body.get("goal"):
-        sheet["goal"] = body["goal"]
+    # 직업은 몸 수치만 정한다. 사용자가 쓰지 않은 행동 목표를 직업 사전에서 보충하지 않는다.
+    # 직접 작성한 시트의 선택 필드 goal은 기존 load_party → 프롬프트 경로에서 그대로 지원한다.
     bg = sanitize_background(background)
     if bg:
         sheet["background"] = bg
