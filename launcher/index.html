@@ -55,9 +55,12 @@
   .traits { display: flex; gap: 6px; flex-wrap: wrap; }
   /* D37 외형 블록 — 미리보기(16px→64px 픽셀 확대)·머리/몸통 칩·재질별 스와치+자유 색·랜덤 */
   .look { display: flex; gap: 12px; align-items: flex-start; margin-top: 2px; }
-  .lookPrev { width: 64px; height: 64px; image-rendering: pixelated; background: #1a1d25;
+  .lookPrev { width: 96px; height: 96px; image-rendering: pixelated; background: #1a1d25;
               border: 1px solid #2c303c; border-radius: 6px; flex: none; }
   .lookBody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+  .lookParts { display:flex; flex-direction:column; gap:5px; }
+  .lookParts[hidden] { display:none; }
+  .lookGallery { color:#e8c268; font-size:12px; }
   .swrow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
   .swlab { width: 30px; font-size: 11.5px; color: #8a8f9c; flex: none; }
   .sw { width: 18px; height: 18px; border-radius: 4px; border: 2px solid transparent; cursor: pointer; padding: 0; }
@@ -186,9 +189,10 @@ async function loadSprites() {                  // 미리보기 합성기 — �
   try { await WLSprites.load('/viewer/assets/sprites/sprites.json'); } catch (e) { /* 미리보기 없음 */ }
 }
 function drawLook(cv, look) {
+  const img = (look && window.WLSprites && WLSprites.ready) ? WLSprites.cell(look, 'front', -1) : null;
+  cv.width = cv.height = img ? img.width : 16;
   const g = cv.getContext('2d');
   g.imageSmoothingEnabled = false; g.clearRect(0, 0, cv.width, cv.height);
-  const img = (look && window.WLSprites && WLSprites.ready) ? WLSprites.cell(look, 'front', -1) : null;
   if (img) g.drawImage(img, 0, 0);
 }
 function lookBlock(s, lk) {
@@ -197,14 +201,24 @@ function lookBlock(s, lk) {
   const rows = LOOK_KEYS.map(k => `<div class="swrow"><span class="swlab">${LOOK_LABELS[k]}</span>` +
     (lk.swatches[k] || []).map(c => `<button type="button" class="sw ${s.look.colors[k] === c ? 'on' : ''}" data-sw="${k}" data-c="${c}" style="background:${c}" title="${c}"></button>`).join('') +
     `<input type="color" data-sw-free="${k}" value="${esc(s.look.colors[k])}" title="자유 색"></div>`).join('');
-  return `<label class="f">외형 <span class="hint" style="display:inline">— 머리·몸통·색. 그림에만 닿는다(캐릭터는 자기 외모를 모른다)</span></label>
+  const illustrations = window.WLSprites ? WLSprites.illustrations() : [];
+  return `<label class="f">외형 <span class="hint" style="display:inline">— 원하는 모습을 고르세요</span></label>
       <div class="look" data-k="look">
         <canvas class="lookPrev" width="16" height="16" title="정면"></canvas>
         <div class="lookBody">
+          <select data-art aria-label="캐릭터 외형"><option value="">파츠 조합</option>${illustrations.map(p =>
+            `<option value="${esc(p.id)}" ${s.look.sprite === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+          <label class="hint" data-hair-row ${s.look.sprite ? '' : 'hidden'}>헤어스타일
+            <select data-hairstyle aria-label="헤어스타일"></select>
+          </label>
+          <span class="hint" data-art-note ${s.look.sprite ? '' : 'hidden'}>의상은 유지하고 머리 모양을 고를 수 있어요.</span>
+          <div class="lookParts" ${s.look.sprite ? 'hidden' : ''}>
           <div class="radios" data-lk="head">${chips(lk.heads, 'head')}</div>
           <div class="radios" data-lk="body">${chips(lk.bodies, 'body')}</div>
           ${rows}
           <button type="button" class="small" data-lk-rand title="현재 성별 기준으로 머리·몸통·색을 다시 뽑는다">외형 랜덤</button>
+          </div>
+          <a class="lookGallery" href="/art/sprites-v4/" target="_blank" rel="noopener">4방향 움직임 보기 ↗</a>
         </div>
       </div>`;
 }
@@ -244,7 +258,11 @@ async function loadPresets() {
   if (presets) return;
   presets = await api('/api/presets');
   await loadSprites();                                                 // D37 미리보기 합성기
-  for (const s of slots) if (!s.look) s.look = randomLook(s.sex);      // 처음부터 얼굴이 보인다
+  for (const s of slots) if (!s.look) {
+    s.look = randomLook(s.sex);
+    const art = window.WLSprites && WLSprites.illustrations().find(p => p.job === s.job);
+    if (s.look && art) s.look.sprite = art.id;
+  }
   renderCards();
   $('defaultPreview').innerHTML = presets.default_party.map(p =>
     `<div><b>${esc(p.name)}</b> — ${esc(p.job)}(${esc(p.sex)}) · ${esc(p.persona)}</div>`).join('') +
@@ -304,6 +322,14 @@ function bindCard(card, i) {
   const lookEl = card.querySelector('[data-k=look]');        // D37 외형 — 칩·스와치·자유 색·랜덤·미리보기
   if (lookEl) {
     const paintLook = () => {
+      lookEl.querySelector('[data-art]').value = s.look.sprite || '';
+      lookEl.querySelector('.lookParts').hidden = !!s.look.sprite;
+      lookEl.querySelector('[data-art-note]').hidden = !s.look.sprite;
+      lookEl.querySelector('[data-hair-row]').hidden = !s.look.sprite;
+      const hairSelect=lookEl.querySelector('[data-hairstyle]');
+      const styles=window.WLSprites ? WLSprites.hairstyles(s.look) : [];
+      hairSelect.innerHTML=styles.map(h=>`<option value="${esc(h.id)}">${esc(h.name)}</option>`).join('');
+      hairSelect.value=s.look.hairstyle || 'default';
       for (const k of ['head', 'body']) {
         lookEl.querySelectorAll(`[data-lk=${k}] label`).forEach(l =>
           l.classList.toggle('on', l.querySelector('input').value === s.look[k]));
@@ -312,6 +338,12 @@ function bindCard(card, i) {
       lookEl.querySelectorAll('input[type=color]').forEach(i => { i.value = s.look.colors[i.dataset.swFree]; });
       drawLook(lookEl.querySelector('canvas.lookPrev'), s.look);
     };
+    lookEl.querySelector('[data-art]').onchange = e => {
+      if(e.target.value) s.look.sprite=e.target.value; else delete s.look.sprite;
+      delete s.look.hairstyle; // 외형마다 허용되는 머리가 다르므로 새 외형은 기본 머리로 시작한다.
+      paintLook();
+    };
+    lookEl.querySelector('[data-hairstyle]').onchange = e => {s.look.hairstyle=e.target.value;paintLook();};
     for (const k of ['head', 'body']) {
       for (const lab of lookEl.querySelectorAll(`[data-lk=${k}] label`)) {
         lab.onclick = (e) => { e.preventDefault(); s.look[k] = lab.querySelector('input').value; paintLook(); };   // 칩=이중 발화 차단(육안 1호 선례)

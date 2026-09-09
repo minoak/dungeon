@@ -97,7 +97,8 @@ def sanitize_background(text, limit=BACKGROUND_MAX):
 
 def load_looks(sprites_path=SPRITES_FILE, looks_path=LOOKS_FILE):
     """외형 사전(D37) — 파츠(머리·몸통)는 sprites.json 에서, 스와치·기본색은 looks.json 에서. 캐시.
-    반환 {heads:{id:{name,group}}, bodies:{id:name}, swatches:{재질:[hex]}, defaults:{재질:hex}}.
+    반환 {heads:{id:{name,group}}, bodies:{id:name}, swatches:{재질:[hex]}, defaults:{재질:hex},
+          illustrations:{id:{name,job,hairstyles:{머리id:이름}}}}.
     형식 검증: 재질 4종이 sprites.json materials 와 looks.json 양쪽에 있어야 한다."""
     key = (sprites_path, looks_path)
     if key in _LOOKS:
@@ -118,13 +119,24 @@ def load_looks(sprites_path=SPRITES_FILE, looks_path=LOOKS_FILE):
         if (not swatches.get(k) or not all(isinstance(c, str) and _HEX.match(c) for c in swatches[k])
                 or not _HEX.match(str(defaults.get(k, "")))):
             raise ValueError("looks.json: 재질 %r 의 스와치/기본색 누락 또는 hex 아님" % k)
-    data = {"heads": heads, "bodies": bodies, "swatches": swatches, "defaults": defaults}
+    # 완성 SD 외형도 같은 look에 기록한다. 파츠를 함께 보존해 구형 뷰어의 폴백을 유지한다.
+    atlas_path = os.path.join(os.path.dirname(sprites_path), "sd", "atlas.json")
+    illustrations = {}
+    if os.path.exists(atlas_path):
+        with io.open(atlas_path, encoding="utf-8") as f:
+            atlas = json.load(f)
+        illustrations = {sid: {"name": p["name"], "job": p["job"],
+                              "hairstyles": {hid: h["name"] for hid, h in
+                                             p.get("hairstyles", {"default": {"name": "기본 머리"}}).items()}}
+                         for sid, p in atlas.get("presets", {}).items()}
+    data = {"heads": heads, "bodies": bodies, "swatches": swatches, "defaults": defaults,
+            "illustrations": illustrations}
     _LOOKS[key] = data
     return data
 
 
 def sanitize_look(look, data=None):
-    """외형 필드 검증·정규화 — {head, body, colors{hair,skin,top,bottom}}.
+    """외형 필드 검증·정규화 — {head, body, colors{hair,skin,top,bottom}, sprite?, hairstyle?}.
     머리·몸통은 sprites.json 등재 id 만, 색은 '#rrggbb' 형식만(스와치 밖 자유 색 허용 — 가정 B),
     빠진 색은 기본색으로 보충·소문자 정규화. None 이면 None(=시트에 필드 없음 → 러너가 랜덤으로 뽑는다).
     엔진·프롬프트는 이 값을 절대 안 읽는다 — 그래서 자유 색을 받아도 UGC 관문이 아니다(그림에만 닿는다)."""
@@ -149,7 +161,20 @@ def sanitize_look(look, data=None):
         if not isinstance(c, str) or not _HEX.match(c):
             raise ValueError("외형 색 %s 는 '#rrggbb' 형식: %r" % (k, c))
         out_c[k] = c.lower()
-    return {"head": head, "body": body, "colors": out_c}
+    result = {"head": head, "body": body, "colors": out_c}
+    sprite = look.get("sprite")
+    if sprite is not None:
+        if not isinstance(sprite, str) or sprite not in data.get("illustrations", {}):
+            raise ValueError("등재되지 않은 완성 외형: %r" % (sprite,))
+        result["sprite"] = sprite
+    hairstyle = look.get("hairstyle")
+    if hairstyle is not None:
+        styles = data.get("illustrations", {}).get(sprite, {}).get("hairstyles", {})
+        if not isinstance(hairstyle, str) or hairstyle not in styles:
+            raise ValueError("이 외형에 등재되지 않은 헤어스타일: %r" % (hairstyle,))
+        # 필드가 없는 기존 저장본은 그대로 둔다. 새 선택만 기록한다.
+        result["hairstyle"] = hairstyle
+    return result
 
 
 def random_look(rng, sex, data=None):

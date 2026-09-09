@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>원더랜드 · SD 도트 캐릭터</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eee9df;color:#303330;font:15px/1.6 "Malgun Gothic",system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:36px 28px}a{color:inherit}header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ccc7bc;padding-bottom:22px;gap:20px}.brand{font-size:11px;letter-spacing:.2em;color:#687269}h1{font-size:30px;margin:5px 0 0;letter-spacing:-.04em}h2{margin:0;font-size:19px}.sub{color:#74766c;font-size:13px;margin:8px 0 0}.pill{border:1px solid #bbbdb0;padding:6px 12px;border-radius:30px;font-size:12px;white-space:nowrap}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin:26px 0 18px}.group{display:flex;align-items:center;gap:7px;flex-wrap:wrap}button,select{font:inherit;color:inherit;cursor:pointer;border:1px solid #c6c8bb;background:#f8f5ee;border-radius:7px;padding:7px 14px}button[aria-pressed=true],button.primary{background:#394a42;color:#fff;border-color:#394a42}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #a77539;outline-offset:4px}.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.card{background:#f8f5ee;border:1px solid #d8d6cc;border-radius:12px;overflow:hidden}.cardTop{padding:18px 22px;display:flex;justify-content:space-between;align-items:center}.no{font:12px ui-monospace,monospace;color:#868c80}.stage{background:radial-gradient(ellipse at 50% 67%,#e2e3d8 0%,#f1efe6 65%);height:248px;display:grid;place-items:center}.stage canvas{width:192px;height:192px;image-rendering:pixelated}.detail{padding:14px 22px 20px;border-top:1px solid #e1dfd4}.detail p{font-size:12px;color:#767d70;margin:0}.sizes{display:flex;align-items:end;justify-content:center;gap:36px;padding:16px 0 0}.size{text-align:center;font:11px/1.5 ui-monospace,monospace;color:#757a70}.size canvas{display:block;image-rendering:pixelated;margin:0 auto 8px;background:#242d29;border-radius:5px}.foot{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:24px;padding:18px 0;border-top:1px solid #cfcec1;color:#687267;font-size:12px}.foot a{font-weight:600}.timeline{display:flex;gap:14px;align-items:center;margin-top:20px;font-size:12px;color:#667261}.timeline input{width:190px;accent-color:#485e4e}#status{margin-left:auto}.scene{margin-top:18px;border-radius:12px;overflow:hidden;background:#161d1a;border:1px solid #c6c8bb}.scene canvas{width:100%;display:block;image-rendering:pixelated}.sceneTitle{font-size:12px;color:#bfc8b9;padding:14px 20px;border-bottom:1px solid #334038;display:flex;justify-content:space-between}.note{font-size:12px;color:#777d71;margin-top:18px}.links{display:flex;gap:16px;flex-wrap:wrap}@media(max-width:800px){main{padding:22px 16px}.cards{grid-template-columns:1fr}.stage{height:224px}header{align-items:start}h1{font-size:25px}.toolbar{margin-top:20px}#status{margin-left:0}.timeline{flex-wrap:wrap}.scene{display:none}}
+</style></head><body><main>
+<header><div><div class="brand">WONDERLAND / CHARACTER ART</div><h1>작은 모험가들, 선명한 표정</h1><p class="sub">큰 눈과 짧은 SD 비율, 도트로 그린 세 가지 기본 외형.</p></div><span class="pill">SD 도트 · 1차 적용본</span></header>
+<div class="toolbar"><div class="group" id="directions" aria-label="바라보는 방향"></div><div class="group"><button id="motion" aria-pressed="true">걷기</button><button id="play" class="primary">일시정지</button></div></div>
+<section class="cards" id="cards"></section>
+<style>.hairChoice{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;margin:0 0 12px}.hairChoice select{max-width:190px;padding:6px 10px}</style>
+<div class="timeline"><label for="frame">프레임</label><input id="frame" type="range" min="0" max="3" value="0"><span id="number">1 / 4</span><label for="speed">간격</label><select id="speed"><option value="120">120 ms</option><option value="160" selected>160 ms</option><option value="220">220 ms</option></select><span id="status" role="status">외형을 불러오는 중…</span></div>
+<section class="scene"><div class="sceneTitle"><span>던전 배경에서 보기</span><span>게임과 같은 스프라이트 · 2배 확대</span></div><canvas id="scene" width="960" height="224" aria-label="던전 바닥 위에서 움직이는 세 캐릭터"></canvas></section>
+<div class="foot"><div class="links"><a href="/launcher/">파티 만들기 →</a><a href="/viewer/?run=art/sprites-v4/demo-hairstyles.jsonl">게임에서 보기 →</a><a href="../../../viewer/assets/sprites/sd/atlas.json">에셋 정보</a></div><span>검사 헤어 5종 · 궁수/도적 각 3종 · 4방향 · 정지 + 걷기 4프레임</span></div>
+<p class="note">확대 모습과 48px 표시를 함께 비교해 보세요. 생성 원본을 정렬한 첫 적용본으로, 걷기의 발 교차와 방향별 장비 표현은 더 다듬을 여지가 있습니다.</p>
+</main><script src="../../../viewer/assets/sprites/sprites.js"></script><script>
+'use strict';
+const q=s=>document.querySelector(s),dirs={front:'정면',right:'오른쪽',back:'뒷면',left:'왼쪽'};
+const names={'sd-warrior':['검사','밤색 머리 · 아이보리 망토 · 짧은 검'],'sd-archer':['궁수','금발 · 초록 망토 · 활'],'sd-rogue':['도적','보랏빛 머리 · 스카프 · 단검']};
+let direction='front',phase=0,playing=true,walking=true,previous=0,loaded=false;
+const looks=Object.keys(names).map(sprite=>({sprite,head:'M1',body:'B1'}));
+q('#directions').innerHTML=Object.entries(dirs).map(([d,n])=>`<button data-dir="${d}" aria-pressed="${d==='front'}">${n}</button>`).join('');
+q('#cards').innerHTML=looks.map((l,i)=>`<article class="card"><div class="cardTop"><h2>${names[l.sprite][0]}</h2><span class="no">0${i+1}</span></div><div class="stage"><canvas width="96" height="96" data-art="${i}" aria-label="${names[l.sprite][0]} 확대"></canvas></div><div class="detail"><label class="hairChoice">헤어스타일<select data-hair="${i}" aria-label="${names[l.sprite][0]} 헤어스타일"></select></label><p>${names[l.sprite][1]}</p><div class="sizes">${[48,96].map(s=>`<div class="size"><canvas width="${s}" height="${s}" data-art="${i}" style="width:${s}px;height:${s}px" aria-label="${names[l.sprite][0]} ${s}px"></canvas>${s} px</div>`).join('')}</div></div></article>`).join('');
+const tiles=new Image();tiles.src='../../../viewer/assets/kenney/tilemap_packed.png';tiles.onload=()=>draw();
+function draw(){if(!loaded)return;const p=walking?phase:-1;
+ for(const c of document.querySelectorAll('[data-art]')){const g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);g.imageSmoothingEnabled=false;g.drawImage(WLSprites.cell(looks[+c.dataset.art],direction,p),0,0,c.width,c.height)}
+ const c=q('#scene'),g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);g.imageSmoothingEnabled=false;
+ if(tiles.complete&&tiles.naturalWidth)for(let y=0;y<7;y++)for(let x=0;x<30;x++)g.drawImage(tiles,x===0||x===29||y===0||y===6?64:0,x===0||x===29||y===0||y===6?48:0,16,16,x*32,y*32,32,32);
+ for(let i=0;i<looks.length;i++){g.fillStyle='rgba(0,0,0,.2)';g.beginPath();g.ellipse(192+i*288,164,26,8,0,0,Math.PI*2);g.fill();g.drawImage(WLSprites.cell(looks[i],direction,p),144+i*288,76,96,96)}
+ q('#frame').value=phase;q('#number').textContent=walking?`${phase+1} / 4`:'정지';
+}
+q('#directions').onclick=e=>{if(!e.target.dataset.dir)return;direction=e.target.dataset.dir;for(const b of q('#directions').children)b.setAttribute('aria-pressed',b===e.target);draw()};
+q('#play').onclick=()=>{playing=!playing;q('#play').textContent=playing?'일시정지':'재생';previous=performance.now()};
+q('#motion').onclick=()=>{walking=!walking;q('#motion').textContent=walking?'걷기':'정지';q('#motion').setAttribute('aria-pressed',walking);q('#frame').disabled=!walking;draw()};
+q('#frame').oninput=e=>{phase=+e.target.value;playing=false;q('#play').textContent='재생';draw()};
+function loop(t){if(loaded&&playing&&walking&&t-previous>=+q('#speed').value){phase=(phase+1)%4;previous=t;draw()}requestAnimationFrame(loop)}requestAnimationFrame(loop);
+WLSprites.load('../../../viewer/assets/sprites/sprites.json').then(()=>{
+ if(looks.some(l=>!WLSprites.isSD(l)))throw new Error('일부 외형을 불러오지 못했습니다');
+ for(const select of document.querySelectorAll('[data-hair]')){
+   const look=looks[+select.dataset.hair];
+   select.replaceChildren(...WLSprites.hairstyles(look).map(h=>new Option(h.name,h.id)));
+   select.onchange=()=>{look.hairstyle=select.value;draw()};
+ }
+ loaded=true;q('#status').textContent='세 외형 준비 완료';draw();
+}).catch(e=>q('#status').textContent=e.message+' · 서버에서 열어 주세요.');
+</script></body></html>

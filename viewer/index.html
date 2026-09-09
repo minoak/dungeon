@@ -37,6 +37,8 @@
     background: #0a0b0e; padding: 12px; position: relative;
   }
   canvas { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+  #mapWrap.close { display:block; overflow:auto; }
+  #mapWrap.close > canvas { max-width:none; max-height:none; }
   aside {
     width: 390px; flex: none; display: flex; flex-direction: column;
     border-left: 1px solid #23262f; background: #12141a; min-height: 0;
@@ -48,6 +50,7 @@
   .pcHead .face { width: 32px; height: 32px; image-rendering: pixelated; flex: none; align-self: center;
                   background: #1a1d25; border-radius: 4px; }   /* D37 초상화 */
   .pc.dead .face { filter: grayscale(1); opacity: .55; }
+  .pcHead .face.sd-face { width:64px; height:64px; }
   .pcHead b { font-size: 13.5px; }
   .pcHead .job { color: #8a8f9c; font-size: 11.5px; }
   .pcHead .stat { margin-left: auto; font-size: 11.5px; color: #b9bec9; white-space: nowrap; }
@@ -94,6 +97,7 @@
   <h1>원더랜드</h1>
   <select id="runSel" title="판 선택 — runs/ 보존판 또는 라이브"></select>
   <select id="tsSel" title="타일셋"></select>
+  <select id="mapScale" title="지도 표시 크기"><option value="fit">맵 전체</option><option value="close">가까이 보기</option></select>
   <span id="liveBadge">LIVE</span>
   <span class="sub" id="runInfo"></span>
   <span id="err"></span>
@@ -501,7 +505,7 @@ function hpBar(gx, gy, hp, maxhp) {
 function drawBot(b, f, alpha = 1, rot = 0) {
   const look = looks[b.char], spr = window.WLSprites;
   const phase = (spr && playing && f.moved && f.moved[b.char])
-    ? Math.floor(performance.now() / spr.frameMs()) % 4 : -1;
+    ? Math.floor(performance.now() / spr.frameMs(look)) % 4 : -1;
   const img = (look && spr && spr.ready)
     ? spr.cell(look, (f.facing && f.facing[b.char]) || 'front', phase) : null;
   if (!img) { drawCell('bot:' + b.job, b.x, b.y, alpha, rot, colors[b.char]); return; }
@@ -510,7 +514,9 @@ function drawBot(b, f, alpha = 1, rot = 0) {
   ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false;
   if (rot) { ctx.translate(px + sz / 2, py + sz / 2); ctx.rotate(rot); ctx.translate(-sz / 2, -sz / 2); }
   else ctx.translate(px, py);
-  ctx.drawImage(img, 0, 0, sz, sz);
+  // SD의 발은 같은 타일에 고정하고 머리만 위로 확장한다. 이동 좌표·판정 크기는 그대로다.
+  const size = sz * spr.displayScale(look);
+  ctx.drawImage(img, (sz-size)/2, sz-size, size, size);
   ctx.restore();
 }
 
@@ -594,7 +600,7 @@ function render() {
     drawBot(b, f, 0.55, Math.PI / 2);
     badge('☠', b.x, b.y, '#c8ccd6');
   }
-  for (const b of f.bots) {
+  for (const b of [...f.bots].sort((a,b)=>a.y-b.y)) {
     if (!b.alive || b.won) continue;
     ctx.save(); ctx.globalAlpha = 0.9; ctx.strokeStyle = colors[b.char] || '#fff'; ctx.lineWidth = 2;
     ctx.beginPath();
@@ -602,7 +608,8 @@ function render() {
     ctx.stroke(); ctx.restore();
     drawBot(b, f, 1, 0);
     hpBar(b.x, b.y, b.hp, b.maxhp);
-    badge(b.char, b.x, b.y, colors[b.char] || '#fff', 0.16, 0.16);
+    const sd = window.WLSprites && WLSprites.isSD(looks[b.char]);
+    badge(b.char, b.x, b.y, colors[b.char] || '#fff', sd ? 0.5 : 0.16, sd ? -0.5 : 0.16);
   }
 }
 
@@ -658,7 +665,11 @@ function renderParty() {
   if (window.WLSprites && WLSprites.ready) {            // D37 초상화 — 정면 정지 프레임(32px 로 확대)
     for (const cv2 of $('party').querySelectorAll('canvas.face')) {
       const img = WLSprites.cell(looks[cv2.dataset.face], 'front', -1);
-      if (img) { const g = cv2.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(img, 0, 0); }
+      if (img) {
+        cv2.width = cv2.height = img.width;
+        cv2.classList.toggle('sd-face', WLSprites.isSD(looks[cv2.dataset.face]));
+        const g = cv2.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(img, 0, 0);
+      }
     }
   }
 }
@@ -826,6 +837,14 @@ $('bBack').onclick = () => setIdx(curIdx - 1);
 $('bFwd').onclick = () => setIdx(curIdx + 1);
 $('bPlay').onclick = () => setPlaying(!playing);
 $('slider').oninput = e => setIdx(+e.target.value);
+$('mapScale').onchange = () => {
+  const wrap=$('mapWrap'), close=$('mapScale').value==='close';
+  wrap.classList.toggle('close',close);
+  if(close) requestAnimationFrame(() => {
+    const b=frames[curIdx]?.bots.find(b=>b.alive && !b.won);
+    if(b) wrap.scrollTo({left:(b.x+.5)*T*S-wrap.clientWidth/2,top:(b.y+.5)*T*S-wrap.clientHeight/2});
+  });
+};
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
   if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }

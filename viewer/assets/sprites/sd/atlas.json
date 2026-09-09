@@ -1,0 +1,80 @@
+{
+  "version": 2,
+  "cell": 96,
+  "directions": [
+    "front",
+    "right",
+    "back",
+    "left"
+  ],
+  "columns": 5,
+  "frame_ms": 160,
+  "display_scale": 1.5,
+  "presets": {
+    "sd-warrior": {
+      "name": "SD 검사",
+      "sheet": "warrior.png",
+      "job": "전사",
+      "hairstyles": {
+        "default": {
+          "name": "헝클어진 머리",
+          "sheet": "warrior.png"
+        },
+        "parted": {
+          "name": "가르마",
+          "sheet": "warrior-parted.png"
+        },
+        "halfup": {
+          "name": "반묶음",
+          "sheet": "warrior-halfup.png"
+        },
+        "long": {
+          "name": "긴 머리",
+          "sheet": "warrior-long.png"
+        },
+        "twintails": {
+          "name": "양갈래",
+          "sheet": "warrior-twintails.png"
+        }
+      }
+    },
+    "sd-archer": {
+      "name": "SD 궁수",
+      "sheet": "archer.png",
+      "job": "궁수",
+      "hairstyles": {
+        "default": {
+          "name": "포니테일",
+          "sheet": "archer.png"
+        },
+        "bob": {
+          "name": "단발",
+          "sheet": "archer-bob.png"
+        },
+        "braid": {
+          "name": "땋은 머리",
+          "sheet": "archer-braid.png"
+        }
+      }
+    },
+    "sd-rogue": {
+      "name": "SD 도적",
+      "sheet": "rogue.png",
+      "job": "도적",
+      "hairstyles": {
+        "default": {
+          "name": "단발 + 옆땋기",
+          "sheet": "rogue.png"
+        },
+        "pixie": {
+          "name": "숏컷",
+          "sheet": "rogue-pixie.png"
+        },
+        "ponytail": {
+          "name": "포니테일",
+          "sheet": "rogue-ponytail.png"
+        }
+      }
+    }
+  }
+}
