@@ -57,12 +57,20 @@
   }
  },
  "미나": {
+  "feature:chest": {
+   "turn": 45,
+   "depth": 1
+  },
   "monster:고블린": {
    "turn": 126,
    "depth": 1
   },
   "monster:그림자거미": {
    "turn": 48,
+   "depth": 1
+  },
+  "trap:alarm": {
+   "turn": 79,
    "depth": 1
   },
   "trap:dart": {
