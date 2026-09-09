@@ -94,8 +94,8 @@
     </div>
     <div class="status" id="tStatus">상태 확인 중…</div>
     <div class="row center" id="tRunRow" hidden style="margin-top:10px">
-      <button id="bWatch">관전으로</button>
-      <button id="bGame" title="게임 클라이언트(초점 캐릭터 카메라 뷰어, game/) — 빌드가 없으면 안내 페이지가 뜬다">게임 화면으로</button>
+      <button id="bWatch" title="게임 클라이언트(초점 캐릭터 카메라 뷰어, game/) — 빌드가 없으면 안내 페이지가 뜬다">관전으로</button>
+      <button id="bGame" title="기존 HTML 지도 뷰어(viewer/)">옛 뷰어로</button>
       <button class="danger" id="bStop">진행 중인 판 중지</button>
     </div>
   </div>
@@ -250,9 +250,9 @@ async function refreshStatus() {
   } catch (e) { $('tStatus').textContent = '서버 연결 실패 — launcher.py 가 떠 있나? (' + e.message + ')'; }
 }
 $('bNew').onclick = async () => { await loadPresets(); show('sParty'); };
-$('bReplays').onclick = () => { location.href = '/viewer/'; };
-$('bWatch').onclick = () => { location.href = '/viewer/?run=state/stream.jsonl'; };
-$('bGame').onclick = () => { location.href = '/game/?run=state/stream.jsonl'; };   // 게임 클라이언트(2026-09-09 M3) — 기본 링크 교체는 파트너 결정 뒤
+$('bReplays').onclick = () => { location.href = '/game/'; };                       // 게임 클라이언트가 기본(2026-09-09 파트너 결정) — 판 목록은 화면 안 드롭다운
+$('bWatch').onclick = () => { location.href = '/game/?run=state/stream.jsonl'; };    // 기본 = 게임 클라이언트(2026-09-09 파트너 결정 "계속 새 뷰어로 보려면 불편")
+$('bGame').onclick = () => { location.href = '/viewer/?run=state/stream.jsonl'; };   // 옛 HTML 뷰어 — 은퇴 전까지 보조 진입
 $('bStop').onclick = async () => { await api('/api/stop', {}); refreshStatus(); };
 
 /* ═══ 파티 ═══ */
@@ -421,7 +421,7 @@ $('bStart').onclick = async () => {
     while (Date.now() - t0 < 60000) {
       await new Promise(r => setTimeout(r, 700));
       const st = await api('/api/status');
-      if (st.seed != null && (st.running || st.outcome)) { location.href = st.viewer; return; }
+      if (st.seed != null && (st.running || st.outcome)) { location.href = st.game || st.viewer; return; }   // 시작 뒤 자동 이동도 게임 클라이언트로
       if (!st.running && st.seed == null) { /* 아직 run_meta 전 */ }
     }
     $('err2').style.color = '#ff8b7a';
