@@ -1,0 +1,23 @@
+{
+  "name": "wonderland-game",
+  "private": true,
+  "version": "0.1.0",
+  "description": "원더랜드 게임 클라이언트 — 초점 캐릭터 카메라 뷰어 (stream.jsonl 순수 소비자, LLM 0콜)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "smoke": "node verify/smoke.mjs"
+  },
+  "dependencies": {
+    "phaser": "3.90.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "playwright-core": "1.63.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.6"
+  }
+}

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>원더랜드 — 관전</title>
+<link rel="icon" href="data:,">   <!-- favicon 404 방지 -->
+<!-- 초점 캐릭터 카메라 뷰어(GAME_CLIENT_PLAN_2026-09-09). stream.jsonl 의 순수 소비자, LLM 0콜.
+     레이아웃: 무대(좌·넓게) | 칩 열 + 초점 카드(우) / 무대 아래 컨트롤 + 로그(접기 가능). -->
+</head>
+<body>
+<div id="app">
+  <main id="stage" aria-label="무대">
+    <div id="overlay"></div>          <!-- 말풍선·지문 등 DOM 오버레이(Bubbles) — 카메라 좌표는 app.scene.project() -->
+    <div id="hud"></div>              <!-- 무대 위 고정 표식(LIVE 배지 등) -->
+  </main>
+  <aside id="side">
+    <div id="chips"></div>            <!-- 캐릭터 칩(Chips) — 클릭·숫자키로 초점 전환 -->
+    <div id="focusCard"></div>        <!-- 초점 카드(FocusCard) -->
+  </aside>
+  <section id="bottom">
+    <div id="controls"></div>         <!-- 재생 컨트롤(Controls) -->
+    <div id="log"></div>              <!-- 대사·지문·사건 로그(Log) -->
+  </section>
+</div>
+<script type="module" src="./src/main.ts"></script>
+</body>
+</html>
