@@ -78,7 +78,8 @@ def build(spec):
                       ("rest_verb", "DUNGEON_REST"), ("relations", "DUNGEON_RELATIONS"),   # 참말을 한다)
                       ("trail_on", "DUNGEON_TRAIL"), ("objtags", "DUNGEON_OBJTAGS"),        # D38 궤적·D39 태그(09-06)
                       ("floor_on", "DUNGEON_FLOOR"),                                         # D40 층 집계·결산
-                      ("explore_dirs", "DUNGEON_EXPLORE_DIRS")):                             # D19 개정 4 방향 탐색 열거(09-07)
+                      ("explore_dirs", "DUNGEON_EXPLORE_DIRS"),                              # D19 개정 4 방향 탐색 열거(09-07)
+                      ("give_verb", "DUNGEON_GIVE"), ("bond_verb", "DUNGEON_BOND")):           # D47 ② 건네기·친목(09-09)
         setattr(d, attr, os.environ.get(env, "1") != "0")   # 전부 러너 기본 1 — 끄려면 env 로
     try:
         with open(os.path.join(HERE, "lore.json"), encoding="utf-8") as f:
@@ -100,6 +101,8 @@ def build(spec):
             b["hp"] = min(int(ov["hp"]), b["maxhp"])
         if "bag" in ov:
             b["bag"] = int(ov["bag"])
+        if "potions" in ov:                    # 소지 물약(07-17) 프리셋 — 건네기(D47 ②) 장면 저작
+            b["potions"] = int(ov["potions"])
         if "known" in ov:                      # 도감 게이팅 켬 — 장면 전제 지식(메모리 전용)
             b["known"] = set(ov["known"])
         if "plan" in ov:                       # 작정(D16) 프리셋 — 큐 물리를 LLM 없이 실험
@@ -175,7 +178,8 @@ def build(spec):
 
 def summary(res):
     keep = ("type", "result", "target", "to", "trap", "found", "monsters",
-            "roll", "total", "hit", "dmg", "hp", "loot", "why", "missing")
+            "roll", "total", "hit", "dmg", "hp", "loot", "why", "missing",
+            "item", "what", "form", "placed", "equipped")   # D47 ② 건네기·친목
     return " ".join("%s=%s" % (k, json.dumps(res[k], ensure_ascii=False))
                     for k in keep if k in res)
 
@@ -215,6 +219,8 @@ def play(spec, brain, state_dir):
             trail=os.environ.get("DUNGEON_TRAIL", "1") != "0",   # 자기 행동 궤적(D38) — 표현층 메타
             objtags=os.environ.get("DUNGEON_OBJTAGS", "1") != "0",   # 오브젝트 태그(D39) — 표현층 메타
             floor=os.environ.get("DUNGEON_FLOOR", "1") != "0",       # 층 집계·결산(D40) — 표현층 메타
+            give=os.environ.get("DUNGEON_GIVE", "1") != "0",         # 건네기(D47 ②) — 메뉴·물리 메타
+            bond=os.environ.get("DUNGEON_BOND", "1") != "0",         # 친목(D47 ②) — 메뉴·관계 메타
             backend=brains.backend_name(),     # 두뇌 백엔드(2026-07-25 additive) — show_runner 와
                                                #   같은 필드명. 프로브도 어느 배관으로 잰 건지
                                                #   사후 판독돼야 한다(속도 실측이 이 파일도 쓴다)
@@ -339,7 +345,7 @@ def probe(spec, n, jobs):
         elif dec.get("reason"):
             line += "  | " + dec.get("reason", "")[:60]
         print(line)
-        for k in ("say", "say_kind", "to", "note", "floor_line"):   # 말·종류(D47)·상대(D41)·남긴 한 줄·결산 한 줄(D40)도 프로브의 답이다(09-06)
+        for k in ("say", "say_kind", "to", "item", "form", "note", "floor_line"):   # 말·종류(D47)·상대(D41)·건네기 물건·친목 몸짓(D47 ②)·남긴 한 줄·결산 한 줄(D40)도 프로브의 답이다(09-06)
             if dec.get(k):
                 print("         %s: %s" % (k, dec[k]))
         if dec.get("relation"):                      # 관계 살(D36) — 초대 받은 결정의 relation_line

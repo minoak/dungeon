@@ -101,6 +101,9 @@ def main(path):
                 if k == "제안" and dd.get("to") in (None, "all"):
                     meetings += 1
     answers = [v for r in ticks for m in (r.get("answers") or {}).values() for v in m.values()]
+    acts = Counter(dd.get("type") for r in ticks for dd in (r.get("decisions") or {}).values()   # D47 ② 건네기·친목 결정 수
+                   if dd.get("type") in ("give", "bond") and not dd.get("skipped"))
+    reps = Counter((x.get("kind"), x.get("how")) for r in ticks for x in (r.get("replies") or []))   # 반응 형태(tick.replies)
 
     print("  말 걸림 정지 %d회(%.2f/틱) · 전원 제자리 %d틱(%.0f%%) · 최장 정체 %d틱 · 결정 %d(say %.0f%%)"
           % (hails, hails / max(n, 1), len(stall_turns), 100.0 * len(stall_turns) / max(n, 1), longest,
@@ -113,6 +116,9 @@ def main(path):
     if kinds:
         print("  말 종류 %s · 회의 %d · 제안 응답 %d/%d(%.0f%%)"
               % (dict(kinds.most_common()), meetings, sum(answers), len(answers), 100.0 * sum(answers) / max(len(answers), 1)))
+    if acts or reps:
+        print("  건네기 %d · 친목 %d · 반응 형태 %s" % (acts.get("give", 0), acts.get("bond", 0),
+              " · ".join("%s→%s %d" % (k, h, v) for (k, h), v in sorted(reps.items())) or "없음"))
 
     # 저체력 결정 / 물약
     low = defaultdict(Counter)

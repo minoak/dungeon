@@ -43,7 +43,7 @@ def check(name, cond):
         C.failed += 1
 
 
-INTENT_KEYS = ("target", "say", "to", "say_kind", "reason", "src")   # to = D41 지목(09-06 additive) · say_kind = D47 말의 종류(09-08 additive)
+INTENT_KEYS = ("target", "item", "form", "say", "to", "say_kind", "reason", "src")   # to = D41 지목(09-06 additive) · say_kind = D47 말의 종류(09-08 additive) · item/form = D47 ② 건네기·친목(09-09 additive)
 
 
 def derive(dec):

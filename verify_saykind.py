@@ -273,7 +273,7 @@ print("── ⑫ 러너 배선(소스)")
 import io as _io                                     # noqa: E402
 rsrc = _io.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "show_runner.py"), encoding="utf-8").read()
 check("⑫ 스위치·settle·run_meta·병합·보관·리셋·answers 계측 배선",
-      'DUNGEON_SAYKIND' in rsrc and 'DUNGEON_PENDING' in rsrc and 'settle_proposals(d, bots, open_props, decisions)' in rsrc
+      'DUNGEON_SAYKIND' in rsrc and 'DUNGEON_PENDING' in rsrc and 'settle_proposals(d, bots, open_props, decisions, replies)' in rsrc
       and 'say_kind=SAYKIND_ON' in rsrc and 'pending=PENDING_ON' in rsrc and 'merge_inbox(pending, inbox)' in rsrc
       and 'keep_pending(inbox, decisions)' in rsrc and rsrc.count('open_props = {}') == 2
       and 'deliver_and_hail(d, bots, says, say_to, say_kind, open_props)' in rsrc and '"answers": answers' in rsrc)

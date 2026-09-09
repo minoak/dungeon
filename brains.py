@@ -515,6 +515,10 @@ def _witness_prose(w):
         if w.get("door") and w["door"] not in what:
             what += " %s" % w["door"]
         return "%s(%s)가 %s을(를) 사용하는 것을" % (w.get("mon", "?"), w.get("id", "?"), what)
+    if k == "ally_give":                    # D47 ②(09-09) 건네기 목격 — 물건이 손을 옮기는 것을
+        return "%s가 %s에게 %s을(를) 건네는 것을" % (who, w.get("to_name", "동료"), w.get("what", "?"))
+    if k == "ally_bond":                    # D47 ② 친목 목격 — 몸짓(형태=자유 문구, 뜻은 안 붙인다)
+        return "%s가 %s에게 몸짓하는 것을 — %s" % (who, w.get("to_name", "동료"), w.get("form", "몸짓"))
     if k == "ally_use":                     # D30(09-05) 오브젝트 사용 — 동사는 '사용' 하나(파트너 확정:
         what = w.get("what", "?")           #   "~가 문을 사용". 종류별 문장 사전 없음 — 확장 시 what 만
         if w.get("id") and w["id"] not in what:   # 바뀐다). id 는 obs 가 부르는 이름에 없을 때만 붙인다
@@ -543,6 +547,24 @@ def _last_prose(last, names=None):
     미래 additive 필드의 안전망, verify_wire ③이 실전 폴백 0을 감시)."""
     t, r = last.get("type"), last.get("result")
     tgt = str(last.get("target", "") or "")
+    _who = lambda c: "%s(봇%s)" % ((names or {}).get(c, "동료"), c)   # D47 ② 상대 호칭(동료는 이름으로)
+    if t == "give":                       # D47 ② 건네기 — 자기 행동의 결과(사실만)
+        if r == "given":
+            tail = ((" (남은 물약 %d병)" % last.get("potions", 0)) if last.get("item") == "potion"
+                    else (" — 그의 발밑에 놓였다(자리가 차 있었다)" if last.get("placed") else " — 그가 바로 걸쳤다"))
+            return "%s에게 %s을(를) 건넸다%s" % (_who(last.get("to")), last.get("what", "?"), tail)
+        return "건네려 했지만 — " + {"too_far": "곁에 없었다(붙어야 건넨다)", "nothing": "줄 것이 없었다",
+                                     "no_target": "상대가 그 자리에 없었다", "no_room": "바닥에 놓을 자리가 없었다"}.get(r, str(r))
+    if t == "bond":                       # D47 ② 친목 — 자기 행동의 결과(반응은 상대의 다음 결정에서)
+        if r == "done":
+            return "%s에게 몸짓을 했다 — %s" % (_who(last.get("to")), last.get("form", "몸짓"))
+        return "몸짓을 하려 했지만 — " + {"too_far": "곁에 없었다", "no_target": "상대가 그 자리에 없었다"}.get(r, str(r))
+    if t == "received":                   # D47 ② 받은 쪽(hurt 문법 — 남이 내게 한 일)
+        tail = ((" (소지 물약 %d병)" % last.get("potions", 0)) if last.get("item") == "potion"
+                else (" — 발밑에 놓였다(걸칠지는 네 몫)" if last.get("placed") else " — 바로 걸쳤다"))
+        return "%s에게서 %s을(를) 받았다%s" % (_who(last.get("from")), last.get("what", "?"), tail)
+    if t == "bonded":
+        return "%s가 너에게 몸짓을 했다 — %s" % (_who(last.get("from")), last.get("form", "몸짓"))
     if t == "hurt":
         s = "%s(%s)에게 맞았다 — %d 피해, 남은 HP %d" % (
             last.get("by", "?"), last.get("by_id", "?"),
@@ -753,7 +775,8 @@ def _last_prose(last, names=None):
 _TRAIL_RUNS = {"walking": "%d걸음", "following": "%d틱 동행",
                "waiting": "%d틱 대기", "resting": "%d틱 휴식"}
 _VERB_KR = {"goto": "이동", "follow": "동행", "explore": "탐색", "attack": "공격", "interact": "상호작용",
-            "search": "수색", "wait": "기다림", "rest": "휴식", "drink": "물약"}   # 최근 판단 장부 줄의 동사(D38 개정 2)
+            "search": "수색", "wait": "기다림", "rest": "휴식", "drink": "물약",
+            "give": "건네기", "bond": "친목"}   # 최근 판단 장부 줄의 동사(D38 개정 2) — give/bond=D47 ②(09-09)
 
 
 def _hist_item(h):
@@ -761,8 +784,10 @@ def _hist_item(h):
     결과는 안 붙는다(D38 개정 2-b, 파트너 "캐릭터의 선택만"). 작정 수=캐릭터가 미리 정한 것, 폴백=규칙두뇌가 대신 고른 것."""
     src = h.get("src") or ""
     tag = ", 작정" if src == "plan" else (", 폴백" if src == "fallback" else "")
-    return "%s%s (t%s%s)" % (_VERB_KR.get(h.get("type"), h.get("type") or "?"),
-                             (" %s" % G.place_word(h["target"], "decide")) if h.get("target") else "", h.get("turn", "?"), tag)
+    what = ((" %s" % G.ITEM_KR.get(h["item"], h["item"])) if h.get("item")       # D47 ② 건네기 물건 / 친목 몸짓
+            else ((" [%s]" % h["form"]) if h.get("form") else ""))
+    return "%s%s%s (t%s%s)" % (_VERB_KR.get(h.get("type"), h.get("type") or "?"),
+                               (" %s" % G.place_word(h["target"], "decide")) if h.get("target") else "", what, h.get("turn", "?"), tag)
 
 
 def _dlg_who(m, nm):
@@ -790,6 +815,23 @@ def _floor_counts(counts):
 def _floor_name(depth):
     d = int(depth or 0)
     return "마을" if d == 0 else "%d층" % d
+
+
+def _clean_form(raw):
+    """친목의 몸짓(D47 ② 응답 `form`, 2026-09-09 파트너 "['대화' '친목' '머리를 쓰다듬기']") — 한 줄·따옴표 제거·BOND_LEN 자.
+    목록이 아니라 자유 문구(파트너 결정 09-09: 기계는 횟수만, 형태는 기록으로). 비면 엔진이 '몸짓'으로 적는다."""
+    return " ".join(str(raw or "").replace('"', "").replace("'", "").split())[:G.BOND_LEN]
+
+
+def _act_item(a, other):
+    """관계 상세 기록 한 건(D47 ②) → 't12 내가 머리 쓰다듬기 → 답: 말로' / 't14 카야(봇2)가 물약 건넴 → 내 답: 없음'.
+    반응은 형태만(행동|말|없음 — 러너 classify_reply). 아직 답이 없으면 꼬리 없음."""
+    who = "내가" if a.get("mine") else "%s가" % other
+    what = ("%s 건넴" % a.get("what", "?")) if a.get("kind") == "건네기" else str(a.get("what", "몸짓"))
+    rep = a.get("reply")
+    tail = "" if rep is None else " → %s: %s" % ("답" if a.get("mine") else "내 답",
+                                                 {"행동": "행동으로", "말": "말로", "없음": "없음"}.get(rep, rep))
+    return "t%s %s %s%s" % (a.get("turn", "?"), who, what, tail)
 
 
 _KIND_PROPOSE = ("제안", "요청", "부탁", "proposal", "propose", "request", "ask", "suggest", "offer")
@@ -1107,6 +1149,9 @@ def _wire(obs, names=None):
                                  (" (%s)" % ago(b_["last"])) if b_.get("last") is not None else "")
                     for b_ in r.get("bones", [])]
             M.append("- %s: %s" % (nm(r.get("char", "?")), ", ".join(bits) if bits else "아직 없음"))
+            acts = r.get("acts") or []
+            if acts:                        # D47 ② 상세 기록(파트너 초안 §A-5) — 형태(무엇을)+반응(형태만: 행동|말|없음)
+                M.append("  · 최근 친목·건네기: " + " / ".join(_act_item(a, nm(r.get("char", "?"))) for a in acts))
 
     k = obs.get("known")
     if k and (k.get("statics") or k.get("last_seen") or k.get("zones")):
@@ -1142,6 +1187,10 @@ def _wire(obs, names=None):
                                           it.get("type", "?"))    # (tN) = D38 궤적 판만(얼마나 전의 판단인지)
             if it.get("target"):
                 line += " %s" % G.place_word(it["target"], "decide")   # 칸 핑 '@x,y' → 사람 말(09-08)
+            if it.get("item"):
+                line += " %s" % G.ITEM_KR.get(it["item"], it["item"])   # D47 ② 건네기 — 무엇을
+            if it.get("form"):
+                line += " [%s]" % it["form"]                            # D47 ② 친목 — 어떤 몸짓
             if it.get("reason"):
                 line += ' — 이유: "%s"' % it["reason"]
             M.append(line)
@@ -1277,6 +1326,8 @@ def _pick(obj, obs):
     out = {"type": o["type"], "choice": n}
     if "target" in o:
         out["target"] = o["target"]
+    if "item" in o:
+        out["item"] = o["item"]               # D47 ② 건네기 — 물건은 메뉴 줄이 정한다(응답 필드 아님)
     return out
 
 
@@ -1373,6 +1424,8 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
             if act:
                 if act["type"] == "follow":
                     then = []                       # 동행=열린 결말 — then 뒤수 부적합(D18 A-5)
+                if act["type"] == "bond":           # D47 ② 친목 — 몸짓은 응답 form(자유 문구, 엔진 무해석·BOND_LEN)
+                    act["form"] = _clean_form(obj.get("form"))
                 return {**act,
                         **({"then": then} if then else {}),
                         **({"note": note} if note else {}),
@@ -1537,7 +1590,9 @@ def think_all(d, bots, inbox=None):
         if HISTORY_ON:                   # D38 개정 2-b(09-07 밤, 파트너 "캐릭터의 선택만"): 결정마다 한 항목 — 실 결정·
             hist = by[c].setdefault("history", [])   #   작정 수·폴백 전부(캐릭터가 정했거나 미리 정한 것 + 대신 골라진 것의 표식).
             hist.append({"turn": d.turn, "type": dec.get("type", ""), "target": dec.get("target"),
-                         "src": dec.get("src", "")})          #   엔진이 걷고 멈춘 결과는 안 담는다(직전 절·궤적의 몫)
+                         "src": dec.get("src", ""),           #   엔진이 걷고 멈춘 결과는 안 담는다(직전 절·궤적의 몫)
+                         **({"item": dec["item"]} if dec.get("item") else {}),    # D47 ② 건네기 물건 / 친목 몸짓 — 선택의 일부
+                         **({"form": dec["form"]} if dec.get("form") else {})})
             del hist[:-HISTORY_MAX]
         if DIALOGUE_ON and dec.get("say"):     # D43: 내가 한 말도 대화 장부에(들은 말과 한 흐름 — 한쪽만 있으면 독백 기록)
             dl = by[c].setdefault("dialogue", [])
@@ -1549,7 +1604,7 @@ def think_all(d, bots, inbox=None):
                                          #   **실** 결정을 유지(09-06 마을 판: 미나의 '직전 판단'이 매번
                                          #   "[작정] 미리 정한 다음 수"라 자기 결정·결과가 두 수 전으로 사라졌다)
         it = {"type": dec.get("type", "")}   # bot_snapshot 화이트리스트 밖 = 스트림 계약 불변
-        for k in ("target", "say", "to", "say_kind", "reason", "src"):   # (직전 decisions에서 파생 가능한 값). to=D41 지목·say_kind=D47
+        for k in ("target", "item", "form", "say", "to", "say_kind", "reason", "src"):   # (직전 decisions에서 파생 가능한 값). to=D41 지목·say_kind=D47·item/form=D47 ② 건네기 물건·친목 몸짓
             if dec.get(k):                   # (궤적 끈 판) 작정 수도 자기 판단의 연속이라 intent 갱신
                 it[k] = dec[k]
         if trail_on:

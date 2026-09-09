@@ -186,6 +186,12 @@ PENDING_MAX = 6                                              #   보관 상한(�
 FLOOR_ON = os.environ.get("DUNGEON_FLOOR", "1") != "0"       # 층 집계·결산(D40 ②, 09-06) — 러너 기본 1,
                                                              #   엔진 기본 0. "이 층에서 지금까지" 꼬리표 ×N +
                                                              #   층 전이 때 얼려 "지난 층"(캐릭터 한 줄 피기백)
+GIVE_ON = os.environ.get("DUNGEON_GIVE", "1") != "0"         # 건네기(D47 ②, 09-09 파트너 "건네기를 만들려면 아이템 거래를
+                                                             #   넣어야 해") — 러너 기본 1, 엔진 기본 0. 곁의 동료에게 물약·
+                                                             #   무기·방어구를 넘기는 즉시 동사(메뉴 열거). 승낙=이 줄을 고르는 것
+BOND_ON = os.environ.get("DUNGEON_BOND", "1") != "0"         # 친목(D47 ②, 09-09 파트너 "['대화' '친목' '머리를 쓰다듬기']") —
+                                                             #   러너 기본 1, 엔진 기본 0. 곁의 동료에게 하는 몸짓(응답 form
+                                                             #   자유 문구) — 물리 없음, 기록·목격·뼈. 반응은 상대의 다음 결정
 LORE_FILE = os.path.join(HERE, "lore.json")
 STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적용 후 맵이 보이게(헤들리스=0)
 
@@ -474,6 +480,16 @@ def act_summary(res):
         tag = {"treasure": "$ 획득", "potion": "! 회복 물약 획득", "too_far": "너무 멀다",
                "nothing": "허탕", "no_target": "대상 없음"}
         return "상호작용 %s — %s" % (res.get("target", "?"), tag.get(r, r))
+    if t == "give":                                            # 건네기(D47 ②)
+        if res.get("result") == "given":
+            return "봇%s에게 %s 건넴%s" % (res.get("to", "?"), res.get("what", "?"),
+                                          " (그의 발밑에 놓임)" if res.get("placed") else "")
+        return "건네기 — " + {"too_far": "곁에 없다", "nothing": "줄 것이 없다", "no_target": "대상 없음",
+                              "no_room": "놓을 자리 없음"}.get(res.get("result"), str(res.get("result")))
+    if t == "bond":                                            # 친목(D47 ②)
+        if res.get("result") == "done":
+            return "봇%s에게 친목 — %s" % (res.get("to", "?"), res.get("form", "몸짓"))
+        return "친목 — " + {"too_far": "곁에 없다", "no_target": "대상 없음"}.get(res.get("result"), str(res.get("result")))
     if t == "drink":
         if res.get("result") == "drink_heal":
             return "회복 물약을 들이켰다 — HP %d 회복(전부), 남은 물약 %d병" % (
@@ -543,6 +559,7 @@ def build_town():
     d.ally_sight, d.social = ALLY_SIGHT_ON, SOCIAL_ON                  # 동료 시야 면제 · 채널 분리
     d.trail_on, d.objtags = TRAIL_ON, OBJTAGS_ON                       # D38 궤적 · D39 오브젝트 태그
     d.floor_on = FLOOR_ON                                              # D40 층 집계·결산(마을도 한 층)
+    d.give_verb, d.bond_verb = GIVE_ON, BOND_ON                         # D47 ② 건네기·친목(마을에서도 곁이면 된다)
     for n in spec.get("npcs", []):
         x, y = int(n["x"]), int(n["y"])
         if d.grid[y][x] != G.FLOOR:            # 좌표-그림 어긋남은 시작 전에 죽는 게 낫다
@@ -628,10 +645,25 @@ def deliver_and_hail(d, bots, says, say_to, say_kind=None, open_props=None):
     return inbox, hails
 
 
-def settle_proposals(d, bots, open_props, decisions):
+def classify_reply(dec, other):
+    """반응의 형태(D47 ②, 2026-09-09 파트너 "응답에서 제안 승낙 시 선택지 안에서 행동할 수 있게") — 상대(other)의 제안·친목·
+    건네기 뒤 내 첫 결정이 그 사람을 향했나: **행동**(건네기·친목·동행·합류(goto b<그>)의 대상이 그 사람) / **말**(say 의 to 가
+    그 사람 또는 all) / **없음**. 내용(수락·거절)은 안 읽는다 — 엔진이 제안 내용을 모르니 승낙은 곧 행동이다(파트너 초안 §A-3
+    "시도했다고 수락까지 자동으로 정하지 않는다"). 순수 함수."""
+    if not dec:
+        return "없음"
+    if dec.get("type") in ("give", "bond", "follow", "goto") and str(dec.get("target") or "") == "b%s" % other:
+        return "행동"
+    if dec.get("say") and dec.get("to") in (other, "all"):
+        return "말"
+    return "없음"
+
+
+def settle_proposals(d, bots, open_props, decisions, replies=None):
     """D47 반응 장부 — 제안을 받은 봇이 그 뒤 **첫 결정**을 내리면 제안은 닫힌다(유효기간 = 상대의 다음 결정까지, 파트너
-    "제안을 받았으니 판단을 새로 내리게 하자"). 그 결정에서 제안한 사람(또는 모두)에게 말했으면 '답함' 뼈(answered/replied) —
-    내용(수락·거절)은 안 읽는다. 작정 집행(src=plan)은 읽지 않았으니 열어 둔다. 반환 {받은 봇: {한 봇: 답함 여부}}(계측)."""
+    "제안을 받았으니 판단을 새로 내리게 하자"). 그 결정에서 제안한 사람에게 **말했거나 행동했으면**(classify_reply — D47 ②:
+    건네기·친목·동행·합류로 그를 향한 것도 답이다) '답함' 뼈(answered/replied) — 내용(수락·거절)은 안 읽는다. 작정 집행
+    (src=plan)은 읽지 않았으니 열어 둔다. 반환 {받은 봇: {한 봇: 답함 여부}}(계측 — 형태는 replies 목록에 {from,to,kind,how})."""
     by = {b["char"]: b for b in bots}
     out = {}
     for c, dec in (decisions or {}).items():
@@ -641,10 +673,36 @@ def settle_proposals(d, bots, open_props, decisions):
         if not opened:
             continue
         for a in list(opened):
-            answered = bool(dec.get("say")) and dec.get("to") in (a, "all")
+            how = classify_reply(dec, a)
+            answered = how != "없음"
             if answered and by.get(a) is not None and by.get(c) is not None:
                 d.note_answer(by[a], by[c])
             out.setdefault(c, {})[a] = answered
+            if replies is not None:
+                replies.append({"from": c, "to": a, "kind": "제안", "how": how})
+            del opened[a]
+    return out
+
+
+def settle_acts(d, bots, open_acts, decisions, replies=None):
+    """D47 ② 친목·건네기의 반응 — 받은 봇의 그 뒤 **첫 결정**(작정 집행 제외)이 답이다: 형태(행동|말|없음)를 양쪽 관계 장부의
+    상세 기록에 적고(note_reply) 계측 목록에 {from,to,kind,how}. 제안과 같은 자(classify_reply) — 뜻은 안 읽는다."""
+    by = {b["char"]: b for b in bots}
+    out = []
+    for c, dec in (decisions or {}).items():
+        if not dec or dec.get("src") == "plan" or dec.get("skipped"):
+            continue
+        opened = open_acts.get(c)
+        if not opened:
+            continue
+        for a in list(opened):
+            how = classify_reply(dec, a)
+            if by.get(a) is not None and by.get(c) is not None:
+                d.note_reply(by[c], by[a], how)
+            ent = {"from": c, "to": a, "kind": opened[a], "how": how}
+            out.append(ent)
+            if replies is not None:
+                replies.append(ent)
             del opened[a]
     return out
 
@@ -714,7 +772,7 @@ def main():
                       loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
                       dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
                       ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
-                      status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON)
+                      status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON)
         d.lore = lore
     bots = []
     for c in chars:
@@ -798,6 +856,8 @@ def main():
                                        #   (정지 물리를 바꾸므로 리플레이·판 비교의 전제 — hail 과 같은 급)
             say_kind=SAYKIND_ON,       # 말의 종류(D47) 여부 — 정지는 제안만·회의·반복 방지·반응 뼈(정지 물리 메타, sayto 와 같은 급)
             pending=PENDING_ON,        # 들은 말 보관(D47 배관) 여부 — inbox 에 보관된 옛 말(turn 스탬프)이 섞이는 표현층 메타
+            give=GIVE_ON,              # 건네기(D47 ②, 09-09) 여부 — 메뉴(options give)·소지품 이동 물리 메타(rest 와 같은 급)
+            bond=BOND_ON,              # 친목(D47 ②) 여부 — 메뉴(options bond)·관계 뼈·tick.replies 를 바꾸는 사회층 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
@@ -832,6 +892,7 @@ def main():
                                             # 빈 dict 아닌 전 봇 키 — 스트림 tick.inbox 형태 고정(소비자 인덱싱)
     pending = {b["char"]: [] for b in bots}   # D47 배관 — 걷는 동안 들린 말의 보관함(결정 때 함께 읽힘)
     open_props = {}                         # D47 제안 장부 {받은 봇: {한 봇: turn}} — 상대의 다음 결정까지 열려 있다
+    open_acts = {}                          # D47 ② 친목·건네기 장부 {받은 봇: {한 봇: 종류}} — 반응은 상대의 다음 결정에서 형태로
     write_map(d, bots, 0)
     time.sleep(1.0)
 
@@ -847,8 +908,10 @@ def main():
         decisions = brains.think_all(d, bots, inbox)
         # 사교 콜(채널 분리) — 걷는 중에 말을 들은 봇만. 행동은 못 바꾸고 say 만 낸다.
         social = brains.social_all(d, bots, inbox)
-        answers = settle_proposals(d, bots, open_props, decisions) if (SAYKIND_ON and SAYTO_ON) else {}
+        replies = []                          # D47 ② 반응(형태) 계측 — 제안·친목·건네기에 대한 첫 결정의 답(행동|말|없음)
+        answers = settle_proposals(d, bots, open_props, decisions, replies) if (SAYKIND_ON and SAYTO_ON) else {}
                                              # D47 반응 장부: 제안 받은 봇의 첫 결정에서 닫힌다(답했으면 뼈)
+        settle_acts(d, bots, open_acts, decisions, replies)   # D47 ② 친목·건네기의 반응 — 같은 결정에서 같은 자로
         if PENDING_ON:
             pending = keep_pending(inbox, decisions)   # 읽은 봇은 비우고, 걷던 봇은 보관(D47 배관)
         for b in bots:
@@ -875,6 +938,9 @@ def main():
                     continue
                 res = d.act(b, dec, bots)                # 핑/공격/상호작용 판정 = 진실
                 res["reason"] = dec.get("reason", "")
+                if res.get("type") in ("give", "bond") and res.get("result") in ("given", "done"):
+                    open_acts.setdefault(res["to"], {})[b["char"]] = "건네기" if res["type"] == "give" else "친목"
+                                                         # D47 ② 상대의 다음 결정이 답이다(형태) — settle_acts 가 닫는다
                 src = dec.get("src", "haiku")
                 append(botlog[b["char"]], "[t%02d] %s" % (turn, dec.get("reason", "")))
                 append(botlog[b["char"]], "        -> %s  <%s>" % (act_summary(res), src))
@@ -918,6 +984,7 @@ def main():
         tick_rec = {"turn": turn, "inbox": inbox_in, "decisions": decisions,
                     **({"hails": hails} if hails else {}),   # 말 걸림 정지 성사(D24) — additive 계측
                     **({"answers": answers} if answers else {}),   # 제안 반응(D47) {받은 봇: {한 봇: 답함 여부}} — additive 계측
+                    **({"replies": replies} if replies else {}),   # 반응 형태(D47 ②) [{from,to,kind,how}] — additive 계측
                     "events": turn_events,
                     "bots": [G.bot_snapshot(b) for b in bots],
                     "monsters": [m.as_dict() for m in d.monsters],
@@ -983,7 +1050,7 @@ def main():
                               wait_verb=WAIT_ON, motion=MOTION_ON,
                               ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
                               n_gear=N_GEAR, status=STATUS_ON, rest_verb=REST_ON,
-                              relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON)
+                              relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON)
                 d.lore = lore
                 fresh = True
             # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,
@@ -1009,7 +1076,8 @@ def main():
                 n["status"] = {t: dict(e) for t, e in (b.get("status") or {}).items()}   # 상태 태그(D34)
                 n["bleed_steps"] = b.get("bleed_steps", 0)   #   도 이월 — 몸은 층을 넘어도 그 몸이다
                 n["relations"] = {oc: {**e, "bones": {k: dict(v) for k, v in e["bones"].items()},
-                                       "queue": list(e.get("queue") or [])}
+                                       "queue": list(e.get("queue") or []),
+                                       "acts": [dict(a) for a in (e.get("acts") or [])]}   # D47 ② 상세 기록도 이월
                                   for oc, e in (b.get("relations") or {}).items()}   # 관계 장부(D36)도 이월
                 n["memories"] = list(b.get("memories") or [])   # 기억도 이월(D22) — 전사는 원정급
                                                           # 사건(장부=층의 기억과 대비. 구역 이름은
@@ -1035,6 +1103,7 @@ def main():
             inbox = {b["char"]: [] for b in bots}   # 층 전이 = 대화 리셋(형태는 전 봇 키로 고정)
             pending = {b["char"]: [] for b in bots}   # 보관함도 리셋(D47 배관)
             open_props = {}                         # 제안 장부도 리셋(D47)
+            open_acts = {}                          # 친목·건네기 장부도 리셋(D47 ②)
             lvl = {"turn": turn, **d.level_snapshot(),            # descend/ascend 직후 level 불변식
                    "party": [G.bot_snapshot(b) for b in bots]}
             sw.emit("level", **lvl)

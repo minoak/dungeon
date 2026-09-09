@@ -168,12 +168,14 @@ EVENT_KINDS = {
     'door': True, 'talk': True, 'rest_done': True, 'hail': True, 'lost': True, 'reunion': True,
     'wander': True, 'enter': True, 'descend': True, 'ascend': True, 'plan_broken': True,
     'wait_allies': True, 'search': True, 'exhausted': True,
+    'give': True, 'bond': True, 'received': True, 'bonded': True,   # D47 ② 건네기·친목(한 쪽·받은 쪽)
     'move': False, 'start': False, 'arrive': False, 'blocked': False, 'swap': False, 'misc': False,
 }
 WITNESS_LABELS = {              # 목격 사건(witnessed kind) → 집계 라벨. 문장은 brains._witness_prose 그대로
     'ally_hurt': '동료 피격', 'ally_down': '동료 전사', 'ally_hit': '동료 명중', 'ally_kill': '동료 처치',
     'ally_trap': '동료 함정', 'ally_heal': '동료 회복', 'ally_loot': '동료 획득', 'ally_spot': '동료 발견',
     'ally_mishap': '동료 사고', 'ally_use': '동료 사용', 'mon_use': '몹 문 사용', 'ally_status': '동료 상태',
+    'ally_give': '동료 건넴', 'ally_bond': '동료 친목',   # D47 ②(09-09) 건네기·친목 목격
 }
 _RUN_RESULTS = {'walking': '걸음', 'following': '틱 동행', 'waiting': '틱 대기', 'resting': '틱 휴식'}
 
@@ -273,6 +275,20 @@ def event_tags(rec, names=None):
                 out.append(('status', rec['status'], '걸림'))
             return out
         return [('misc', '기타', json.dumps(rec, ensure_ascii=False))]
+    if t == 'give':                                   # D47 ②(09-09) 건네기 — 한 쪽의 자기 사건
+        if r == 'given':
+            return [('give', '건넴', '%s → %s%s' % (rec.get('what', '?'), nm(rec.get('to')),
+                                                  ' (그의 발밑에 놓임)' if rec.get('placed') else ''))]
+        return [('misc', '헛손질', {'too_far': '곁에 없음', 'nothing': '줄 것 없음', 'no_room': '놓을 자리 없음'}.get(r, r))]
+    if t == 'bond':                                   # D47 ② 친목 — 한 쪽의 자기 사건(형태=자유 문구)
+        if r == 'done':
+            return [('bond', '친목', '%s → %s' % (rec.get('form', '몸짓'), nm(rec.get('to'))))]
+        return [('misc', '헛손질', {'too_far': '곁에 없음'}.get(r, r))]
+    if t == 'received':                               # D47 ② 받은 쪽의 자기 사건(hurt 문법 — 남이 내게 한 일)
+        return [('received', '받음', '%s (%s)%s' % (rec.get('what', '?'), nm(rec.get('from')),
+                                                   ' — 발밑에 놓임' if rec.get('placed') else ''))]
+    if t == 'bonded':
+        return [('bonded', '친목 받음', '%s: %s' % (nm(rec.get('from')), rec.get('form', '몸짓')))]
     if t in ('goto', 'explore', 'follow'):
         if r == 'pathed':
             return [('start', '이동 시작', (place_word(tgt, 'decide') + ' 쪽') if tgt and tgt != 'auto' else '새 길')]
@@ -409,8 +425,16 @@ BONES = {'talk': '이야기를 나눔', 'fought': '함께 싸움', 'waited': '�
          # 시도와 반응이 짝 — proposed(내가 그에게 제안) ↔ asked(그가 내게 제안) / answered(그가 내 제안에 답함) ↔
          # replied(내가 그의 제안에 답함). '답함'은 다음 결정에서 그 사람에게 말을 했다는 구조적 사실뿐(수락·거절은 안 읽는다).
          # ⚠️ 라벨 문구는 세션 임시안 — 파트너 문장 대기.
-         'proposed': '제안함', 'asked': '제안받음', 'answered': '내 제안에 답함', 'replied': '제안에 답해 줌'}
+         'proposed': '제안함', 'asked': '제안받음', 'answered': '내 제안에 답함', 'replied': '제안에 답해 줌',
+         # D47 ②(2026-09-09, 파트너 "건네기를 만들려면 아이템 거래를 넣어야 해" · "['대화' '친목' '머리를 쓰다듬기'] — 친목 행위라
+         # 일반 대화와는 별개"): 건네기는 방향이 있고(gave/received), 친목은 쌍이 같이 센다(파트너 초안 §A-5 "두란과 친목행위 3회"
+         # — 묶어 표시, 상세는 acts 기록에). ⚠️ 라벨 문구는 세션 임시안 — 파트너 문장 대기.
+         'gave': '물건을 건넴', 'received': '물건을 받음', 'bond': '친목행위'}
 STRONG_BONES = ('rescued', 'at_death')   # 즉시 청한다 — 한 번이 열 번의 잡담보다 무겁다
+ACTS_MAX = 8             # 관계 장부의 상세 기록(D47 ②: 친목·건네기 한 건=형태+상대 반응) 보존 상한 — 상대별
+ACTS_SHOW = 4            # 결정 obs 에 되돌려주는 최근 기록 수(상대별)
+BOND_LEN = 30            # 친목의 몸짓(응답 form) 한 줄 상한 — 자유 문구(목록 아님: 파트너 결정 09-09, 매 턴 목록=유혹)
+ITEM_KR = {'potion': '회복 물약', 'weapon': '무기', 'armor': '방어구'}   # 건네기 item 키 → 사람 말(메뉴·장부·궤적 공용)
 
 
 def status_prose(tag):
@@ -578,7 +602,7 @@ class Dungeon:
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
                  motion=False, ally_sight=False, social=False, solo=False, n_gear=0,
                  town=False, status=False, rest_verb=False, relations=False, trail=False,
-                 objtags=False, floor=False, explore_dirs=False):
+                 objtags=False, floor=False, explore_dirs=False, give_verb=False, bond_verb=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -673,6 +697,10 @@ class Dungeon:
                                    #   목록은 계획기(_explore_ways)와 같은 논리 한 벌(라벨=사실).
         self.floor_on = bool(floor)    # 층 집계·결산(D40 ②, 09-06) — 기본 꺼짐. 러너가 DUNGEON_FLOOR(기본 1)로 켠다.
                                    #   사건 사전으로 자기·목격 사건을 층 단위로 세고(bot['floor']) 층을 떠날 때 얼린다(floors).
+        self.give_verb = bool(give_verb)   # 건네기(D47 ②, 09-09) — 기본 꺼짐(기존 verify 비트 동일). 러너가 DUNGEON_GIVE(기본 1)로
+                                   #   켠다. 곁(체비셰프≤1)의 동료에게 물약·무기·방어구를 넘기는 즉시 동사 — 메뉴 열거+_give.
+        self.bond_verb = bool(bond_verb)   # 친목(D47 ②, 09-09) — 기본 꺼짐. 러너가 DUNGEON_BOND(기본 1)로 켠다. 곁의 동료에게 하는
+                                   #   몸짓(형태=응답 form 자유 문구) — 물리 없음, 기록·목격·관계 뼈만. 상대는 안 선다.
         self._talked = set()       # (쌍, 틱) — 같은 틱 양방향 대화를 한 번으로(note_talk 중복 방지)
         self._ring_target = 0      # loops 판에서 주 고리에 배속할 방 수(_carve_rooms 가 굴림)
         self.rooms = self._carve_rooms()
@@ -749,6 +777,7 @@ class Dungeon:
         d.objtags = False          # 오브젝트 태그(D39) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.floor_on = False         # 층 집계·결산(D40) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.explore_dirs = False     # 방향 탐색 열거(D19 개정 4) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.give_verb = d.bond_verb = False   # 건네기·친목(D47 ②, 09-09) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d._talked = set()
         d.grave_of = {}            # 묘→캐릭터(D22 개정) — __new__ 경유라 명시 초기화
         d.npc_lines = {}           # NPC 인사 사전 — build_town 이 채운다(데이터, 판정 무접촉)
@@ -1761,6 +1790,30 @@ class Dungeon:
                  '회복 물약을 마신다 — 상처가 전부 아문다 (한 턴 소모, 소지 %d병)%s'
                  % (bot['potions'],
                     ' ※ 지금은 상처가 없다' if bot['hp'] >= bot['maxhp'] else ''))
+        # D47 ②(2026-09-09 파트너 "제안은 열리게 하는 대신 응답에서 제안 승낙 시 선택지 안에서 행동할 수 있게"): 건네기·친목은
+        # **곁(체비셰프≤1 — 동행의 '곁'과 같은 자)의 동료에게 늘 열리는 즉시 행동**이다 — 제안이 있어서 생기는 줄이 아니다(파트너
+        # 초안 §A-1 "관계가 동료라는 이유만으로 행동을 숨기지는 않는다"). 승낙 = 이 줄을 고르는 것(엔진은 제안 내용을 안 읽는다).
+        # 라벨=사실만(무엇을·누구에게·물리). 친목의 몸짓 목록은 매 턴 안 늘어놓는다(유혹 — 예시는 지침에 한 번, 응답 form 자유 문구).
+        if (self.give_verb or self.bond_verb) and not self.solo:
+            _anm = {o['char']: (o.get('name') or o['job']) for o in bots}
+            for a in allies:
+                if a['dist'] > 1:
+                    continue                           # 곁이 아니면 어휘가 안 된다(다가가는 건 '합류'가 담당)
+                who_ = '%s(봇%s)' % (_anm.get(a['char'], '동료'), a['char'])
+                if self.give_verb:
+                    ob = next(o for o in bots if o['char'] == a['char'])
+                    if bot.get('potions'):
+                        _add('give', a['id'], '건네기: 회복 물약 → %s (곁, 소지 %d병)' % (who_, bot['potions']))
+                        options[-1]['item'] = 'potion'
+                    for slot in ('weapon', 'armor'):
+                        g = bot.get(slot)
+                        if g:
+                            _add('give', a['id'], '건네기: %s → %s (곁 — 벗어 건넨다%s)'
+                                 % (g['name'], who_,
+                                    ', 그의 %s 자리가 차 있어 발밑에 놓인다' % ITEM_KR[slot] if ob.get(slot) else ', 그가 바로 걸친다'))
+                            options[-1]['item'] = slot
+                if self.bond_verb:
+                    _add('bond', a['id'], '친목: %s에게 곁에서 하는 몸짓 하나 — 어떤 몸짓인지는 응답 `form`에 (한 턴 소모)' % who_)
         if exit_obj and not exit_obj['adj']:
             _add('goto', 'exit', '이동: %s exit — %s, 거리 %d'
                  % ('던전 입구' if self.town else '계단',
@@ -1905,7 +1958,9 @@ class Dungeon:
         # 1회성: 이번 결정에 한 번 전달하고 비운다(휘발=다음 결정 1회 — D22).
         # 자기 사건은 last 가 담당(중복 없음). 종 표기는 내 도감 기준(모르는 종=낯선 짐승 — D9 정합).
         def _mask(w):                          # 도감 게이트 — 몹 이름만 가린다(함정·샘은 by_kind 로 면제)
-            out = {**w, **({'name': names.get(w['char'], _unknown)} if 'char' in w else {})}
+            out = {**w, **({'name': names.get(w['char'], _unknown)} if 'char' in w else {}),
+                   **({'to_name': '%s(봇%s)' % (names.get(w['to'], _unknown), w['to'])} if 'to' in w else {})}
+            #   ↑ D47 ②(09-09) 건네기·친목 목격의 상대(to) — 사람 사건이라 이름으로(솔로 판은 '낯선 사람')
             #   ↑ 몹 주어 사실(mon_use — D30 확장 2차)은 char 가 없다: 이름 풀이는 사람 사건에만
             if known is not None:
                 if 'by' in out and out.get('by_kind', 'monster') == 'monster' \
@@ -1945,6 +2000,8 @@ class Dungeon:
                 ent = {'char': oc, 'name': ob.get('name') or ob['job'], 'bones': bones,
                        'line': e.get('line'), 'line_turn': e.get('line_turn'),
                        'line_src': e.get('line_src')}
+                if e.get('acts'):                      # D47 ② 상세 기록(친목·건네기 형태+상대 반응) — 최근 ACTS_SHOW 건
+                    ent['acts'] = [dict(a) for a in e['acts'][-ACTS_SHOW:]]
                 if not invited and e.get('queue'):
                     ent['invite'] = e['queue'].pop(0)   # 결정당 초대 1개 — 나머지는 다음 결정
                     invited = True
@@ -2068,6 +2125,10 @@ class Dungeon:
             res = self._set_explore(bot, tgt, bots)   # 탐색(선택적 방위 tgt)
         elif typ == 'follow':
             res = self._set_follow(bot, tgt, bots)    # 동행(D18 A-5) — 곁 유지 지속 order
+        elif typ == 'give':
+            res = self._give(bot, tgt, (action or {}).get('item'), bots)   # 건네기(D47 ②) — 곁의 동료에게 소지품
+        elif typ == 'bond':
+            res = self._bond(bot, tgt, (action or {}).get('form'), bots)   # 친목(D47 ②) — 곁의 동료에게 몸짓
         else:
             res = self._set_order(bot, tgt, bots)     # goto(기본)
         self._note_last(bot, res, plan=(action.get('src') == 'plan'))   # D38: 작정 집행 결과엔 표식
@@ -3790,6 +3851,127 @@ class Dungeon:
             return
         self._bone(a, b['char'], 'answered')
         self._bone(b, a['char'], 'replied')
+
+    def _ally_target(self, bot, target_id, bots):
+        """건네기·친목 공용 대상 해소 — ('b2'|'2') → 곁(체비셰프≤1, 동행의 '곁'과 같은 자)의 살아있는 동료 dict.
+        반환 (tid, recv, why) — why ∈ None/'no_target'/'too_far'. 시야 밖 동료는 D18 개정대로 없는 것."""
+        s = str(target_id or '')
+        tid = s if s[:1] == 'b' else 'b%s' % s
+        res = self._resolve_target(tid, bots, bot)
+        if res is None or res[0] != 'bot':
+            return tid, None, 'no_target'
+        if not self._beside(bot, res[1], 'bot'):
+            return tid, None, 'too_far'
+        recv = next((o for o in (bots or []) if o['char'] == tid[1:]), None)
+        return tid, recv, (None if recv is not None else 'no_target')
+
+    def _receive(self, recv, rec, bots=None):
+        """받은 쪽의 자기 사건(D47 ②) — hurt 문법(남이 내게 한 일도 내 경험): last+궤적에 싣는다. 걷는 동료는 안 세운다
+        (다음 결정에서 읽는다 — 잡담·친목=무정지 원칙). 대기·휴식 중이면 깨운다(손에 쥐어 주고 어깨를 두드리는 건 사건 —
+        wait 의 '동료 진입'과 같은 급). 판정 무접촉."""
+        recv['last'] = dict(rec)
+        self._trail_add(recv, recv['last'])
+        if str(recv.get('order') or '') in ('wait', 'rest'):
+            recv['order'], recv['path'], recv['plan'] = None, [], []
+            recv['wait'] = None
+            recv['rest'] = None
+
+    def _give(self, bot, target_id, item, bots=None):
+        """건네기(D47 ②, 2026-09-09 파트너 "건네기를 만들려면 아이템 거래를 넣어야 해") — 곁의 동료에게 소지품을 넘긴다.
+        물약: potions −1/+1. 무기·방어구: 벗어 건넨다 — 상대 슬롯이 비었으면 그가 걸치고(equipped), 차 있으면 발밑에 피처로
+        놓인다(placed — 착용은 상대의 결정, equip 스왑 '헌것은 그 자리에' 문법과 대칭. 발밑이 찼으면 내 발밑, 둘 다 찼으면 no_room).
+        굴림 없음·한 턴 소모·상대는 안 선다. 엔진은 선물인지 거래의 절반인지 모른다(D5) — 거래 = 제안(말) + 건네기 둘, 협상 상태
+        없음(파트너 09-09 "제안은 열리게"). 뼈: 한 쪽 gave / 받은 쪽 received. 목격(ally_give)은 둘을 뺀 시야 안 동료."""
+        item = str(item or '')
+        tid, recv, why = self._ally_target(bot, target_id, bots)
+        base = {'char': bot['char'], 'type': 'give', 'target': tid, 'item': item}
+        if not self.give_verb:                          # 꺼진 판 — 미노출 동사(환각 방어: 아무 일도 없다)
+            return {**base, 'result': 'nothing'}
+        if why:
+            return {**base, 'result': why}
+        extra, got = {}, {}
+        if item == 'potion':
+            if not bot.get('potions'):
+                return {**base, 'result': 'nothing'}
+            bot['potions'] -= 1
+            recv['potions'] = recv.get('potions', 0) + 1
+            what = '물약'
+            extra, got = {'potions': bot['potions']}, {'potions': recv['potions']}
+        elif item in ('weapon', 'armor'):
+            g = bot.get(item)
+            if not g:
+                return {**base, 'result': 'nothing'}
+            what = g['name']
+            if recv.get(item):                          # 차 있다 — 발밑에 놓는다(그가 고른다)
+                spot = next(((x, y) for (x, y) in ((recv['x'], recv['y']), (bot['x'], bot['y']))
+                             if self.feature_at(x, y) is None), None)
+                if spot is None:
+                    return {**base, 'result': 'no_room'}
+                bot[item] = None
+                self._add_feature(item, g['name'], spot[0], spot[1])
+                extra, got = {'placed': True}, {'placed': True}
+            else:
+                bot[item] = None
+                recv[item] = dict(g)
+                extra, got = {'equipped': True}, {'equipped': True}
+        else:
+            return {**base, 'result': 'nothing'}
+        self._receive(recv, {'char': recv['char'], 'type': 'received', 'from': bot['char'],
+                             'what': what, 'item': item, **got}, bots)
+        self._bone(bot, recv['char'], 'gave')
+        self._bone(recv, bot['char'], 'received')
+        self.note_act(bot, recv, '건네기', what)
+        self._witness(bots, bot['x'], bot['y'],
+                      {'kind': 'ally_give', 'char': bot['char'], 'to': recv['char'], 'what': what},
+                      exclude=(bot['char'], recv['char']))
+        return {**base, 'result': 'given', 'to': recv['char'], 'what': what, **extra}
+
+    def _bond(self, bot, target_id, form, bots=None):
+        """친목(D47 ②, 2026-09-09 파트너 "['대화' '친목' '머리를 쓰다듬기'] … 이건 친목 행위라 일반 대화와는 별개") — 곁의
+        동료에게 하는 몸짓 하나. 형태(form)는 캐릭터의 자유 문구(어깨 두드리기·손잡기·포옹·머리 쓰다듬기…, BOND_LEN) —
+        엔진은 세기만 한다(내용 무해석 D5, 목록 없음 = 파트너 결정 "형태는 기록으로, 기계는 횟수만"). 물리 없음: 받은 쪽 자기
+        사건(bonded)·목격(ally_bond)·뼈 bond(쌍이 같이)·상세 기록(acts — 반응은 러너가 상대의 다음 결정에서 형태로 적는다).
+        시도했다고 반응까지 정해지진 않는다(파트너 초안 §A-3). 한 턴 소모, 상대는 안 선다."""
+        form = ' '.join(str(form or '').split())[:BOND_LEN] or '몸짓'
+        tid, recv, why = self._ally_target(bot, target_id, bots)
+        base = {'char': bot['char'], 'type': 'bond', 'target': tid, 'form': form}
+        if not self.bond_verb:
+            return {**base, 'result': 'nothing'}
+        if why:
+            return {**base, 'result': why}
+        self._receive(recv, {'char': recv['char'], 'type': 'bonded', 'from': bot['char'], 'form': form}, bots)
+        self._bone(bot, recv['char'], 'bond')
+        self._bone(recv, bot['char'], 'bond')
+        self.note_act(bot, recv, '친목', form)
+        self._witness(bots, bot['x'], bot['y'],
+                      {'kind': 'ally_bond', 'char': bot['char'], 'to': recv['char'], 'form': form},
+                      exclude=(bot['char'], recv['char']))
+        return {**base, 'result': 'done', 'to': recv['char']}
+
+    def note_act(self, a, b, kind, what):
+        """상세 기록(D47 ②, 파트너 초안 §A-5 "상세 기록에는 농담·접촉·함께 쉰 내용과 상대 반응을 보존한다") — a 가 b 에게 한
+        친목·건네기 한 건을 양쪽 장부에: {turn, kind(친목|건네기), what(형태|물건), mine, reply}. reply 는 상대의 다음 결정에서
+        러너가 note_reply 로 적는다(행동|말|없음 — 형태만, 뜻은 살 초대에). 상한 ACTS_MAX(오래된 것부터 바랜다)."""
+        if not self.relations:
+            return
+        for me, other, mine in ((a, b, True), (b, a, False)):
+            if not me.get('alive', True):
+                continue
+            e = self._rel(me, other['char'])
+            acts = e.setdefault('acts', [])
+            acts.append({'turn': self.turn, 'kind': kind, 'what': what, 'mine': mine, 'reply': None})
+            del acts[:-ACTS_MAX]
+
+    def note_reply(self, recv, giver, how):
+        """반응 기록(D47 ②) — recv 가 giver 의 친목·건네기 뒤 첫 결정에서 어떻게 답했나(how ∈ 행동|말|없음, 러너가 분류).
+        아직 답이 안 적힌 그 상대의 기록 전부에 적는다(한 결정이 그 사이 쌓인 것 모두의 답이다). 수락·거절은 안 읽는다."""
+        if not self.relations:
+            return
+        for me, other, mine in ((recv, giver, False), (giver, recv, True)):
+            acts = ((me.get('relations') or {}).get(other['char']) or {}).get('acts') or []
+            for a in acts:
+                if a.get('mine') == mine and a.get('reply') is None:
+                    a['reply'] = how
 
     def _remember_grave(self, bot, f):
         """묘 발견 기억(D22 개정) — 그 죽음을 이미 아는 봇(목격 fallen·발견 grave_found)은 무등재,

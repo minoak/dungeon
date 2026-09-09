@@ -317,6 +317,16 @@ function evLine(e, f) {
     if (e.swap) return cls('dim', `${esc(e.swap.name || '동료')}와 스치듯 자리를 바꾸며 — 이동 중`);
     return cls('dim', `▸ ${esc(resolveTarget(e.target, f))}${/지점$/.test(resolveTarget(e.target, f)) ? '으로' : '에게'} 이동 중`);
   }
+  if (t === 'give') {   // 건네기(D47 ②, 09-09)
+    const M = { too_far: '곁에 없다', nothing: '줄 것이 없다', no_target: '대상 없음', no_room: '놓을 자리 없음' };
+    if (e.result === 'given')
+      return cls('gold', `⇢ ${esc(names[e.to] || e.to)}에게 ${esc(e.what || '?')}을(를) 건넸다${e.placed ? ' (그의 발밑에 놓임)' : ''}`);
+    return cls('dim', '건네기 — ' + (M[e.result] || esc(e.result)));
+  }
+  if (t === 'bond') {   // 친목(D47 ②) — 형태는 캐릭터의 자유 문구
+    if (e.result === 'done') return cls('notable', `✋ ${esc(names[e.to] || e.to)}에게 — ${esc(e.form || '몸짓')}`);
+    return cls('dim', '친목 — ' + (e.result === 'too_far' ? '곁에 없다' : '대상 없음'));
+  }
   if (t === 'interact') {
     const r = e.result;
     if (r === 'exit')
