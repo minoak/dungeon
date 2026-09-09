@@ -40,6 +40,20 @@ export function installLog(app: App): void {
   }
   const root = app.dom.log;
   root.innerHTML = '';
+  // 표시만 거른다. 원본 사건·속내는 모든 기록에서 그대로 볼 수 있다.
+  document.querySelectorAll<HTMLButtonElement>('[data-log-view]').forEach(button => {
+    button.onclick = () => {
+      const stick = atBottom();
+      root.dataset.view = button.dataset.logView;
+      document.querySelectorAll<HTMLButtonElement>('[data-log-view]').forEach(b => {
+        const on = b === button;
+        b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
+      });
+      const hint = document.querySelector('.journal-hint');
+      if (hint) hint.textContent = root.dataset.view === 'story' ? '대화와 주요 사건' : '이동 · 속내 · 모든 사건';
+      if (stick) scrollBottom();
+    };
+  });
   let lastIdx = -1;                              // 마지막으로 반영한 프레임 번호(-1 = 비어 있음)
 
   const atBottom = (): boolean => root.scrollTop + root.clientHeight >= root.scrollHeight - 12;

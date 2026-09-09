@@ -24,6 +24,31 @@ WL_GAME_URL=http://127.0.0.1:8000/game/ npm run smoke   # 론처 상대로
 URL 파라미터: `run=`(판 경로, 기본 `state/stream.jsonl`) · `focus=`(초점 봇 번호, 기본 파티 1번) · `t=`(시작 틱).
 단축키: Space 재생/정지 · ←/→ 한 틱(Shift 10틱) · Home/End · 숫자 1~9 초점 전환.
 
+## 관전 화면 정리 (2026-09-09)
+
+상단에서 원정을 고르고, 던전 옆의 세 초상으로 시점을 전환한다. 선택한 모험가의 HP·소지품·속내·최근 대화를
+우선 보여주며, 캐릭터 설정과 관계 횟수는 펼쳐서 읽는다. 관계의 의미는 캐릭터가 남긴 문장 그대로 표시한다.
+
+하단 **이야기**는 대화와 주요 사건, **모든 기록**은 이동·속내를 포함한 전체 기록이다. 표시만 거르므로
+원본 로그를 바꾸지 않는다. **기록 접기**로 무대를 넓힐 수 있고 캔버스·카메라도 새 크기에 맞춘다.
+900px 이하에서는 무대 → 재생·기록 → 모험가 정보 순서로 배치한다.
+
+색·간격·글자·말풍선 표현은 `src/style.css`의 관전 화면 규칙에서 조정한다. 기존 모듈 DOM 훅은 유지한다.
+재생 아이콘은 `src/ui/icons.ts`의 SVG다. `verify/smoke.mjs`에서 표시 전환 시 원문 보존, 펼침 조작,
+키보드로 초상 선택, 기록 접기와 캔버스 크기, 1024·768·390px 배치를 함께 검증한다.
+검증 캡처는 `verify/out/ui-*.png`에 남는다. 변경 후 `npm run build`하고 뷰어를 새로고침하면 적용된다.
+
+## 맵·몬스터 도트 교체 (2026-09-09)
+
+고블린·그림자거미는 SD 크기의 4방향 외형과 걷기 프레임을 사용한다. 바닥은 돌무늬 4변형,
+벽은 윗면/앞면을 구분하며, 문·계단·상자·샘·소지품·함정·비석도 새 에셋을 사용한다.
+칸 좌표로 바닥 변형을 고르므로 같은 판을 다시 보거나 시킹해도 무늬가 바뀌지 않는다.
+
+런타임 = `src/assets/world/*.png`, 매핑/애니메이션 = `src/assets/world.ts`.
+원본·정확한 프롬프트·재생성 방법 = [`art/world-v1/README.md`](../art/world-v1/README.md).
+새 에셋은 Vite가 빌드에 포함한다. `viewer/tiles.json`은 마을 NPC·미등록 종류의 폴백으로 유지한다.
+숨은 개체 표시 규칙과 원정 데이터는 그대로다. 이 교체는 아래 초기 Phase B 카드의 에셋 범위를 후속 확장한 작업이다.
+
 ## 구조(Phase A = M1 골격, 2026-09-09)
 
 ```
@@ -37,6 +62,7 @@ src/play/Focus.ts        초점 캐릭터 · 'change' 이벤트
 src/world/Sight.ts       격자 LOS(브레젠험, '#'/'+' 가 막음, 목표 칸은 보임) · allCells(마을)
 src/assets/sd.ts         atlas.json → spritesheet 등록 · resolveLook(직업 폴백) · frameIndex · 걷기 애니 · 초상 크롭
 src/assets/tiles.ts      tiles.json 매핑 재사용 + EXTRA(문·출구·물약·무기·방어구·NPC·묘) · TILE=48
+src/assets/world.ts      전용 맵·몬스터·오브젝트, 4방향 걷기, 좌표로 고정하는 바닥 변형
 src/scene/DungeonScene.ts 무대: 타일맵·문·출구·피처·함정·몹·SD 캐릭터·이름표·초점 링·카메라·트윈·걷기 애니 · 공개 API
 src/scene/Fog.ts         밝기(B4): 미지 α.88·본 곳 α.45·시야 0, 마을 없음, 서명 더티체크 · window.__wlFog
 src/scene/Bubbles.ts     말풍선·지문·몸 돌리기(B2): #overlay DOM, rAF 재배치, 화자당 1개, 제안 .proposal
@@ -82,6 +108,7 @@ verify/smoke.mjs         Playwright(msedge 채널) 스모크 — M1 + M2 장면 
 | `actorOf(char)` | `{sprite, label, key, dir, cell, alive, won}` |
 | `turnToward(char, other)` | 몸 돌리기(정지 프레임). 다음 걸음이 방향을 되돌린다 |
 | `tileFrame(key)` | Kenney 시트 프레임 번호 — `'item:potion' 'item:weapon' 'item:armor' 'feat:chest' 'mob:고블린' …` |
+| `visualOf(key)` | 새 에셋 우선, 없는 종류는 Kenney 폴백. `{texture, frame, scale, originY}` — 바닥 오브젝트·건네기 연출에서 공유 |
 | `visibleSet(char)` / `seenSet(char)` | 현재 프레임 시야 / 이 층 누적 본 칸(캐시). 초점 없으면 null(=전부) |
 | `setZoom(z)` · `zoom` · `ZOOMS` | 1 / 1.5 / 2 |
 | `DEPTH` | `ground 0 · footprint 5 · feature 10 · trap 12 · corpse 15 · focusRing 19 · stand 20(+y·0.01) · fx 50 · fog 60 · label 70` |

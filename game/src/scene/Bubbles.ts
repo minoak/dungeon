@@ -20,6 +20,7 @@ const LIFT = 24;                                 // 머리 위 이름표를 비�
 const TAIL = 8;                                  // 말풍선 꼬리 높이(화면 px)
 const GAP = 6;                                   // 겹친 말풍선을 위로 쌓을 때 사이 간격(화면 px)
 const EDGE = 4;                                  // 무대 가장자리 여백(화면 px) — 넘치면 안으로 당긴다
+const HUD_CLEARANCE = 84;                        // 무대 상단의 층·시점 표시 아래에 대사를 배치한다
 
 const STYLE = `
 #overlay .bubble, #overlay .stage-dir { position: absolute; left: 0; top: 0; max-width: 260px; box-sizing: border-box;
@@ -140,12 +141,13 @@ export function installBubbles(app: App): void {
   /** 앵커 위에 놓되, 먼저 놓인 것과 겹치면 그 위로 쌓고(가까이 선 화자들), 위가 모자라면 옆으로, 그래도 안 되면 위에 붙여 겹친다. */
   function settle(f: Float, a: { x: number; y: number }, placed: Rect[], W: number, H: number): void {
     const w = f.w, h = f.h;
+    const topEdge = Math.min(HUD_CLEARANCE, Math.max(EDGE, H - h - EDGE));
     const clampX = (l: number): number => (W > w + EDGE * 2 ? Math.max(EDGE, Math.min(W - w - EDGE, l)) : l);
     let left = clampX(a.x - w / 2);
     let bottom = a.y;
     if (H > 0 && bottom > H - EDGE) bottom = H - EDGE;
     let top = bottom - h;
-    if (top < EDGE) { top = EDGE; bottom = top + h; }   // 무대 위로 넘치면 안으로(화자 머리 위 자리를 포기하는 대신 읽힌다)
+    if (top < topEdge) { top = topEdge; bottom = top + h; }   // 상단 표식 뒤에 대사가 가려지지 않도록 내린다
     if (!fits(left, top, w, h, placed)) {
       // ① 위로 쌓기
       let b2 = bottom;
@@ -154,7 +156,7 @@ export function installBubbles(app: App): void {
         for (const r of placed) if (overlaps(left, b2 - h, w, h, r)) { b2 = r.top - GAP; bumped = true; }
         if (!bumped) break;
       }
-      if (b2 - h >= EDGE) { bottom = b2; top = b2 - h; }
+      if (b2 - h >= topEdge) { bottom = b2; top = b2 - h; }
       else {
         // ② 위가 모자라다 — 앵커 높이에서 옆(오른쪽 → 왼쪽)으로 비켜 선다
         const band = placed.filter(r => overlaps(left, top, w, h, r));
@@ -162,7 +164,7 @@ export function installBubbles(app: App): void {
         const rightL = maxR + GAP, leftL = minL - w - GAP;
         if (rightL + w <= W - EDGE && fits(rightL, top, w, h, placed)) left = rightL;
         else if (leftL >= EDGE && fits(leftL, top, w, h, placed)) left = leftL;
-        else { top = Math.max(EDGE, b2 - h); bottom = top + h; }   // ③ 포기 — 위에 붙여 겹친다
+        else { top = Math.max(topEdge, b2 - h); bottom = top + h; }   // ③ 자리가 모자라도 상단 표식은 피한다
       }
     }
     f.rect = { left, right: left + w, top, bottom };

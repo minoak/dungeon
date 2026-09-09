@@ -210,14 +210,15 @@ export function installFocusCard(app: App): void {
     root.innerHTML = '';
     const fc = el('div', 'fc');
     fc.innerHTML =
+      `<div class="fc-eyebrow">지금 바라보는 모험가</div>` +
       `<div class="fc-head"><span class="fc-name"></span><span class="fc-job"></span><span class="fc-mark"></span></div>` +
-      `<div class="fc-sheet"></div>` +
-      `<div class="fc-hpline"><div class="fc-hpbar"><div class="fc-hpfill"></div></div><span class="fc-hp"></span></div>` +
+      `<div class="fc-hpline"><span class="fc-hplabel">HP</span><div class="fc-hpbar"><div class="fc-hpfill"></div></div><span class="fc-hp"></span></div>` +
       `<div class="fc-status"></div>` +
       `<div class="fc-items"></div>` +
-      `<div class="fc-sec">속내</div><div class="fc-reason"></div>` +
-      `<div class="fc-sec">최근 말</div><div class="fc-say"></div>` +
-      `<div class="fc-sec">관계</div><div class="fc-rels"></div>`;
+      `<section class="fc-block"><h2 class="fc-sec">속내</h2><div class="fc-reason"></div></section>` +
+      `<section class="fc-block fc-dialogue"><h2 class="fc-sec">최근 대화</h2><div class="fc-say"></div></section>` +
+      `<details class="fc-profile"><summary>캐릭터 설정</summary><div class="fc-sheet"></div></details>` +
+      `<section class="fc-block"><h2 class="fc-sec">동료에 대한 생각</h2><div class="fc-rels"></div></section>`;
     root.appendChild(fc);
     const q = (s: string): HTMLElement => fc.querySelector(s) as HTMLElement;
     return { fc, name: q('.fc-name'), job: q('.fc-job'), mark: q('.fc-mark'), sheet: q('.fc-sheet'),
@@ -233,7 +234,7 @@ export function installFocusCard(app: App): void {
       const row = el('div', 'fc-rel'); row.dataset.other = p.char;
       row.innerHTML = `<div class="fc-rel-name" style="color:${esc(run.colors[p.char] || '#fff')}">${esc(run.names[p.char] || p.char)}` +
                       ` <span class="fc-job">${esc(run.jobs[p.char] || '')}</span></div>` +
-                      `<div class="fc-bones"></div><div class="fc-line"></div>`;
+                      `<div class="fc-line"></div><details class="fc-history"><summary>함께한 일</summary><div class="fc-bones"></div></details>`;
       n.rels.appendChild(row);
       rows.set(p.char, { root: row, bones: row.querySelector('.fc-bones') as HTMLElement, line: row.querySelector('.fc-line') as HTMLElement });
     }
@@ -258,15 +259,18 @@ export function installFocusCard(app: App): void {
 
     // ── 머리: 이름·직업·성별·표식 ──
     n.fc.dataset.char = char;
+    n.fc.style.setProperty('--char-color', run.colors[char] || '#fff');
     n.fc.classList.toggle('snap', change.mode === 'seek');
     n.name.style.color = run.colors[char] || '#fff';
     put(n.name, esc(run.names[char] || char));
     const sex = member?.sex ? ` · ${esc(member.sex)}` : '';
     put(n.job, esc(run.jobs[char] || member?.job || '?') + sex);
     const sheetBits: string[] = [];
-    if (member?.persona) sheetBits.push(esc(member.persona));
-    if (member?.goal) sheetBits.push(`<b>목표</b> ${esc(member.goal)}`);
-    put(n.sheet, sheetBits.length ? `<b>시트</b> ${sheetBits.join(' · ')}` : '');
+    if (member?.persona) sheetBits.push(`<p><b>성격</b>${esc(member.persona)}</p>`);
+    if (typeof member?.background === 'string' && member.background) sheetBits.push(`<p><b>배경</b>${esc(member.background)}</p>`);
+    if (member?.goal) sheetBits.push(`<p><b>목표</b>${esc(member.goal)}</p>`);
+    put(n.sheet, sheetBits.join(''));
+    (n.sheet.parentElement as HTMLDetailsElement).hidden = !sheetBits.length;
 
     // ── 몸: 스냅샷(이 층에 없으면 마지막으로 있던 값) ──
     let b: Bot | null = f.bots.find(x => x.char === char) ?? null;
@@ -295,7 +299,7 @@ export function installFocusCard(app: App): void {
       if (n.hpfill.style.background !== col) n.hpfill.style.background = col;
       put(n.hp, `${hp}/${b.maxhp}`);
       put(n.status, (b.status || []).map(s => `<span class="tag">${esc(s)}</span>`).join(''));
-      put(n.items, `물약 ${b.potions ?? 0}병 · ${gearText(b.weapon, '맨손')} · ${gearText(b.armor, '맨몸')}`);
+      put(n.items, `<div><span>물약</span><strong>${b.potions ?? 0}병</strong></div><div><span>무기</span><strong>${gearText(b.weapon, '맨손')}</strong></div><div><span>방어구</span><strong>${gearText(b.armor, '맨몸')}</strong></div>`);
     } else {
       if (n.hpfill.style.width !== '0%') n.hpfill.style.width = '0%';
       put(n.hp, '—'); put(n.status, ''); put(n.items, '<span class="none">—</span>');
@@ -330,7 +334,7 @@ export function installFocusCard(app: App): void {
       const lf = latest.rel[o];
       const line = lf?.decisions[char]?.relation?.line;
       row.line.classList.toggle('none', !line);
-      put(row.line, line && lf ? `「${esc(line)}」${t(lf)}` : '아직 없음');
+      put(row.line, line && lf ? `「${esc(line)}」${t(lf)}` : '아직 남긴 생각이 없어요.');
     }
   }
 

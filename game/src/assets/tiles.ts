@@ -1,4 +1,5 @@
-// 타일·오브젝트 스프라이트 = viewer/tiles.json(Kenney Tiny Dungeon, CC0)의 글리프→타일 매핑 재사용.
+// 구형 타일 폴백 = viewer/tiles.json(Kenney Tiny Dungeon, CC0)의 글리프→타일 매핑 재사용.
+// 새 맵·몬스터·주요 오브젝트는 world.ts. 이 매핑은 NPC·미등록 종류와 기존 tileFrame API를 유지한다.
 // 표시 타일 48px(원본 16px ×3). SD 96px = 2타일 높이(RPG 만들기 비율). 뷰어 매핑에 없는 키만 EXTRA 로 보충.
 export const TILE = 48;
 

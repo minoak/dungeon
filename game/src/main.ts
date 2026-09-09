@@ -33,6 +33,16 @@ async function boot(): Promise<void> {
     audio: { noAudio: true }, banner: false, scene: [],
   });
   app.game = game;
+  // 기록 접기·반응형 배치로 무대 크기만 변해도 캔버스와 카메라가 즉시 따라간다.
+  const stageSize = new ResizeObserver(([entry]) => {
+    const w = Math.round(entry.contentRect.width), h = Math.round(entry.contentRect.height);
+    if (w > 0 && h > 0 && (game.scale.width !== w || game.scale.height !== h)) {
+      // RESIZE 모드는 부모 크기의 캐시를 사용하므로 먼저 새 경계를 읽어야 한다.
+      game.scale.getParentBounds(); game.scale.refresh();
+    }
+  });
+  stageSize.observe(app.dom.stage);
+  game.events.once('destroy', () => stageSize.disconnect());
   game.scene.add('dungeon', new DungeonScene(), true, { app, atlas, tiles });
   app.scene = await sceneReady;
 

@@ -18,7 +18,9 @@ export function installChips(app: App): void {
     if (!run) return;
     run.party.forEach((p, i) => {
       const c = p.char, color = run.colors[c] || '#fff';
-      const chip = el('div', 'chip');
+      const chip = el('button', 'chip');
+      chip.setAttribute('type', 'button');
+      chip.style.setProperty('--char-color', color);
       chip.dataset.char = c;
       chip.title = `${run.names[c]} — 클릭하면 카메라가 따라간다 (키 ${i + 1})`;
       chip.innerHTML =
@@ -46,6 +48,7 @@ export function installChips(app: App): void {
       const b = f.bots.find(x => x.char === c);
       const cls = n.root.classList;
       cls.toggle('focus', c === focus);
+      n.root.setAttribute('aria-pressed', String(c === focus));
       let dead = false, won = false, unseen = false, tags = '';
       if (b) {
         const r = Math.max(0, Math.min(1, b.hp / Math.max(1, b.maxhp)));

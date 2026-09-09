@@ -1,0 +1,3 @@
+Use case: background-extraction. Edit target: the attached 3-column 4-row goblin sprite sheet.
+Change ONLY the light grey and white checkerboard BACKGROUND to a completely uniform solid vivid magenta #FF00FF for chroma-key sprite extraction. This is technical source art for a game asset pipeline.
+Keep all twelve goblins, their exact pixel art, outlines, size, poses, location, arrangement, colors, details, weapons and exact canvas dimensions unchanged. Preserve every dark outline and small finger, ear and cleaver detail. Replace checkerboard inside gaps between legs, weapon/hand and body as well. Do not draw any checkerboard, shadows, grid, gradients, text, border or patterns. Every background pixel should be the SAME solid saturated #FF00FF. No magenta on the goblins.

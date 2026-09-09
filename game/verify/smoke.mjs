@@ -295,6 +295,66 @@ try {
     await page.screenshot({ path: out('m1-town-t0.png') });
   });
 
+  await check('도트 에셋 로드 · 지형 변형 · 미등록 종류 폴백', async () => {
+    const r = await page.evaluate(() => {
+      const a = window.__wl, s = a.scene;
+      a.playback.setIdx(a.frameOfTurn(176), 'seek');
+      return { frames: ['wl-terrain', 'wl-goblin', 'wl-spider', 'wl-props', 'wl-traps'].map(k => s.textures.get(k).frameTotal - 1),
+        tiles: [...new Set(s.ground.layer.data.flat().map(t => t.index).filter(n => n >= 0))],
+        unknown: s.visualOf('mob:미등록'), known: s.visualOf('feat:chest'),
+        goblin: s.children.getByName('mob-0')?.texture.key };
+    });
+    assert.deepEqual(r.frames, [8, 12, 12, 8, 4]);
+    assert(r.tiles.filter(i => i < 4).length >= 3, '바닥 변형 부족');
+    assert.equal(r.unknown.texture, 'tiny');
+    assert.equal(r.known.texture, 'wl-props');
+    assert.equal(r.goblin, 'wl-goblin');
+  });
+  await check('몬스터 두 종류 표시 · 숨은 몬스터/함정 비노출 · 이동 애니와 시킹 정지', async () => {
+    const r = await page.evaluate(() => {
+      const a = window.__wl, kinds = new Set(), leaks = [], movement = [];
+      let spiderIdx = -1, spiderSpace = -1;
+      for (let i = 1; i < a.run.frames.length; i++) {
+        const f = a.run.frames[i], p = a.run.frames[i - 1];
+        if (f.levelIdx !== p.levelIdx) continue;
+        a.playback.setIdx(i - 1, 'seek'); a.playback.step(1);
+        const vis = a.scene.visibleSet(a.focus.char);
+        for (const m of f.monsters) {
+          const sprite = a.scene.children.getByName('mob-' + m.id);
+          if (m.alive && (m.concealed || (vis && !vis.has(m.x + ',' + m.y)))) {
+            if (sprite) leaks.push([f.turn, m.id]);
+          } else if (m.alive && sprite) {
+            kinds.add(sprite.texture.key);
+            if (sprite.texture.key === 'wl-spider') {
+              const space = Math.min(...f.bots.filter(b => b.alive && !b.won).map(b => (b.x - m.x) ** 2 + (b.y - m.y) ** 2));
+              if (space > spiderSpace && space <= 10) { spiderIdx = i; spiderSpace = space; }
+            }
+            const prev = p.monsters.find(v => v.id === m.id);
+            if (prev && (prev.x !== m.x || prev.y !== m.y) && sprite.anims.isPlaying) movement.push(sprite.anims.currentAnim.key);
+          }
+        }
+        for (const tr of f.traps) if (tr.hidden && a.scene.children.getByName(`trap-${tr.x},${tr.y}`)) {
+          leaks.push([f.turn, 'hidden trap', tr.x, tr.y]);
+        }
+      }
+      a.playback.setIdx(a.frameOfTurn(176), 'seek');
+      const stopped = a.scene.children.list.filter(o => o.name?.startsWith('mob-')).every(o => !o.anims.isPlaying);
+      return { kinds: [...kinds], leaks, movement: [...new Set(movement)], stopped, spiderIdx };
+    });
+    assert(r.kinds.includes('wl-goblin') && r.kinds.includes('wl-spider'), JSON.stringify(r.kinds));
+    assert.deepEqual(r.leaks, []);
+    assert(r.movement.length >= 2, '몬스터 걷기 애니 없음');
+    assert(r.stopped, '시킹 뒤 걷기가 계속됨');
+    await sleep(500);
+    await page.screenshot({ path: out('world-combat.png') });
+    if (r.spiderIdx >= 0) {
+      await page.evaluate(i => window.__wl.playback.setIdx(i, 'seek'), r.spiderIdx);
+      await sleep(500);
+      await page.screenshot({ path: out('world-spider.png') });
+    }
+    return r.movement.join(', ');
+  });
+
   /* ═══════════════ M1 + M2 (9) 16× 전체 재생 — 안개·말풍선·로그가 켜진 채로 ═══════════════ */
   let perf = null;
   await check('M1 16× 전체 재생 끝까지·프레임 정체 <400ms', async () => {
@@ -338,6 +398,63 @@ try {
   if (live) {
     await check('B5 라이브 배지(#hud .live-hud "LIVE · t…")', async () => { await mustText('#hud .live-hud', 'LIVE'); });
   } else skip('B5 라이브 배지(#hud .live-hud)', '리플레이 판(라이브 아님) — 론처 [L] 판에서만 검사 가능');
+
+  /* ═══════════════ 관전 UI — 표시 필터가 기록을 지우지 않고, 배치 변경이 카메라를 깨지 않는다 ═══════════════ */
+  await seekTurn(179);
+  await check('UI 이야기/모든 기록 전환 · 원문 보존', async () => {
+    const before = await page.locator('#log').textContent();
+    assert.equal(await page.locator('#log').getAttribute('data-view'), 'story');
+    assert.equal(await page.locator('#log .rsn').last().isVisible(), false);
+    await page.locator('[data-log-view="all"]').click();
+    assert.equal(await page.locator('#log .rsn').last().isVisible(), true);
+    assert.equal(await page.locator('#log').textContent(), before);
+    await page.locator('[data-log-view="story"]').click();
+    assert.equal(await page.locator('#log').textContent(), before);
+  });
+  await check('UI 캐릭터 설정·관계 횟수 펼침 · 키보드 초점 선택', async () => {
+    assert.equal(await page.locator('.fc-profile').getAttribute('open'), null);
+    await page.locator('.fc-profile summary').click();
+    assert.equal(await page.locator('.fc-sheet').isVisible(), true);
+    await page.locator('.fc-profile summary').click();
+    assert.equal(await page.locator('.fc-history').first().getAttribute('open'), null);
+    await page.locator('.fc-history summary').first().click();
+    assert.equal(await page.locator('.fc-bones').first().isVisible(), true);
+    await page.locator('.fc-history summary').first().click();
+    const wasPlaying = await page.evaluate(() => window.__wl.playback.playing);
+    await page.locator('.chip[data-char="1"]').press('Space');
+    assert.equal(await page.locator('.chip[data-char="1"]').getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.evaluate(() => window.__wl.playback.playing), wasPlaying);
+  });
+  await check('UI 기록 접기 · 캔버스 크기 동기화 · 390px 모바일', async () => {
+    const height = () => page.locator('#stage').evaluate(e => e.clientHeight);
+    const expanded = await height();
+    await page.locator('#bLog').click();
+    await page.waitForFunction(h => document.querySelector('#stage').clientHeight > h + 30, expanded);
+    assert(await height() > expanded + 30);
+    await page.waitForFunction(() => Math.abs(window.__wl.game.scale.height - document.querySelector('#stage').clientHeight) <= 1);
+    assert.equal(await page.locator('#bLog').getAttribute('aria-expanded'), 'false');
+    await page.screenshot({path: out('ui-stage-expanded.png')});
+    await page.locator('#bLog').click();
+    for (const width of [1024, 768, 390]) {
+      await page.setViewportSize({width, height: 844});
+      await page.waitForFunction(() => Math.abs(window.__wl.game.scale.width - document.querySelector('#stage').clientWidth) <= 1);
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}px 가로 넘침`);
+      assert(await height() >= 240, `${width}px 무대가 너무 작음`);
+      await page.waitForFunction(() => {
+        const labels = ['#hud', '#sceneCaption'].map(s => document.querySelector(s).getBoundingClientRect());
+        return [...document.querySelectorAll('#overlay .bubble')].every(e => {
+          if (getComputedStyle(e).visibility === 'hidden') return true;
+          const b = e.getBoundingClientRect();
+          return labels.every(r => b.right <= r.left || b.left >= r.right || b.bottom <= r.top || b.top >= r.bottom);
+        });
+      });
+      await page.screenshot({path: out(`ui-${width}.png`), fullPage: width <= 768});
+    }
+    await page.setViewportSize({width: 1280, height: 800});
+    await page.waitForFunction(() => Math.abs(window.__wl.game.scale.width - document.querySelector('#stage').clientWidth) <= 1);
+    await page.locator('#side').evaluate(e => { e.scrollTop = 0; });
+    await page.screenshot({path: out('ui-desktop.png')});
+  });
 
   /* ═══════════════ (10) 브라우저 오류 0 ═══════════════ */
   await check('브라우저 오류 0(pageerror·console.error·HTTP≥400·requestfailed)', () => {

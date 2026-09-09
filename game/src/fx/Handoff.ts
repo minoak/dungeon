@@ -59,9 +59,11 @@ export function installHandoff(app: App): void {
     if (!from || !first) return;
     let to: { x: number; y: number } = first;
 
-    const frame = scene.tileFrame('item:' + String(e.item ?? ''));
-    const icon = scene.add.image(from.x, from.y - LIFT, 'tiny', frame)
-      .setScale(2).setDepth(DEPTH.fx).setName('handoff');
+    const art = scene.visualOf('item:' + String(e.item ?? ''));
+    const iconScale = art.texture === 'tiny' ? 2 : 1;
+    const icon = scene.add.image(from.x, from.y - LIFT, art.texture, art.frame)
+      .setOrigin(0.5, art.texture === 'tiny' ? 0.5 : 0.78)
+      .setScale(iconScale).setDepth(DEPTH.fx).setName('handoff');
     const what = typeof e.what === 'string' ? e.what : '';
     const label = what
       ? scene.add.text(from.x, from.y - LIFT + 18, what, {
@@ -92,7 +94,7 @@ export function installHandoff(app: App): void {
         label?.destroy(); f.label = null;
         // 도착 팝 — 커졌다 작아진다(120ms) 뒤 사라진다. 바닥에 남는 것(placed)은 씬의 features 몫.
         f.tween = scene.tweens.add({
-          targets: icon, scale: 2.6, duration: POP_MS / 2, yoyo: true, ease: 'Sine.easeOut',
+          targets: icon, scale: iconScale * 1.3, duration: POP_MS / 2, yoyo: true, ease: 'Sine.easeOut',
           onComplete: () => destroy(f),
         });
       },

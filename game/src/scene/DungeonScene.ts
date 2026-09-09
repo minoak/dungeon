@@ -10,6 +10,8 @@ import { TILE, tileIndex, type Tileset, type TilesCfg } from '../assets/tiles';
 import { FOOT_Y, frameIndex, portraitCanvas, queueSdSheets, registerAnims, resolveMember, sheetKey,
          walkAnimKey, type SdAtlas } from '../assets/sd';
 import { cellKey } from '../world/Sight';
+import { queueWorld, registerWorldAnims, terrainFrame, TERRAIN_CELL, WORLD_CELL, WORLD_FOOT,
+         worldVisual, monsterFrame, monsterWalk } from '../assets/world';
 
 /** 그리기 순서. stand 는 y(타일)마다 +0.01 — 아래 줄이 위에 그려진다. fog(60)는 B4, label 은 이름표. */
 export const DEPTH = { ground: 0, footprint: 5, feature: 10, trap: 12, corpse: 15, focusRing: 19, stand: 20,
@@ -59,12 +61,14 @@ export class DungeonScene extends Phaser.Scene {
   preload(): void {
     this.load.spritesheet('tiny', '/viewer/' + this.ts.sheet, { frameWidth: this.ts.tile, frameHeight: this.ts.tile });
     queueSdSheets(this.load, this.atlas);
+    queueWorld(this.load);
   }
 
   create(): void {
     const src = this.textures.get('tiny').getSourceImage() as HTMLImageElement;
     this.cols = Math.max(1, Math.floor(src.width / this.ts.tile));
     registerAnims(this.anims, this.atlas);
+    registerWorldAnims(this.anims);
     this.footprints = this.add.graphics().setDepth(DEPTH.footprint);
     this.ring = this.add.graphics().setDepth(DEPTH.focusRing);
     const cam = this.cameras.main;
@@ -105,6 +109,18 @@ export class DungeonScene extends Phaser.Scene {
   }
   /** Kenney 타일 프레임 번호('item:potion' 'feat:chest' 'mob:고블린' …). */
   tileFrame(key: string): number { return tileIndex(this.ts, this.cols, key); }
+  /** 새 에셋을 우선 사용하고, 아직 없는 종류는 기존 타일로 표시한다. */
+  visualOf(key: string): { texture: string; frame: number; scale: number; originY: number } {
+    const art = worldVisual(key);
+    return art ? { ...art, scale: 1, originY: WORLD_FOOT / WORLD_CELL }
+      : { texture: 'tiny', frame: this.tileFrame(key), scale: TILE / this.ts.tile, originY: 0.9 };
+  }
+
+  private placeObject(key: string, x: number, y: number, depth: number): Phaser.GameObjects.Sprite {
+    const art = this.visualOf(key), pos = this.worldOf(x, y);
+    return this.add.sprite(pos.x, pos.y, art.texture, art.frame).setOrigin(0.5, art.originY)
+      .setScale(art.scale).setDepth(depth);
+  }
   /** 현재 프레임에서 그 캐릭터가 보는 칸(마을=전부). 초점이 없으면 null(=전부). */
   visibleSet(char: Char | null): Set<string> | null {
     if (!char || !this.frame) return null;
@@ -157,7 +173,7 @@ export class DungeonScene extends Phaser.Scene {
   /* ───────────── 층 ───────────── */
 
   private buildLevel(ls: LevelState): void {
-    const L = ls.line, ts = this.ts;
+    const L = ls.line;
     for (const o of this.levelObjs) o.destroy();
     this.levelObjs = [];
     for (const s of this.mobs.values()) s.destroy();
@@ -170,35 +186,27 @@ export class DungeonScene extends Phaser.Scene {
     this.footprints.clear(); this.visitedDrawn = 0;
     this.seenCache = null;
 
-    const floorI = this.tileFrame('floor'), wallI = this.tileFrame('wall');
-    const isOpen = (x: number, y: number) => y >= 0 && y < L.h && x >= 0 && x < L.w && (L.grid[y][x] === '.' || L.grid[y][x] === '+');
-    const data: number[][] = [];
-    for (let y = 0; y < L.h; y++) {
-      const row: number[] = [];
-      for (let x = 0; x < L.w; x++) {
-        const ch = L.grid[y][x];
-        if (ch === '.' || ch === '+') { row.push(floorI); continue; }
-        let edge = false;                        // 바닥에 접한 벽만 벽돌 — 나머지는 어둠(암반)
-        for (let dy = -1; dy <= 1 && !edge; dy++) for (let dx = -1; dx <= 1 && !edge; dx++) if (isOpen(x + dx, y + dy)) edge = true;
-        row.push(edge ? wallI : -1);
-      }
-      data.push(row);
+    const data = Array.from({ length: L.h }, (_, y) =>
+      Array.from({ length: L.w }, (_, x) => terrainFrame(L.grid, x, y, ls.town)));
+    this.map = this.make.tilemap({ data, tileWidth: TERRAIN_CELL, tileHeight: TERRAIN_CELL });
+    const tileset = this.map.addTilesetImage('wl-terrain', 'wl-terrain', TERRAIN_CELL, TERRAIN_CELL, 0, 0);
+    this.ground = this.map.createLayer(0, tileset!, 0, 0)!.setScale(TILE / TERRAIN_CELL).setDepth(DEPTH.ground);
+
+    // 북쪽 벽 아래와 서쪽 벽 옆에 얕은 접촉 그림자. 지형을 다시 그릴 때만 만든다.
+    const shade = this.add.graphics().setDepth(DEPTH.ground + 1);
+    shade.fillStyle(0x10131e, 0.3);
+    for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) if (L.grid[y][x] === '.') {
+      if (L.grid[y - 1]?.[x] === '#') shade.fillRect(x * TILE, y * TILE, TILE, 7);
+      if (L.grid[y]?.[x - 1] === '#') shade.fillRect(x * TILE, y * TILE, 4, TILE);
     }
-    this.map = this.make.tilemap({ data, tileWidth: ts.tile, tileHeight: ts.tile });
-    const tileset = this.map.addTilesetImage('tiny', 'tiny', ts.tile, ts.tile, 0, 0);
-    this.ground = this.map.createLayer(0, tileset!, 0, 0)!.setScale(TILE / ts.tile).setDepth(DEPTH.ground);
+    this.levelObjs.push(shade);
 
     // 문 타일 · 출구
-    const doorI = this.tileFrame('door');
     for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) if (L.grid[y][x] === '+') {
-      const c = this.centerOf(x, y);
-      this.levelObjs.push(this.add.sprite(c.x, c.y, 'tiny', doorI).setScale(TILE / ts.tile).setDepth(DEPTH.feature));
+      this.levelObjs.push(this.placeObject('door', x, y, DEPTH.feature));
     }
     const [ex, ey] = L.exit;
-    const ec = this.centerOf(ex, ey);
-    this.levelObjs.push(this.add.sprite(ec.x, ec.y, 'tiny', this.tileFrame('exit')).setScale(TILE / ts.tile).setDepth(DEPTH.feature));
-    this.levelObjs.push(this.add.text(ec.x, ec.y, '>', { fontFamily: 'Consolas, monospace', fontSize: '26px', color: '#e8c268',
-      stroke: '#000', strokeThickness: 4 }).setOrigin(0.5).setDepth(DEPTH.feature + 1).setResolution(2));
+    this.levelObjs.push(this.placeObject('exit', ex, ey, DEPTH.feature));
 
     const m = TILE * 2;
     this.cameras.main.setBounds(-m, -m, L.w * TILE + 2 * m, L.h * TILE + 2 * m);
@@ -249,9 +257,9 @@ export class DungeonScene extends Phaser.Scene {
       const k = ft.type + '#' + ft.id;
       seenFeats.add(k);
       let s = this.feats.get(k);
-      const c = this.centerOf(ft.x, ft.y);
+      const c = this.worldOf(ft.x, ft.y);
       if (!s) {
-        s = this.add.sprite(c.x, c.y, 'tiny', this.tileFrame('feat:' + ft.type)).setScale(TILE / this.ts.tile).setDepth(DEPTH.feature);
+        s = this.placeObject('feat:' + ft.type, ft.x, ft.y, DEPTH.feature);
         this.feats.set(k, s);
       } else s.setPosition(c.x, c.y);
       s.setAlpha(canSee(ft.x, ft.y) ? 1 : 0.7);
@@ -266,8 +274,7 @@ export class DungeonScene extends Phaser.Scene {
       seenTraps.add(k);
       let s = this.traps.get(k);
       if (!s) {
-        const c = this.centerOf(tr.x, tr.y);
-        s = this.add.sprite(c.x, c.y, 'tiny', this.tileFrame('trap:' + tr.kind)).setScale(TILE / this.ts.tile).setDepth(DEPTH.trap);
+        s = this.placeObject('trap:' + tr.kind, tr.x, tr.y, DEPTH.trap).setName('trap-' + k);
         this.traps.set(k, s);
       }
       s.setAlpha(tr.sprung ? 0.55 : 0.95);
@@ -352,25 +359,40 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private updateMob(mob: Monster, prev: Frame | null, snap: boolean): void {
-    const c = this.centerOf(mob.x, mob.y);
+    const c = this.worldOf(mob.x, mob.y);
+    const art = worldVisual('mob:' + mob.kind);
     let s = this.mobs.get(mob.id);
     if (!s) {
-      s = this.add.sprite(c.x, c.y, 'tiny', this.tileFrame('mob:' + mob.kind)).setScale(TILE / this.ts.tile);
+      s = this.placeObject('mob:' + mob.kind, mob.x, mob.y, DEPTH.stand).setName('mob-' + mob.id);
       this.mobs.set(mob.id, s);
       snap = true;
     }
+    const pm = prev?.monsters.find(m => m.id === mob.id);
+    const moved = !!pm && (pm.x !== mob.x || pm.y !== mob.y);
+    let dir: Dir = s.getData('dir') || 'front';
+    if (moved) {
+      const dx = mob.x - pm!.x, dy = mob.y - pm!.y;
+      dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'back' : 'front');
+    } else if (snap) dir = 'front';
+    s.setData('dir', dir);
     if (!mob.alive) {
       this.tweens.killTweensOf(s);
+      s.anims.stop();
+      if (art) s.setFrame(monsterFrame(dir));
       s.setPosition(c.x, c.y).setAngle(90).setAlpha(0.4).setDepth(DEPTH.corpse);
       return;
     }
     s.setAngle(0).setAlpha(1).setDepth(DEPTH.stand + mob.y * 0.01 - 0.005);
-    const pm = prev?.monsters.find(m => m.id === mob.id);
-    const moved = !!pm && (pm.x !== mob.x || pm.y !== mob.y);
     if (!snap && moved) {
       this.tweens.killTweensOf(s);
-      this.tweens.add({ targets: s, x: c.x, y: c.y, duration: Math.min(320, this.app.playback.tickMs * 0.8), ease: 'Linear' });
-    } else { this.tweens.killTweensOf(s); s.setPosition(c.x, c.y); }
+      if (art) s.play(monsterWalk(art.texture, dir), true);
+      const frame = this.frame;
+      this.tweens.add({ targets: s, x: c.x, y: c.y, duration: Math.min(320, this.app.playback.tickMs * 0.8), ease: 'Linear',
+        onComplete: () => { if (this.frame === frame && art) { s!.anims.stop(); s!.setFrame(monsterFrame(dir)); } } });
+    } else {
+      this.tweens.killTweensOf(s); s.anims.stop(); s.setPosition(c.x, c.y);
+      if (art) s.setFrame(monsterFrame(dir));
+    }
   }
 
   /* ───────────── 카메라 ───────────── */
