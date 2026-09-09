@@ -53,8 +53,4 @@ input[type=range] { flex: 1; min-width: 120px; }
 .chip .tags .tag { display: inline-block; padding: 0 5px; border-radius: 3px; background: #2a2330; color: #f4a0c0; margin-right: 3px; }
 .chip .tags .st { color: var(--gold); }
 
-/* ── 로그(Log) 기본 — B2 가 채운다 ── */
-#log .grp { border-left: 2px solid var(--line); padding-left: 8px; margin: 4px 0; }
-#log .gt { color: var(--dim); font-size: 11px; }
-#log .say .bub { color: #fff; }
-#log .focus { border-left-color: var(--accent); }
+/* 로그(#log)·말풍선(#overlay)·초점 카드(#focusCard)·라이브 배지의 스타일은 각 모듈이 <style id="style-…"> 로 주입한다(B1·B2·B5). */

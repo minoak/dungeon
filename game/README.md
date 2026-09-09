@@ -10,8 +10,8 @@ Node 22.16 / npm 10.9 확인.
 
 ```bash
 cd game
-npm install                      # ⚠️ 이 PC 의 ~/.npmrc 에 os=linux 가 있어 네이티브 바이너리가 리눅스판으로 깔린다.
-                                 #    그럴 땐:  rm -rf node_modules package-lock.json && npm_config_os=win32 npm_config_cpu=x64 npm install
+npm install                      # ⚠️ vite build 가 "Cannot find module @rollup/rollup-win32-x64-msvc" 로 터지면 ~/.npmrc 의 os=linux 류
+                                 #    잔재가 원인(09-09 이 PC 에서 제거함). 남아 있으면 그 줄을 지우고 node_modules·package-lock.json 을 지운 뒤 다시 npm install
 npm run dev                      # http://127.0.0.1:5173/game/?run=runs/stream-20260909-203709.jsonl&focus=2&t=176
 npm run build                    # tsc --noEmit && vite build → dist/  (론처가 /game/ 으로 서빙 — M3/B5)
 npm run smoke                    # 빌드 산출물을 vite preview 로 띄우고 헤드리스 Edge 로 대표 판 재생(verify/smoke.mjs, 스냅샷 verify/out/)
@@ -38,12 +38,16 @@ src/world/Sight.ts       격자 LOS(브레젠험, '#'/'+' 가 막음, 목표 칸
 src/assets/sd.ts         atlas.json → spritesheet 등록 · resolveLook(직업 폴백) · frameIndex · 걷기 애니 · 초상 크롭
 src/assets/tiles.ts      tiles.json 매핑 재사용 + EXTRA(문·출구·물약·무기·방어구·NPC·묘) · TILE=48
 src/scene/DungeonScene.ts 무대: 타일맵·문·출구·피처·함정·몹·SD 캐릭터·이름표·초점 링·카메라·트윈·걷기 애니 · 공개 API
-src/scene/Fog.ts         (B4 stub)   src/scene/Bubbles.ts (B2 stub)   src/fx/Handoff.ts (B3 stub)
+src/scene/Fog.ts         밝기(B4): 미지 α.88·본 곳 α.45·시야 0, 마을 없음, 서명 더티체크 · window.__wlFog
+src/scene/Bubbles.ts     말풍선·지문·몸 돌리기(B2): #overlay DOM, rAF 재배치, 화자당 1개, 제안 .proposal
+src/fx/Handoff.ts        건네기 트윈(B3): give 틱에 물건 아이콘이 둘 사이를 0.4s 건너간다(name 'handoff')
+src/text/evline.ts       사건 문장 사전(B2): viewer evLine 이식 + follow/rest/give/bond/NPC 어휘 — 순수 함수
 src/ui/Chips.ts          캐릭터 칩(초상·이름·직업·HP·상태·시야 밖 흐림·전사·하강) · 클릭/숫자키
 src/ui/Controls.ts       판 선택·재생 버튼·속도·슬라이더·틱 라벨·LIVE 배지·줌·로그 접기·단축키
-src/ui/FocusCard.ts      (B1 stub)   src/ui/Log.ts (B2 stub)
+src/ui/FocusCard.ts      초점 카드(B1): HP·상태·소지·속내·최근 말·관계 뼈(BONES)·관계 한 줄 — 결정 색인 이진 탐색
+src/ui/Log.ts            로그(B2): 프레임 그룹 .grp[data-turn], 창 90, 증분 append, 초점 줄 .focus
 src/ui/dom.ts            $, esc, el, typing
-verify/smoke.mjs         Playwright(msedge 채널) 스모크 — M1 검사. B6 가 장면 재현 검사를 덧붙인다
+verify/smoke.mjs         Playwright(msedge 채널) 스모크 — M1 + M2 장면 재현(초점=수나 t176~t184·안개·말풍선·로그·건네기·B5 status) · 실패는 모아서 마지막에 한꺼번에
 ```
 
 ## 계약(바뀌지 않는 것 — Phase B 카드의 입력)
@@ -93,18 +97,54 @@ verify/smoke.mjs         Playwright(msedge 채널) 스모크 — M1 검사. B6 �
 숨은 함정(`hidden`)·매복 몹(`concealed`)·숨은 피처(`concealed`)는 안 그린다. 산 몹은 초점 캐릭터 시야 안만, 피처·시체는
 시야 안이거나 본 적 있는 칸만. 마을(`levels[i].town`)은 전부. 초점이 없으면 전부(관전자).
 
-## Phase B 카드(각 카드 = 자기 파일만, 겹침 0 — 계획 §6)
+## Phase B 카드(각 카드 = 자기 파일만, 겹침 0 — 계획 §6) — 2026-09-09 6장 전부 통합됨
 
 | 카드 | 파일 | 입력 | 수용 |
 |---|---|---|---|
 | B1 초점 카드 | `src/ui/FocusCard.ts` | focus/frame 이벤트 · bots · decisions(reason/say/relation) · BONES 라벨(엔진 `dungeon_gm.py` BONES 복사) | 초점 전환 시 HP·상태·소지·속내·관계 뼈·관계 한 줄이 바뀐다 |
-| B2 말풍선·로그 | `src/scene/Bubbles.ts` `src/ui/Log.ts` | decisions(say/to/say_kind/form) · events(evLine 사전 = `viewer/index.html` 이식) · headOf/project/turnToward | 제안 표식·지문 줄·사건 줄 시간순, 초점 줄 강조, 몸 돌리기 |
+| B2 말풍선·로그 | `src/scene/Bubbles.ts` `src/ui/Log.ts` `src/text/evline.ts` | decisions(say/to/say_kind/form) · events(evLine 사전 = `viewer/index.html` 이식) · headOf/project/turnToward | 제안 표식·지문 줄·사건 줄 시간순, 초점 줄 강조, 몸 돌리기 — 훅 `#overlay .bubble[data-char](.proposal/.focus/.who/.to)` · `.stage-dir[data-char]` · `#log .grp[data-turn]` 안 `.say/.rsn/.ev.{give|dir|…}/.focus(data-c)` |
 | B3 건네기 트윈 | `src/fx/Handoff.ts` | events give(char,to,item,what) · feetOf · tileFrame('item:…') | give 틱에 아이콘이 둘 사이를 0.4s 건너간다(seek 는 생략) |
 | B4 밝기 | `src/scene/Fog.ts` | visibleSet/seenSet · level.grid · town · TILE · DEPTH.fog | 가 본 곳/시야/미지 3단, 마을 전체 밝음, 16× 프레임 드롭 없음 |
 | B5 라이브·배포 | `src/stream/live.ts` · `launcher.py`(`/game/` 라우트만) · `package.json` scripts | RunSource/fetchStatus · 론처 `do_GET` | 더미 두뇌 판 라이브 재생, `npm run build` 산출물이 8000 의 `/game/` 에서 열린다, `python verify_launcher.py` 통과 |
 | B6 스모크 | `verify/smoke.mjs` | 전부 | seed 257573 판 t176~t184 초점=수나 재생·캡처, JS 오류 0 |
 
 금지: `dungeon_gm.py` `brains.py` `show_runner.py` `adventurer_prompt_menu.md` `viewer/` 무수정 · 새 에셋 제작 금지 · 다른 카드의 파일·`main.ts`·`app.ts`·`types.ts` 무수정(필요하면 자기 파일 안에서 해결하고 통합자에게 요청).
+
+## 론처 배포(B5, 2026-09-09)
+
+`launcher.py`(8000)가 `npm run build` 산출물 `game/dist/` 를 **`/game/`** 으로 서빙한다(vite `base: '/game/'` 과 같다). 뷰어·runs·state 서빙은 그대로.
+
+| 요청 | 응답 |
+|---|---|
+| `GET /game` | 302 → `/game/`(쿼리 보존) |
+| `GET /game/` · `/game/index.html` | `game/dist/index.html`, `Cache-Control: no-store`(새 빌드가 바로 보이게) |
+| `GET /game/assets/…` | 해시 자산, 캐시 헤더 기본(SimpleHTTPRequestHandler) |
+| `game/dist/index.html` 없음 | 503 + 한글 안내 한 장(`cd game && npm install && npm run build`) — 어느 `/game/…` 경로든 같은 답 |
+| `GET /api/status` | 기존 키 + `game: "/game/?run=state/stream.jsonl"`(추가만 — `viewer` 유지) |
+
+구현 = `Handler.translate_path` 오버라이드(`/game/` 접두 → `/game/dist/`; 따옴표 풀기·`..` 걸러내기·index.html 선택은 부모 그대로) + `do_GET` 의 302/503 두 분기 + `end_headers` 의 no-store 한 줄. `python verify_launcher.py` 무변경 통과.
+
+```bash
+cd game && npm run build && npm run launch        # = python ../launcher.py --no-browser → http://127.0.0.1:8000/game/?run=state/stream.jsonl
+npm run smoke:launcher                             # = WL_GAME_URL=http://127.0.0.1:8000/game/ 로 smoke.mjs (WL_LAUNCHER=http://127.0.0.1:8765 로 다른 포트)
+```
+
+### 라이브(`src/stream/live.ts`)
+
+- `RunSource` 폴링은 setTimeout 사슬 — 실패하면 **1.5 → 3 → 6s(상한)** 백오프, 성공하면 1.5s 로 복귀(`delay`·`failures` 필드로 관찰).
+- `installLive(app)`(main.ts 가 한 줄로 설치) — 라이브 판(`app.live`)일 때 `/api/status` 를 1.5s 마다 읽어 `#hud .badge.live-hud` 를 갱신한다. 문자열이 같으면 DOM 무접촉.
+
+| 배지 | 뜻 |
+|---|---|
+| `LIVE · t{turn}` | 러너가 돌고 있다(turn = 론처가 읽은 틱과 붙은 프레임 중 큰 것) |
+| `LIVE · t{turn} · 론처 응답 없음` | `/api/status` 실패 — 상태 폴링도 같은 백오프 |
+| `중단됨 · t{turn}` | 러너는 죽었는데 `end` 라인이 없다(`/api/stop`·강제 종료) |
+| `론처 없음 — 라이브 아님` | vite 개발·프리뷰의 더미 `{dev:true}` — 더는 묻지 않는다 |
+| (숨김) | 라이브가 아니다(리플레이·`end` 뒤) |
+
+새 판이 시작돼 파일이 줄어들면(파서 reset → bus `run`) 배지도 초기화된다. 덤: `state/` 경로를 보고 있는데 라이브가 아니면(끝남·빈 판·404) 3s 마다 상태를 살펴, 론처에서 새 판이 돌기 시작했으면(running·틱 있음·end 없음) 같은 경로를 다시 연다 — 론처에서 시작 → 이 창이 알아서 붙는다. 스타일은 `<style id="style-live">` 주입(style.css 무수정).
+
+⚠️ 론처의 정적 서빙은 **리포 root** 기준이라 `make_server(state_dir=임시)` 로 격리해도 `/state/stream.jsonl` 은 실제 `state/` 를 준다(러너 쓰기만 격리). 라이브 검증은 임시 폴더·더미 두뇌로 하되 이 점을 알고 할 것.
 
 ## 검증 규율
 

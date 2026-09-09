@@ -95,6 +95,7 @@
     <div class="status" id="tStatus">상태 확인 중…</div>
     <div class="row center" id="tRunRow" hidden style="margin-top:10px">
       <button id="bWatch">관전으로</button>
+      <button id="bGame" title="게임 클라이언트(초점 캐릭터 카메라 뷰어, game/) — 빌드가 없으면 안내 페이지가 뜬다">게임 화면으로</button>
       <button class="danger" id="bStop">진행 중인 판 중지</button>
     </div>
   </div>
@@ -251,6 +252,7 @@ async function refreshStatus() {
 $('bNew').onclick = async () => { await loadPresets(); show('sParty'); };
 $('bReplays').onclick = () => { location.href = '/viewer/'; };
 $('bWatch').onclick = () => { location.href = '/viewer/?run=state/stream.jsonl'; };
+$('bGame').onclick = () => { location.href = '/game/?run=state/stream.jsonl'; };   // 게임 클라이언트(2026-09-09 M3) — 기본 링크 교체는 파트너 결정 뒤
 $('bStop').onclick = async () => { await api('/api/stop', {}); refreshStatus(); };
 
 /* ═══ 파티 ═══ */

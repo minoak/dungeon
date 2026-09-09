@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "smoke": "node verify/smoke.mjs"
+    "smoke": "node verify/smoke.mjs",
+    "launch": "python ../launcher.py --no-browser",
+    "smoke:launcher": "node -e \"process.env.WL_GAME_URL ||= (process.env.WL_LAUNCHER || 'http://127.0.0.1:8000') + '/game/'; import('./verify/smoke.mjs')\""
   },
   "dependencies": {
     "phaser": "3.90.0"

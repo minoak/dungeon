@@ -17,8 +17,10 @@ API(JSON):
   POST /api/start    {"map":"normal|big","town":bool,"brain":"gemini_api|claude_cli|anthropic_api|dummy",
                       "seed":int|null|"random","party":"custom|default"} → 이전 판 보존(live.bat 규칙)
                      → 러너 subprocess. 동시 1판(실행 중이면 409)
-  GET  /api/status   {running,pid,started,seed,party,turn,outcome,viewer}
+  GET  /api/status   {running,pid,started,seed,party,turn,outcome,viewer,game}
   POST /api/stop     러너 종료
+  GET  /game/        게임 클라이언트(game/dist/ 빌드 산출물 — 초점 캐릭터 카메라 뷰어, 2026-09-09 M3/B5).
+                     /game → 302 /game/ · /game/… 은 game/dist/… 서빙 · 빌드가 없으면 503 한 장(빌드 명령 안내)
 
 ⚠️ 사용자 자유 입력(이름·배경)은 시트 UGC 의 프롬프트 인젝션 관문이다 — sheetkit 이 격리(정제·
 상한·인용 한 줄)하고 러너의 load_party 가 다시 검증한다. 막는 게 아니라 격리+관측(D31).
@@ -49,6 +51,9 @@ MAPS = {                                          # 시작 옵션 → 러너 환
 }
 BRAINS = ("gemini_api", "claude_cli", "anthropic_api", "dummy")
 BIG_KEYS = tuple(MAPS["big"])
+GAME_PREFIX = "/game/"                            # 게임 클라이언트(M3/B5): URL 접두 → game/dist/ (vite base '/game/' 와 같다)
+GAME_DIST_PREFIX = "/game/dist/"
+GAME_NO_STORE = ("/game/", "/game/index.html")    # 진입 HTML 만 캐시 금지 — 해시 자산(/game/assets/*)은 기본 캐시
 
 
 class Conflict(Exception):
@@ -154,7 +159,8 @@ class Runner:
         """실행 여부 + 현 판의 사실(스트림에서 읽는다 — 러너 밖 원천 없음)."""
         out = {"running": self.running(), "pid": self.proc.pid if self.proc else None,
                "started": self.started, "seed": None, "party": [], "turn": None, "outcome": None,
-               "viewer": "/viewer/?run=state/stream.jsonl"}
+               "viewer": "/viewer/?run=state/stream.jsonl",
+               "game": "/game/?run=state/stream.jsonl"}      # 게임 클라이언트(M3/B5) — additive, 뷰어 키는 그대로
         path = os.path.join(self.state_dir, "stream.jsonl")
         if os.path.exists(path):
             try:
@@ -276,7 +282,34 @@ class Handler(SimpleHTTPRequestHandler):
     def end_headers(self):
         if self.path.startswith("/state/") or self.path.startswith("/runs/"):
             self.send_header("Cache-Control", "no-store")   # 라이브 스트림은 캐시 금지
+        elif urlparse(self.path).path in GAME_NO_STORE:
+            self.send_header("Cache-Control", "no-store")   # 게임 클라이언트 진입 HTML — 새 빌드가 바로 보이게(해시 자산은 기본 캐시)
         super().end_headers()
+
+    # ── 게임 클라이언트(M3/B5) — /game/… 을 game/dist/… 로 ──
+    def translate_path(self, path):
+        """/game/<x> → <root>/game/dist/<x>. 나머지는 그대로(뷰어·runs·state 서빙 불변). 접두만 바꾸고
+        따옴표 풀기·'..' 걸러내기·index.html 선택은 부모 구현이 그대로 맡는다."""
+        if path.startswith(GAME_PREFIX):
+            path = GAME_DIST_PREFIX + path[len(GAME_PREFIX):]
+        return super().translate_path(path)
+
+    def _game_missing(self):
+        """빌드 산출물이 없다 — 503 + 한글 안내 한 장(정적 404 대신 이유를 말한다)."""
+        body = ("<!DOCTYPE html><html lang=\"ko\"><head><meta charset=\"utf-8\"><title>게임 클라이언트 빌드 없음</title>"
+                "<style>body{background:#0f1115;color:#d8dee9;font:15px/1.6 system-ui,sans-serif;padding:40px}"
+                "code{background:#1c2028;padding:2px 6px;border-radius:4px}</style></head><body>"
+                "<h1>게임 클라이언트 빌드가 없다</h1>"
+                "<p><code>game/dist/index.html</code> 이 없다. 리포에서 한 번 빌드하면 이 주소(/game/)로 열린다:</p>"
+                "<p><code>cd game &amp;&amp; npm install &amp;&amp; npm run build</code></p>"
+                "<p>그동안은 <a href=\"/viewer/?run=state/stream.jsonl\">기존 뷰어</a>로 관전할 수 있다.</p>"
+                "</body></html>").encode("utf-8")
+        self.send_response(503)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     # ── 라우팅 ──
     def do_GET(self):
@@ -298,6 +331,15 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Location", "/launcher/")
             self.end_headers()
             return
+        if path == "/game":                           # 게임 클라이언트(M3/B5) — 슬래시 없는 진입은 /game/ 으로(쿼리 보존)
+            q = urlparse(self.path).query
+            self.send_response(302)
+            self.send_header("Location", GAME_PREFIX + ("?" + q if q else ""))
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if path.startswith(GAME_PREFIX) and not os.path.isfile(os.path.join(self.ctx.root, "game", "dist", "index.html")):
+            return self._game_missing()
         return super().do_GET()
 
     def do_POST(self):

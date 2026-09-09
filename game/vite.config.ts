@@ -54,7 +54,8 @@ function wlStatic(): Plugin {
 export default defineConfig({
   base: '/game/',
   plugins: [wlStatic()],
-  server: { port: 5173, host: '127.0.0.1' },
+  // WL_NOHMR=1 → HMR 끔(다른 손이 편집 중인 트리에서 dev 서버 상대로 스모크를 돌릴 때 페이지 재로드를 막는다 — B6)
+  server: { port: 5173, host: '127.0.0.1', ...(process.env.WL_NOHMR ? { hmr: false } : {}) },
   preview: { port: 4173, host: '127.0.0.1' },
   build: { outDir: 'dist', emptyOutDir: true, sourcemap: false, chunkSizeWarningLimit: 2000 },
 });

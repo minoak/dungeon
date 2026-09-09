@@ -105,3 +105,15 @@ game/                      # Phaser 3 + TypeScript + Vite (Node 22.16 / npm 10.9
 
 - `STREAM_FORMAT.md` · `viewer/index.html`(evLine 사전·방향/걷기 규칙·라이브 폴링) · `viewer/assets/sprites/sprites.js`(SD 로딩 예) · `viewer/assets/sprites/sd/atlas.json` · `art/sprites-v4/README.md`(연동 규격·검토 서버) · `launcher.py`(라우트·보존 규칙) · `design/HARNESS_DESIGN.md` D37(외형)·D47 ②(건네기·친목 — `tick.replies`, `decisions.form/item`).
 - 판: `runs/stream-20260909-203709.jsonl`(seed 257573, 250틱) · `runs/stream-20260909-202333.jsonl`(seed 857635, 107틱 미완).
+
+
+## 10. 진행 기록 — 2026-09-09 밤(다음 세션): M1·M2·M3 구현 완료
+
+- **Phase A(솔로, 커밋 13e05a8)** = M1 골격. Phaser **3.90.0** + TypeScript 5.9 + Vite 7 (레지스트리 최신은 Phaser 4.2·Vite 8·TS 7 이지만 §0 의 "Phaser 3" 을 따라 고정). 스트림 파서(증분·tail·파일 순서 조인·방향/이동·관전 근사 LOS·캐릭터별 본 칸·발자국)·재생 클록·초점·SD 스프라이트시트(직업별 기본 SD 폴백 = §8 제안대로)·타일(tiles.json 재사용 + 문·출구·물약·장비·NPC·묘 보충)·무대 씬·칩·컨트롤·스모크. 인터페이스 계약 = `game/README.md`.
+- **Phase B(울트라코드 6카드 병렬, wf_0f75bf37 — 에이전트 6·오류 0·약 21분·서브에이전트 토큰 1.03M)** = M2·M3. 파일 겹침 0, 각 카드 자체 검증(dev 서버+헤드리스 Edge 스크린샷) 뒤 보고서.
+  B1 초점 카드(`ui/FocusCard.ts`, 결정 색인 이진 탐색, BONES 복사) · B2 말풍선·지문·로그(`scene/Bubbles.ts` `ui/Log.ts` `text/evline.ts` — 뷰어 evLine 이식 + follow/rest/give/bond/NPC 어휘, 지문 "유나: *…*", 건네기 "수나 → 유나: 가죽 갑옷") · B3 건네기 트윈(`fx/Handoff.ts`, 0.4s 포물선+팝) · B4 밝기(`scene/Fog.ts`, 미지 α.88·본 곳 α.45, 서명 더티체크, 틱당 ≤1회) · B5 라이브·배포(`stream/live.ts` 백오프·`installLive` 배지·새 판 자동 재접속, `launcher.py` `/game/`→`game/dist/` 라우트·503 안내·status.game) · B6 스모크(`verify/smoke.mjs` — 실패 수집 구조, M1+M2 검사 26종).
+- **Phase C(솔로 통합)**: main.ts 에 `installLive` + 오류 span 분리 · 씬 판 교체 결함 수선(B4 적발: 같은 levelIdx 면 재구축 안 됨) · style.css 중복 제거 · `WL_NOHMR` 스위치 · README 갱신 · 론처 페이지에 "게임 화면으로" 버튼(기본 링크는 그대로 — §8 파트너 결정 대기). 검증: `npm run build` OK · `npm run smoke` **25 통과·0 실패·1 생략**(라이브 배지는 론처 판에서만) · `python verify_launcher.py` ALL PASS · 엔진·프롬프트·viewer/ diff 0.
+- **§7 수용 기준 실측**: 초점=수나 t176→t184 — 고블린 m0 시야 안 · t179 건네기 아이콘 0ms 등장·600ms 소멸 + 로그 "수나 → 유나: 가죽 갑옷" + 말풍선 "이거 입고" + 관계 뼈 "물건을 건넴 1" · t181 "처치" · t182 지문 overlay+log · t184 "동행" · t1 제안 말풍선 · 칩 클릭 전환 37~90ms · 16× 전체 재생 최악 프레임 간격 35ms(헤드리스) · 브라우저 오류 0.
+- **임시 가정(파트너 "전부 추천으로", 09-09)**: 초점 기본=파티 1번 · 옛 판=직업별 기본 SD · `dist/` 는 ignore(론처에서 열려면 `cd game && npm run build`) · 몹 표시=초점 캐릭터 시야 · 피처 '가 본 자리'=시야에 든 적 있는 칸 · 카드들의 문구(시트/목표/아직 없음/모두/동행 줄 등)는 세션 문장 — 파트너 문장이 오면 `evline.ts`·`FocusCard.ts` 한 곳씩.
+- **환경 메모**: `~/.npmrc` 의 `os=linux` 잔재(tmux 시절)를 제거(파트너 승인) — 그 전엔 rollup/esbuild 리눅스 바이너리가 깔려 빌드 실패. SD 에셋 묶음(1a97f8a)·판 파일 8개(ce7c23b)는 파트너 위임으로 이 세션이 커밋.
+- **남은 것(서비스 단계로 미룸 — 파트너 "당장은 할 필요 없다")**: 다듬기(안개 α·아이콘 존재감·말풍선 배치) · 기존 HTML 뷰어 은퇴·론처 기본 링크 교체(§8) · 라이브 배지 실판 육안 · 층 2 판에서 ▼ 표식·층 전이 육안 · 미니맵 없음 유지. **서비스 골격(계정·다중 판·비용·호스팅)은 별도 토론 세션**(파트너 09-09 "라이브 서비스를 생각하고 있지 않아 우리?").

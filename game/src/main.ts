@@ -12,13 +12,19 @@ import { installLog } from './ui/Log';
 import { installBubbles } from './scene/Bubbles';
 import { installFog } from './scene/Fog';
 import { installHandoff } from './fx/Handoff';
+import { installLive } from './stream/live';
 
 declare global { interface Window { __wl?: App } }
 
 async function boot(): Promise<void> {
   const app = new App();
   window.__wl = app;
-  app.bus.on('error', msg => { app.dom.hud.textContent = msg; });
+  // 오류 문구는 #hud 의 제 자리(span)에만 — 라이브 배지(installLive) 등 다른 HUD 요소를 지우지 않는다. 판이 열리면 숨긴다.
+  const errEl = document.createElement('span');
+  errEl.id = 'hudError'; errEl.className = 'badge'; errEl.hidden = true;
+  app.dom.hud.appendChild(errEl);
+  app.bus.on('error', msg => { errEl.textContent = msg; errEl.hidden = false; });
+  app.bus.on('run', () => { errEl.hidden = true; });
   const [atlas, tiles] = await Promise.all([fetchAtlas(), fetchTiles()]);
   const sceneReady = new Promise<DungeonScene>(res => { app.bus.on('scene', res); });
   const game = new Phaser.Game({
@@ -32,6 +38,7 @@ async function boot(): Promise<void> {
 
   installControls(app); installChips(app);
   installFocusCard(app); installLog(app); installBubbles(app); installFog(app); installHandoff(app);   // Phase B 카드
+  installLive(app);                                                                                     // B5 라이브 배지(론처 /api/status)
 
   const q = new URLSearchParams(location.search);
   const t = q.get('t');

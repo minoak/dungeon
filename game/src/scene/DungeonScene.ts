@@ -74,6 +74,8 @@ export class DungeonScene extends Phaser.Scene {
     this.scale.on('resize', (gs: Phaser.Structs.Size) => { cam.setSize(gs.width, gs.height); });
     this.app.playback.on('frame', ch => this.applyFrame(ch));
     this.app.focus.on('change', ({ char }) => this.follow(char, true));
+    // 판 교체(B4 적발): 새 판의 levelIdx 가 옛 판과 같으면(0→0) 층 재구축이 안 돼 옛 타일맵·본 칸 캐시가 남는다 — 강제로 비운다
+    this.app.bus.on('run', () => { this.levelIdx = -1; this.seenCache = null; });
     this.app.bus.emit('scene', this);
     const cur = this.app.playback.cur;
     if (cur) this.applyFrame({ prev: null, cur, idx: this.app.playback.idx, mode: 'seek' });
