@@ -96,7 +96,7 @@ export class StreamParser {
     this.cur = ls;
     this.scratch = { visitedSet: new Set(), seenSet: {}, townVis: town ? allCells(L.w, L.h) : null };
     this.prev = {};                              // 재스폰 — 좌표 연속성 없음(방향은 유지)
-    this.frame('level', L.turn, L.party, L.monsters, L.features, L.traps, {});
+    this.frame('level', L.turn, L.party, L.monsters, L.features, L.traps, { reaction_stats: L.reaction_stats });
   }
 
   private tick(t: TickLine): void {
@@ -141,6 +141,7 @@ export class StreamParser {
       bots, monsters, features, traps,
       events: t.events || [], decisions: t.decisions || {}, inbox: t.inbox || {},
       hails: t.hails, answers: t.answers, replies: t.replies,
+      social_events: t.social_events, reactions: t.reactions, reaction_stats: t.reaction_stats,
       facing, moved, vis, seen, visited: ls.visitedList.length,
     };
     r.frames.push(f);

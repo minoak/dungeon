@@ -10,9 +10,9 @@ claude.exe -p --model haiku 로 (캐릭터 시트 + obs)를 주고 한 '행동'�
 
 진실(좌표·이동가능·주사위 판정)은 dungeon_gm 이 쥔다. 봇은 '의도'만 낸다.
 반환: {type, [target], [choice], say, reason, src}
-   type ∈ goto/attack/interact/search/explore ; target=보이는 오브젝트 id(explore는 선택적 방위).
+   조합형 type = COMMON 10개 동사, target = 관측 대상 ID(self 포함, explore는 길 ID).
    choice = 리모컨 모드에서 고른 옵션 번호(기록용 — 엔진 판정은 type/target 만 읽는다).
-리모컨(기본): 행동은 obs['options'](엔진 열거)에서 번호 선택 — DUNGEON_MENU=0 이면 구식 자유서술.
+조합형(기본): COMMON과 현재 대상 ID를 조합한다. 이전 방식은 백업 비교용 명시 설정에서만 읽는다.
 """
 import os
 import re
@@ -54,17 +54,23 @@ def _load_prompt(fname, required=True):
     return _variant(raw, False), _variant(raw, True)
 
 
-ADV_PROMPT, ADV_PROMPT_SOLO = _load_prompt("adventurer_prompt.md")
-MENU_PROMPT, MENU_PROMPT_SOLO = _load_prompt("adventurer_prompt_menu.md", required=False)
+LEGACY_PROMPT_DIR = os.path.join("backups", "prompts", "2026-09-10")
+ADV_PROMPT, ADV_PROMPT_SOLO = _load_prompt(os.path.join(LEGACY_PROMPT_DIR, "adventurer_prompt.md"), required=False)
+MENU_PROMPT, MENU_PROMPT_SOLO = _load_prompt(os.path.join(LEGACY_PROMPT_DIR, "adventurer_prompt_menu.md"), required=False)
+COMPOSE_PROMPT, COMPOSE_PROMPT_SOLO = _load_prompt("adventurer_prompt.md")
 # 사교 콜 프롬프트(채널 분리 2026-07-26) — 없으면 사교 채널이 통째로 꺼진다(안전망)
 SOCIAL_PROMPT, SOCIAL_PROMPT_SOLO = _load_prompt("social_prompt.md", required=False)
 
-# 리모컨 모드(기본 on): 행동=엔진 열거 옵션에서 번호 선택, 말·속내=자유.
-# DUNGEON_MENU=0 이면 구식 자유서술(동사+target 직접 작성) — A/B 대조군.
-MENU = os.environ.get("DUNGEON_MENU", "1") != "0" and bool(MENU_PROMPT)
-if os.environ.get("DUNGEON_MENU", "1") != "0" and not MENU_PROMPT:
-    import sys
-    print("[경고] adventurer_prompt_menu.md 없음 — 리모컨 끄고 자유서술로 폴백", file=sys.stderr)
+# 조합형을 기본으로 사용한다. 명시적인 구형 환경 변수는 과거 비교 하니스와 호환한다.
+_ACTION_MODE = os.environ.get("DUNGEON_ACTION_MODE", "").strip().lower()
+if not _ACTION_MODE:
+    _ACTION_MODE = ("menu" if os.environ["DUNGEON_MENU"] != "0" else "free") if "DUNGEON_MENU" in os.environ else "compose"
+if _ACTION_MODE not in ("", "menu", "free", "compose"):
+    raise ValueError("DUNGEON_ACTION_MODE는 menu/free/compose 중 하나여야 한다")
+COMPOSE = _ACTION_MODE == "compose"
+MENU = _ACTION_MODE == "menu"
+if (MENU and not MENU_PROMPT) or (_ACTION_MODE == "free" and not ADV_PROMPT):
+    raise FileNotFoundError("비교용 이전 프롬프트 백업이 없다: " + LEGACY_PROMPT_DIR)
 
 # D17-4 직렬화 스위치: LLM 에게 보내는 obs 표현(wire)에서 큰 덩어리를 한 변수씩 끄는 노브.
 # obs dict 자체(스트림·BYO·검증 계약)는 불변 — 여기는 '보여주는 방법'만 만진다(options 선례).
@@ -163,6 +169,54 @@ NOTE_LEN = 80            # 한 줄 상한 — 수필 방지(say 160 의 절반: 
 
 _TYPES = {"goto", "attack", "interact", "search", "explore", "follow", "drink", "wait", "rest"}
 _BEARINGS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW"}
+
+
+def action_metadata():
+    """프롬프트 실험을 구식 자유출력과 구분한다. 기존 menu/choice 계약은 유지."""
+    return {"action_mode": "compose" if COMPOSE else "menu" if MENU else "free",
+            **({"compose_profile": G.CA.PROFILE, "auto_approach": True} if COMPOSE else {})}
+
+
+def _compose_types():
+    """기본 동사 + 켜진 기능. 대상·거리·소지품에 따라 행동 목록을 좁히지 않는다."""
+    types = ["goto", "follow", "explore", "search", "attack", "interact", "drink"]
+    types += [t for t in ("give", "bond", "wait", "rest")
+              if os.environ.get("DUNGEON_" + t.upper(), "1") != "0"]
+    return types
+
+
+def _compose_pick(obj, obs):
+    """선행 프로브: 기존 동사를 직접 읽는다. 모르는 동사를 이동으로 바꾸지 않는다."""
+    if obs.get('action_schema') == G.CA.PROFILE:
+        return G.CA.parse(obj, obs)
+    typ = str(obj.get("type") or "").strip().lower()
+    if typ not in _compose_types():
+        return None, "invalid_type"
+    tgt = str(obj.get("target") or "").strip()
+    out = {"type": typ}
+    if typ in ("search", "drink", "wait", "rest"):
+        if tgt:
+            return None, "unexpected_target"
+    elif typ == "explore":
+        if tgt:
+            directions = {w["bearing"] for w in obs.get("sights", {}).get("ways", [])}
+            if tgt.upper() not in directions:
+                return None, "invalid_target"
+            out["target"] = tgt.upper()
+    else:
+        if tgt not in _valid_targets(obs, typ):
+            return None, "invalid_target"
+        out["target"] = tgt
+    if typ == "give":
+        item = obj.get("item")
+        if item not in ("potion", "weapon", "armor"):
+            return None, "invalid_item"
+        out["item"] = item              # 실제 소유·거리는 엔진이 실행 시점에 판정
+    elif obj.get("item"):
+        return None, "unexpected_item"
+    if typ == "bond":
+        out["form"] = _clean_form(obj.get("form"))
+    return out, None
 
 
 def _valid_targets(obs, verb="goto"):
@@ -548,6 +602,20 @@ def _last_prose(last, names=None):
     t, r = last.get("type"), last.get("result")
     tgt = str(last.get("target", "") or "")
     _who = lambda c: "%s(봇%s)" % ((names or {}).get(c, "동료"), c)   # D47 ② 상대 호칭(동료는 이름으로)
+    if r == "approaching":
+        return "%s — %s 실행 거리까지 접근을 시작했다" % (_tgt_name(tgt, names), t)
+    if r == "no_path" and last.get("parent_action_id"):
+        return "%s에게 접근할 길이 없었다" % _tgt_name(tgt, names)
+    if r == 'no_effect':
+        return '%s에 %s을(를) 시도했으나 변화가 없었다 (%s)' % (_tgt_name(tgt, names), t, last.get('reason_code', 'no_effect'))
+    if t == 'healed' or (t == 'use' and r == 'healed'):
+        return '%s — 물약으로 HP %d 회복 (HP %d)' % (_tgt_name(tgt, names) if tgt else '나', last.get('heal', 0), last.get('hp', 0))
+    if t == 'use' and last.get('effect_type'):
+        return _last_prose({**last, 'type': last['effect_type']}, names)
+    if t == 'use':
+        why = {'no_target': '대상이 더는 보이지 않는다', 'lost': '대상을 놓쳤다',
+               'nothing': '요청한 소지품이 없다', 'too_far': '실행 거리에 닿지 못했다'}.get(r, str(r))
+        return '%s 사용 실패 — %s' % (_tgt_name(tgt, names), why)
     if t == "give":                       # D47 ② 건네기 — 자기 행동의 결과(사실만)
         if r == "given":
             tail = ((" (남은 물약 %d병)" % last.get("potions", 0)) if last.get("item") == "potion"
@@ -926,7 +994,7 @@ _WIRE_KEYS = frozenset((
                #   '그 밖의 정보' JSON 덤프로 매턴 새 나간다(화이트리스트 폴백)
 
 
-def _wire(obs, names=None):
+def _wire(obs, names=None, compose=False):
     """obs(dict 계약) → 자기설명 한국어 사실 문장(D17-3). LLM 두뇌 전용 표현 층 —
     dict 계약(스트림·BYO·검증)은 무변경, 여기는 '보여주는 방법'만 소유한다.
     원칙: obs 에 있는 사실만 문장으로(시야-온리는 입력에서 이미 보장), 해석·추천은 싣지
@@ -942,7 +1010,8 @@ def _wire(obs, names=None):
         솔로 판(로스터 없음)에서 names 가 비어 남남이 된다. 도감의 '낯선 짐승'과 같은 문법:
         모르는 것은 모른다고 쓴다. ⚠️ 이름을 모를 뿐 id(봇2)는 그대로 — 지칭은 돼야
         핑을 걸 수 있고, 이름은 만나서 통성명해야 얻는 것이다(그건 아직 없다)."""
-        return "동료 %s" % nm(char) if names.get(char) else "낯선 사람(봇%s)" % char
+        label = "동료 %s" % nm(char) if names.get(char) else "낯선 사람(봇%s)" % char
+        return label + (" [b%s]" % char if compose else "")
 
     def at(o):
         if o.get("dist") == 0:
@@ -1296,8 +1365,46 @@ def _wire(obs, names=None):
     out = []
     if M:
         out += ["# 기억 — 무엇을 기억하나"] + M + [""]
-    out += ["# 관측 — 지금 보고 듣는 것", ""] + L
-    extra = {kk: v for kk, v in obs.items() if kk not in _WIRE_KEYS}
+    out += ["# 판단 공간 — 지금 보고 듣는 것" if compose else "# 관측 — 지금 보고 듣는 것", ""] + L
+    if compose:
+        # 메뉴가 사라져도 장비 효과·공격 가능 거리 같은 사실은 잃지 않는다.
+        out += ["", "## 소지품 — 착용 현황"]
+        if not obs.get('action_schema'):
+            out += ["- potion: 회복 물약 %d병" % obs.get("potions", 0)]
+        for slot in ("weapon", "armor"):
+            gear = (obs.get("gear") or {}).get(slot)
+            out.append("- %s: %s" % (slot, gear["name"] if gear else "없음"))
+        facts = []
+        for f in s.get("features", []):
+            if f.get("type") in ("weapon", "armor"):
+                effect = "피해" if f["type"] == "weapon" else "막기"
+                facts.append("- %s: 착용하면 %s +%d, 교체한 장비는 그 자리에 놓인다"
+                             % (f["id"], effect, G.GEAR_KINDS.get(f["name"], 0)))
+        for m in s.get("monsters", []):
+            facts.append("- %s: 현재 자리에서 %s" % (m["id"], "공격 사거리·사선 안" if m.get("in_range") else "공격 범위 밖"))
+        if facts:
+            out += ["", "## 대상의 현재 사실"] + facts
+        ways = s.get("ways", []) if not obs.get('action_schema') else []
+        if ways:
+            out += ["", "## 탐색 후보 — 방향"] + [
+                "- %s: %d칸, %s" % (w["bearing"], w["dist"], "가 본 길" if w.get("visited") else "안 가본 길")
+                for w in ways]
+        if obs.get('action_schema') == G.CA.PROFILE:
+            out += ["", "## 대상 — 지금 참조할 수 있는 ID"]
+            for target in obs.get('targets', []):
+                out.append('- [%s] %s (%s)%s%s' % (
+                    target['id'], target.get('name', target['id']), ', '.join(target['tags']),
+                    (' — ' + at(target)) if 'dist' in target else '',
+                    (' · %d개' % target['count']) if 'count' in target else ''))
+        out += ["", "## 행동과 의사소통", "COMMON: " + " / ".join(G.CA.COMMON if obs.get('action_schema') else _compose_types()),
+                "의사소통: 잡담 / 제안"]
+    if obs.get('social_events'):
+        out += ['', '## 네가 받은 사회적 상호작용 — 선택적으로 한 사건에 반응할 수 있다']
+        for event in obs['social_events']:
+            out.append('- [%s] t%s · %s(봇%s)에게서: %s' % (
+                event['id'], event['turn'], names.get(event['actor'], '상대'), event['actor'], G.SR.describe(event)))
+    extra = {kk: v for kk, v in obs.items() if kk not in _WIRE_KEYS
+             and kk not in ('action_schema', 'actor', 'targets', 'items', 'ways', 'social_events')}
     if extra:                       # 미래 additive 필드 — 조용한 누락 대신 정직한 노출
         out += ["", "## 그 밖의 정보", "```json",
                 json.dumps(extra, ensure_ascii=False), "```"]
@@ -1341,6 +1448,18 @@ def _then(obj, obs):
     raw = obj.get("then")
     if not isinstance(raw, list):
         return []
+    if obs.get('action_schema') == G.CA.PROFILE:
+        out = []
+        for item in raw[:G.PLAN_MAX]:
+            if not isinstance(item, dict):
+                break
+            step, error = G.CA.parse(item, obs)
+            if error:
+                break
+            out.append(step)
+            if step['type'] in ('follow', 'wait', 'rest'):
+                break
+        return out
     out, valid = [], None
     for item in raw[:G.PLAN_MAX]:
         step = None
@@ -1374,6 +1493,8 @@ def _fallback(obs, char, why="파싱 실패"):
     """엔진 규칙두뇌(dict 반환)에 say/reason/src 옷을 입혀 돌려준다.
     why = 실패 종류 라벨(타임아웃/빈 응답/JSON 불량/행동 해석 실패…) — 스트림·봇로그 계측."""
     fb = dict(G.dummy_brain(obs, char))            # {type, [dir]}
+    if obs.get('action_schema') == G.CA.PROFILE:
+        fb = G.CA.fallback(fb, obs)
     fb.update(say="", reason="[폴백] %s -> 규칙두뇌" % why, src="fallback")
     return fb
 
@@ -1385,7 +1506,11 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
     # D17-3: obs 는 JSON 덤프가 아니라 자기설명 문장(_wire)으로 나간다 — dict 계약은 불변.
     # options 는 _wire 가 렌더하지 않는다: 메뉴 모드=아래 번호 목록이 그것, 자유서술=비노출(순수성).
     names = {o["char"]: (o.get("name") or o.get("job", "동료")) for o in (roster or [])}
-    if MENU:
+    if COMPOSE:
+        prompt = (_sheet(bot, roster) + "\n" + (COMPOSE_PROMPT_SOLO if solo else COMPOSE_PROMPT)
+                  + "\n\n" + _wire(obs, names, compose=True)
+                  + "\n\n오직 JSON 한 줄로만 답하라.")
+    elif MENU:
         menu = "\n".join("%d. %s" % (o["n"], o["label"])
                          for o in (obs.get("options") or []))
         prompt = (_sheet(bot, roster) + "\n" + (MENU_PROMPT_SOLO if solo else MENU_PROMPT)
@@ -1402,6 +1527,19 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
     obj, jwhy = _extract(raw)
     why = why or jwhy
     if obj:
+        reaction = G.SR.parse(obj, obs) if COMPOSE else {}
+        if COMPOSE:
+            composed, input_error = _compose_pick(obj, obs)
+            if input_error:
+                fb = _fallback(obs, char, input_error + ": " + _head(json.dumps(obj, ensure_ascii=False)))
+                fb["input_error"] = input_error
+                fb['input_error_detail'] = G.CA.error_detail(obj, obs, input_error)
+                fb.update(reaction)
+                return fb
+            # 번호 작정은 이 모드의 문법이 아니다. 기존 객체 작정 검증은 그대로 재사용.
+            raw_then = obj.get("then")
+            if raw_then is not None and (not isinstance(raw_then, list) or any(not isinstance(s, dict) for s in raw_then)):
+                obj = {**obj, "then": []}
         then = _then(obj, obs)                      # 작정(D16) — 유효 수만 남긴 이어질 계획(없으면 [])
         note = (str(obj.get("note", "") or "").strip()[:NOTE_LEN]   # D26 남길 한 줄(선택 필드)
                 if NOTES_ON else "")
@@ -1419,6 +1557,13 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
             rel = {**rel, "to": to_}
         if said:                                            # D47 말의 종류 — 말이 있을 때만(잡담|제안, 기본 잡담)
             rel = {**rel, "say_kind": _parse_kind(obj.get("say_kind"))}
+        if COMPOSE:
+            if composed["type"] in ("follow", "wait", "rest"):
+                then = []
+            return {**composed, **({"then": then} if then else {}),
+                    **({"note": note} if note else {}), **rel, **reaction,
+                    "say": str(obj.get("say", "") or "")[:160],
+                    "reason": str(obj.get("reason", "") or "")[:160], "src": "haiku"}
         if MENU:
             act = _pick(obj, obs)
             if act:
@@ -1464,7 +1609,11 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
                 return out
         # JSON 은 왔으나 행동으로 해석 실패(무효 choice·type·target) — 원문 머리를 계측에 남긴다
         why = "행동 해석 실패: " + _head(json.dumps(obj, ensure_ascii=False))
-    return _fallback(obs, char, why or "파싱 실패")
+    fb = _fallback(obs, char, why or "파싱 실패")
+    if COMPOSE:
+        fb['input_error'] = 'invalid_response'
+        fb['input_error_detail'] = {'code': 'invalid_response', 'reason': why, 'raw_response': raw}
+    return fb
 
 
 def social_all(d, bots, inbox=None):
@@ -1547,6 +1696,9 @@ def think_all(d, bots, inbox=None):
     obss = {}
     for b in thinkers:
         o = d.view(b, bots)
+        reaction_book = G.SR.book(d)
+        if reaction_book is not None:
+            o['social_events'] = reaction_book.offer(b['char'])
         o["messages"] = [{**m, **({"to_me": True} if (G.addressed_to(m, b["char"]) and m.get("to") != "all") else {})}
                          for m in inbox.get(b["char"], [])]   # D41: 나를 지목한 말 표식(렌더용, 스트림 무접촉)
         if b.get("intent"):

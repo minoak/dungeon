@@ -24,7 +24,7 @@
                        1층 아래 계단=관측 클리어. 재입장=같은 층(세계·기억 보존). 솔로와 동시 불가 v0)
           DUNGEON_STREAM_OBS(1이면 스트림 decisions 에 각 봇 obs 동봉 — 용량 커짐, 디버그/BYO용)
           DUNGEON_PARTY_FILE(기본 party.json — 캐릭터 시트. 검증 실패=내장 2인 폴백)
-          DUNGEON_MENU(기본1 — 리모컨: 행동을 엔진 열거 옵션에서 번호 선택. 0=구식 자유서술)
+          DUNGEON_ACTION_MODE(기본 compose — 조합형. menu/free는 백업 비교용)
           DUNGEON_STEP_DELAY(기본 0.5초 — 관전 페이싱. 헤들리스 실측은 0)
           DUNGEON_STATE_DIR(기본 ./state — 상태·스트림 출력 폴더. 병렬 실측 시 판마다 분리)
           DUNGEON_GM_MODEL/DUNGEON_GM_TIMEOUT(GM 모델·타임아웃 — gm.py. GM 은 비동기 후채움이라
@@ -336,6 +336,18 @@ def event(line):
 def act_summary(res):
     """봇 한 행동/자동보행 결과를 한 줄 요약 — 로그/이벤트 공용."""
     t = res["type"]
+    if res.get("result") == "approaching":
+        return "%s %s — 실행 거리까지 접근 시작 (%d걸음)" % (t, res.get("target", "?"), res.get("len", 0))
+    if res.get("result") == "no_path" and res.get("parent_action_id"):
+        return "%s %s — 접근할 길이 없다" % (t, res.get("target", "?"))
+    if res.get('result') == 'no_effect':
+        return '%s %s — 변화 없음 (%s)' % (t, res.get('target', '?'), res.get('reason_code', 'no_effect'))
+    if t == 'use' and res.get('result') == 'healed':
+        return '%s에게 물약 사용 — HP +%d (HP %d)' % (res.get('target', '?'), res.get('heal', 0), res.get('hp', 0))
+    if t == 'use' and res.get('effect_type'):
+        return act_summary({**res, 'type': res['effect_type']})
+    if t == 'use':
+        return '%s 사용 실패 — %s' % (res.get('target', '?'), res.get('result', '?'))
     if t == "goto":
         if res["result"] == "blocked" and res.get("allies"):   # D18: 동료發 대우회 — 멈춰 보고
             return "%s — 동료(%s)가 길목에 서 있어 크게 돌아야 함, 멈춰 보고" % (
@@ -560,6 +572,8 @@ def build_town():
     d.trail_on, d.objtags = TRAIL_ON, OBJTAGS_ON                       # D38 궤적 · D39 오브젝트 태그
     d.floor_on = FLOOR_ON                                              # D40 층 집계·결산(마을도 한 층)
     d.give_verb, d.bond_verb = GIVE_ON, BOND_ON                         # D47 ② 건네기·친목(마을에서도 곁이면 된다)
+    d.auto_approach = brains.COMPOSE
+    d.composed_actions = brains.COMPOSE
     for n in spec.get("npcs", []):
         x, y = int(n["x"]), int(n["y"])
         if d.grid[y][x] != G.FLOOR:            # 좌표-그림 어긋남은 시작 전에 죽는 게 낫다
@@ -598,6 +612,18 @@ def deliver_and_hail(d, bots, says, say_to, say_kind=None, open_props=None):
                             if oc != b["char"]
                             and any(o["char"] == oc and (o["x"], o["y"]) in seen for o in bots)]
     by_char = {o["char"]: o for o in bots}
+    reaction_book = G.SR.book(d)
+    if reaction_book is not None:
+        for actor, text in says.items():
+            recipients = [b['char'] for b in bots if b['alive'] and not b['won']
+                          and any(m['from'] == actor for m in inbox[b['char']])]
+            rid = reaction_book.record('say', actor, recipients, d.turn, text=text,
+                                       say_kind=say_kind.get(actor, '잡담'), addressed_to=say_to.get(actor))
+            if rid:
+                for char in recipients:
+                    for message in inbox[char]:
+                        if message['from'] == actor:
+                            message['social_event_id'] = rid
 
     def proposal_to(m, b):
         # D47: 이 말이 나를 세울 제안인가 — 지목(to=나) 또는 회의(대상 없음·all)
@@ -772,7 +798,8 @@ def main():
                       loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
                       dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
                       ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
-                      status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON)
+                      status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON,
+                      auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE)
         d.lore = lore
     bots = []
     for c in chars:
@@ -816,7 +843,9 @@ def main():
     fallen = []         # 이전 층에서 쓰러진 영웅(층 전이 때 bots 에서 빠짐 — 기록만 남긴다)
 
     # 스트림 머리: run_meta(1회 — started 가 유일한 비결정 필드) + 첫 level
+    reaction_book = G.SR.book(d)
     sw.emit("run_meta", v=1, started=time.strftime("%Y-%m-%dT%H:%M:%S"),
+            **({'reaction': True, 'reaction_schema': 'social-v0.4'} if reaction_book is not None else {}),
             seed=DUNGEON_SEED, w=DUNGEON_W, h=DUNGEON_H, depths=DEPTHS,
             monsters=N_MON, traps=N_TRAP, lurkers=N_LURK,
             potions=N_POTION,          # 층당 회복 물약(07-17 additive) — 배치를 바꾸는 판 파라미터
@@ -827,6 +856,7 @@ def main():
             max_turns=MAX_TURNS, gm=GM_ON,
             stream_obs=os.environ.get("DUNGEON_STREAM_OBS") == "1",   # decisions 에 obs 동봉 여부(스키마 판별용)
             menu=brains.MENU,          # 리모컨(번호 선택) 여부 — decisions 에 choice 가 실리는지 판별용
+            **brains.action_metadata(),  # compose 선행 프로브 / 기존 menu·free 구분
             ledger=LEDGER_ON,          # 공간 장부(D17) 여부 — obs(known·돌아가기)를 바꾸는 실행모드 메타
             scan=SCAN_ON,              # 스캐너(D19) 여부 — obs(구조)·정지 물리를 바꾸는 실행모드 메타
                                        #   (걸음 정지 규칙이 달라지므로 리플레이·판 비교의 전제)
@@ -880,6 +910,7 @@ def main():
                     **({"look": b["look"]} if b.get("look") else {})}   # D37(09-06) 외형 — 뷰어 전용
                    for b in bots])
     lvl = {"turn": 0, **d.level_snapshot(),
+           **({'reaction_stats': reaction_book.snapshot()} if reaction_book is not None else {}),
            "party": [G.bot_snapshot(b) for b in bots]}
     sw.emit("level", **lvl)
     iss.consume("level", lvl)          # 발급기도 같은 원장을 본다 — 층의 몹 id→종 지도 구축
@@ -938,9 +969,6 @@ def main():
                     continue
                 res = d.act(b, dec, bots)                # 핑/공격/상호작용 판정 = 진실
                 res["reason"] = dec.get("reason", "")
-                if res.get("type") in ("give", "bond") and res.get("result") in ("given", "done"):
-                    open_acts.setdefault(res["to"], {})[b["char"]] = "건네기" if res["type"] == "give" else "친목"
-                                                         # D47 ② 상대의 다음 결정이 답이다(형태) — settle_acts 가 닫는다
                 src = dec.get("src", "haiku")
                 append(botlog[b["char"]], "[t%02d] %s" % (turn, dec.get("reason", "")))
                 append(botlog[b["char"]], "        -> %s  <%s>" % (act_summary(res), src))
@@ -954,6 +982,9 @@ def main():
                            % (dec["say"], (" → %s" % dec["to"]) if dec.get("to") else "",
                               " [제안]" if dec.get("say_kind") == "제안" else ""))
                     event('   봇%s \U0001f4ac "%s"' % (b["char"], dec["say"]))
+            if res.get("type") in ("give", "bond") and res.get("result") in ("given", "done"):
+                # 접근 완료도 수신자의 다음 결정에서 반응을 기록한다. 접근 시작에는 기록하지 않는다.
+                open_acts.setdefault(res["to"], {})[b["char"]] = "건네기" if res["type"] == "give" else "친목"
             res["job"] = b["job"]
             turn_events.append(res)
             mark = {"fallback": " [규칙]", "plan": " [작정]"}.get(src, "")
@@ -962,6 +993,17 @@ def main():
                 event("   봇%s 쓰러졌다!" % b["char"])
             write_map(d, bots, turn)
             time.sleep(STEP_DELAY)
+
+        if reaction_book is not None:
+            for char, decision in sorted(decisions.items()):
+                reaction = reaction_book.consume(char, decision, turn)
+                if reaction:
+                    line = '%s → %s: %s — %s [%s]' % (
+                        names.get(char, char), names.get(reaction['to'], reaction['to']),
+                        '좋아함' if reaction['value'] == 'like' else '싫어함',
+                        G.SR.describe(reaction['source']), reaction['reaction_to'])
+                    append(botlog[char], '        반응: ' + line)
+                    event('   반응: ' + line)
 
         # ③ 몬스터 턴 (엔진 — 독립 시계)
         mon_events = d.monster_turn(bots)
@@ -982,6 +1024,7 @@ def main():
         # 여기서 즉시 직렬화되므로 GM 지연·이후 dict 변경과 독립(공유 오염 방어).
         # 스냅샷은 델타 아닌 전체 — 임의 틱 시킹용. visited 만 제외(파생: 스폰+틱별 봇 좌표 누적).
         tick_rec = {"turn": turn, "inbox": inbox_in, "decisions": decisions,
+                    **(reaction_book.drain() if reaction_book is not None else {}),
                     **({"hails": hails} if hails else {}),   # 말 걸림 정지 성사(D24) — additive 계측
                     **({"answers": answers} if answers else {}),   # 제안 반응(D47) {받은 봇: {한 봇: 답함 여부}} — additive 계측
                     **({"replies": replies} if replies else {}),   # 반응 형태(D47 ②) [{from,to,kind,how}] — additive 계측
@@ -1033,6 +1076,7 @@ def main():
                       if FLOOR_ON else {})                                            #   층의 집계를 얼린다
             nd = d.depth - 1 if up else d.depth + 1
             sw.emit("ascend" if up else "descend", turn=turn, to_depth=nd,
+                    **({'reaction_summary': reaction_book.close_floor(turn)} if reaction_book is not None else {}),
                     party=[{"char": b["char"], "hp": b["hp"], "bag": b["bag"],
                             "potions": b.get("potions", 0)}
                            for b in sorted(survivors, key=lambda b: b["char"])],
@@ -1050,7 +1094,8 @@ def main():
                               wait_verb=WAIT_ON, motion=MOTION_ON,
                               ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
                               n_gear=N_GEAR, status=STATUS_ON, rest_verb=REST_ON,
-                              relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON)
+                              relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON,
+                              auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE)
                 d.lore = lore
                 fresh = True
             # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,
@@ -1099,12 +1144,16 @@ def main():
                 ux, uy = c0[0] if c0 else (nb[0]["x"], nb[0]["y"])
                 d._add_feature("stairs_up", "위로 오르는 계단", ux, uy)
             d.turn = turn
+            if reaction_book is not None:
+                reaction_book.start_floor(d.depth, turn)
+                d.reaction_book = reaction_book
             bots = nb
             inbox = {b["char"]: [] for b in bots}   # 층 전이 = 대화 리셋(형태는 전 봇 키로 고정)
             pending = {b["char"]: [] for b in bots}   # 보관함도 리셋(D47 배관)
             open_props = {}                         # 제안 장부도 리셋(D47)
             open_acts = {}                          # 친목·건네기 장부도 리셋(D47 ②)
             lvl = {"turn": turn, **d.level_snapshot(),            # descend/ascend 직후 level 불변식
+                   **({'reaction_stats': reaction_book.snapshot()} if reaction_book is not None else {}),
                    "party": [G.bot_snapshot(b) for b in bots]}
             sw.emit("level", **lvl)
             iss.consume("level", lvl)               # 새 층 몹 id→종 지도 갱신
@@ -1138,7 +1187,11 @@ def main():
         event("=== 시간 종료 (틱 한도 %d 도달, 지하 %d층) — %s 던전에 남음 / 쓰러짐 %s ==="
               % (MAX_TURNS, d.depth, left, dead or "없음"))
         event("    (더 길게: DUNGEON_TURNS=400 bash ~/dungeon/start.sh)")
+    if reaction_book is not None:
+        reaction_book.close_floor(turn)
     sw.emit("end", turn=turn, outcome=outcome, depth=d.depth,
+            **({'reaction_summary': reaction_book.summary(), 'reaction_floors': reaction_book.floors}
+               if reaction_book is not None else {}),
             survivors=won, fallen=dead, remaining=left,
             bots=[G.bot_snapshot(b) for b in bots])
     sw.close()

@@ -279,7 +279,7 @@ rsrc = io.open(os.path.join(HERE, "show_runner.py"), encoding="utf-8").read()
 check("러너: 스위치·메타·note_talk 배선·이월",
       'DUNGEON_RELATIONS' in rsrc and 'relations=RELATIONS_ON' in rsrc and 'd.note_talk(' in rsrc
       and 'n["relations"]' in rsrc)
-pm = io.open(os.path.join(HERE, "adventurer_prompt_menu.md"), encoding="utf-8").read()
+pm = io.open(os.path.join(HERE, brains.LEGACY_PROMPT_DIR, "adventurer_prompt_menu.md"), encoding="utf-8").read()
 check("프롬프트: relation_line 필드 안내(절이 있을 때만)", "`relation_line`" in pm and "절이 있을 때만" in pm)
 
 

@@ -64,6 +64,7 @@ export interface Trap {
 export interface Room { id: number; x: number; y: number; w: number; h: number; type: string; neighbours?: number[] }
 
 export interface LevelLine {
+  reaction_stats?: ReactionStats;
   kind: 'level'; turn: number; depth: number; w: number; h: number;
   master_seed?: number; level_seed?: number;
   grid: string[];                                // h 개의 w 폭 문자열: '#' 벽 · '.' 바닥 · '+' 문(빛을 막고 지나감)
@@ -75,6 +76,7 @@ export interface LevelLine {
 export interface Then { type: string; target?: string }
 
 export interface Decision {
+  reaction?: 'like' | 'dislike'; reaction_to?: string;
   type: string; target?: string; item?: string; form?: string; choice?: number; then?: Then[];
   note?: string; say?: string; to?: string; say_kind?: string; reason?: string; src?: string;
   skipped?: boolean;
@@ -92,10 +94,29 @@ export interface StreamEvent {
   [k: string]: unknown;
 }
 
-export interface InboxMsg { from: Char; text: string; turn?: number; to?: string; kind?: string }
+export interface InboxMsg { from: Char; text: string; turn?: number; to?: string; kind?: string; social_event_id?: string }
 export interface Reply { from: Char; to: Char; kind: string; how: string }
 
+export interface SocialEvent {
+  id: string; type: 'say' | 'give' | 'bond' | 'use'; actor: Char; recipients: Char[];
+  turn: number; depth: number; floor_id: string; source_action_id?: string;
+  text?: string; say_kind?: string; addressed_to?: string; what?: string; item?: string; form?: string; heal?: number;
+}
+export interface Reaction {
+  id: string; actor: Char; to: Char; value: 'like' | 'dislike'; reaction_to: string;
+  turn: number; depth: number; floor_id: string; source: SocialEvent;
+}
+export interface ReactionCounts { like: number; dislike: number }
+export interface ReactionSummary {
+  total: ReactionCounts; by_actor: Record<Char, ReactionCounts>;
+  pairs: ({ from: Char; to: Char } & ReactionCounts)[];
+  events: number; opportunities: number; unrated: number;
+}
+export interface ReactionFloor extends ReactionSummary { id: string; depth: number; since: number; until?: number }
+export interface ReactionStats { run: ReactionSummary; floor: ReactionFloor }
+
 export interface TickLine {
+  social_events?: SocialEvent[]; reactions?: Reaction[]; reaction_stats?: ReactionStats;
   kind: 'tick'; turn: number;
   inbox?: Record<Char, InboxMsg[]>;
   decisions?: Record<Char, Decision>;
@@ -108,11 +129,13 @@ export interface TickLine {
 }
 
 export interface DescendLine {
+  reaction_summary?: ReactionFloor;
   kind: 'descend' | 'ascend'; turn: number; to_depth: number;
   party: { char: Char; hp: number; bag: number; potions?: number }[]; fallen: Char[];
 }
 
 export interface EndLine {
+  reaction_summary?: ReactionSummary; reaction_floors?: ReactionFloor[];
   kind: 'end'; turn: number; outcome: 'escaped' | 'wiped' | 'timeout' | string; depth: number;
   survivors: Char[]; fallen: Char[]; remaining?: Char[]; bots: Bot[];
 }
@@ -131,6 +154,7 @@ export interface LevelState {
 }
 
 export interface Frame {
+  social_events?: SocialEvent[]; reactions?: Reaction[]; reaction_stats?: ReactionStats;
   kind: 'level' | 'tick';
   idx: number;                                   // run.frames 안 번호
   turn: number;

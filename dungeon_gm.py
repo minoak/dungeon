@@ -23,6 +23,8 @@
 """
 
 import json                     # 사건 사전(D40) 폴백 — 모르는 결과 형태는 JSON 으로 정직 노출
+import composed_actions as CA
+import social_reactions as SR
 import math
 import os
 import random
@@ -202,6 +204,18 @@ def event_tags(rec, names=None):
     tgt = str(rec.get('target') or '')
     nm = lambda c: (names or {}).get(c, '동료')
     out = []
+    if r == 'approaching':
+        return [('start', '접근 시작', '%s %s' % (t, place_word(tgt, 'decide')))]
+    if r == 'no_path' and rec.get('parent_action_id'):
+        return [('misc', '접근 불가', place_word(tgt, 'decide'))]
+    if r == 'no_effect':
+        return [('misc', '변화 없음', '%s %s' % (t, tgt))]
+    if t == 'healed' or (t == 'use' and r == 'healed'):
+        return [('heal', '회복', '%s +%d (HP %d)' % (tgt, rec.get('heal', 0), rec.get('hp', 0)))]
+    if t == 'use' and rec.get('effect_type'):
+        return event_tags({**rec, 'type': rec['effect_type']}, names)
+    if t == 'use':
+        return [('misc', '사용 실패', '%s (%s)' % (tgt, r))]
     if t == 'state':
         k = 'critical' if r == 'critical' else 'recovered'
         return [(k, '위급' if k == 'critical' else '위급 해제', 'HP %d/%d' % (rec.get('hp', 0), rec.get('maxhp', 0)))]
@@ -602,7 +616,8 @@ class Dungeon:
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
                  motion=False, ally_sight=False, social=False, solo=False, n_gear=0,
                  town=False, status=False, rest_verb=False, relations=False, trail=False,
-                 objtags=False, floor=False, explore_dirs=False, give_verb=False, bond_verb=False):
+                 objtags=False, floor=False, explore_dirs=False, give_verb=False, bond_verb=False,
+                 auto_approach=False, composed_actions=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -701,6 +716,9 @@ class Dungeon:
                                    #   켠다. 곁(체비셰프≤1)의 동료에게 물약·무기·방어구를 넘기는 즉시 동사 — 메뉴 열거+_give.
         self.bond_verb = bool(bond_verb)   # 친목(D47 ②, 09-09) — 기본 꺼짐. 러너가 DUNGEON_BOND(기본 1)로 켠다. 곁의 동료에게 하는
                                    #   몸짓(형태=응답 form 자유 문구) — 물리 없음, 기록·목격·관계 뼈만. 상대는 안 선다.
+        self.auto_approach = bool(auto_approach)   # 조합형: 실행 거리까지 걷고 원래 행동을 한 번 실행
+        self.composed_actions = bool(composed_actions)
+        self._action_serial = 0
         self._talked = set()       # (쌍, 틱) — 같은 틱 양방향 대화를 한 번으로(note_talk 중복 방지)
         self._ring_target = 0      # loops 판에서 주 고리에 배속할 방 수(_carve_rooms 가 굴림)
         self.rooms = self._carve_rooms()
@@ -778,6 +796,9 @@ class Dungeon:
         d.floor_on = False         # 층 집계·결산(D40) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.explore_dirs = False     # 방향 탐색 열거(D19 개정 4) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.give_verb = d.bond_verb = False   # 건네기·친목(D47 ②, 09-09) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.auto_approach = False
+        d.composed_actions = False
+        d._action_serial = 0
         d._talked = set()
         d.grave_of = {}            # 묘→캐릭터(D22 개정) — __new__ 경유라 명시 초기화
         d.npc_lines = {}           # NPC 인사 사전 — build_town 이 채운다(데이터, 판정 무접촉)
@@ -1368,7 +1389,7 @@ class Dungeon:
                 q.append((nx, ny))
         return dist
 
-    def path_to(self, sx, sy, tx, ty, bots, best_effort=False, avoid_traps=True):
+    def path_to(self, sx, sy, tx, ty, bots, best_effort=False, avoid_traps=True, goals=None):
         """(sx,sy)→(tx,ty) 최단 경로. 이동=8연결(대각선 코너컷 금지), walkable 재사용.
         동료는 장애물이 아니다(D18 개정 07-17, ally_pass): 경로가 동료 칸을 지나면 실행 때
         서로 자리를 바꾼다(교대, _step_order) — 외길의 동료가 '이동 선택지 소멸'을 만들던 결함 치료.
@@ -1382,7 +1403,10 @@ class Dungeon:
         반환: 시작 제외, 밟을 칸 목록(목표/접근칸=마지막). 도달불가/이미도착이면 []. (Stage2 자동보행용)"""
         tblock = ({(t.x, t.y) for t in self.traps if not t.hidden and not t.sprung}
                   if avoid_traps else set())
-        if self.walkable(tx, ty, bots):           # 종점만은 ally_pass 없이 — 동료가 선 칸을 '목적지'로
+        supplied_goals = goals
+        if goals is not None:                    # 자동 접근: 행동을 실행할 수 있는 칸 집합까지 최단 보행
+            goals = set(goals)
+        elif self.walkable(tx, ty, bots):           # 종점만은 ally_pass 없이 — 동료가 선 칸을 '목적지'로
             goals = {(tx, ty)}                    #   삼지 않는다(교대는 지나가는 예의지 도착지가 아니다.
         else:                                     #   동행 목표 칸까지 파고들면 리더와 교대하는 헛짓).
             goals = {(tx + dx, ty + dy) for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0))
@@ -1410,7 +1434,7 @@ class Dungeon:
         if reached is None:
             if tblock:                            # 함정 우회로가 없다 → 함정 경유 허용으로 재시도(외길 봉쇄 방지)
                 return self.path_to(sx, sy, tx, ty, bots,
-                                    best_effort=best_effort, avoid_traps=False)
+                                    best_effort=best_effort, avoid_traps=False, goals=supplied_goals)
             if best_effort:                       # 도달불가(몹 봉쇄 등) → 목표에 *지형상* 가장 가까운 도달가능 칸까지
                 gdist = self._terrain_dist_from(tx, ty)   # 벽만 막는 거리맵(몹 무시) → 봉쇄몹 직전까지 안내
                 cand = [c for c in prev if c in gdist]
@@ -2008,7 +2032,7 @@ class Dungeon:
                 if bones or ent.get('invite') or e.get('line'):
                     rel_obs.append(ent)
         rid_here = self._room_id_at(cx, cy)
-        return {'pos': [cx, cy], 'hp': bot['hp'], 'maxhp': bot['maxhp'],
+        obs = {'pos': [cx, cy], 'hp': bot['hp'], 'maxhp': bot['maxhp'],
                 'job': bot['job'], 'sex': bot['sex'],
                 'str': bot['str'], 'dex': bot['dex'], 'inventory': bot['bag'],
                 'potions': bot.get('potions', 0),   # 소지 회복 물약(07-17) — 자기 몸의 사실
@@ -2050,7 +2074,8 @@ class Dungeon:
                            '$': 'treasure', '>': 'stairs/exit', 'M': 'monster',
                            '^': 'trap', '=': 'chest', '~': 'fountain', '!': 'potion',
                            ')': 'weapon', '[': 'armor',
-                           'T': 'grave', ' ': 'unknown'}}
+                            'T': 'grave', ' ': 'unknown'}}
+        return CA.observe(self, bot, bots, obs) if self.composed_actions else obs
 
     # ── 탐색 프런티어 (explore = 미지로 트인 출입구) ─────────────
     def _frontier_cells(self, cx, cy, seen):
@@ -2096,8 +2121,18 @@ class Dungeon:
         attack/interact/search = 즉시 판정. 반환: 결과 dict — GM 서사·로그가 읽을 '진실'.
         then(D16 작정) = 이어질 행동 최대 PLAN_MAX수 — 에이전트가 품는 계획이지 세계에 거는
         예약이 아니다: 인터럽트(피격·새 발견·길막힘·lost)가 남은 작정을 찢는다."""
+        if self.composed_actions:
+            CA.normalize(bot, action)
+            if bot.get('order'):
+                bot['order'], bot['path'], bot['plan'] = None, [], []
+            bot.pop('_active_action', None)
+            bot['_execution_refs'] = CA.copy.deepcopy(bot.get('_plan_refs' if action.get('src') == 'plan' else '_target_refs', {}))
+            if 'then' in action:
+                bot['_plan_refs'] = CA.copy.deepcopy(bot['_execution_refs'])
         typ = (action or {}).get('type', 'goto')
         tgt = (action or {}).get('target')
+        if bot.pop('approach', None):             # 새 판단은 예전 접근 요청을 이어 실행하지 않는다
+            bot['order'], bot['path'], bot['plan'] = None, [], []
         bot['wander'] = None                      # 새 결정 = '계속 이동'의 단절(D21 맴돎 창 리셋)
         bot['exit_seen_at_order'] = self.exit in self.visible_cells(bot['x'], bot['y'])
         #   ↑ 09-08 D45 부검: 결정 순간 계단이 눈에 있었나 — at_exit 정지의 dedupe 재료(아래 step_order). 시드 217 livelock:
@@ -2107,6 +2142,40 @@ class Dungeon:
             bot['plan'] = ([] if typ in ('follow', 'wait', 'rest')   # 동행·대기·휴식=열린 결말 — 뒤수 부적합
                            else [dict(s) for s in (action.get('then') or [])
                                  if isinstance(s, dict) and s.get('type')][:PLAN_MAX])
+        aid = None
+        if self.composed_actions or (self.auto_approach and typ in ('attack', 'interact', 'give', 'bond')):
+            self._action_serial += 1
+            aid = 'd%s:t%s:a%s' % (self.depth, self.turn, self._action_serial)
+            action['action_id'] = aid             # 실제 접수된 결정에만 부여. 모델이 만드는 값이 아니다
+            res = (self._begin_approach(bot, action, bots)
+                   if self.auto_approach and typ in (CA.DISTANCE_ACTIONS if self.composed_actions else ('attack', 'interact', 'give', 'bond'))
+                   else None)
+        else:
+            res = None
+        if res is None:
+            res = self._execute_action(bot, action, bots)
+        if aid:
+            res['parent_action_id'] = aid
+        if self.composed_actions:
+            CA.decorate(bot, action, res)
+            if bot.get('order'):
+                bot['_active_action'] = {k: v for k, v in action.items() if k in ('type', 'target', 'item', 'form', 'action_id')}
+            else:
+                bot.pop('_active_action', None)
+                bot.pop('_execution_refs', None)
+        self._note_last(bot, res, plan=(action.get('src') == 'plan'))
+        return res
+
+    def _execute_action(self, bot, action, bots):
+        """현재 자리에서 원래 행동의 효과를 한 번 판정한다. 접근 완료도 같은 실행 경로를 쓴다."""
+        if not self.composed_actions:
+            return self._execute_legacy_action(bot, action, bots)
+        result = CA.execute(self, bot, action, bots)
+        SR.physical(self, bot, action, result, bots)
+        return result
+
+    def _execute_legacy_action(self, bot, action, bots):
+        typ, tgt = action.get('type', 'goto'), action.get('target')
         if typ == 'attack':
             res = self._attack(bot, tgt, bots)
         elif typ == 'interact':
@@ -2131,7 +2200,121 @@ class Dungeon:
             res = self._bond(bot, tgt, (action or {}).get('form'), bots)   # 친목(D47 ②) — 곁의 동료에게 몸짓
         else:
             res = self._set_order(bot, tgt, bots)     # goto(기본)
-        self._note_last(bot, res, plan=(action.get('src') == 'plan'))   # D38: 작정 집행 결과엔 표식
+        return res
+
+    def _approach_target(self, bot, action, bots):
+        """접근은 지금 보이는 실물만 해소한다. 기억의 좌표나 숨은 실물로 재조준하지 않는다."""
+        if self.composed_actions:
+            return CA.entity(self, bot, action.get('target'), bots)
+        typ, tgt = action['type'], action.get('target')
+        res = self._resolve_target(tgt, bots, bot)
+        if not res:
+            return None
+        kind, xy = res
+        if typ in ('give', 'bond'):
+            return res if kind == 'bot' and str(tgt) != 'b%s' % bot['char'] else None
+        if xy not in self.visible_cells(bot['x'], bot['y']):
+            return None
+        if typ == 'attack':
+            m = self.monster_at(*xy) if kind == 'monster' else None
+            return res if m and m.alive and not m.concealed else None
+        if kind == 'exit':
+            return res
+        f = self._feature_by_target(tgt)
+        return res if kind in ('exit', 'feature') and f and not f.concealed else None
+
+    def _action_in_range(self, bot, action, target, at=None):
+        if self.composed_actions:
+            return CA.in_range(self, bot, action, target, at)
+        x, y = at if at is not None else (bot['x'], bot['y'])
+        tx, ty = target[1]
+        if action['type'] == 'attack':
+            mon = self.monster_at(tx, ty)
+            return bool(mon and self._can_hit({**bot, 'x': x, 'y': y}, mon))
+        if action['type'] in ('give', 'bond'):
+            return self._beside_xy(x, y, tx, ty, 'bot')
+        return abs(x - tx) + abs(y - ty) <= 1
+
+    def _approach_path(self, bot, action, target, bots):
+        """기존 BFS·함정 회피·교대 규칙에 실행 가능한 도착 칸만 넘긴다."""
+        tx, ty = target[1]
+        radius = int(bot.get('atk_range') or 1) if action['type'] == 'attack' else 1
+        goals = {(x, y) for y in range(max(0, ty - radius), min(self.h, ty + radius + 1))
+                 for x in range(max(0, tx - radius), min(self.w, tx + radius + 1))
+                 if self.walkable(x, y, bots) and self._action_in_range(bot, action, target, (x, y))}
+        return self.path_to(bot['x'], bot['y'], tx, ty, bots, goals=goals)
+
+    def _begin_approach(self, bot, action, bots):
+        typ = action['type']
+        if (typ == 'give' and not self.give_verb) or (typ == 'bond' and not self.bond_verb):
+            return None
+        if typ == 'attack' and not action.get('target'):
+            return None                           # 기존 무대상 공격 API는 현재 사거리 판정 유지
+        base = {'char': bot['char'], **{k: action[k] for k in ('type', 'target', 'item', 'form') if k in action}}
+        target = self._approach_target(bot, action, bots)
+        if not target:
+            bot['plan'] = []
+            return {**base, 'result': 'no_target'}
+        if typ == 'give' and not self.composed_actions:
+            item = action.get('item')
+            if not bot.get('potions' if item == 'potion' else item or ''):
+                return {**base, 'result': 'nothing'}
+        if self._action_in_range(bot, action, target):
+            return None
+        path = self._approach_path(bot, action, target, bots)
+        if not path:
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            return {**base, 'result': 'no_path'}
+        pending = {k: action[k] for k in ('type', 'target', 'item', 'form', 'action_id') if k in action}
+        bot['approach'] = pending
+        bot['order'], bot['path'] = action['target'], path
+        return {**base, 'result': 'approaching', 'len': len(path),
+                'required_range': int(bot.get('atk_range') or 1) if typ == 'attack' else 1}
+
+    def _cancel_approach(self, bot):
+        """중단한 원래 의도를 표시한다. 피격/제안 등은 그 행동의 성공이나 하위 행동이 아니다."""
+        action = bot.pop('approach', None) or bot.get('_active_action')
+        bot.pop('_active_action', None)
+        bot.pop('_execution_refs', None)
+        return {'interrupted_action_id': action['action_id']} if action else {}
+
+    def _step_approach(self, bot, bots):
+        action = bot['approach']
+        base = {'char': bot['char'], 'type': 'walk', 'target': action['target'],
+                'parent_action_id': action['action_id'], 'action_type': action['type']}
+        target = self._approach_target(bot, action, bots)
+        if not target:
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            bot.pop('approach', None)
+            return {**base, 'result': 'lost', 'approach_status': 'interrupted'}
+        if self._action_in_range(bot, action, target):
+            newly = self._perceive(bot)
+            if newly:
+                bot['order'], bot['path'], bot['plan'] = None, [], []
+                bot.pop('approach', None)
+                return {**base, 'result': 'encounter', 'approach_status': 'interrupted',
+                        'monsters': [{'id': 'm%d' % m.id, 'kind': m.kind, 'state': m.state} for m in newly]}
+            sres = self._sighted_stop(bot, base)
+            if sres:
+                bot.pop('approach', None)
+                return {**sres, 'approach_status': 'interrupted'}
+            bot.pop('approach', None)
+            bot['order'], bot['path'] = None, []
+            # 이동한 틱에는 효과를 더하지 않는다. 다음 틱 시작에 재검증 후 원래 행동을 실행.
+            res = self._execute_action(bot, action, bots)
+            return {**res, 'parent_action_id': action['action_id'], 'approach_status': 'completed'}
+        end = bot['path'][-1] if bot.get('path') else (bot['x'], bot['y'])
+        if not self._action_in_range(bot, action, target, end):
+            bot['path'] = self._approach_path(bot, action, target, bots)
+        if not bot.get('path'):
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            bot.pop('approach', None)
+            return {**base, 'result': 'blocked', 'approach_status': 'interrupted'}
+        res = self._step_order(bot, bots, approaching=True)
+        res.update(parent_action_id=action['action_id'], action_type=action['type'])
+        if not bot.get('order'):
+            bot.pop('approach', None)
+            res['approach_status'] = 'interrupted'
         return res
 
     def _note_last(self, bot, res, plan=False):
@@ -2261,6 +2444,8 @@ class Dungeon:
         if not plan:
             return None
         step = plan.pop(0)
+        if self.composed_actions:
+            return CA.plan_step(self, bot, step, bots)
         typ = str(step.get('type') or '')
         tgt = step.get('target')
         why = None
@@ -2278,12 +2463,18 @@ class Dungeon:
             res = self._resolve_target(tgt, bots, bot)
             if res is None or res[0] != 'monster':
                 why = '대상 소멸'
+            elif self.auto_approach:
+                if self._approach_target(bot, step, bots) is None:
+                    why = '대상 소멸'
             elif abs(bot['x'] - res[1][0]) + abs(bot['y'] - res[1][1]) != 1:
                 why = '인접 아님'
         elif typ == 'interact':
             res = self._resolve_target(tgt, bots, bot)
             if res is None:
                 why = '대상 소멸'
+            elif self.auto_approach:
+                if self._approach_target(bot, step, bots) is None:
+                    why = '대상 소멸'
             elif abs(bot['x'] - res[1][0]) + abs(bot['y'] - res[1][1]) > 1:
                 why = '인접 아님'
         else:
@@ -2398,6 +2589,9 @@ class Dungeon:
                 ghost = True            #   정직 보고(+장부 교정) — 조용한 explore 강등 금지.
                                         #   id 없는 항목(trap@)은 핑 대상 아님(리뷰 픽스) → 아래 폴백
             else:
+                if self.composed_actions:
+                    bot['order'], bot['path'], bot['plan'] = None, [], []
+                    return {'char': bot['char'], 'type': 'goto', 'target': target_id, 'result': 'no_target'}
                 return self._set_explore(bot, None, bots)    # 무효 핑 → 탐색(출구 떠먹이기 폐기)
         tx, ty = resolved[1]
         if ghost and ((bot['x'], bot['y']) == (tx, ty)
@@ -2422,6 +2616,9 @@ class Dungeon:
                     bot['plan'] = []    #   (거짓 arrived 는 D1-4 위반 + 다음 작정의 거짓 전제 — 리뷰 픽스)
                     return {**base, 'result': 'lost'}
                 return {**base, 'result': 'arrived'}
+            if self.composed_actions:
+                bot['order'], bot['path'], bot['plan'] = None, [], []
+                return {**base, 'result': 'no_path'}
             return self._set_explore(bot, None, bots)    # 도달불가 핑 → 탐색 폴백(무효핑과 대칭·재핑 livelock 차단)
         jam = self._ally_jam(bot, tx, ty, path, bots)
         if jam:                                          # 동료가 길목 점유 = 새 정보 — 멈춰 보고, 에이전트가 정한다
@@ -2446,6 +2643,8 @@ class Dungeon:
         tid = s if s[:1] == 'b' else 'b%s' % s           # 'b2'/'2' 관용(자유서술 흔들림 흡수)
         resolved = self._resolve_target(tid, bots, bot)  # bot=시야 밖 동료면 None(D18 개정)
         if resolved is None or resolved[0] != 'bot':
+            if self.composed_actions:
+                return {'char': bot['char'], 'type': 'follow', 'target': tid, 'result': 'no_target'}
             return self._set_explore(bot, None, bots)    # 무효 대상 → 탐색(무효 핑과 대칭)
         tx, ty = resolved[1]
         base = {'char': bot['char'], 'type': 'follow', 'target': tid}
@@ -2455,6 +2654,9 @@ class Dungeon:
             return {**base, 'result': 'following'}
         path = self.path_to(bot['x'], bot['y'], tx, ty, bots)
         if not path:
+            if self.composed_actions:
+                bot['order'], bot['path'], bot['plan'] = None, [], []
+                return {**base, 'result': 'no_path'}
             return self._set_explore(bot, None, bots)    # 도달불가 → 탐색 폴백(재핑 livelock 차단)
         jam = self._ally_jam(bot, tx, ty, path, bots)
         if jam:                                          # 동료發 대우회 — A-0과 동형 blocked
@@ -2829,11 +3031,19 @@ class Dungeon:
         return res
 
     def step_order(self, bot, bots):
-        res = self._step_order(bot, bots)
+        action = bot.get('_active_action')
+        res = (self._step_approach(bot, bots) if bot.get('approach') and bot.get('order')
+               else self._step_order(bot, bots))
+        if self.composed_actions and action:
+            res['parent_action_id'] = action['action_id']
+            CA.decorate(bot, action, res)
+            if not bot.get('order'):
+                bot.pop('_active_action', None)
+                bot.pop('_execution_refs', None)
         self._note_last(bot, res)             # 자동보행 결과도 봇의 '직전 결과'(obs.last)에 남는다
         return res
 
-    def _step_order(self, bot, bots):
+    def _step_order(self, bot, bots, approaching=False):
         """order 가 있으면 path 한 칸 전진(틱당 1칸·화면에 보임 = 스타크래프트 핑 자동보행).
         각 칸 후 인카운터 점검(전부 에지 트리거 — D2): *새로* 본 몹 / 함정 발동·발견 / 출구·도착
         → 보행 정지 + 이벤트, order 비움.
@@ -2860,7 +3070,7 @@ class Dungeon:
             bot['order'], bot['path'], bot['plan'] = None, [], []
             self._perceive(bot)               # 동행 대상 사망/하강 — 해석 실패 = lost(허탕 의미론)
             return {**base, 'result': 'lost'}
-        if (res0 and res0[0] in ('monster', 'bot')
+        if (not approaching and res0 and res0[0] in ('monster', 'bot')
                 and self._beside(bot, res0[1], res0[0])):
             if follow:                        # 곁 유지 — 이 틱은 대기, order 지속(도착 개념 없음)
                 bot['path'] = []
@@ -2892,7 +3102,7 @@ class Dungeon:
         # 시야 밖=마지막 본 자리 스냅샷 유지(유령 추적 정당 — 07-05 판정). 경로 소진+시야 내도
         # 재경로 대상(아니면 FLEEING 추격이 한 틱 걸러 lost 나는 술래잡기). concealed 몹 좌표로는
         # 재조준 금지(시야-온리) — 사실상 order 대상 몹은 비은닉이지만 불변식은 코드로 지킨다.
-        if res0 and res0[0] in ('monster', 'bot'):
+        if not approaching and res0 and res0[0] in ('monster', 'bot'):
             tx, ty = res0[1]
             mon = self.monster_at(tx, ty) if res0[0] == 'monster' else None
             # 동료 시야 면제(07-26)를 켠 판은 **여기도 같은 눈을 써야 한다**: obs 로는 동료가
@@ -2969,7 +3179,10 @@ class Dungeon:
             res = self._resolve_target(tid, bots, bot)         # 은닉몹 점거 → 재경로 1회
                                                                #   (동행이면 tid='b<char>' — 원 대상.
                                                                #    bot=문 핑의 들어서는 쪽 유지, D19)
-            bot['path'] = self.path_to(bot['x'], bot['y'], res[1][0], res[1][1], bots) if res else []
+            if approaching:
+                bot['path'] = self._approach_path(bot, bot['approach'], res, bots) if res else []
+            else:
+                bot['path'] = self.path_to(bot['x'], bot['y'], res[1][0], res[1][1], bots) if res else []
             jam = (self._ally_jam(bot, res[1][0], res[1][1], bot['path'], bots)
                    if res else None)          # 교대(07-17) 후 동료發 대우회는 발화 불능 — 은퇴 코드
             if (not bot['path'] or jam
@@ -3141,7 +3354,8 @@ class Dungeon:
             self._trail_add(bot, bot['last'])   # D38 궤적 — 말 걸림도 자기 경험
             return fresh
         bot['order'], bot['path'], bot['plan'] = None, [], []   # 인터럽트 문법(D16) — 작정 파기
-        bot['last'] = {'type': 'hail', 'result': 'hailed', 'froms': list(froms)}
+        bot['last'] = {'type': 'hail', 'result': 'hailed', 'froms': list(froms),
+                       **self._cancel_approach(bot)}
         self._trail_add(bot, bot['last'])       # D38 궤적 — 말 걸림도 자기 경험
         return fresh
 
@@ -3156,6 +3370,9 @@ class Dungeon:
         구판(07-05~07-10)은 동료도 직교만 곁으로 쳐서 대각 비껴섬이 lost 로 났다.
         exit·탐색 셀(@)은 자리 자체가 목표라 무조건 arrived. 자기가 주운 보물은 여기 안 온다 —
         step_order 의 treasure 분기가 path 소진 시 order 를 그 자리에서 완결한다.)"""
+        if bot.get('approach'):
+            # 접근 경로 끝은 LLM 재결정점이 아니다. 다음 틱에 거리·대상·새 사건을 다시 확인한다.
+            return {**base, 'result': 'arrived', 'approach_status': 'ready'}
         s = str(base.get('target') or '')
         if s.startswith('follow:'):                   # 동행(A-5): 경로 소진은 완결이 아니다 —
             res = self._resolve_target(s[7:], bots)
@@ -4068,8 +4285,11 @@ class Dungeon:
             # 피격 = 인터럽트(D1 대개정): 하던 일(자동보행 order)을 멈추고 다음 틱 에이전트에게 묻는다.
             # 세계가 봇을 세우는 유일한 '접촉' 채널 — 정지 규칙(레벨 트리거) 삭제의 반대급부.
             b['order'], b['path'], b['plan'] = None, [], []   # 남은 작정(D16)도 찢는다
+            interrupted = self._cancel_approach(b)
+            ev.update(interrupted)
             b['last'] = {'type': 'hurt', 'by': m.kind, 'by_id': 'm%d' % m.id,
-                         'dmg': dmg, 'hp': b['hp'],
+                          'dmg': dmg, 'hp': b['hp'],
+                          **interrupted,
                          **({'surprise': True} if ambush else {})}
             if b['hp'] <= 0:
                 b['alive'] = False; ev['down'] = True
@@ -4405,6 +4625,7 @@ def bot_snapshot(b):
             'potions': b.get('potions', 0),   # 회복 물약 소지(07-17 additive)
             'weapon': b.get('weapon'), 'armor': b.get('armor'),   # 장비(07-30 additive)
             'order': b.get('order'),
+            **({'approach': dict(b['approach'])} if b.get('approach') and b.get('order') else {}),
             **({'status': sorted(b['status'])} if b.get('status') else {}),   # 상태 태그(D34 additive)
             **({'relations': {oc: {k: v['n'] for k, v in e['bones'].items() if v['n']}
                               for oc, e in sorted(b['relations'].items())

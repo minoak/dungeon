@@ -11,6 +11,7 @@ import type { App } from '../app';
 import type { Bot, Char, Decision, Frame, Gear, PartyMember, Run } from '../stream/types';
 import type { FrameChange } from '../play/Playback';
 import { el, esc } from './dom';
+import { reactionSummaryHtml } from '../text/reactions';
 
 /** 관계 뼈 라벨 — dungeon_gm.py BONES(422행) 를 그대로 복사(엔진 무접촉 — 값이 바뀌면 여기도 손으로 맞춘다).
  *  ⚠️ 라벨 문구는 엔진의 세션 임시안 — 파트너 문장 대기. 모르는 뼈 키는 키 그대로 보여준다. */
@@ -116,7 +117,7 @@ interface RelRow { root: HTMLElement; bones: HTMLElement; line: HTMLElement }
 interface Nodes {
   fc: HTMLElement; name: HTMLElement; job: HTMLElement; mark: HTMLElement; sheet: HTMLElement;
   hpfill: HTMLElement; hp: HTMLElement; status: HTMLElement; items: HTMLElement;
-  reason: HTMLElement; say: HTMLElement; rels: HTMLElement;
+  reason: HTMLElement; say: HTMLElement; rels: HTMLElement; reactions: HTMLElement;
 }
 
 export function installFocusCard(app: App): void {
@@ -218,12 +219,13 @@ export function installFocusCard(app: App): void {
       `<section class="fc-block"><h2 class="fc-sec">속내</h2><div class="fc-reason"></div></section>` +
       `<section class="fc-block fc-dialogue"><h2 class="fc-sec">최근 대화</h2><div class="fc-say"></div></section>` +
       `<details class="fc-profile"><summary>캐릭터 설정</summary><div class="fc-sheet"></div></details>` +
-      `<section class="fc-block"><h2 class="fc-sec">동료에 대한 생각</h2><div class="fc-rels"></div></section>`;
+      `<section class="fc-block"><h2 class="fc-sec">동료에 대한 생각</h2><div class="fc-rels"></div></section>` +
+      `<section class="fc-block"><h2 class="fc-sec">남긴 반응 · 관전 집계</h2><div class="fc-reactions"></div></section>`;
     root.appendChild(fc);
     const q = (s: string): HTMLElement => fc.querySelector(s) as HTMLElement;
     return { fc, name: q('.fc-name'), job: q('.fc-job'), mark: q('.fc-mark'), sheet: q('.fc-sheet'),
              hpfill: q('.fc-hpfill'), hp: q('.fc-hp'), status: q('.fc-status'), items: q('.fc-items'),
-             reason: q('.fc-reason'), say: q('.fc-say'), rels: q('.fc-rels') };
+             reason: q('.fc-reason'), say: q('.fc-say'), rels: q('.fc-rels'), reactions: q('.fc-reactions') };
   }
   /** 관계 줄 = 파티의 다른 캐릭터마다 하나(파티 순서). 초점·판이 바뀔 때만 다시 만든다. */
   function buildRows(run: Run, char: Char, n: Nodes): void {
@@ -256,6 +258,11 @@ export function installFocusCard(app: App): void {
     const member: PartyMember | undefined = run.party.find(p => p.char === char);
     const others = run.party.filter(p => p.char !== char).map(p => p.char);
     buildRows(run, char, n);
+    const stats = f.reaction_stats;
+    put(n.reactions, stats
+      ? `<b>이번 층</b><br>${reactionSummaryHtml(stats.floor, run, char)}<br>` +
+        `<b>원정 전체</b><br>${reactionSummaryHtml(stats.run, run, char)}`
+      : '<span class="none">반응 기록이 없는 이전 판</span>');
 
     // ── 머리: 이름·직업·성별·표식 ──
     n.fc.dataset.char = char;

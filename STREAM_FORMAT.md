@@ -4,6 +4,54 @@
 엔진 → 스트림 → **[맵뷰어 | 기계 크로니클 | GM(옵션·LLM) | 웹뷰어]** — 모든 소비자는 형제다.
 GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0콜로 만들어진다.
 
+## 조합형 행동 — 2026-09-10 additive
+
+`run_meta.action_mode`는 `menu | free | compose`다. 새 필드가 없는 구판은 기존 `menu` bool로 판별한다.
+2026-09-10 조합형 기본 승격 이후 새 원정은 기본 `compose`다. 현재 지침은 `adventurer_prompt.md`, 이전 메뉴형·자유서술형은 `backups/prompts/2026-09-10/`에 보존한다. 기존 기록의 action_mode 해석은 바꾸지 않는다.
+compose는 `menu:false`와 `compose_profile`을 함께 기록한다. `legacy-v0.1`은 자동 접근 없는 첫 판, `legacy-v0.2`는 거리 행동의 자동 접근을 연결한 판이다. 두 프로필 모두 v0.4 전체 resolver·reaction 구현을 뜻하지 않는다.
+
+현재 `compose-v0.4`는 본 구현 행동 계약이다. 선택적 반응 지원 여부는 별도의 `reaction` 메타로 구별한다. `Dungeon.composed_actions=True`와 `auto_approach=True`를 함께 사용한다. 아래 legacy 설명은 과거 기록의 해석용이며 새 프로필에는 다음 계약을 적용한다.
+
+- COMMON: `goto/follow/explore/search/attack/use/give/bond/wait/rest`. 새 프롬프트는 `interact/drink`를 제시하지 않지만 파서는 `use` 별칭으로 호환한다.
+- `self`는 파싱 때 `b<char>`로 정규화한다. way는 `w<관측번호>_<순번>`이며 관측마다 만료한다. 내부 경로를 가진 관측 참조이며 영구 개체가 아니다.
+- 소지품 `i1/i2/i3`은 **그 행위자의** 물약 묶음/착용 무기/착용 방어구 슬롯이다. 물약 한 병 단위의 영구 ID가 아니다. 실제 접수 시 장비 값을 보관하여 접근 중 교체된 장비를 대신 건네지 않는다.
+- 관측은 `action_schema`, `actor`, `targets`, `items`, `ways`를 추가한다. 모델에 제공하는 대상 목록에는 실물 좌표나 내부 참조를 포함하지 않는다. `then`도 같은 행동 문법을 사용하며 착수 시 참조를 재검증한다.
+- **모든 접수 행동**에 `action_id`, 그 결과와 진행 이벤트에 `parent_action_id`를 부여한다. `events.resolution = {actor,type,target,phase,status,reason}`은 원래 정규 행동을 보존한다. `phase:pending`이면 `status:null`, `phase:resolved`이면 `status:success|failed|no_effect`다. 몸에 붙은 상태를 나타내는 기존 `events.status`와 구별하기 위해 중첩했다.
+- `use`의 사물 기능 결과에는 `effect_type:interact|goto`가 붙어 기존 결과 어휘를 재사용한다. 물약 사용은 `result:healed`, `heal/hp/potions/item_used`; 효과 없는 조합은 `result:no_effect`, `reason_code`다. 공격 대상이 사람인 경우 `target_kind:bot`, `target_id:b<char>`이며 `monster_hp`는 구 소비자를 위한 호환 HP 필드다.
+- `search/attack/use/give/bond`는 자동 접근한다. 실행 조건이 깨지면 실패로 남기며 임의 탐색으로 바꾸지 않는다. 입력 오류 폴백과 구별한다.
+- `input_error_detail`은 `{code,attempted_action,target_ids,known_goto_ids,item_ids,target_detail}`로 원문 객체와 그때의 참조 목록을 보존한다. `way_not_current`는 이번 관측에 없는 길이라는 뜻이며, 실제 과거에 존재한 ID라는 단정이 아니다. 추가 오류는 `missing_target/missing_item/invalid_response`; 응답 자체가 불량이면 `raw_response`와 호출·파싱 `reason`을 보존한다. 실제 결정은 같은 틱의 규칙 행동이며 `src:fallback`이다.
+- 선택적 reaction은 아래 별도 계약을 따른다. 기존 관계 기록과 replies는 유지한다. 시도 횟수는 decisions, 완료 결과는 resolution의 resolved 상태를 기준으로 읽고 pending을 중복 집계하지 않는다.
+
+과거 legacy 프로브의 `decisions.input_error?`는 입력 오류를 구분한다: `invalid_type`, `invalid_target`, `invalid_item`, `unexpected_target`, `unexpected_item`.
+이 결정의 실제 `type/target/item`은 같은 결정점에서 선택한 규칙두뇌의 대체 행동이고 `src:"fallback"`이다. 요청 원문 요약은 기존 `reason`의 폴백 이유에 남는다. JSON 파싱 실패·타임아웃은 기존 이유 라벨을 사용한다.
+이미 아는 대상에 대한 `too_far` 같은 세계 판정은 입력 오류가 아니다. 직접 출력한 정상 행동은 `src:"haiku"`와 기존 이벤트 계약을 유지하며 choice가 없다.
+v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근 보행 연결이나 social event ID가 없다. v0.2는 아래 접근 연결만 추가한다.
+
+### 자동 접근 — legacy-v0.2, 2026-09-10 additive
+
+- `run_meta.auto_approach:true`: `attack/interact/give/bond`의 실행 거리까지 자동 접근하는 물리 규칙. 없거나 false면 구판. 리플레이는 Dungeon의 `auto_approach`를 이 값으로 설정한다.
+- `decisions[char].action_id`: 엔진 접수 시 생성한 결정 ID (`d<depth>:t<turn>:a<serial>`). 모델 출력이나 별도 goto 결정이 아니다. 이미 거리 안인 즉시 실행에도 붙는다.
+- 시작 이벤트는 **원래 type/target/item/form**과 `result:"approaching"`, `len`, `required_range`, `parent_action_id`를 가진다. 성공·거리 실패·친목 횟수로 집계하지 않는다.
+- 보행 이벤트는 기존 `type:"walk"`, target과 결과를 유지하며 `parent_action_id`, `action_type`으로 원래 의도를 가리킨다. 실행 거리까지의 경로 끝은 `result:"arrived", approach_status:"ready"`; 다음 틱에 재검증하고 원래 행동을 실행한다. 이동과 공격/건네기를 한 틱에 겹치지 않는다.
+- 최종 실행 결과는 기존 type/result와 `parent_action_id`, `approach_status:"completed"`. completed는 실행 판정 완료이며 성공을 보장하지 않는다(예: 소지품이 사라져 `nothing`).
+- 보행 도중 중단 결과에는 `approach_status:"interrupted"`. 대상이 보이지 않거나 소멸하면 `walk/lost`, 경로가 없거나 막히면 `no_path` 또는 `walk/blocked`; 임의 탐색으로 바꾸지 않는다.
+- 봇 스냅샷의 선택 필드 `approach`는 `{action_id,type,target,item?,form?}`. 중단/완료하면 빠진다. 피격 이벤트에는 `interrupted_action_id`가 붙는다. 제안에 의한 정지는 기존 tick.hails와 직전 스냅샷의 approach로 연결되며 봇의 자기 관측에도 interrupted_action_id가 남는다.
+- 친목·건네기의 수신 사건, 관계 횟수, replies 대기는 실제 `done/given`이 난 뒤에만 생긴다. 말은 기존처럼 최초 결정 시점에 발화하고 접근 중 반복 발화하지 않는다.
+
+접근에 필요한 사거리: 공격=시트 atk_range와 사선, interact=맨해튼 거리 ≤1, give/bond=체비셰프 거리 ≤1. 시야·피격·함정·새 발견·교대 등 기존 보행 규칙을 적용한다. 사용 가능한 대상 종류와 기존 행동 효과는 각 resolver의 계약을 따른다.
+
+### 선택적 반응 — social-v0.4, 2026-09-10 additive
+
+- 새 조합형 원정의 `run_meta`에 `reaction:true`, `reaction_schema:"social-v0.4"`를 추가한다. 메타가 없는 과거 판은 미지원이며 0건으로 추정하지 않는다.
+- `tick.social_events[]`: 이번 틱에 실제로 수신된 사회 사건. `{id:"social_N",type:"say|give|bond|use",actor,recipients:[char],turn,depth,floor_id,...}`. ID는 한 원정에서 단조 증가하며 층을 넘어 중복되지 않는다. `actor`와 `recipients`는 기존 스트림과 같은 봇 번호 문자열(`"1"`)이다. 말은 실제 시야 배달 수신자를 묶은 한 사건으로 `text/say_kind/addressed_to`를, 행동은 실제 성공 후 `source_action_id`와 `form`·`item/what/placed`·`heal` 등 원문 결과를 보관한다. 접근 시작·실패·자기 행동에는 받은 사회 사건이 생기지 않는다.
+- 봇의 다음 **행동 판단** 관측에 `social_events[]`를 제공한다. 자신이 받은 사건 사실만 전달하며 `recipients`·반응·집계는 제외한다. 자동보행·계획 집행·별도 사교 콜은 기회를 소비하지 않는다. 수신자별 최근 32건까지 보관하고 그 판단 이후 또는 층 이동 때 기회를 닫는다. 생략·만료는 평가되지 않은 상태로 남는다.
+- 응답의 선택 필드 `reaction:"like|dislike"`, `reaction_to:"social_N"`는 한 결정에 최대 한 사건이다. 현재 제공한 ID만 허용한다. 본 행동의 수락/거절과 독립이며, 생략을 `neutral`로 만들지 않는다. 같은 수신자의 중복 평가·미실행(`skipped`)·계획(`src:plan`) 반응은 집계하지 않는다.
+- `decisions.reaction_error?={code,value,target}`: `invalid_reaction`, `reaction_not_received`, `multiple_reactions_not_supported`, 실행 시 재검증의 `reaction_not_eligible`. 반응 오류는 본 행동을 바꾸지 않는다. 본 행동이 입력 오류로 폴백해도 모델이 실제 출력한 유효 반응은 보존한다.
+- `tick.reactions[]`: **검증된 반응의 원천**. `{id:"reaction_N",actor,to,value,reaction_to,turn,depth,floor_id,source}`. `actor`는 평가한 사람, `to`는 원래 행위자이며 `source`는 수신자 목록을 포함한 원사건 스냅샷이다. decisions는 제안된 응답, reactions는 승인된 기록이므로 통계는 reactions를 기준으로 읽는다. 한 발화를 들은 여러 사람은 각자 평가할 수 있다.
+- 집계 형태는 `{total:{like,dislike},by_actor:{char:{like,dislike}},pairs:[{from,to,like,dislike}],events,opportunities,unrated}`. `from→to`는 평가자→원래 행위자 방향이다. `events`는 사회 사건 수, `opportunities`는 수신 건수(한 발화의 수신자가 둘이면 2), `unrated`는 아직 평가 기록이 없는 수신 건수이며 대기·생략·만료를 포함한다.
+- `level.reaction_stats`와 `tick.reaction_stats`는 `{run:집계,floor:{id,depth,since,...집계}}` 전체 스냅샷이다. 임의 턴으로 돌아가도 그 프레임 당시 값을 읽는다. `descend/ascend.reaction_summary`는 떠나는 방문의 `{id,depth,since,until,...집계}`. `end.reaction_summary`는 원정 전체, `end.reaction_floors[]`는 방문별 결산이다. 마을 재방문도 새 `floor_N`으로 분리한다.
+- 수치와 과거 like/dislike는 관전 전용이다. 봇의 intent·history·notes·relations·floor 관측에 자동 주입하거나 호감 점수로 환산하지 않는다. 기존 `replies`(말/행동/없음)와 관계 장부는 별개로 유지한다.
+
 ## 파일 규칙
 - 위치: `state/stream.jsonl`. **실행 시작 때 truncate**(이전 판 기록은 사라진다 — 보존하려면 실행 후 복사).
 - **단일 writer 가정**: 러너를 동시에 2개 띄우면 같은 파일을 서로 덮어써 계약이 깨진다(락 없음 — 로컬 관전 도구).

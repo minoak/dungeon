@@ -154,6 +154,10 @@
         <input type="text" id="seed" placeholder="비우면 랜덤 · 정수 입력 시 그 던전">
       </details>
     </div>
+    <div class="card">
+      <h3>모험가의 행동</h3>
+      <div class="hint">모험가는 대상과 행동을 자유롭게 조합한다. 멀리 있는 대상에게 행동하면 필요한 거리까지 먼저 다가간다.</div>
+    </div>
   </div>
   <div id="err2" style="color:#ff8b7a;font-size:13px;min-height:18px;margin-top:10px"></div>
   <div class="foot">
@@ -506,6 +510,7 @@ $('bStart').onclick = async () => {
     map: $('mapMode').querySelector('label.on input').value,
     town: $('town').checked,
     brain: $('brain').value,
+    action_mode: 'compose',
     seed: $('seed').value.trim() || null,
     party: partyMode,
   };

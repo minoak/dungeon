@@ -181,7 +181,7 @@ function parseStream(text) {
     try { o = JSON.parse(raw); } catch (e) { continue; }  // 깨진 라인은 조용히 무시
     if (o.kind === 'run_meta') { meta = o; continue; }
     if (o.kind === 'end') { endLine = o; continue; }
-    if (o.kind === 'descend') {
+    if (o.kind === 'descend' || o.kind === 'ascend') {
       // 강하 자체는 프레임이 아니다 — 직후 level 라인이 새 층 개시 프레임을 만든다
       if (frames.length) frames[frames.length - 1].descend = o;
       continue;
@@ -194,6 +194,7 @@ function parseStream(text) {
         if (!visSet.has(k)) { visSet.add(k); visList.push([b.x, b.y]); }
       }
       frames.push({ kind: 'level', turn: o.turn, level: o, bots: o.party,
+                    reaction_stats: o.reaction_stats,
                     monsters: o.monsters, features: o.features, traps: o.traps,
                     visList, visCount: visList.length });
       continue;
@@ -207,6 +208,7 @@ function parseStream(text) {
       frames.push({ kind: 'tick', turn: o.turn, level: curLevel, bots: o.bots,
                     monsters: o.monsters, features: o.features, traps: o.traps,
                     events: o.events, decisions: o.decisions, inbox: o.inbox,
+                    reactions: o.reactions, reaction_stats: o.reaction_stats,
                     visList, visCount: visList.length });
       continue;
     }
@@ -281,6 +283,13 @@ function evLine(e, f) {
   const t = e.type;
   const who = e.char ? nameSpan(e.char) + ' ' : '';
   const cls = (c, h) => ({ cls: c, html: who + h });
+
+  if (e.result === 'approaching') return cls('dim', `↗ ${esc(resolveTarget(e.target, f))} — 실행 거리까지 접근한다`);
+  if (e.result === 'no_path' && e.parent_action_id) return cls('dim', `${esc(resolveTarget(e.target, f))} — 접근할 길이 없다`);
+  if (e.result === 'no_effect') return cls('dim', `${esc(resolveTarget(e.target, f))} — ${esc(t)} 시도, 변화 없음`);
+  if (t === 'use' && e.result === 'healed') return cls('gold', `${esc(resolveTarget(e.target, f))}에게 물약 사용 — HP +${esc(e.heal)} (HP ${esc(e.hp)})`);
+  if (t === 'use' && (e.effect_type === 'interact' || e.effect_type === 'goto')) return evLine({ ...e, type: e.effect_type }, f);
+  if (t === 'use') return cls('dim', `${esc(resolveTarget(e.target, f))} 사용 실패 — ${esc(e.result)}`);
 
   if (t === 'goto')
     return cls('dim', `⚑ ${esc(resolveTarget(e.target, f))}${e.result === 'arrived' ? ' — 이미 곁에' : '에게 핑'}`);
@@ -358,7 +367,7 @@ function evLine(e, f) {
     const sneak = e.surprise ? '기습! ' : '';
     if (!e.hit) return cls('combat', `⚔ ${sneak}${esc(e.target)} 공격 — 빗나감${roll}`);
     const head = sneak + (e.crit ? '대성공! ' : '');
-    const tail = e.killed ? ' — 처치!' : ` (적 HP ${Math.max(0, e.monster_hp)})`;
+    const tail = e.killed ? ' — 처치!' : ` (${e.target_kind === 'bot' ? '대상' : '적'} HP ${Math.max(0, e.monster_hp)})`;
     return cls('combat', `⚔ ${esc(e.target)} 공격 — ${head}${e.dmg}피해${tail}${roll}`);
   }
   if (t === 'search') {
@@ -385,6 +394,24 @@ function evLine(e, f) {
   return { cls: 'dim', html: esc(t) };     // 모르는 이벤트: 이름만 (additive 관용)
 }
 
+function reactionText(r) {
+  const s = r.source || {};
+  const detail = s.type === 'say' ? `${s.say_kind || '잡담'}: 「${s.text || ''}」`
+    : s.type === 'bond' ? `친목: ${s.form || '몸짓'}`
+    : s.type === 'give' ? `건네기: ${s.what || s.item || '물건'}` : `물약 사용: HP +${s.heal || 0}`;
+  return `${nameSpan(r.actor)} → ${nameSpan(r.to)} · ${r.value === 'like' ? '좋아함 (like)' : '싫어함 (dislike)'}` +
+    ` — ${esc(detail)} (t${esc(s.turn)} · ${esc(r.reaction_to)})`;
+}
+function reactionSummary(s, char) {
+  if (!s) return '반응 기록이 없는 이전 판';
+  const n = char ? (s.by_actor[char] || {like:0, dislike:0}) : s.total;
+  const bits = [`좋아함(like) ${esc(n.like)} · 싫어함(dislike) ${esc(n.dislike)}`];
+  for (const p of (s.pairs || []).filter(p => !char || p.from === char))
+    bits.push(`${esc(names[p.from] || p.from)} → ${esc(names[p.to] || p.to)}: like ${esc(p.like)} / dislike ${esc(p.dislike)}`);
+  if (!char) bits.push(`평가가 기록되지 않은 수신 ${esc(s.unrated)}건`);
+  return bits.join('<br>');
+}
+
 function buildFeedGroups() {
   feedGroups = frames.map((f, i) => {
     if (f.kind === 'level') {
@@ -406,13 +433,15 @@ function buildFeedGroups() {
       if (d.say) parts.push(`<div class="say">${nameSpan(c)} <span class="bub">「${esc(d.say)}」</span>${d.say_kind === '제안' ? '<span class="kind">제안</span>' : ''}</div>`);
       if (d.reason) parts.push(`<div class="rsn">${esc(d.reason)}</div>`);
     }
+    for (const r of (f.reactions || [])) parts.push(`<div class="ev notable reaction">${reactionText(r)}</div>`);
     for (const e of (f.events || [])) {
       const line = evLine(e, f);
       if (line) parts.push(`<div class="ev ${line.cls}">${line.html}</div>`);
     }
     if (f.descend) {
       const who = (f.descend.party || []).map(p => esc(names[p.char] || p.char)).join('·');
-      parts.push(`<div class="ev gold">▼ ${who} — 지하 ${f.descend.to_depth}층으로 내려간다</div>`);
+      parts.push(`<div class="ev gold">${f.descend.kind === 'ascend' ? `▲ ${who} — 마을로 돌아간다` : `▼ ${who} — 지하 ${esc(f.descend.to_depth)}층으로 내려간다`}</div>`);
+      if (f.descend.reaction_summary) parts.push(`<div class="ev notable">이 층의 반응 결산<br>${reactionSummary(f.descend.reaction_summary)}</div>`);
     }
     if (!parts.length) return '';
     return `<div class="grp"><div class="gt">t${f.turn}</div>${parts.join('')}</div>`;
@@ -427,6 +456,9 @@ function endGroupHtml() {
     bits.push(`☠ 쓰러진 자: ${endLine.fallen.map(c => esc(names[c] || c)).join(', ')}`);
   if ((endLine.survivors || []).length)
     bits.push(`🛡 생환: ${endLine.survivors.map(c => esc(names[c] || c)).join(', ')}`);
+  if (endLine.reaction_summary) bits.push('원정 반응 결산<br>' + reactionSummary(endLine.reaction_summary));
+  for (const floor of endLine.reaction_floors || []) bits.push(
+    `${floor.depth === 0 ? '마을' : '지하 '+esc(floor.depth)+'층'} (t${esc(floor.since)}~${esc(floor.until)}): like ${esc(floor.total.like)} / dislike ${esc(floor.total.dislike)}`);
   return `<div class="grp fin">${bits.join('<br>')}</div>`;
 }
 
@@ -659,7 +691,9 @@ function renderParty() {
     const face = looks[c] ? `<canvas class="face" width="16" height="16" data-face="${esc(c)}"></canvas>` : '';
     rows.push(`<div class="${cls}"><div class="pcHead">${face}<span class="dot" style="background:${col}"></span>` +
       `<b>${esc(names[c])}</b><span class="job">${esc(jobs[c])}</span><span class="stat">${stat}</span></div>` +
-      hpHtml + `<div class="ord">${ord}</div></div>`);
+      hpHtml + `<div class="ord">${ord}</div>` + (f.reaction_stats
+        ? `<div class="ord"><b>남긴 반응 · 이번 층</b><br>${reactionSummary(f.reaction_stats.floor, c)}<br>` +
+          `<b>원정 전체</b><br>${reactionSummary(f.reaction_stats.run, c)}</div>` : '') + `</div>`);
   }
   $('party').innerHTML = rows.join('');
   if (window.WLSprites && WLSprites.ready) {            // D37 초상화 — 정면 정지 프레임(32px 로 확대)

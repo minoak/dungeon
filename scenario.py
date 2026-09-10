@@ -71,6 +71,8 @@ def build(spec):
                                      monsters=spec.get("monsters"),
                                      traps=spec.get("traps"), scan=SCAN_ON)
     d.ally_sight = ALLY_SIGHT_ON       # from_ascii 는 __new__ 경유 — 스위치는 호출측이 켠다
+    d.auto_approach = brains.COMPOSE
+    d.composed_actions = brains.COMPOSE
     for attr, env in (("events", "DUNGEON_EVENTS"), ("graves", "DUNGEON_GRAVES"),   # 러너 기본 스위치 미러링
                       ("hail", "DUNGEON_HAIL"), ("wait_verb", "DUNGEON_WAIT"),      #   (09-05 구멍 ②: 장면이
                       ("motion", "DUNGEON_MOTION"), ("selfstop", "DUNGEON_SELFSTOP"),   #   라이브 판과 같은
@@ -213,6 +215,7 @@ def play(spec, brain, state_dir):
             monsters=len(d.monsters), traps=len(d.traps),
             lurkers=sum(1 for m in d.monsters if m.concealed),
             max_turns=turns, gm=False, stream_obs=False, menu=brains.MENU,
+            **brains.action_metadata(),
             ledger=True,                       # 장면은 장부(D17) 상시 켬 — 라이브 판과 같은 조건
             scan=SCAN_ON,                      # 스캐너(D19) 여부 — 정지 물리가 달라진다(비교 전제)
             ally_sight=ALLY_SIGHT_ON,          # 동료 시야 면제(07-26) — 시야 물리 메타(A/B 전제)

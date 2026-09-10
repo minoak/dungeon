@@ -108,6 +108,10 @@ class Runner:
             if brain not in BRAINS:
                 raise BadRequest("두뇌는 %s 중 하나" % "/".join(BRAINS))
             env["DUNGEON_BRAIN_BACKEND"] = brain
+            action_mode = str(opts.get("action_mode", "compose"))
+            if action_mode not in ("menu", "compose"):
+                raise BadRequest("행동 선택 방식은 menu/compose 중 하나")
+            env["DUNGEON_ACTION_MODE"] = action_mode
             seed = opts.get("seed")
             if seed in (None, "", "random"):
                 env["DUNGEON_SEED"] = "random"
@@ -146,7 +150,8 @@ class Runner:
             self.started = time.strftime("%Y-%m-%dT%H:%M:%S")
             self.seed_requested = env["DUNGEON_SEED"]
             return {"ok": True, "pid": self.proc.pid, "seed": self.seed_requested, "brain": brain,
-                    "party": which, "map": m, "town": bool(opts.get("town"))}
+                    "party": which, "map": m, "town": bool(opts.get("town")),
+                    "action_mode": action_mode}
 
     def stop(self):
         with self.lock:
@@ -177,6 +182,7 @@ class Runner:
                     meta = json.loads(lines[0])
                     if meta.get("kind") == "run_meta":
                         out["seed"] = meta.get("seed")
+                        out["action_mode"] = meta.get("action_mode", "menu" if meta.get("menu") else "free")
                         out["party"] = [{"char": p.get("char"), "name": p.get("name") or p.get("job"),
                                          "job": p.get("job")} for p in meta.get("party", [])]
                 except ValueError:

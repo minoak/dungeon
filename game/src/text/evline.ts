@@ -5,6 +5,7 @@
 // 색 등급(cls): dim(소음) · notable(정지·발견) · gold(획득·하강) · combat(전투) · fb(규칙 두뇌) · give(건네기) · dir(지문).
 import type { Char, Decision, Frame, Run, StreamEvent } from '../stream/types';
 import { esc } from '../ui/dom';
+import { reactionHtml, reactionSummaryHtml } from './reactions';
 
 export interface EvLine { cls: string; html: string }
 
@@ -86,6 +87,13 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
   const L = (cls: string, h: string): EvLine => ({ cls, html: who + h });
   const tgt = (): string => resolveTarget(e.target, f, run);
 
+  if (e.result === 'approaching') return L('dim', `↗ ${esc(tgt())} — 실행 거리까지 접근한다`);
+  if (e.result === 'no_path' && e.parent_action_id) return L('dim', `${esc(tgt())} — 접근할 길이 없다`);
+  if (e.result === 'no_effect') return L('dim', `${esc(tgt())} — ${esc(t)} 시도, 변화 없음`);
+  if (t === 'use' && e.result === 'healed') return L('gold', `${esc(tgt())}에게 물약 사용 — HP +${num(e.heal)} (HP ${num(e.hp)})`);
+  if (t === 'use' && (e.effect_type === 'interact' || e.effect_type === 'goto')) return evLine({ ...e, type: e.effect_type }, f, run);
+  if (t === 'use') return L('dim', `${esc(tgt())} 사용 실패 — ${esc(e.result)}`);
+
   if (t === 'goto') {
     if (e.result === 'blocked') return L('notable', `⚑ ${esc(tgt())} — 길 막힘(${listNames(e.allies, run) || '동료'}가 길목에)`);
     return L('dim', `⚑ ${esc(tgt())}${e.result === 'arrived' ? ' — 이미 곁에' : '에게 핑'}`);
@@ -166,7 +174,7 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
     const target = esc(str(e.target, '적'));
     if (!e.hit) return L('combat', `⚔ ${sneak}${target} 공격 — 빗나감${roll}`);
     const head = sneak + (e.crit ? '대성공! ' : '');
-    const tail = e.killed ? ' — 처치!' : ` (적 HP ${Math.max(0, num(e.monster_hp))})`;
+    const tail = e.killed ? ' — 처치!' : ` (${e.target_kind === 'bot' ? '대상' : '적'} HP ${Math.max(0, num(e.monster_hp))})`;
     return L('combat', `⚔ ${target} 공격 — ${head}${num(e.dmg)}피해${tail}${roll}`);
   }
   if (t === 'search') {
@@ -291,6 +299,9 @@ export function groupHtml(f: Frame, run: Run, focus: Char | null): string {
   if (f.kind === 'level') return `<div class="grp lvl" data-turn="${f.turn}">${levelHead(f, run)}</div>`;
   const parts: string[] = [];
   for (const c of Object.keys(f.decisions)) parts.push(decisionLines(c, f.decisions[c], run, focus));
+  for (const reaction of f.reactions || []) {
+    parts.push(lineHtml('ev notable reaction', reactionHtml(reaction, run), [reaction.actor, reaction.to], focus));
+  }
   for (const e of f.events) {
     const line = evLine(e, f, run);
     if (!line) continue;
@@ -302,6 +313,8 @@ export function groupHtml(f: Frame, run: Run, focus: Char | null): string {
     const chars = arr(f.descend.party).map(p => str(obj(p)?.char)).filter(c => isBotChar(run, c));
     const html = f.descend.kind === 'ascend' ? `▲ ${who} — 마을로 돌아간다` : `▼ ${who} — 지하 ${f.descend.to_depth}층으로 내려간다`;
     parts.push(lineHtml('ev gold', html, chars, focus));
+    if (f.descend.reaction_summary) parts.push(lineHtml('ev notable',
+      '이 층의 반응 결산<br>' + reactionSummaryHtml(f.descend.reaction_summary, run), chars, focus));
   }
   const body = parts.join('');
   if (!body) return '';
@@ -317,5 +330,9 @@ export function endGroupHtml(run: Run): string {
   if (arr(end.fallen).length) bits.push(`☠ 쓰러진 자: ${arr(end.fallen).map(c => esc(nameOf(run, c))).join(', ')}`);
   if (arr(end.survivors).length) bits.push(`🛡 생환: ${arr(end.survivors).map(c => esc(nameOf(run, c))).join(', ')}`);
   if (arr(end.remaining).length) bits.push(`⏳ 남은 자: ${arr(end.remaining).map(c => esc(nameOf(run, c))).join(', ')}`);
+  if (end.reaction_summary) bits.push('원정 반응 결산<br>' + reactionSummaryHtml(end.reaction_summary, run));
+  for (const floor of end.reaction_floors || []) bits.push(
+    `${floor.depth === 0 ? '마을' : '지하 ' + esc(floor.depth) + '층'} (t${esc(floor.since)}~${esc(floor.until)}): ` +
+    `like ${esc(floor.total.like)} / dislike ${esc(floor.total.dislike)}`);
   return `<div class="grp fin" data-turn="${end.turn}">${bits.join('<br>')}</div>`;
 }

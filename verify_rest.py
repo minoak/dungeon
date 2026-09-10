@@ -264,7 +264,7 @@ check("러너 스위치·메타·요약 코드 존재",
 gsrc = io.open(os.path.join(HERE, "dungeon_gm.py"), encoding="utf-8").read()
 check("휴식 사실은 선택지 라벨이 말한다(D42: 지침은 조작법만 — 회복량·상태 회복은 그 순간 라벨에)",
       "틱마다 HP %d 회복" in gsrc and "다 나으면 몸 상태" in gsrc)
-pm = io.open(os.path.join(HERE, "adventurer_prompt_menu.md"), encoding="utf-8").read()
+pm = io.open(os.path.join(HERE, brains.LEGACY_PROMPT_DIR, "adventurer_prompt_menu.md"), encoding="utf-8").read()
 check("지침에 휴식 규칙 없음(D42 — 세계 세부는 상황에서 준다)", "틱마다 HP" not in pm and "휴식뿐" not in pm)
 
 print()
