@@ -17,6 +17,7 @@ echo   [7] Gemini brain     (API - COSTS MONEY)
 echo   [8] Gemini + ally-sight  (door fix ON - compare with 7)
 echo   [9] BIG verdict: map + Gemini + ally-sight + social  (~25min, ~500 KRW)
 echo   [T] TOWN run (D29): village 0F + dungeon 1F, round trip  (Gemini - COSTS MONEY)
+echo   [A] SKILL ALPHA: skills + dice combat + 5 floors (web launcher)
 echo   [L] LAUNCHER (web): build your party, pick options, start, watch  (D31)
 echo   [Q] Quit
 echo  ==========================================
@@ -31,6 +32,7 @@ if /i "%pick%"=="7" goto gemini
 if /i "%pick%"=="8" goto allysight
 if /i "%pick%"=="9" goto bigally
 if /i "%pick%"=="T" goto town
+if /i "%pick%"=="A" goto alpha
 if /i "%pick%"=="L" goto launcher
 if /i "%pick%"=="Q" exit /b 0
 goto menu
@@ -119,11 +121,17 @@ timeout /t 4 /nobreak >nul
 start "" http://localhost:8000/viewer/
 goto menu
 
+:alpha
+set "launcher_mode=--alpha"
+goto launch_web
+
 :launcher
+set "launcher_mode="
+:launch_web
 echo Web launcher: party builder (job / trait keywords / free-text background), options, start, viewer.
 echo It serves port 8000 itself - close any old "python -m http.server 8000" window first.
 echo Brains that call an API cost money (Gemini). The rules brain (dummy) is free.
-start "Wonderland launcher" cmd /k "set PYTHONUTF8=1&& python %~dp0launcher.py"
+start "Wonderland launcher" cmd /k "set PYTHONUTF8=1&& python launcher.py %launcher_mode%"
 goto menu
 
 :viewer

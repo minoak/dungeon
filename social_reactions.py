@@ -22,6 +22,8 @@ def parse(obj, obs):
 
 
 def describe(event):
+    if event.get('skill_id'):
+        return '%s: HP +%d' % (event.get('skill_name', event['skill_id']), event.get('heal', 0))
     if event['type'] == 'say':
         return '%s: %s' % (event.get('say_kind', '잡담'), event.get('text', ''))
     if event['type'] == 'bond':
@@ -145,6 +147,10 @@ def physical(d, bot, action, result, bots):
     elif typ == 'use' and outcome == 'healed' and str(action.get('target', '')).startswith('b'):
         recipient = action['target'][1:]
         details = {'heal': result.get('heal', 0), 'item': action.get('item', 'i1')}
+    elif result.get('skill_id') and result.get('heal', 0) > 0 and str(action.get('target', '')).startswith('b'):
+        typ = 'skill'
+        recipient = action['target'][1:]
+        details = {k: result[k] for k in ('heal', 'skill_id', 'skill_name')}
     if recipient and any(b['char'] == recipient and b['alive'] and not b['won'] for b in bots):
         rid = ledger.record(typ, bot['char'], [recipient], d.turn,
                             source_action_id=action.get('action_id'), **details)

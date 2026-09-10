@@ -600,6 +600,11 @@ def _last_prose(last, names=None):
     어휘 전거 = STREAM_FORMAT.md 이벤트 표. 모르는 형태는 컴팩트 JSON 폴백(정보 무소실 —
     미래 additive 필드의 안전망, verify_wire ③이 실전 폴백 0을 감시)."""
     t, r = last.get("type"), last.get("result")
+    if last.get('skill_id'):
+        return G.SK.summary(last)
+    if t == 'pushed':
+        entered = last.get('entered') or {}
+        return '스킬에 의해 한 칸 밀려났다' + (' — 함정을 밟았다' if entered.get('trap') else '')
     tgt = str(last.get("target", "") or "")
     _who = lambda c: "%s(봇%s)" % ((names or {}).get(c, "동료"), c)   # D47 ② 상대 호칭(동료는 이름으로)
     if r == "approaching":
@@ -1382,6 +1387,8 @@ def _wire(obs, names=None, compose=False):
                              % (f["id"], effect, G.GEAR_KINDS.get(f["name"], 0)))
         for m in s.get("monsters", []):
             facts.append("- %s: 현재 자리에서 %s" % (m["id"], "공격 사거리·사선 안" if m.get("in_range") else "공격 범위 밖"))
+            if m.get('status'):
+                facts.append('- %s: %s' % (m['id'], ' · '.join(m['status'])))
         if facts:
             out += ["", "## 대상의 현재 사실"] + facts
         ways = s.get("ways", []) if not obs.get('action_schema') else []
@@ -1398,13 +1405,19 @@ def _wire(obs, names=None, compose=False):
                     (' · %d개' % target['count']) if 'count' in target else ''))
         out += ["", "## 행동과 의사소통", "COMMON: " + " / ".join(G.CA.COMMON if obs.get('action_schema') else _compose_types()),
                 "의사소통: 잡담 / 제안"]
+        if obs.get('skills'):
+            out += ['', 'SKILL:']
+            for skill in obs['skills']:
+                out.append('- %s (%s): %s · 남은 재사용 %d행동' % (
+                    skill['id'], skill['name'], skill['description'], skill['cooldown']))
+            out.append('SKILL도 type + target으로 선택하며 범위 밖이면 기존 자동 접근을 따른다.')
     if obs.get('social_events'):
         out += ['', '## 네가 받은 사회적 상호작용 — 선택적으로 한 사건에 반응할 수 있다']
         for event in obs['social_events']:
             out.append('- [%s] t%s · %s(봇%s)에게서: %s' % (
                 event['id'], event['turn'], names.get(event['actor'], '상대'), event['actor'], G.SR.describe(event)))
     extra = {kk: v for kk, v in obs.items() if kk not in _WIRE_KEYS
-             and kk not in ('action_schema', 'actor', 'targets', 'items', 'ways', 'social_events')}
+             and kk not in ('action_schema', 'actor', 'targets', 'items', 'ways', 'social_events', 'skills')}
     if extra:                       # 미래 additive 필드 — 조용한 누락 대신 정직한 노출
         out += ["", "## 그 밖의 정보", "```json",
                 json.dumps(extra, ensure_ascii=False), "```"]
@@ -1507,7 +1520,12 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
     # options 는 _wire 가 렌더하지 않는다: 메뉴 모드=아래 번호 목록이 그것, 자유서술=비노출(순수성).
     names = {o["char"]: (o.get("name") or o.get("job", "동료")) for o in (roster or [])}
     if COMPOSE:
-        prompt = (_sheet(bot, roster) + "\n" + (COMPOSE_PROMPT_SOLO if solo else COMPOSE_PROMPT)
+        instructions = COMPOSE_PROMPT_SOLO if solo else COMPOSE_PROMPT
+        if obs.get('skills'):
+            instructions = instructions.replace('매 판단에 제시되는 COMMON에서 행동 이름을 고른다.',
+                                                '매 판단에 제시되는 COMMON 또는 SKILL에서 행동 이름을 고른다.')
+            instructions = instructions.replace('이어질 행동도 같은 COMMON과', '이어질 행동도 같은 COMMON 또는 SKILL과')
+        prompt = (_sheet(bot, roster) + "\n" + instructions
                   + "\n\n" + _wire(obs, names, compose=True)
                   + "\n\n오직 JSON 한 줄로만 답하라.")
     elif MENU:

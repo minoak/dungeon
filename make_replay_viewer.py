@@ -21,6 +21,13 @@ def humanize(e, nm):
     t = e.get('type')
     who = nm(e.get('char'))
 
+    if e.get('skill_id'):
+        import skill_core
+        return [('fight', '%s ✦ %s' % (who, skill_core.summary(e)))]
+    if t == 'monster_status':
+        return [('fight', '%s — %s %d 피해%s' % (e.get('monster', '?'), e.get('status', '?'),
+                 e.get('dmg', 0), '·쓰러짐' if e.get('killed') else ''))]
+
     if t == 'attack' and e.get('result') == 'attack':
         tgt = e.get('target', '?')
         if e.get('hit'):

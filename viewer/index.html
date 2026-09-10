@@ -91,6 +91,7 @@
   input[type=range] { flex: 1; accent-color: #e8c268; }
   #tlabel { font-size: 12.5px; color: #b9bec9; white-space: nowrap; min-width: 110px; text-align: right; }
 </style>
+<link rel="stylesheet" href="assets/skills.css">
 </head>
 <body>
 <header>
@@ -121,7 +122,8 @@
 </footer>
 
 <script src="assets/sprites/sprites.js"></script>   <!-- D37 파츠 스프라이트 합성기(론처와 공용) — 없어도 뷰어는 산다 -->
-<script>
+<script type="module">
+import { skillsHtml, alphaLabel, acquisitionHtml, skillRollHtml, skillEffectText } from './assets/skills.js';
 'use strict';
 /* ════════════════════════════════════════════════════════════════
    원더랜드 웹 타일 뷰어 v1 — stream.jsonl 순수 소비자.
@@ -284,6 +286,17 @@ function evLine(e, f) {
   const who = e.char ? nameSpan(e.char) + ' ' : '';
   const cls = (c, h) => ({ cls: c, html: who + h });
 
+  if (e.skill_id) {
+    const effects = (e.effects || []).map(skillEffectText);
+    const why = { cooldown: '재사용 대기 중', insufficient_hp: 'HP 부족', invalid_skill: '보유하지 않은 스킬',
+      target_not_bleeding: '출혈 조건 미충족', lost: '대상 소실', not_living: '살아있는 대상이 아님',
+      too_far: '범위 밖', self_only: '자신에게만 가능', hostile_self: '자해 불가' };
+    const detail = e.result === 'skill_failed' ? (why[e.reason_code] || e.reason_code)
+      : e.hit === false ? '빗나감/저항' : effects.join(', ');
+    return cls('combat', `✦ ${esc(e.skill_name || e.skill_id)} → ${esc(resolveTarget(e.target, f))}: ${esc(detail)}` + skillRollHtml(e));
+  }
+  if (t === 'monster_status') return cls('combat', `${esc(e.monster)} — ${esc(e.status)} ${esc(e.dmg)} 피해${e.killed ? '·쓰러짐' : ''}`);
+
   if (e.result === 'approaching') return cls('dim', `↗ ${esc(resolveTarget(e.target, f))} — 실행 거리까지 접근한다`);
   if (e.result === 'no_path' && e.parent_action_id) return cls('dim', `${esc(resolveTarget(e.target, f))} — 접근할 길이 없다`);
   if (e.result === 'no_effect') return cls('dim', `${esc(resolveTarget(e.target, f))} — ${esc(t)} 시도, 변화 없음`);
@@ -398,7 +411,8 @@ function reactionText(r) {
   const s = r.source || {};
   const detail = s.type === 'say' ? `${s.say_kind || '잡담'}: 「${s.text || ''}」`
     : s.type === 'bond' ? `친목: ${s.form || '몸짓'}`
-    : s.type === 'give' ? `건네기: ${s.what || s.item || '물건'}` : `물약 사용: HP +${s.heal || 0}`;
+    : s.type === 'give' ? `건네기: ${s.what || s.item || '물건'}`
+    : s.skill_id ? `${s.skill_name || s.skill_id}: HP +${s.heal || 0}` : `물약 사용: HP +${s.heal || 0}`;
   return `${nameSpan(r.actor)} → ${nameSpan(r.to)} · ${r.value === 'like' ? '좋아함 (like)' : '싫어함 (dislike)'}` +
     ` — ${esc(detail)} (t${esc(s.turn)} · ${esc(r.reaction_to)})`;
 }
@@ -419,7 +433,7 @@ function buildFeedGroups() {
       const head = f.level.depth === 1
         ? `⚐ 원정 시작 — 지하 1층 (${roster})`
         : `▼ 지하 ${f.level.depth}층 진입 (${roster})`;
-      return `<div class="grp lvl">${head}</div>`;
+      return `<div class="grp lvl">${head}${acquisitionHtml(f.level.skill_acquisitions, names)}</div>`;
     }
     const parts = [];
     // 결정(속내·발화) — 재결정 봇만 존재. 폴백은 페르소나로 인용하지 않는다(보고서 원칙).
@@ -691,7 +705,7 @@ function renderParty() {
     const face = looks[c] ? `<canvas class="face" width="16" height="16" data-face="${esc(c)}"></canvas>` : '';
     rows.push(`<div class="${cls}"><div class="pcHead">${face}<span class="dot" style="background:${col}"></span>` +
       `<b>${esc(names[c])}</b><span class="job">${esc(jobs[c])}</span><span class="stat">${stat}</span></div>` +
-      hpHtml + `<div class="ord">${ord}</div>` + (f.reaction_stats
+      hpHtml + `<div class="ord">${ord}</div>` + skillsHtml(meta.alpha, b) + (f.reaction_stats
         ? `<div class="ord"><b>남긴 반응 · 이번 층</b><br>${reactionSummary(f.reaction_stats.floor, c)}<br>` +
           `<b>원정 전체</b><br>${reactionSummary(f.reaction_stats.run, c)}</div>` : '') + `</div>`);
   }
@@ -734,6 +748,7 @@ function renderFeed() {
 function renderInfo() {
   if (!meta) { $('runInfo').textContent = ''; return; }
   const bits = [`seed ${meta.seed}`, `${meta.w}×${meta.h}`, `${meta.depths}층`];
+  if (meta.alpha) bits.push(alphaLabel(meta));
   if (meta.menu) bits.push('리모컨');
   if (endLine) {
     const oc = { escaped: '탈출', wiped: '전멸', timeout: '시간종료' }[endLine.outcome] || endLine.outcome;

@@ -83,6 +83,7 @@
   .presetMessage.error { color: #ff8b7a; }
   button:disabled { opacity: .45; cursor: default; }
 </style>
+<link rel="stylesheet" href="/viewer/assets/skills.css">
 </head>
 <body>
 <header><h1>WONDERLAND</h1><span class="sub">에이전트는 픽셀 던전을 플레이한다 — 시작 화면(D31)</span></header>
@@ -95,6 +96,7 @@
     <div class="tag">캐릭터를 꾸미고, 던전을 열고, 그들이 어떻게 헤쳐 나가는지 지켜본다</div>
     <div class="row center">
       <button class="primary" id="bNew">새 원정</button>
+      <button id="bAlpha">스킬 알파 시작</button>
       <button id="bReplays">지난 판 보기</button>
     </div>
     <div class="status" id="tStatus">상태 확인 중…</div>
@@ -129,6 +131,20 @@
 <!-- ═══ 3. 옵션 → 시작 ═══ -->
 <section id="sOpts" hidden>
   <h2>2 / 2 · 던전</h2>
+  <div class="wl-alpha-panel">
+    <label for="runMode"><b>원정 모드</b></label>
+    <select id="runMode"><option value="standard">일반판</option><option value="alpha">스킬 알파 v0.1</option></select>
+    <div id="alphaInfo" hidden>
+      <h3 style="margin-top:14px">스킬을 고르고, 주사위로 겨룬다</h3>
+      <p>각 모험가는 스킬 2개로 시작해. 명중·피해를 주사위로 정하고, <b>3층에 도착하면 랜덤 스킬을 하나씩</b> 얻어.<br>
+        던전 1~5층 · 최대 600틱 · 마을 없이 시작</p>
+      <p class="wl-skill-note">예: 1d6은 6면 주사위 하나, 피해 1~6을 뜻해. 스킬은 모험가가 직접 선택해 사용해.<br>
+        사용 후 재사용 대기는 다른 행동을 완료할 때 줄어들어. 관전 화면에서 설명과 남은 대기를 볼 수 있어.</p>
+      <div id="alphaPreview" class="wl-alpha-preview"></div>
+      <p id="alphaBrainHint" class="hint"></p>
+    </div>
+    <p id="standardInfo" class="hint">기존 조합형 원정. 스킬·주사위 전투 확장·랜덤 스킬 획득은 꺼져 있어.</p>
+  </div>
   <div class="opts">
     <div class="card">
       <h3>맵</h3>
@@ -141,7 +157,7 @@
     <div class="card">
       <h3>두뇌</h3>
       <select id="brain">
-        <option value="gemini_api">Gemini API (빠름 · 판당 ~150원)</option>
+        <option value="gemini_api">Gemini API (사용량에 따라 과금)</option>
         <option value="claude_cli">Claude CLI (구독 · 느림)</option>
         <option value="dummy">규칙 두뇌 (LLM 0콜 — 배관 점검)</option>
       </select>
@@ -168,7 +184,8 @@
 
 </main>
 <script src="/viewer/assets/sprites/sprites.js"></script>   <!-- D37 파츠 스프라이트 합성기(뷰어와 공용) — 없어도 폼은 산다 -->
-<script>
+<script type="module">
+import { skillsHtml } from '/viewer/assets/skills.js';
 /* ═══ 상태 ═══ */
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -251,12 +268,12 @@ async function refreshStatus() {
   try {
     const st = await api('/api/status');
     if (st.running) {
-      $('tStatus').innerHTML = `판 <b>진행 중</b> — seed ${esc(st.seed ?? '…')}, t=${esc(st.turn ?? 0)}` +
+      $('tStatus').innerHTML = `${st.mode === 'alpha' ? '스킬 알파' : '일반판'} <b>진행 중</b> — seed ${esc(st.seed ?? '…')}, t=${esc(st.turn ?? 0)}` +
         (st.party?.length ? ` · ${st.party.map(p => esc(p.name)).join('·')}` : '');
       $('tRunRow').hidden = false;
     } else {
       $('tStatus').textContent = st.seed != null
-        ? `지난 판: seed ${st.seed}, ${st.turn ?? 0}틱, 결말 ${st.outcome ?? '(중단)'}` : '아직 돈 판이 없다';
+        ? `지난 ${st.mode === 'alpha' ? '스킬 알파' : '일반판'}: seed ${st.seed}, ${st.turn ?? 0}틱, 결말 ${st.outcome ?? '(중단)'}` : '아직 돈 판이 없다';
       $('tRunRow').hidden = true;
     }
   } catch (e) { $('tStatus').textContent = '서버 연결 실패 — launcher.py 가 떠 있나? (' + e.message + ')'; }
@@ -265,6 +282,7 @@ $('bNew').onclick = async () => {
   try { await loadPresets(); show('sParty'); }
   catch (e) { $('tStatus').textContent = e.message; }
 };
+$('bAlpha').onclick = () => { $('runMode').value = 'alpha'; updateMode(); $('bNew').click(); };
 $('bReplays').onclick = () => { location.href = '/game/'; };                       // 게임 클라이언트가 기본(2026-09-09 파트너 결정) — 판 목록은 화면 안 드롭다운
 $('bWatch').onclick = () => { location.href = '/game/?run=state/stream.jsonl'; };    // 기본 = 게임 클라이언트(2026-09-09 파트너 결정 "계속 새 뷰어로 보려면 불편")
 $('bGame').onclick = () => { location.href = '/viewer/?run=state/stream.jsonl'; };   // 옛 HTML 뷰어 — 은퇴 전까지 보조 진입
@@ -496,10 +514,32 @@ $('bNext').onclick = async () => {
       $('err').textContent = '저장됨: ' + res.party.map(p => `${p.name}(${p.job}: ${p.traits.join('·')})`).join(' / ');
     } catch (e) { $('err').style.color = '#ff8b7a'; $('err').textContent = e.message; return; }
   }
+  updateMode();
   show('sOpts');
 };
 
 /* ═══ 옵션 → 시작 ═══ */
+function updateMode() {
+  const alpha = $('runMode').value === 'alpha';
+  $('alphaInfo').hidden = !alpha;
+  $('standardInfo').hidden = alpha;
+  $('town').disabled = alpha;
+  if (alpha) $('town').checked = false;
+  $('bStart').textContent = alpha ? '알파 원정 시작 → 관전' : '원정 시작';
+  $('bNew').textContent = alpha ? '알파 파티 꾸미기' : '새 원정';
+  $('alphaBrainHint').textContent = $('brain').value === 'dummy'
+    ? '규칙 두뇌는 스킬을 선택하지 않아. 스킬을 쓰는 모습을 보려면 Gemini나 Claude를 선택해.'
+    : '600틱까지 이어지는 실험이므로 소요 시간과 API 비용은 모험가들의 행동에 따라 달라져.';
+  if (!presets?.skill_alpha) return;
+  const a = { ...presets.skill_alpha, skills: true, trpg_combat: true };
+  const members = partyMode === 'custom' ? slots : presets.default_party;
+  $('alphaPreview').innerHTML = members.map((s, i) => `<div><b>${esc(s.name || `${i + 1}번 모험가`)} · 시작 스킬</b>` +
+    skillsHtml(a, { skills: a.default_sets[i % a.default_sets.length], alive: true, hp: 99 }) + '</div>').join('');
+}
+$('runMode').onchange = updateMode;
+$('brain').onchange = updateMode;
+$('runMode').value = new URLSearchParams(location.search).get('mode') === 'alpha' ? 'alpha' : 'standard';
+updateMode();
 for (const lab of $('mapMode').querySelectorAll('label')) {
   lab.onclick = (e) => { e.preventDefault(); $('mapMode').querySelectorAll('label').forEach(l => l.classList.toggle('on', l === lab)); };
 }
@@ -511,6 +551,7 @@ $('bStart').onclick = async () => {
     town: $('town').checked,
     brain: $('brain').value,
     action_mode: 'compose',
+    mode: $('runMode').value,
     seed: $('seed').value.trim() || null,
     party: partyMode,
   };

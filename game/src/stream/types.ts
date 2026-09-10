@@ -64,6 +64,7 @@ export interface Trap {
 export interface Room { id: number; x: number; y: number; w: number; h: number; type: string; neighbours?: number[] }
 
 export interface LevelLine {
+  skill_acquisitions?: unknown[];
   reaction_stats?: ReactionStats;
   kind: 'level'; turn: number; depth: number; w: number; h: number;
   master_seed?: number; level_seed?: number;
@@ -98,7 +99,8 @@ export interface InboxMsg { from: Char; text: string; turn?: number; to?: string
 export interface Reply { from: Char; to: Char; kind: string; how: string }
 
 export interface SocialEvent {
-  id: string; type: 'say' | 'give' | 'bond' | 'use'; actor: Char; recipients: Char[];
+  skill_id?: string; skill_name?: string;
+  id: string; type: 'say' | 'give' | 'bond' | 'use' | 'skill'; actor: Char; recipients: Char[];
   turn: number; depth: number; floor_id: string; source_action_id?: string;
   text?: string; say_kind?: string; addressed_to?: string; what?: string; item?: string; form?: string; heal?: number;
 }

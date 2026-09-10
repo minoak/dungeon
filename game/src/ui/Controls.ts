@@ -6,6 +6,7 @@ import { ZOOMS } from '../scene/DungeonScene';
 import { $, esc, typing } from './dom';
 import { fetchText } from '../stream/live';
 import { icon } from './icons';
+import { alphaLabel } from '../../../viewer/assets/skills.js';
 
 export function installControls(app: App): void {
   const root = $('controls');
@@ -20,9 +21,14 @@ export function installControls(app: App): void {
     `<div class="view-tools"><button id="bZoom" title="화면 확대">확대 ${app.scene?.zoom ?? 1.5}×</button>` +
     `<button id="bLog" title="기록 접기/펼치기" aria-expanded="true" aria-controls="log journalHead">기록 접기</button></div></div>`;
   const stageInfo = document.createElement('div');
-  stageInfo.id = 'stageInfo'; stageInfo.innerHTML = '<span class="stage-kicker">원정</span><strong id="floorLabel">불러오는 중</strong>';
+  stageInfo.id = 'stageInfo'; stageInfo.innerHTML = '<span class="stage-kicker">원정</span><strong id="floorLabel">불러오는 중</strong><div id="alphaLabel" class="wl-alpha-label" hidden></div>';
   app.dom.hud.prepend(stageInfo);
   const pb = app.playback;
+  app.bus.on('run', () => {
+    const label = alphaLabel(app.run?.meta);
+    $('alphaLabel').textContent = label;
+    $('alphaLabel').hidden = !label;
+  });
   const slider = $('slider') as HTMLInputElement;
 
   $('bStart').onclick = () => pb.setIdx(0);

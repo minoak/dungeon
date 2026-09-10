@@ -5,6 +5,8 @@
 좌표/실물 참조는 봇 내부에만 보관하고 모델에는 기존 방위·거리 표현을 보낸다.
 """
 import copy
+import skill_core as SK
+import skill_combat as SC
 
 PROFILE = 'compose-v0.4'
 COMMON = ('goto', 'follow', 'explore', 'search', 'attack', 'use', 'give', 'bond', 'wait', 'rest')
@@ -94,7 +96,7 @@ def observe(d, bot, bots, obs):
         targets.append(dict(entry))
     bot['_target_refs'] = refs
     obs.update(action_schema=PROFILE, actor=actor, targets=targets, items=items, ways=candidates)
-    return obs
+    return SK.observe(d, bot, obs)
 
 
 def normalize(bot, action):
@@ -150,7 +152,7 @@ def parse(obj, obs):
         typ = 'use'
     elif typ == 'drink':
         typ, target, item = 'use', 'self', 'i1'
-    if typ not in COMMON:
+    if typ not in COMMON and typ not in {s['id'] for s in obs.get('skills', [])}:
         return None, 'invalid_type'
     out = {'type': typ}
     if not target and typ == 'search':             # 주변 조사라는 기존 문법의 호환 별칭
@@ -232,6 +234,9 @@ def entity(d, bot, target, bots, refs=None):
 
 
 def in_range(d, bot, action, target, at=None):
+    skill = SK.lookup(d, bot, action['type'])
+    if skill:
+        return SK.in_range(d, bot, skill, target, at)
     x, y = at if at is not None else (bot['x'], bot['y'])
     tx, ty = target[1]
     if target[0] == 'item' or (target[0] == 'bot' and target[2] is bot):
@@ -338,37 +343,54 @@ def execute(d, bot, action, bots):
 def attack_actor(d, bot, recipient, bots):
     """사람도 같은 명중·장비·피격 중단 규칙을 따른다. 관계의 감정 평가는 만들지 않는다."""
     import dungeon_gm as G
-    roll = d.d20()
     mod = bot['dex'] if int(bot.get('atk_range') or 1) > 1 else bot['str']
     ac = 10 + recipient['dex'] + G.gear_bonus(recipient, 'armor')
     if d.status:
-        mod -= G.POISON_MOD if '중독' in (bot.get('status') or {}) else 0
+        mod -= G.POISON_MOD if not d.trpg_combat and '중독' in (bot.get('status') or {}) else 0
         ac -= G.POISON_MOD if '중독' in (recipient.get('status') or {}) else 0
-    hit = roll == 20 or roll + mod >= ac
+    if d.trpg_combat:
+        combat_roll = SC.check(d, mod, ac, disadvantage=d.status and '중독' in (bot.get('status') or {}), attack=True)
+        roll, hit = combat_roll['roll'], combat_roll['success']
+    else:
+        roll = d.d20()
+        hit = roll == 20 or roll + mod >= ac
     res = {'char': bot['char'], 'type': 'attack', 'result': 'attack', 'target_id': 'b' + recipient['char'],
            'target': recipient.get('name') or recipient['job'], 'roll': roll, 'mod': mod,
            'total': roll + mod, 'ac': ac, 'hit': hit}
+    if d.trpg_combat:
+        res['combat_roll'] = combat_roll
     if hit:
         damage = (bot['wdmg'] + G.gear_bonus(bot, 'weapon')) * (2 if roll == 20 else 1)
-        recipient['hp'] -= damage
-        interrupted = d._cancel_approach(recipient)
-        recipient['order'], recipient['path'], recipient['plan'] = None, [], []
-        res.update(dmg=damage, hp=max(0, recipient['hp']), monster_hp=max(0, recipient['hp']),
-                   target_kind='bot', crit=roll == 20)
-        d._note_last(recipient, {'type': 'hurt', 'by': bot.get('name') or bot['job'],
-                                'by_id': 'b' + bot['char'], 'by_kind': 'bot',
-                                'dmg': damage, 'hp': max(0, recipient['hp']), **interrupted})
-        if recipient['hp'] <= 0:
-            recipient['alive'] = False
-            res['killed'] = True
-            grave = d._on_down(recipient, bots, by=bot.get('name') or bot['job'], by_kind='bot')
-            if grave:
-                res['grave'] = grave
-        else:
-            d._witness(bots, recipient['x'], recipient['y'],
-                       {'kind': 'ally_hurt', 'char': recipient['char'],
-                        'by': bot.get('name') or bot['job'], 'by_kind': 'bot', 'dmg': damage},
-                       exclude=(bot['char'], recipient['char']))
+        if d.trpg_combat:
+            damage_roll = SC.weapon_damage(d, bot['wdmg'], roll == 20)
+            damage = damage_roll['value'] + G.gear_bonus(bot, 'weapon')
+            res['damage_roll'] = damage_roll
+        res.update(damage_actor(d, bot, recipient, damage, bots, roll == 20))
+    return res
+
+
+def damage_actor(d, bot, recipient, damage, bots, critical=False):
+    """사람 대상 피해의 피격 중단·쓰러짐·목격을 스킬과 공유한다."""
+    res = {}
+    recipient['hp'] -= damage
+    interrupted = d._cancel_approach(recipient)
+    recipient['order'], recipient['path'], recipient['plan'] = None, [], []
+    res.update(dmg=damage, hp=max(0, recipient['hp']), monster_hp=max(0, recipient['hp']),
+               target_kind='bot', crit=critical)
+    d._note_last(recipient, {'type': 'hurt', 'by': bot.get('name') or bot['job'],
+                            'by_id': 'b' + bot['char'], 'by_kind': 'bot',
+                            'dmg': damage, 'hp': max(0, recipient['hp']), **interrupted})
+    if recipient['hp'] <= 0:
+        recipient['alive'] = False
+        res['killed'] = True
+        grave = d._on_down(recipient, bots, by=bot.get('name') or bot['job'], by_kind='bot')
+        if grave:
+            res['grave'] = grave
+    else:
+        d._witness(bots, recipient['x'], recipient['y'],
+                   {'kind': 'ally_hurt', 'char': recipient['char'],
+                    'by': bot.get('name') or bot['job'], 'by_kind': 'bot', 'dmg': damage},
+                   exclude=(bot['char'], recipient['char']))
     return res
 
 
@@ -378,7 +400,7 @@ def decorate(bot, action, result):
     pending = bool(bot.get('order')) and (r in ('approaching', 'pathed', 'walking', 'following', 'resting', 'waiting') or result.get('approach_status') == 'ready')
     if pending:
         status = None
-    elif r in ('lost', 'no_target', 'too_far', 'no_path', 'blocked', 'nothing', 'no_potion', 'no_room', 'wait_allies', 'disabled'):
+    elif r in ('lost', 'no_target', 'too_far', 'no_path', 'blocked', 'nothing', 'no_potion', 'no_room', 'wait_allies', 'disabled', 'skill_failed', 'skill_missed'):
         status = 'failed'
     elif r == 'no_effect' or (action['type'] == 'search' and not result.get('found')):
         status = 'no_effect'

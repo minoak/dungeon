@@ -4,6 +4,32 @@
 엔진 → 스트림 → **[맵뷰어 | 기계 크로니클 | GM(옵션·LLM) | 웹뷰어]** — 모든 소비자는 형제다.
 GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0콜로 만들어진다.
 
+## 스킬 알파 — 2026-09-10 additive (기본 OFF)
+
+모든 알파 플래그가 OFF이면 기존 스트림과 동일하다. 활성 판은 `run_meta.alpha`로 식별한다.
+버전 `skills-alpha-v0.1`, `skills/trpg_combat/random_skill/random_skill_effective`,
+프리셋 정의, 획득 층(3), 예산(5), 대기시간 기준(`completed_actions`)을 기록한다.
+
+- 스킬 판단도 기존 `decisions[char].type + target + action_id`를 사용한다.
+- 자동 접근은 기존 `approaching/walk` 이벤트와 동일하다. 스킬 접근 보행을 새 goto 결정으로 세지 않는다.
+- 실행 결과는 `tick.events`에 `skill_id/skill_name/skill_cost/skill_spent/skill_roll/skill_dc/effects/penalties/
+  cooldown_before/cooldown_after/resolution`을 추가한다. 필드는 해당할 때만 존재한다.
+- `result`는 `skill`(효과 발생), `skill_missed`(빗나감/주 내성 저항), `skill_failed`(실행 조건 실패),
+  `no_effect`(유효 시도였지만 변화 없음)다. `skill_spent:true`일 때만 사용 비용을 냈다.
+- `tick.skill_events`는 `type:skill_roll | skill_effect | resolution`의 보조 기록이다.
+  각각 원래 결정의 `parent_action_id`를 참조한다. resolution의 원래 행동은 `action_type`에 있다.
+  주 내성 및 부가 내성의 눈·보정·DC·성공 여부도 기록한다.
+- 스킬 ON의 봇 스냅샷에는 `skills/skill_cooldowns/generated_skills`가 있다.
+  `level.skill_acquisitions[]`는 3층 입장 당시의 char/turn/depth/generated_skill_id/전체 skill 정의다.
+- TRPG 기본 공격은 기존 필드에 `combat_roll`과 `damage_roll`을 추가한다.
+  몬스터 스킬 출혈은 `monster_status` 이벤트와 몬스터 스냅샷 `status`를 사용한다.
+- 타인을 치유한 스킬은 기존 사회 사건에 `type:skill`, `skill_id/skill_name/heal`을 남긴다.
+  기존 reaction의 참조·평가 계약을 따른다.
+
+과거 판에 스킬을 소급 생성하지 않는다. 무작위 스킬 재현은 같은 코드 버전과 기록된 생성 입력이 필요하며,
+정확한 판정 재생은 기존처럼 시드와 decisions로 수행한다. 관전 seek는 스냅샷을 사용한다.
+[실제 규칙과 검증 범위](docs/alpha-skills.md) 참고.
+
 ## 조합형 행동 — 2026-09-10 additive
 
 `run_meta.action_mode`는 `menu | free | compose`다. 새 필드가 없는 구판은 기존 `menu` bool로 판별한다.

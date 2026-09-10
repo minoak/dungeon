@@ -25,6 +25,8 @@
 import json                     # 사건 사전(D40) 폴백 — 모르는 결과 형태는 JSON 으로 정직 노출
 import composed_actions as CA
 import social_reactions as SR
+import skill_core as SK
+import skill_combat as SC
 import math
 import os
 import random
@@ -204,6 +206,10 @@ def event_tags(rec, names=None):
     tgt = str(rec.get('target') or '')
     nm = lambda c: (names or {}).get(c, '동료')
     out = []
+    if rec.get('skill_id'):
+        return [('skill', '스킬', SK.summary(rec))]
+    if t == 'pushed':
+        return [('hurt', '밀림', '스킬에 의해 한 칸 밀려났다')]
     if r == 'approaching':
         return [('start', '접근 시작', '%s %s' % (t, place_word(tgt, 'decide')))]
     if r == 'no_path' and rec.get('parent_action_id'):
@@ -501,7 +507,8 @@ class Monster:
                 'hp': self.hp, 'maxhp': self.maxhp, 'ac': self.ac,
                 'atk': self.atk, 'dmg': self.dmg, 'alive': self.alive,
                 'state': self.state, 'concealed': self.concealed,
-                'target': self.target, 'desperate': self.desperate}
+                'target': self.target, 'desperate': self.desperate,
+                **({'status': sorted(self.skill_status)} if getattr(self, 'skill_status', None) else {})}
 
 
 # 함정 패밀리(Stage 3, SPD 33종→3종 린 스타터): 베이스 클래스 1개 + kind 테이블.
@@ -617,7 +624,7 @@ class Dungeon:
                  motion=False, ally_sight=False, social=False, solo=False, n_gear=0,
                  town=False, status=False, rest_verb=False, relations=False, trail=False,
                  objtags=False, floor=False, explore_dirs=False, give_verb=False, bond_verb=False,
-                 auto_approach=False, composed_actions=False):
+                 auto_approach=False, composed_actions=False, skills=False, trpg_combat=False, random_skill=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -718,6 +725,9 @@ class Dungeon:
                                    #   몸짓(형태=응답 form 자유 문구) — 물리 없음, 기록·목격·관계 뼈만. 상대는 안 선다.
         self.auto_approach = bool(auto_approach)   # 조합형: 실행 거리까지 걷고 원래 행동을 한 번 실행
         self.composed_actions = bool(composed_actions)
+        self.skills = bool(skills and composed_actions)
+        self.trpg_combat = bool(trpg_combat)
+        self.random_skill = bool(random_skill)
         self._action_serial = 0
         self._talked = set()       # (쌍, 틱) — 같은 틱 양방향 대화를 한 번으로(note_talk 중복 방지)
         self._ring_target = 0      # loops 판에서 주 고리에 배속할 방 수(_carve_rooms 가 굴림)
@@ -798,6 +808,7 @@ class Dungeon:
         d.give_verb = d.bond_verb = False   # 건네기·친목(D47 ②, 09-09) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.auto_approach = False
         d.composed_actions = False
+        d.skills = d.trpg_combat = d.random_skill = False
         d._action_serial = 0
         d._talked = set()
         d.grave_of = {}            # 묘→캐릭터(D22 개정) — __new__ 경유라 명시 초기화
@@ -1591,6 +1602,7 @@ class Dungeon:
                            {'id': 'm%d' % m.id, 'kind': m.kind, 'state': m.state,
                             'aware': (m.state == 'HUNTING' and m.target == bot['char']),  # 이 몹이 *날* 노린다(매트릭스 신호)
                             'hp': m.hp, **bear(m.x, m.y),
+                            **({'status': sorted(m.skill_status)} if self.skills and getattr(m, 'skill_status', None) else {}),
                             # 지금 칠 수 있는가(2026-07-26). adj(맨해튼≤1)와 **다른 자**다 —
                             # adj 는 계단·상자 접촉에도 쓰이는 공용 필드라 사거리를 얹으면 안 된다.
                             **({'in_range': True} if self._can_hit(bot, m) else {})})
@@ -1624,7 +1636,7 @@ class Dungeon:
                    **({'moving': True} if (self.motion and b.get('order')   # 이동중(D27) — 몸짓도
                        and b.get('path')) else {}),                  #   시야를 탄다. 깃발 하나뿐
                    **({'status': sorted(b['status'])}                # 상태 태그(D34) — 겉으로 드러난다
-                      if (self.status and b.get('status')) else {}),   #   (파트너 확정: 같은 단어)
+                      if ((self.status or self.skills) and b.get('status')) else {}),   #   (파트너 확정: 같은 단어)
                    **({'resting': True} if (self.rest_verb            # 휴식중(D35) — 쉬는 몸도 보인다
                        and b.get('order') == 'rest') else {})}
                   for b in bots
@@ -2053,7 +2065,7 @@ class Dungeon:
                 **({'dry': dry_out} if dry_out else {}),   # 무발견 신호(07-24) — 도달 시점 1회
                 **({'memories': mem} if mem else {}),    # 기억(D22 fallen) — 휘발 0, 있을 때만 실림
                 **({'status': [{'tag': t, **e} for t, e in sorted(bot['status'].items())]}
-                   if (self.status and bot.get('status')) else {}),   # 상태 태그(D34) — 자기 몸의 사실
+                   if ((self.status or self.skills) and bot.get('status')) else {}),   # 상태 태그(D34) — 자기 몸의 사실
                 **({'relations': rel_obs} if rel_obs else {}),   # 관계 장부(D36) — 뼈 횟수·살·초대
                 **({'exhausted': True} if exhausted else {}),   # 탐색 소진(D19 개정) — 새 길·기억의 계단·안 가 본 문 없음
                 **({'trail': trail} if (getattr(self, 'trail_on', False) and trail) else {}),
@@ -2148,7 +2160,7 @@ class Dungeon:
             aid = 'd%s:t%s:a%s' % (self.depth, self.turn, self._action_serial)
             action['action_id'] = aid             # 실제 접수된 결정에만 부여. 모델이 만드는 값이 아니다
             res = (self._begin_approach(bot, action, bots)
-                   if self.auto_approach and typ in (CA.DISTANCE_ACTIONS if self.composed_actions else ('attack', 'interact', 'give', 'bond'))
+                   if self.auto_approach and (typ in (CA.DISTANCE_ACTIONS if self.composed_actions else ('attack', 'interact', 'give', 'bond')) or (self.skills and typ not in CA.COMMON))
                    else None)
         else:
             res = None
@@ -2158,6 +2170,7 @@ class Dungeon:
             res['parent_action_id'] = aid
         if self.composed_actions:
             CA.decorate(bot, action, res)
+            SK.complete(self, bot, action, res)
             if bot.get('order'):
                 bot['_active_action'] = {k: v for k, v in action.items() if k in ('type', 'target', 'item', 'form', 'action_id')}
             else:
@@ -2170,7 +2183,9 @@ class Dungeon:
         """현재 자리에서 원래 행동의 효과를 한 번 판정한다. 접근 완료도 같은 실행 경로를 쓴다."""
         if not self.composed_actions:
             return self._execute_legacy_action(bot, action, bots)
-        result = CA.execute(self, bot, action, bots)
+        result = (SK.execute(self, bot, action, bots)
+                  if self.skills and action.get('type') not in CA.COMMON
+                  else CA.execute(self, bot, action, bots))
         SR.physical(self, bot, action, result, bots)
         return result
 
@@ -2238,7 +2253,7 @@ class Dungeon:
     def _approach_path(self, bot, action, target, bots):
         """기존 BFS·함정 회피·교대 규칙에 실행 가능한 도착 칸만 넘긴다."""
         tx, ty = target[1]
-        radius = int(bot.get('atk_range') or 1) if action['type'] == 'attack' else 1
+        radius = SK.required_range(self, bot, action)
         goals = {(x, y) for y in range(max(0, ty - radius), min(self.h, ty + radius + 1))
                  for x in range(max(0, tx - radius), min(self.w, tx + radius + 1))
                  if self.walkable(x, y, bots) and self._action_in_range(bot, action, target, (x, y))}
@@ -2252,6 +2267,10 @@ class Dungeon:
             return None                           # 기존 무대상 공격 API는 현재 사거리 판정 유지
         base = {'char': bot['char'], **{k: action[k] for k in ('type', 'target', 'item', 'form') if k in action}}
         target = self._approach_target(bot, action, bots)
+        if self.skills and typ not in CA.COMMON:
+            why = SK.preflight(self, bot, SK.lookup(self, bot, typ), target)
+            if why:
+                return SK.failure(bot, action, why)
         if not target:
             bot['plan'] = []
             return {**base, 'result': 'no_target'}
@@ -2269,7 +2288,7 @@ class Dungeon:
         bot['approach'] = pending
         bot['order'], bot['path'] = action['target'], path
         return {**base, 'result': 'approaching', 'len': len(path),
-                'required_range': int(bot.get('atk_range') or 1) if typ == 'attack' else 1}
+                'required_range': SK.required_range(self, bot, action)}
 
     def _cancel_approach(self, bot):
         """중단한 원래 의도를 표시한다. 피격/제안 등은 그 행동의 성공이나 하위 행동이 아니다."""
@@ -3037,6 +3056,7 @@ class Dungeon:
         if self.composed_actions and action:
             res['parent_action_id'] = action['action_id']
             CA.decorate(bot, action, res)
+            SK.complete(self, bot, action, res)
             if not bot.get('order'):
                 bot.pop('_active_action', None)
                 bot.pop('_execution_refs', None)
@@ -3130,7 +3150,7 @@ class Dungeon:
         if not bot.get('path'):
             self._perceive(bot)               # 멈춘 자리에서도 눈은 뜨고 있다 — 곁의 몹을 못 본 채
             return self._order_done(bot, bots, base)  #   맞으면 거짓 매복(they-ambush)이 되므로
-        if self.status and '둔화' in (bot.get('status') or {}):   # 둔화(D34): SLOW_EVERY 틱에 한 칸 —
+        if (self.status or self.skills) and '둔화' in (bot.get('status') or {}):   # 둔화(D34): SLOW_EVERY 틱에 한 칸 —
             beat = (bot.get('slow_beat') or 0) + 1                 #   나머지 틱은 제자리(몹은 따라붙는다)
             bot['slow_beat'] = beat % SLOW_EVERY
             if bot['slow_beat'] != 0:
@@ -3402,7 +3422,7 @@ class Dungeon:
         bot['x'], bot['y'] = nx, ny
         self.visited.add((nx, ny))
         out = {}
-        if self.status and '출혈' in (bot.get('status') or {}):   # 출혈(D34): 걸음이 피를 낸다 —
+        if (self.status or self.skills) and '출혈' in (bot.get('status') or {}):   # 출혈(D34): 걸음이 피를 낸다 —
             bot['bleed_steps'] = bot.get('bleed_steps', 0) + 1     #   제자리·전투·휴식은 안 낸다(라벨 그대로).
             if bot['bleed_steps'] % BLEED_STEPS == 0:              #   인터럽트 아님(D2 — 태그가 붙던 순간의
                 bot['hp'] -= 1                                     #   함정/피격이 이미 멈춰 물었다)
@@ -3862,52 +3882,75 @@ class Dungeon:
         # waking(TIME_TO_WAKE_UP=1): 막 깬(발각 직후) 몹은 1턴 더 기습 가능 — 늦잠의 대가.
         # ⚠️ FLEEING 은 기습 아님 — 봇을 빤히 보며 도망치는 중(완전 인지). 등을 쳐도 정면 인지다.
         surprise = mon.state in ('SLEEPING', 'WANDERING') or mon.waking > 0
-        r = max(self.d20(), self.d20()) if surprise else self.d20()
         mod = bot['dex'] if int(bot.get('atk_range') or 1) > 1 else bot['str']
-        if self.status and '중독' in (bot.get('status') or {}):
+        if self.trpg_combat:
+            combat_roll = SC.check(self, mod, mon.ac, advantage=surprise,
+                                   disadvantage=self.status and '중독' in (bot.get('status') or {}), attack=True)
+            r = combat_roll['roll']
+        else:
+            r = max(self.d20(), self.d20()) if surprise else self.d20()
+        if self.status and not self.trpg_combat and '중독' in (bot.get('status') or {}):
             mod -= POISON_MOD                     # 중독(D34): 손이 떨린다 — 명중 감산
         # 활잡이는 DEX 로 굴린다 — 힘이 아니라 겨눔이다. 스트림의 mod 키는 그대로라
         # 소비자 무접촉(값만 어느 능력치에서 왔는지가 달라진다).
         total = r + mod
         hit = (r == 20) or (total >= mon.ac)
+        if self.trpg_combat:
+            hit = combat_roll['success']
         res = {**base, 'result': 'attack', 'target': mon.kind, 'target_id': 'm%d' % mon.id,
                'roll': r, 'mod': mod, 'total': total, 'ac': mon.ac, 'hit': hit}
+        if self.trpg_combat:
+            res['combat_roll'] = combat_roll
         if surprise:
             res['surprise'] = True
         if hit:
             dmg = ((bot['wdmg'] + gear_bonus(bot, 'weapon'))   # 장비(07-30): 무기 보정은 크리에도
                    * (2 if r == 20 else 1)                     #   함께 배가된다(맹타는 든 것째로)
                    + (SURPRISE_DMG_BOT if surprise else 0))
-            mon.hp -= dmg
-            res.update(crit=(r == 20), dmg=dmg, monster_hp=max(0, mon.hp))
-            if self.relations:                    # 함께 싸움(D36): FOUGHT_WINDOW 틱 안에 같은 몹을 친 둘
-                for oc, t in list(mon.last_hits.items()):
-                    key = frozenset((oc, bot['char']))
-                    if oc != bot['char'] and self.turn - t <= FOUGHT_WINDOW and key not in mon.fought:
-                        ob = next((o for o in (bots or []) if o['char'] == oc), None)
-                        if ob is not None:
-                            mon.fought.add(key)   # 몹당 한 번 — 한 전투는 한 번 센다
-                            self._bone(bot, oc, 'fought'); self._bone(ob, bot['char'], 'fought')
-                mon.last_hits[bot['char']] = self.turn
-            if mon.hp <= 0:
-                mon.alive = False; res['killed'] = True
-                if self.relations and mon.state == 'HUNTING' and mon.target \
-                        and mon.target != bot['char']:    # 나를 구함(D36): 나를 물던 몹을 동료가 처치 —
-                    victim = next((o for o in (bots or []) if o['char'] == mon.target   # 그 처치를 본 사람만
-                                   and o['alive'] and not o['won']), None)              # (시야-온리)
-                    if victim is not None and (mon.x, mon.y) in self.visible_cells(victim['x'], victim['y']):
-                        self._bone(victim, bot['char'], 'rescued')
-                for o in (bots or []):    # 목격한 죽음은 장부에서 지운다(D17 교정 — 죽는 걸 본
-                    if (o.get('alive') and not o.get('won')       # 몹이 '마지막 목격'으로 살아
-                            and o.get('ledger') is not None       # 있는 척 잔존하는 유령 방지,
-                            and (mon.x, mon.y) in self.visible_cells(o['x'], o['y'])):
-                        o['ledger']['moving'].pop('m%d' % mon.id, None)   # 리뷰 픽스.
-                        # 안 본 죽음은 안 지운다 — 지우면 그게 역누설이다
-            self._witness(bots, mon.x, mon.y,     # 전달층(D22): "카야가 공격했다!"/"고블린이 쓰러졌다!"
-                          {'kind': 'ally_kill' if not mon.alive else 'ally_hit',
-                           'char': bot['char'], 'mon': mon.kind,
-                           **({'crit': True} if r == 20 else {})},
-                          exclude=(bot['char'],))  # 빗나감은 안 싣는다(소음 절약 — D22 구현 재량)
+            if self.trpg_combat:
+                damage_roll = SC.weapon_damage(self, bot['wdmg'], r == 20)
+                dmg = damage_roll['value'] + gear_bonus(bot, 'weapon') + (SURPRISE_DMG_BOT if surprise else 0)
+                res['damage_roll'] = damage_roll
+            res.update(self._damage_monster(bot, mon, dmg, bots, r == 20))
+        self._wake_attacked_monster(bot, mon, surprise)
+        return res
+
+    def _damage_monster(self, bot, mon, dmg, bots, critical=False):
+        """기본 공격과 스킬의 피해·처치·관계·목격 처리를 한곳에서 유지한다."""
+        res = {}
+        mon.hp -= dmg
+        res.update(crit=critical, dmg=dmg, monster_hp=max(0, mon.hp))
+        if self.relations:                    # 함께 싸움(D36): FOUGHT_WINDOW 틱 안에 같은 몹을 친 둘
+            for oc, t in list(mon.last_hits.items()):
+                key = frozenset((oc, bot['char']))
+                if oc != bot['char'] and self.turn - t <= FOUGHT_WINDOW and key not in mon.fought:
+                    ob = next((o for o in (bots or []) if o['char'] == oc), None)
+                    if ob is not None:
+                        mon.fought.add(key)   # 몹당 한 번 — 한 전투는 한 번 센다
+                        self._bone(bot, oc, 'fought'); self._bone(ob, bot['char'], 'fought')
+            mon.last_hits[bot['char']] = self.turn
+        if mon.hp <= 0:
+            mon.alive = False; res['killed'] = True
+            if self.relations and mon.state == 'HUNTING' and mon.target \
+                    and mon.target != bot['char']:    # 나를 구함(D36): 나를 물던 몹을 동료가 처치 —
+                victim = next((o for o in (bots or []) if o['char'] == mon.target   # 그 처치를 본 사람만
+                               and o['alive'] and not o['won']), None)              # (시야-온리)
+                if victim is not None and (mon.x, mon.y) in self.visible_cells(victim['x'], victim['y']):
+                    self._bone(victim, bot['char'], 'rescued')
+            for o in (bots or []):    # 목격한 죽음은 장부에서 지운다(D17 교정 — 죽는 걸 본
+                if (o.get('alive') and not o.get('won')       # 몹이 '마지막 목격'으로 살아
+                        and o.get('ledger') is not None       # 있는 척 잔존하는 유령 방지,
+                        and (mon.x, mon.y) in self.visible_cells(o['x'], o['y'])):
+                    o['ledger']['moving'].pop('m%d' % mon.id, None)   # 리뷰 픽스.
+                    # 안 본 죽음은 안 지운다 — 지우면 그게 역누설이다
+        self._witness(bots, mon.x, mon.y,     # 전달층(D22): "카야가 공격했다!"/"고블린이 쓰러졌다!"
+                      {'kind': 'ally_kill' if not mon.alive else 'ally_hit',
+                       'char': bot['char'], 'mon': mon.kind,
+                       **({'crit': True} if critical else {})},
+                      exclude=(bot['char'],))  # 빗나감은 안 싣는다(소음 절약 — D22 구현 재량)
+        return res
+
+    def _wake_attacked_monster(self, bot, mon, surprise):
         if mon.alive:                            # 공격받음 = 완전 각성(justAlerted 우회)
             mon.waking = 0                       # 취약창 소비 — 안 끄면 기습→skip→waking 미소비 무한 스턴락
             if mon.state != 'FLEEING':           # 도주몹은 도주 지속(HUNTING 뒤집으면 flee 시계 리셋 교란)
@@ -3915,7 +3958,6 @@ class Dungeon:
                 mon.last_seen, mon.lost = (bot['x'], bot['y']), 0
             if surprise:
                 mon.skip_turns = 1               # 기습라운드 = 다음 몹턴 반격 1회 스킵(대상 턴 스킵)
-        return res
 
     def _drink(self, bot, bots=None):
         """회복 물약 마시기(07-17): 확정 완전 회복 — 샘(그 자리 d20 도박)과 대비되는 '들고 다니는
@@ -4206,12 +4248,12 @@ class Dungeon:
         mem.append({'kind': 'grave_found', 'char': who, 'grave': f.name,
                     'zone': zone, 'turn': self.turn})
 
-    def _apply_status(self, bot, tag, by, bots=(), by_kind='hazard'):
+    def _apply_status(self, bot, tag, by, bots=(), by_kind='hazard', force=False):
         """상태 태그(D34) 부착 — 몹·함정·오브젝트의 특수. 스위치 꺼짐=무동작(기존 판 비트 동일).
         같은 태그 재발=n 만 는다(×N 표시 — 효과 불변, 첫 판 관찰 뒤 재론). 목격(D22 문법): 시야 안
         동료는 '카야가 가시 함정으로 출혈 상태가 되는 것을' 본다 — 상태는 겉으로 드러난다(파트너 확정
         "동료도 같은 단어를 본다"). by_kind: monster(도감 게이트 대상)/trap/hazard. 반환=태그 또는 None."""
-        if not self.status or not bot.get('alive', True):
+        if not (self.status or (self.skills and force)) or not bot.get('alive', True):
             return None
         st = bot.setdefault('status', {})
         e = st.get(tag)
@@ -4271,16 +4313,28 @@ class Dungeon:
         ac = 10 + b['dex'] + gear_bonus(b, 'armor')   # 장비(07-30): 방어구=막기 — 갑옷이 이를 받는다
         if self.status and '중독' in (b.get('status') or {}):
             ac -= POISON_MOD                      # 중독(D34): 몸이 무디다 — 회피 감산
-        r = max(self.d20(), self.d20()) if ambush else self.d20()
+        if self.trpg_combat:
+            combat_roll = SC.check(self, m.atk, ac, advantage=ambush, attack=True)
+            r = combat_roll['roll']
+        else:
+            r = max(self.d20(), self.d20()) if ambush else self.d20()
         total = r + m.atk
         hit = (r == 20) or (total >= ac)
+        if self.trpg_combat:
+            hit = combat_roll['success']
         ev = {'type': 'monster_attack', 'id': 'm%d' % m.id, 'monster': m.kind,
               'target': b['char'],
               'roll': r, 'mod': m.atk, 'total': total, 'ac': ac, 'hit': hit}
+        if self.trpg_combat:
+            ev['combat_roll'] = combat_roll
         if ambush:
             ev['surprise'] = True
         if hit:
             dmg = m.dmg + (SURPRISE_DMG_MON if ambush else 0)
+            if self.trpg_combat:
+                damage_roll = SC.weapon_damage(self, m.dmg, r == 20)
+                dmg = damage_roll['value'] + (SURPRISE_DMG_MON if ambush else 0)
+                ev['damage_roll'] = damage_roll
             b['hp'] -= dmg; ev['dmg'] = dmg; ev['hp'] = b['hp']
             # 피격 = 인터럽트(D1 대개정): 하던 일(자동보행 order)을 멈추고 다음 틱 에이전트에게 묻는다.
             # 세계가 봇을 세우는 유일한 '접촉' 채널 — 정지 규칙(레벨 트리거) 삭제의 반대급부.
@@ -4373,6 +4427,14 @@ class Dungeon:
                 return                                # 이동 이벤트=봇 시야 안일 때만(도주/배회와 정책 통일)
 
     def monster_turn(self, bots):
+        if not self.skills:
+            return self._monster_turn(bots)
+        starts = {m.id: (m.x, m.y) for m in self.monsters}
+        result = self._monster_turn(bots)
+        result.extend(SK.monster_status_after_move(self, bots, starts))
+        return result
+
+    def _monster_turn(self, bots):
         """독립 시계 몹 AI(2b): SLEEPING/WANDERING/HUNTING + LOS 발각굴림 + 대칭 기습 + 강등.
         처리순서(상호배타):
           ① 기습당함(skip_turns>0) = 이번 턴 행동 스킵(대상 턴 스킵). 단조감소 → 무한루프 없음.
@@ -4550,7 +4612,7 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
         cands = base
     x, y = dungeon.rng.choice(cands)
     dungeon.visited.add((x, y))              # 시작 칸도 '가본 곳'
-    return {'char': char, 'x': x, 'y': y,
+    return {**SK.spawn_fields(dungeon, sheet, char), 'char': char, 'x': x, 'y': y,
             'hp': sheet['hp'], 'maxhp': sheet['hp'],
             'str': sheet['str'], 'dex': sheet['dex'], 'wdmg': sheet['wdmg'],
             'stealth': sheet['stealth'],    # 발각 DC 가산(은신) — 도적이 잘 안 들킴
@@ -4619,7 +4681,7 @@ def bot_snapshot(b):
     스냅샷으로 재유도가 일반적으로 안 된다(정확 복원 = 시드+decisions 리플레이. order 는 목표 표시용).
     aware_of 는 정렬 리스트(JSON 가능 + 결정론적 직렬화). order 는 raw('@x,y' 포함) —
     스트림은 관전자/웹 데이터라 시야-온리 마스킹(obs 계약)의 대상이 아니다."""
-    return {'char': b['char'], 'job': b['job'], 'sex': b['sex'],
+    return {**SK.snapshot(b), 'char': b['char'], 'job': b['job'], 'sex': b['sex'],
             'x': b['x'], 'y': b['y'], 'hp': b['hp'], 'maxhp': b['maxhp'],
             'bag': b['bag'], 'alive': b['alive'], 'won': b['won'],
             'potions': b.get('potions', 0),   # 회복 물약 소지(07-17 additive)

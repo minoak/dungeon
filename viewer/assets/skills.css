@@ -1,0 +1,17 @@
+/* 스킬 설명은 펼치지 않아도 읽힌다. 기본판에서는 이 영역을 만들지 않는다. */
+.wl-skill { border: 1px solid #394658; background: #192333; border-radius: 7px; padding: 9px 11px; margin: 7px 0; }
+.wl-skill-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 5px 10px; }
+.wl-skill-head strong { color: #ead3a0; font-size: 13px; }
+.wl-skill-state { color: #99d9bd; font-size: 10px; }
+.wl-skill.cooling { border-color: #504450; }
+.wl-skill.cooling .wl-skill-state { color: #ddb6aa; }
+.wl-skill p { font-size: 12px; line-height: 1.6; color: #d0d8e2; margin: 5px 0 3px; }
+.wl-skill small, .wl-skill-note { font-size: 11px; line-height: 1.6; color: #a0afc0; }
+.wl-skill-new { display: inline-block; color: #b5d7f6; font-size: 10px; margin-top: 3px; }
+.wl-acquisition { color: #e7ca87; margin-top: 5px; }
+.wl-skill-roll { display: block; color: #b3a8b6; font-size: 11px; font-weight: normal; margin-left: 12px; }
+.wl-alpha-label { color: #dcc895; font-size: 11px; line-height: 1.6; margin-top: 5px; max-width: 280px; }
+.wl-alpha-panel { border: 1px solid #716344; border-radius: 9px; padding: 15px; margin-bottom: 18px; background: #24271f; }
+.wl-alpha-panel h3 { color: #ead3a0; margin: 0 0 8px; }
+.wl-alpha-panel p { margin: 6px 0; line-height: 1.7; }
+.wl-alpha-preview { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }

@@ -205,6 +205,22 @@ SHEET_OPT_NUM = {"atk_range": (1, 1, 3)}   # 공격 사거리(맨해튼): 기본
 FREETEXT_MAX = 300                          # 자유서술 절단 — 프롬프트 폭주 방지(UGC 검증 씨앗)
 
 
+SKILLS_ON = os.environ.get('DUNGEON_SKILLS', '0') == '1'
+TRPG_COMBAT_ON = os.environ.get('DUNGEON_TRPG_COMBAT', '0') == '1'
+RANDOM_SKILL_ON = os.environ.get('DUNGEON_RANDOM_SKILL', '0') == '1'
+
+
+def alpha_metadata():
+    if not any((SKILLS_ON, TRPG_COMBAT_ON, RANDOM_SKILL_ON)):
+        return {}
+    return {'alpha': {'version': G.SK.schema.VERSION, 'skills': SKILLS_ON,
+                      'trpg_combat': TRPG_COMBAT_ON, 'random_skill': RANDOM_SKILL_ON,
+                      'random_skill_effective': SKILLS_ON and RANDOM_SKILL_ON,
+                      'acquisition_depth': 3, 'random_budget': 5,
+                      'cooldown_clock': 'completed_actions',
+                      'presets': G.SK.schema.PRESETS if SKILLS_ON else {}}}
+
+
 def load_party(path):
     """party.json → {char: sheet}. 시트=사용자 저작물의 원형이라 여기서 깐깐히 거른다(UGC 검증 씨앗).
     어떤 실패든 내장 2인(HEROES)으로 폴백 + 경고 1줄 — 시트가 이상해도 게임은 죽지 않는다.
@@ -269,6 +285,13 @@ def load_party(path):
             lk = s.get("look")                  # D37(09-06) 외형 — 뷰어 전용(엔진·프롬프트 무접촉).
             if lk is not None:                  #   미등재 파츠·hex 아님 = ValueError = 폴백 경로 그대로
                 out["look"] = sheetkit.sanitize_look(lk)
+            if SKILLS_ON and 'skills' in s:
+                ids = s['skills']
+                if (not isinstance(ids, list) or len(ids) > 3 or
+                        not all(isinstance(sid, str) and sid in G.SK.schema.PRESETS for sid in ids)
+                        or len(set(ids)) != len(ids)):
+                    raise ValueError('skills는 등록된 스킬 ID 최대 3개 목록이어야 함')
+                out['skills'] = list(ids)
             sheets[char] = out
         if not sheets:
             raise ValueError("시트가 하나도 없음")
@@ -336,6 +359,8 @@ def event(line):
 def act_summary(res):
     """봇 한 행동/자동보행 결과를 한 줄 요약 — 로그/이벤트 공용."""
     t = res["type"]
+    if res.get('skill_id'):
+        return G.SK.summary(res)
     if res.get("result") == "approaching":
         return "%s %s — 실행 거리까지 접근 시작 (%d걸음)" % (t, res.get("target", "?"), res.get("len", 0))
     if res.get("result") == "no_path" and res.get("parent_action_id"):
@@ -527,6 +552,8 @@ def act_summary(res):
 
 
 def mon_summary(e):
+    if e['type'] == 'monster_status':
+        return '%s — %s %d 피해%s' % (e['monster'], e['status'], e['dmg'], '·쓰러짐' if e.get('killed') else '')
     if e["type"] == "monster_notice":                      # 몹이 파티를 발견(발각굴림 성공) = 추적 개시
         return "%s 파티를 발견 — 봇%s 추적 개시!" % (e["monster"], e["target"])
     if e["type"] == "monster_flee":                        # 저HP → 도주 전환
@@ -574,6 +601,7 @@ def build_town():
     d.give_verb, d.bond_verb = GIVE_ON, BOND_ON                         # D47 ② 건네기·친목(마을에서도 곁이면 된다)
     d.auto_approach = brains.COMPOSE
     d.composed_actions = brains.COMPOSE
+    d.skills, d.trpg_combat, d.random_skill = SKILLS_ON and brains.COMPOSE, TRPG_COMBAT_ON, RANDOM_SKILL_ON
     for n in spec.get("npcs", []):
         x, y = int(n["x"]), int(n["y"])
         if d.grid[y][x] != G.FLOOR:            # 좌표-그림 어긋남은 시작 전에 죽는 게 낫다
@@ -769,6 +797,8 @@ def arrive_cells(d, ax, ay, k):
 
 
 def main():
+    if SKILLS_ON and not brains.COMPOSE:
+        raise SystemExit('스킬 알파는 DUNGEON_ACTION_MODE=compose에서 실행한다')
     if TOWN_ON and SOLO_ON:
         raise SystemExit("솔로+마을(D29 v0)은 아직 함께 못 쓴다 — 행선(위/아래)이 갈리면 "
                          "러너의 현재 층이 하나뿐이라 두 무리를 동시에 못 좇는다(서랍: 다중 층 동시 진행)")
@@ -799,7 +829,8 @@ def main():
                       dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
                       ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
                       status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON,
-                      auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE)
+                      auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE,
+                      skills=SKILLS_ON, trpg_combat=TRPG_COMBAT_ON, random_skill=RANDOM_SKILL_ON)
         d.lore = lore
     bots = []
     for c in chars:
@@ -845,6 +876,7 @@ def main():
     # 스트림 머리: run_meta(1회 — started 가 유일한 비결정 필드) + 첫 level
     reaction_book = G.SR.book(d)
     sw.emit("run_meta", v=1, started=time.strftime("%Y-%m-%dT%H:%M:%S"),
+            **alpha_metadata(),
             **({'reaction': True, 'reaction_schema': 'social-v0.4'} if reaction_book is not None else {}),
             seed=DUNGEON_SEED, w=DUNGEON_W, h=DUNGEON_H, depths=DEPTHS,
             monsters=N_MON, traps=N_TRAP, lurkers=N_LURK,
@@ -901,7 +933,7 @@ def main():
                                        #   verify_stream 결정론(라인 바이트 동일)이 즉시 깨진다.
             bestiary=iss.snapshot(),   # 판 시작 시점 지식(additive) — 도감이 obs 를 바꾸므로 리플레이·비교의 전제
             bestiary_file=bool(BESTIARY_FILE),   # 영속 여부(실행모드 메타 — gm/menu 와 같은 급)
-            party=[{**{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
+            party=[{**G.SK.snapshot(b), **{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
                                          "wdmg", "stealth", "search_r", "persona")},
                     **({"name": b["name"]} if b.get("name") else {}),   # additive: 보고서·웹의 호칭
                     **{k: b[k] for k in ("speech", "goal", "background")   # D31(09-05) additive —
@@ -1024,6 +1056,7 @@ def main():
         # 여기서 즉시 직렬화되므로 GM 지연·이후 dict 변경과 독립(공유 오염 방어).
         # 스냅샷은 델타 아닌 전체 — 임의 틱 시킹용. visited 만 제외(파생: 스폰+틱별 봇 좌표 누적).
         tick_rec = {"turn": turn, "inbox": inbox_in, "decisions": decisions,
+                    **({'skill_events': G.SK.stream_records(turn_events)} if SKILLS_ON else {}),
                     **(reaction_book.drain() if reaction_book is not None else {}),
                     **({"hails": hails} if hails else {}),   # 말 걸림 정지 성사(D24) — additive 계측
                     **({"answers": answers} if answers else {}),   # 제안 반응(D47) {받은 봇: {한 봇: 답함 여부}} — additive 계측
@@ -1095,7 +1128,8 @@ def main():
                               ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
                               n_gear=N_GEAR, status=STATUS_ON, rest_verb=REST_ON,
                               relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON,
-                              auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE)
+                              auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE,
+                              skills=SKILLS_ON, trpg_combat=TRPG_COMBAT_ON, random_skill=RANDOM_SKILL_ON)
                 d.lore = lore
                 fresh = True
             # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,
@@ -1120,6 +1154,7 @@ def main():
                 n["armor"] = b.get("armor")
                 n["status"] = {t: dict(e) for t, e in (b.get("status") or {}).items()}   # 상태 태그(D34)
                 n["bleed_steps"] = b.get("bleed_steps", 0)   #   도 이월 — 몸은 층을 넘어도 그 몸이다
+                G.SK.inherit(d, b, n)
                 n["relations"] = {oc: {**e, "bones": {k: dict(v) for k, v in e["bones"].items()},
                                        "queue": list(e.get("queue") or []),
                                        "acts": [dict(a) for a in (e.get("acts") or [])]}   # D47 ② 상세 기록도 이월
@@ -1148,11 +1183,13 @@ def main():
                 reaction_book.start_floor(d.depth, turn)
                 d.reaction_book = reaction_book
             bots = nb
+            acquired_skills = G.SK.acquire(d, bots)
             inbox = {b["char"]: [] for b in bots}   # 층 전이 = 대화 리셋(형태는 전 봇 키로 고정)
             pending = {b["char"]: [] for b in bots}   # 보관함도 리셋(D47 배관)
             open_props = {}                         # 제안 장부도 리셋(D47)
             open_acts = {}                          # 친목·건네기 장부도 리셋(D47 ②)
             lvl = {"turn": turn, **d.level_snapshot(),            # descend/ascend 직후 level 불변식
+                   **({'skill_acquisitions': acquired_skills} if acquired_skills else {}),
                    **({'reaction_stats': reaction_book.snapshot()} if reaction_book is not None else {}),
                    "party": [G.bot_snapshot(b) for b in bots]}
             sw.emit("level", **lvl)

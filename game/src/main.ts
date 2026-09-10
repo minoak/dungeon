@@ -1,5 +1,6 @@
 // 부트 — 에셋 사전(atlas·tiles) → Phaser → 씬 준비 → UI 설치 → 판 로드(URL ?run= ?focus= ?t=).
 import './style.css';
+import '../../viewer/assets/skills.css';
 import Phaser from 'phaser';
 import { App } from './app';
 import { DungeonScene } from './scene/DungeonScene';

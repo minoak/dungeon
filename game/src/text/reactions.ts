@@ -3,6 +3,7 @@ import type { Char, Reaction, ReactionSummary, Run, SocialEvent } from '../strea
 import { esc } from '../ui/dom';
 
 export function socialDescription(e: SocialEvent): string {
+  if (e.skill_id) return `${e.skill_name || e.skill_id}: HP +${e.heal || 0}`;
   if (e.type === 'say') return `${e.say_kind || '잡담'}: 「${e.text || ''}」`;
   if (e.type === 'bond') return `친목: ${e.form || '몸짓'}`;
   if (e.type === 'give') return `건네기: ${e.what || e.item || '물건'}`;

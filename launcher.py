@@ -18,7 +18,7 @@ API(JSON):
   POST /api/party    {"slots":[{job,traits[],name,sex,background?,persona?,look?}, ...]} → sheetkit 조립 →
                      러너의 load_party 로 재검증 → party_custom.json 저장 (실패 400 + 이유 한 줄)
   POST /api/start    {"map":"normal|big","town":bool,"brain":"gemini_api|claude_cli|anthropic_api|dummy",
-                      "seed":int|null|"random","party":"custom|default"} → 이전 판 보존(live.bat 규칙)
+                      "seed":int|null|"random","party":"custom|default","mode":"standard|alpha"} → 이전 판 보존(live.bat 규칙)
                      → 러너 subprocess. 동시 1판(실행 중이면 409)
   GET  /api/status   {running,pid,started,seed,party,turn,outcome,viewer,game}
   POST /api/stop     러너 종료
@@ -41,11 +41,13 @@ import webbrowser
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
+from urllib.request import urlopen
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import sheetkit                                   # noqa: E402
+import skill_schema                              # noqa: E402
 from character_presets import PresetStore         # noqa: E402
 
 MAPS = {                                          # 시작 옵션 → 러너 환경변수(wonderland.bat 메뉴 값 그대로)
@@ -66,6 +68,11 @@ class Conflict(Exception):
 
 class BadRequest(Exception):
     pass
+
+
+class LauncherServer(ThreadingHTTPServer):
+    # Windows의 SO_REUSEADDR는 이미 열린 포트에 두 서버를 붙일 수 있다.
+    allow_reuse_address = os.name != 'nt'
 
 
 class Runner:
@@ -112,6 +119,14 @@ class Runner:
             if action_mode not in ("menu", "compose"):
                 raise BadRequest("행동 선택 방식은 menu/compose 중 하나")
             env["DUNGEON_ACTION_MODE"] = action_mode
+            mode = str(opts.get("mode", "standard"))
+            if mode not in ("standard", "alpha"):
+                raise BadRequest("원정 모드는 standard/alpha 중 하나")
+            if mode == "alpha" and (action_mode != "compose" or opts.get("town")):
+                raise BadRequest("스킬 알파는 조합형 행동으로 던전 1층부터 시작한다")
+            # 일반판은 부모 콘솔의 알파 설정을 물려받지 않는다.
+            for key in ("DUNGEON_SKILLS", "DUNGEON_TRPG_COMBAT", "DUNGEON_RANDOM_SKILL"):
+                env[key] = "1" if mode == "alpha" else "0"
             seed = opts.get("seed")
             if seed in (None, "", "random"):
                 env["DUNGEON_SEED"] = "random"
@@ -134,24 +149,27 @@ class Runner:
                 for k in BIG_KEYS:                  # 이전 호출의 큰 판 값이 부모 env 에 남아 있어도 안 물려준다
                     env.pop(k, None) if k not in os.environ else None
             env.update(MAPS[m])
+            if mode == "alpha":
+                env.update(DUNGEON_DEPTHS="5", DUNGEON_TURNS="600", DUNGEON_SOLO="0",
+                           DUNGEON_BESTIARY_FILE="")
             if opts.get("town"):
                 env["DUNGEON_TOWN"] = "1"
             else:
                 env.pop("DUNGEON_TOWN", None)
-            if brain == "dummy":                    # 규칙 두뇌 = 배관 점검용 — 도감 원장 격리(게이트 원칙)
+            if brain == "dummy" or mode == "alpha":  # 실험판은 도감 원장에 누적하지 않는다.
                 env["DUNGEON_BESTIARY_FILE"] = ""
             elif not env.get("DUNGEON_BESTIARY_FILE"):
                 env["DUNGEON_BESTIARY_FILE"] = os.path.join(self.root, "bestiary.json")
             os.makedirs(self.state_dir, exist_ok=True)
             self.preserve_previous()
-            out = io.open(os.path.join(self.state_dir, "runner.out"), "w", encoding="utf-8")
-            self.proc = subprocess.Popen([sys.executable, os.path.join(self.root, "show_runner.py")],
-                                         cwd=self.root, env=env, stdout=out, stderr=subprocess.STDOUT)
+            with io.open(os.path.join(self.state_dir, "runner.out"), "w", encoding="utf-8") as out:
+                self.proc = subprocess.Popen([sys.executable, os.path.join(self.root, "show_runner.py")],
+                                             cwd=self.root, env=env, stdout=out, stderr=subprocess.STDOUT)
             self.started = time.strftime("%Y-%m-%dT%H:%M:%S")
             self.seed_requested = env["DUNGEON_SEED"]
             return {"ok": True, "pid": self.proc.pid, "seed": self.seed_requested, "brain": brain,
                     "party": which, "map": m, "town": bool(opts.get("town")),
-                    "action_mode": action_mode}
+                    "action_mode": action_mode, "mode": mode}
 
     def stop(self):
         with self.lock:
@@ -182,6 +200,7 @@ class Runner:
                     meta = json.loads(lines[0])
                     if meta.get("kind") == "run_meta":
                         out["seed"] = meta.get("seed")
+                        out["mode"] = "alpha" if meta.get("alpha") else "standard"
                         out["action_mode"] = meta.get("action_mode", "menu" if meta.get("menu") else "free")
                         out["party"] = [{"char": p.get("char"), "name": p.get("name") or p.get("job"),
                                          "job": p.get("job")} for p in meta.get("party", [])]
@@ -337,6 +356,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, {"traits": p["traits"], "max_traits": p["max_traits"], "jobs": p["jobs"],
                                     "looks": sheetkit.load_looks(),   # D37(09-06) 외형 사전 — 파츠·스와치·기본색
                                     "default_party": default_party_preview(self.ctx.root),
+                                    "skill_alpha": {"presets": skill_schema.PRESETS,
+                                                    "default_sets": skill_schema.DEFAULT_SETS},
                                     "custom_saved": os.path.exists(self.ctx.party_path),
                                     "default_brain": self.ctx.default_brain or "gemini_api",
                                     "status": self.ctx.runner.status()})
@@ -394,7 +415,7 @@ class Handler(SimpleHTTPRequestHandler):
 def make_server(host, port, root=HERE, party_path=None, state_dir=None, runs_dir=None, brain=None):
     ctx = Ctx(root, party_path or os.path.join(root, "party_custom.json"),
               state_dir or os.path.join(root, "state"), runs_dir or os.path.join(root, "runs"), brain)
-    srv = ThreadingHTTPServer((host, port), partial(Handler, ctx=ctx))
+    srv = LauncherServer((host, port), partial(Handler, ctx=ctx))
     srv.daemon_threads = True
     srv.ctx = ctx
     return srv
@@ -405,14 +426,26 @@ def main():
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--no-browser", action="store_true")
+    ap.add_argument("--alpha", action="store_true", help="시작 화면에서 스킬 알파를 미리 선택")
     a = ap.parse_args()
+    url = "http://%s:%d/launcher/" % (a.host, a.port) + ("?mode=alpha" if a.alpha else "")
+    # 메뉴를 다시 골랐을 때 기존 서버를 연다. 바인드 전에 확인해야 Windows에서도 중복 실행을 막는다.
+    try:
+        with urlopen("http://%s:%d/api/presets" % (a.host, a.port), timeout=2) as response:
+            existing = json.load(response)
+        if "skill_alpha" in existing:
+            print("[launcher] 기존 서버에서 연다: " + url)
+            if not a.no_browser:
+                webbrowser.open(url)
+            return 0
+    except (OSError, ValueError):
+        pass
     try:
         srv = make_server(a.host, a.port)
     except OSError as e:
         print("[launcher] %s:%d 를 열 수 없다(%s) — 기존 뷰어 서버(python -m http.server 8000)가 떠 있으면 "
               "그 창을 닫고 다시, 또는 --port 8001" % (a.host, a.port, e), file=sys.stderr)
         return 1
-    url = "http://%s:%d/launcher/" % (a.host, a.port)
     print("[launcher] %s  (Ctrl-C 로 종료 — 진행 중인 판도 함께 멈춘다)" % url)
     if not a.no_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()

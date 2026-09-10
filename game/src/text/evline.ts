@@ -6,6 +6,7 @@
 import type { Char, Decision, Frame, Run, StreamEvent } from '../stream/types';
 import { esc } from '../ui/dom';
 import { reactionHtml, reactionSummaryHtml } from './reactions';
+import { acquisitionHtml, skillRollHtml, skillEffectText } from '../../../viewer/assets/skills.js';
 
 export interface EvLine { cls: string; html: string }
 
@@ -86,6 +87,17 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
   const who = e.char ? nameSpan(run, e.char) + ' ' : '';
   const L = (cls: string, h: string): EvLine => ({ cls, html: who + h });
   const tgt = (): string => resolveTarget(e.target, f, run);
+
+  if (e.skill_id) {
+    const effects = arr(e.effects).map(obj).filter(x => x !== null).map(skillEffectText);
+    const why: Record<string, string> = { cooldown: '재사용 대기 중', insufficient_hp: 'HP 부족',
+      invalid_skill: '보유하지 않은 스킬', target_not_bleeding: '출혈 조건 미충족', lost: '대상 소실',
+      not_living: '살아있는 대상이 아님', too_far: '범위 밖', self_only: '자신에게만 가능', hostile_self: '자해 불가' };
+    const detail = e.result === 'skill_failed' ? (why[str(e.reason_code)] || str(e.reason_code))
+      : e.hit === false ? '빗나감/저항' : effects.join(', ');
+    return L('combat', `✦ ${esc(e.skill_name || e.skill_id)} → ${esc(tgt())}: ${esc(detail)}` + skillRollHtml(e));
+  }
+  if (t === 'monster_status') return L('combat', `${esc(e.monster)} — ${esc(e.status)} ${num(e.dmg)} 피해${e.killed ? '·쓰러짐' : ''}`);
 
   if (e.result === 'approaching') return L('dim', `↗ ${esc(tgt())} — 실행 거리까지 접근한다`);
   if (e.result === 'no_path' && e.parent_action_id) return L('dim', `${esc(tgt())} — 접근할 길이 없다`);
@@ -296,7 +308,8 @@ export function levelHead(f: Frame, run: Run): string {
 
 /** 한 프레임의 로그 그룹 — 결정(발화·속내)·사건·층 전이. 비면 ''. */
 export function groupHtml(f: Frame, run: Run, focus: Char | null): string {
-  if (f.kind === 'level') return `<div class="grp lvl" data-turn="${f.turn}">${levelHead(f, run)}</div>`;
+  if (f.kind === 'level') return `<div class="grp lvl" data-turn="${f.turn}">${levelHead(f, run)}` +
+    acquisitionHtml(f.level.skill_acquisitions, run.names) + '</div>';
   const parts: string[] = [];
   for (const c of Object.keys(f.decisions)) parts.push(decisionLines(c, f.decisions[c], run, focus));
   for (const reaction of f.reactions || []) {

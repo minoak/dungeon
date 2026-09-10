@@ -12,6 +12,7 @@ import type { Bot, Char, Decision, Frame, Gear, PartyMember, Run } from '../stre
 import type { FrameChange } from '../play/Playback';
 import { el, esc } from './dom';
 import { reactionSummaryHtml } from '../text/reactions';
+import { skillsHtml } from '../../../viewer/assets/skills.js';
 
 /** 관계 뼈 라벨 — dungeon_gm.py BONES(422행) 를 그대로 복사(엔진 무접촉 — 값이 바뀌면 여기도 손으로 맞춘다).
  *  ⚠️ 라벨 문구는 엔진의 세션 임시안 — 파트너 문장 대기. 모르는 뼈 키는 키 그대로 보여준다. */
@@ -117,7 +118,7 @@ interface RelRow { root: HTMLElement; bones: HTMLElement; line: HTMLElement }
 interface Nodes {
   fc: HTMLElement; name: HTMLElement; job: HTMLElement; mark: HTMLElement; sheet: HTMLElement;
   hpfill: HTMLElement; hp: HTMLElement; status: HTMLElement; items: HTMLElement;
-  reason: HTMLElement; say: HTMLElement; rels: HTMLElement; reactions: HTMLElement;
+  reason: HTMLElement; say: HTMLElement; rels: HTMLElement; reactions: HTMLElement; skills: HTMLElement;
 }
 
 export function installFocusCard(app: App): void {
@@ -216,6 +217,8 @@ export function installFocusCard(app: App): void {
       `<div class="fc-hpline"><span class="fc-hplabel">HP</span><div class="fc-hpbar"><div class="fc-hpfill"></div></div><span class="fc-hp"></span></div>` +
       `<div class="fc-status"></div>` +
       `<div class="fc-items"></div>` +
+      `<section class="fc-block fc-skill-section" hidden><h2 class="fc-sec">보유 스킬</h2><div class="fc-skills"></div>` +
+      `<div class="wl-skill-note">대기는 다른 행동을 완료할 때 줄어들어.<br>준비된 스킬도 대상의 거리·시야·조건이 맞아야 해.</div></section>` +
       `<section class="fc-block"><h2 class="fc-sec">속내</h2><div class="fc-reason"></div></section>` +
       `<section class="fc-block fc-dialogue"><h2 class="fc-sec">최근 대화</h2><div class="fc-say"></div></section>` +
       `<details class="fc-profile"><summary>캐릭터 설정</summary><div class="fc-sheet"></div></details>` +
@@ -225,7 +228,7 @@ export function installFocusCard(app: App): void {
     const q = (s: string): HTMLElement => fc.querySelector(s) as HTMLElement;
     return { fc, name: q('.fc-name'), job: q('.fc-job'), mark: q('.fc-mark'), sheet: q('.fc-sheet'),
              hpfill: q('.fc-hpfill'), hp: q('.fc-hp'), status: q('.fc-status'), items: q('.fc-items'),
-             reason: q('.fc-reason'), say: q('.fc-say'), rels: q('.fc-rels'), reactions: q('.fc-reactions') };
+             reason: q('.fc-reason'), say: q('.fc-say'), rels: q('.fc-rels'), reactions: q('.fc-reactions'), skills: q('.fc-skills') };
   }
   /** 관계 줄 = 파티의 다른 캐릭터마다 하나(파티 순서). 초점·판이 바뀔 때만 다시 만든다. */
   function buildRows(run: Run, char: Char, n: Nodes): void {
@@ -283,6 +286,9 @@ export function installFocusCard(app: App): void {
     let b: Bot | null = f.bots.find(x => x.char === char) ?? null;
     const absent = !b;
     if (!b) b = lastBot(run, char, f);
+    const skillCards = skillsHtml(run.meta?.alpha, b);
+    put(n.skills, skillCards);
+    n.skills.parentElement!.hidden = !skillCards;
     const deadNow = b ? !b.alive : false;
     const deadTurn = run.deathTurn[char];
     const dead = deadNow || (absent && deadTurn !== undefined && deadTurn <= f.turn);
