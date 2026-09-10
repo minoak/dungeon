@@ -44,6 +44,9 @@
     padding: 7px 9px; font-size: 13.5px; font-family: inherit;
   }
   textarea { min-height: 78px; resize: vertical; }
+  textarea[data-k=persona] { min-height: 150px; line-height: 1.65; }
+  textarea[data-k=background] { min-height: 200px; line-height: 1.65; }
+  [data-persona] { max-height: 100px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
   .radios { display: flex; gap: 6px; flex-wrap: wrap; }
   .radios label, .traits label {
     border: 1px solid #2c303c; border-radius: 14px; padding: 3px 11px; font-size: 12.5px; cursor: pointer;
@@ -96,7 +99,6 @@
     <div class="tag">캐릭터를 꾸미고, 던전을 열고, 그들이 어떻게 헤쳐 나가는지 지켜본다</div>
     <div class="row center">
       <button class="primary" id="bNew">새 원정</button>
-      <button id="bAlpha">스킬 알파 시작</button>
       <button id="bReplays">지난 판 보기</button>
     </div>
     <div class="status" id="tStatus">상태 확인 중…</div>
@@ -133,7 +135,7 @@
   <h2>2 / 2 · 던전</h2>
   <div class="wl-alpha-panel">
     <label for="runMode"><b>원정 모드</b></label>
-    <select id="runMode"><option value="standard">일반판</option><option value="alpha">스킬 알파 v0.1</option></select>
+    <select id="runMode"><option value="standard">기본 원정 · 스킬과 주사위 전투</option><option value="classic">이전 규칙 · 비교용</option></select>
     <div id="alphaInfo" hidden>
       <h3 style="margin-top:14px">스킬을 고르고, 주사위로 겨룬다</h3>
       <p>각 모험가는 스킬 2개로 시작해. 명중·피해를 주사위로 정하고, <b>3층에 도착하면 랜덤 스킬을 하나씩</b> 얻어.<br>
@@ -143,7 +145,7 @@
       <div id="alphaPreview" class="wl-alpha-preview"></div>
       <p id="alphaBrainHint" class="hint"></p>
     </div>
-    <p id="standardInfo" class="hint">기존 조합형 원정. 스킬·주사위 전투 확장·랜덤 스킬 획득은 꺼져 있어.</p>
+    <p id="standardInfo" class="hint">스킬을 적용하기 전의 규칙으로 비교하는 원정이야. 스킬·주사위 피해·랜덤 스킬 획득은 꺼져 있어.</p>
   </div>
   <div class="opts">
     <div class="card">
@@ -191,6 +193,7 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const COLORS = ['#ffd166', '#6fe3b0', '#c77dff'];
 let presets = null;
+let textLimits = { persona: 2000, background: 4000 };
 let slots = [                                   // look(D37) = {head, body, colors} — 프리셋 로드 때 성별 기준 랜덤으로 채운다
   { name: '', sex: '남', job: '전사', traits: [], persona: '', background: '', look: null },
   { name: '', sex: '여', job: '도적', traits: [], persona: '', background: '', look: null },
@@ -268,12 +271,12 @@ async function refreshStatus() {
   try {
     const st = await api('/api/status');
     if (st.running) {
-      $('tStatus').innerHTML = `${st.mode === 'alpha' ? '스킬 알파' : '일반판'} <b>진행 중</b> — seed ${esc(st.seed ?? '…')}, t=${esc(st.turn ?? 0)}` +
+      $('tStatus').innerHTML = `${modeName(st.mode)} <b>진행 중</b> — seed ${esc(st.seed ?? '…')}, t=${esc(st.turn ?? 0)}` +
         (st.party?.length ? ` · ${st.party.map(p => esc(p.name)).join('·')}` : '');
       $('tRunRow').hidden = false;
     } else {
       $('tStatus').textContent = st.seed != null
-        ? `지난 ${st.mode === 'alpha' ? '스킬 알파' : '일반판'}: seed ${st.seed}, ${st.turn ?? 0}틱, 결말 ${st.outcome ?? '(중단)'}` : '아직 돈 판이 없다';
+        ? `지난 ${modeName(st.mode)}: seed ${st.seed}, ${st.turn ?? 0}틱, 결말 ${st.outcome ?? '(중단)'}` : '아직 돈 판이 없다';
       $('tRunRow').hidden = true;
     }
   } catch (e) { $('tStatus').textContent = '서버 연결 실패 — launcher.py 가 떠 있나? (' + e.message + ')'; }
@@ -282,7 +285,7 @@ $('bNew').onclick = async () => {
   try { await loadPresets(); show('sParty'); }
   catch (e) { $('tStatus').textContent = e.message; }
 };
-$('bAlpha').onclick = () => { $('runMode').value = 'alpha'; updateMode(); $('bNew').click(); };
+function modeName(mode) { return mode === 'alpha' ? '스킬 알파' : mode === 'classic' ? '이전 규칙 원정' : '기본 원정'; }
 $('bReplays').onclick = () => { location.href = '/game/'; };                       // 게임 클라이언트가 기본(2026-09-09 파트너 결정) — 판 목록은 화면 안 드롭다운
 $('bWatch').onclick = () => { location.href = '/game/?run=state/stream.jsonl'; };    // 기본 = 게임 클라이언트(2026-09-09 파트너 결정 "계속 새 뷰어로 보려면 불편")
 $('bGame').onclick = () => { location.href = '/viewer/?run=state/stream.jsonl'; };   // 옛 HTML 뷰어 — 은퇴 전까지 보조 진입
@@ -292,6 +295,11 @@ $('bStop').onclick = async () => { await api('/api/stop', {}); refreshStatus(); 
 async function loadPresets() {
   if (presets) { await refreshCharacters(); return; }
   presets = await api('/api/presets');
+  if (!presets.text_limits || presets.ruleset !== 'skills-v1') {
+    presets = null;
+    throw new Error('이전 런처가 실행 중이야. 진행 중인 원정이 끝난 뒤 런처 창을 닫고 wonderland.bat으로 다시 열어 줘.');
+  }
+  textLimits = presets.text_limits;
   await loadSprites();                                                 // D37 미리보기 합성기
   for (const s of slots) if (!s.look) {
     s.look = randomLook(s.sex);
@@ -330,11 +338,11 @@ function renderCards() {
       <label class="f">성격 키워드 <span class="cnt" data-cnt="traits">${s.traits.length}/${presets.max_traits}</span></label>
       <div class="traits" data-k="traits">${traits.map(t =>
         `<label class="${s.traits.includes(t) ? 'on' : ''}" title="${esc(presets.traits[t].persona)}"><input type="checkbox" value="${esc(t)}">${esc(t)}</label>`).join('')}</div>
-      <label class="f">성격 자유 서술 (선택 — 키워드와 함께, 또는 키워드 없이) <span class="cnt" data-cnt="pt">${s.persona.length}/200</span></label>
-      <textarea maxlength="200" data-k="persona" placeholder="예: 겉으론 장난스럽지만 동료가 다치면 제일 먼저 뛰어든다.">${esc(s.persona)}</textarea>
+      <label class="f">성격 자유 서술 (키워드와 함께, 또는 문장만) <span class="cnt" data-cnt="pt">${s.persona.length}/${textLimits.persona}</span></label>
+      <textarea maxlength="${textLimits.persona}" data-k="persona" placeholder="말투, 습관, 좋아하는 것, 두려워하는 것, 갈등할 때의 태도 등을 자유롭게 써 줘.">${esc(s.persona)}</textarea>
       <div class="hint" data-persona>${esc(personaOf(s))}</div>
-      <label class="f">배경 (자유 입력 · 이 캐릭터의 과거) <span class="cnt" data-cnt="bg">${s.background.length}/400</span></label>
-      <textarea maxlength="400" data-k="background" placeholder="예: 광산 마을에서 자랐다. 무너진 갱도에서 혼자 살아 나온 뒤로 어둠을 믿지 않는다.">${esc(s.background)}</textarea>
+      <label class="f">배경 (자유 입력 · 이 캐릭터의 과거) <span class="cnt" data-cnt="bg">${s.background.length}/${textLimits.background}</span></label>
+      <textarea maxlength="${textLimits.background}" data-k="background" placeholder="자란 곳, 중요한 사람, 잊지 못할 사건, 모험을 시작한 이유 등을 자유롭게 써 줘.">${esc(s.background)}</textarea>
     </div>`).join('');
   for (const card of $('cards').querySelectorAll('.card')) bindCard(card, +card.dataset.i);
   paintPresetControls();
@@ -426,11 +434,11 @@ function bindCard(card, i) {
   const pt = card.querySelector('[data-k=persona]');
   pt.oninput = e => {
     s.persona = e.target.value;
-    card.querySelector('[data-cnt=pt]').textContent = `${s.persona.length}/200`;
+    card.querySelector('[data-cnt=pt]').textContent = `${s.persona.length}/${textLimits.persona}`;
     card.querySelector('[data-persona]').textContent = personaOf(s);
   };
   const bg = card.querySelector('[data-k=background]');
-  bg.oninput = e => { s.background = e.target.value; card.querySelector('[data-cnt=bg]').textContent = `${s.background.length}/400`; };
+  bg.oninput = e => { s.background = e.target.value; card.querySelector('[data-cnt=bg]').textContent = `${s.background.length}/${textLimits.background}`; };
   for (const k of ['sex', 'job']) {
     for (const lab of card.querySelectorAll(`[data-k=${k}] label`)) {
       lab.onclick = (e) => {
@@ -520,16 +528,15 @@ $('bNext').onclick = async () => {
 
 /* ═══ 옵션 → 시작 ═══ */
 function updateMode() {
-  const alpha = $('runMode').value === 'alpha';
+  const alpha = $('runMode').value === 'standard';
   $('alphaInfo').hidden = !alpha;
   $('standardInfo').hidden = alpha;
   $('town').disabled = alpha;
   if (alpha) $('town').checked = false;
-  $('bStart').textContent = alpha ? '알파 원정 시작 → 관전' : '원정 시작';
-  $('bNew').textContent = alpha ? '알파 파티 꾸미기' : '새 원정';
+  $('bStart').textContent = alpha ? '원정 시작 → 관전' : '이전 규칙으로 시작';
   $('alphaBrainHint').textContent = $('brain').value === 'dummy'
     ? '규칙 두뇌는 스킬을 선택하지 않아. 스킬을 쓰는 모습을 보려면 Gemini나 Claude를 선택해.'
-    : '600틱까지 이어지는 실험이므로 소요 시간과 API 비용은 모험가들의 행동에 따라 달라져.';
+    : '원정의 소요 시간과 API 비용은 모험가들의 행동에 따라 달라져.';
   if (!presets?.skill_alpha) return;
   const a = { ...presets.skill_alpha, skills: true, trpg_combat: true };
   const members = partyMode === 'custom' ? slots : presets.default_party;
@@ -538,7 +545,7 @@ function updateMode() {
 }
 $('runMode').onchange = updateMode;
 $('brain').onchange = updateMode;
-$('runMode').value = new URLSearchParams(location.search).get('mode') === 'alpha' ? 'alpha' : 'standard';
+$('runMode').value = new URLSearchParams(location.search).get('mode') === 'classic' ? 'classic' : 'standard';
 updateMode();
 for (const lab of $('mapMode').querySelectorAll('label')) {
   lab.onclick = (e) => { e.preventDefault(); $('mapMode').querySelectorAll('label').forEach(l => l.classList.toggle('on', l === lab)); };

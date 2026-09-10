@@ -17,8 +17,8 @@ echo   [7] Gemini brain     (API - COSTS MONEY)
 echo   [8] Gemini + ally-sight  (door fix ON - compare with 7)
 echo   [9] BIG verdict: map + Gemini + ally-sight + social  (~25min, ~500 KRW)
 echo   [T] TOWN run (D29): village 0F + dungeon 1F, round trip  (Gemini - COSTS MONEY)
-echo   [A] SKILL ALPHA: skills + dice combat + 5 floors (web launcher)
-echo   [L] LAUNCHER (web): build your party, pick options, start, watch  (D31)
+echo   [A] SKILL RUN: now the default expedition (same launcher as L)
+echo   [L] LAUNCHER (web): party + skills + dice combat + 5 floors
 echo   [Q] Quit
 echo  ==========================================
 set "pick="

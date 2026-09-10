@@ -30,6 +30,19 @@ class PresetsTest(unittest.TestCase):
         self.path = Path(self.tmp.name) / "character_presets.json"
         self.store = PresetStore(self.path)
 
+    def test_long_text_roundtrip_with_traits(self):
+        persona = '성' * 1995 + '마지막성격'
+        background = '배' * 3995 + '마지막배경'
+        slot = {**SLOT, 'persona': persona, 'background': background,
+                'traits': ['신중한', '용맹한', '과묵한']}
+        self.store.save(slot)
+        restored = PresetStore(self.path).list()[0]['slot']
+        self.assertEqual(restored['persona'], persona)
+        self.assertEqual(restored['background'], background)
+        sheet = sheetkit.build_party([restored])['1']
+        self.assertTrue(sheet['persona'].endswith(persona))
+        self.assertGreater(len(sheet['persona']), 2000)
+
     def test_roundtrip_and_independent_variants(self):
         first = self.store.save(SLOT, "유나 · 양갈래")
         second = self.store.save(SLOT, "유나 · 다른 버전")

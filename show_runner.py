@@ -17,7 +17,8 @@
 
 환경변수: DUNGEON_W / DUNGEON_H / DUNGEON_SEED / DUNGEON_TURNS
           DUNGEON_GM(0이면 GM 끔) / DUNGEON_MONSTERS(기본2) / DUNGEON_TRAPS(기본3)
-          DUNGEON_DEPTHS(기본2 — 층수. 계단 '>'로 파티가 함께 내려간다. 마지막 층 계단=탈출)
+          DUNGEON_DEPTHS(스킬 원정 기본5 — 층수. 마지막 층 계단=탈출)
+          DUNGEON_SKILLS / DUNGEON_TRPG_COMBAT / DUNGEON_RANDOM_SKILL(조합형 원정 기본1)
           DUNGEON_LURKERS(기본1 — 층당 매복몹 수) / DUNGEON_POTIONS(기본1 — 층당 회복 물약)
           DUNGEON_GEAR(기본3 — 층당 장비. 순환 배치: 단검·가죽 갑옷·장검·사슬 갑옷. 0=끔)
           DUNGEON_TOWN(기본0 — 마을 판(D29): 마을(0층)↔던전 왕복. 켜면 DEPTHS 기본 1 —
@@ -86,9 +87,12 @@ def _pick_seed(raw):
     return int(raw)
 
 
+# 09-11: 사용자 플레이 확인 후 기본 채택. 과거 메뉴형·직접 생성 엔진의 비교 조건은 유지한다.
+SKILLS_ON = os.environ.get('DUNGEON_SKILLS', '1' if brains.COMPOSE else '0') == '1'
+TRPG_COMBAT_ON = os.environ.get('DUNGEON_TRPG_COMBAT', '1' if brains.COMPOSE else '0') == '1'
+RANDOM_SKILL_ON = os.environ.get('DUNGEON_RANDOM_SKILL', '1' if brains.COMPOSE else '0') == '1'
 DUNGEON_SEED = _pick_seed(os.environ.get("DUNGEON_SEED", "7"))
-MAX_TURNS = int(os.environ.get("DUNGEON_TURNS", "250"))   # 1틱=한 걸음(구 30은 단층·1턴=1행동 시절 값.
-                                                          # 2층 관통 더미 실측 ~185틱 → 여유 250)
+MAX_TURNS = int(os.environ.get("DUNGEON_TURNS", "600" if SKILLS_ON else "250"))
 N_MON = int(os.environ.get("DUNGEON_MONSTERS", "2"))
 N_TRAP = int(os.environ.get("DUNGEON_TRAPS", "3"))
 N_LURK = int(os.environ.get("DUNGEON_LURKERS", "1"))
@@ -99,7 +103,7 @@ N_GEAR = int(os.environ.get("DUNGEON_GEAR", "3"))        # 층당 장비(07-30) 
                                                           # 무기 비교가 성립). 엔진 직생성 기본 0
 TOWN_ON = os.environ.get("DUNGEON_TOWN", "0") == "1"     # 마을 판(D29) — 마을(0층)↔던전 왕복.
                                                           # 기본 0(기존 판 그대로) — 퀵스타터가 켠다
-DEPTHS = int(os.environ.get("DUNGEON_DEPTHS", "1" if TOWN_ON else "2"))
+DEPTHS = int(os.environ.get("DUNGEON_DEPTHS", "1" if TOWN_ON else "5" if SKILLS_ON else "2"))
                                                           # 마을 판 기본 1층까지(2층=아직 안 만듦 —
                                                           # 1층의 하강 계단=관측 클리어 조건, 파트너 확정)
 GM_ON = os.environ.get("DUNGEON_GM", "1") != "0"
@@ -202,18 +206,14 @@ SHEET_OPT = ("name", "speech", "goal")     # + relationships(dict) 별도 취급
 # 선택 **수치** 필드: 없으면 기본값, 있으면 범위 검증. 위 SHEET_OPT(프롬프트 전용)와 달리
 # **엔진 판정이 읽는다** — 그래서 상한을 둔다(시트=UGC, 사거리 999 같은 값이 오면 안 된다).
 SHEET_OPT_NUM = {"atk_range": (1, 1, 3)}   # 공격 사거리(맨해튼): 기본 1(근접) · 궁수 2
-FREETEXT_MAX = 300                          # 자유서술 절단 — 프롬프트 폭주 방지(UGC 검증 씨앗)
-
-
-SKILLS_ON = os.environ.get('DUNGEON_SKILLS', '0') == '1'
-TRPG_COMBAT_ON = os.environ.get('DUNGEON_TRPG_COMBAT', '0') == '1'
-RANDOM_SKILL_ON = os.environ.get('DUNGEON_RANDOM_SKILL', '0') == '1'
+FREETEXT_MAX = 300                          # 말투·목표·관계 등 기존 필드. 성격·배경은 sheetkit의 별도 상한.
 
 
 def alpha_metadata():
     if not any((SKILLS_ON, TRPG_COMBAT_ON, RANDOM_SKILL_ON)):
         return {}
-    return {'alpha': {'version': G.SK.schema.VERSION, 'skills': SKILLS_ON,
+    # alpha 필드는 이전 뷰어·분석기 호환을 위해 보존하고 채택된 규칙을 별도로 표시한다.
+    return {'ruleset': 'skills-v1', 'alpha': {'version': G.SK.schema.VERSION, 'skills': SKILLS_ON,
                       'trpg_combat': TRPG_COMBAT_ON, 'random_skill': RANDOM_SKILL_ON,
                       'random_skill_effective': SKILLS_ON and RANDOM_SKILL_ON,
                       'acquisition_depth': 3, 'random_budget': 5,
@@ -250,7 +250,7 @@ def load_party(path):
                 else:
                     if not isinstance(v, str) or not v.strip():
                         raise ValueError("봇%s %s 는 비지 않은 문자열이어야 함: %r" % (char, k, v))
-                    v = v[:FREETEXT_MAX]
+                    v = v[:sheetkit.PERSONA_TOTAL_MAX if k == 'persona' else FREETEXT_MAX]
                 out[k] = v
             if out["hp"] < 1:
                 raise ValueError("봇%s hp 는 1 이상" % char)
@@ -266,7 +266,7 @@ def load_party(path):
                 out[k] = v
             bg = s.get("background")            # D31(09-05) 자유 입력 2호 — 시트 UGC 인젝션 관문:
             if bg is not None:                  #   막지 않고 격리한다(sheetkit.sanitize_background —
-                if not isinstance(bg, str):     #   개행·마크다운 표식 제거·400자). 빈 결과=필드 없음
+                if not isinstance(bg, str):     #   개행·마크다운 표식 제거·공통 상한). 빈 결과=필드 없음
                     raise ValueError("봇%s background 는 문자열이어야 함" % char)
                 bg = sheetkit.sanitize_background(bg, sheetkit.BACKGROUND_MAX)
                 if bg:

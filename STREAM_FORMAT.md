@@ -4,9 +4,11 @@
 엔진 → 스트림 → **[맵뷰어 | 기계 크로니클 | GM(옵션·LLM) | 웹뷰어]** — 모든 소비자는 형제다.
 GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0콜로 만들어진다.
 
-## 스킬 알파 — 2026-09-10 additive (기본 OFF)
+## 스킬 원정 — 2026-09-10 additive, 2026-09-11 기본 채택
 
-모든 알파 플래그가 OFF이면 기존 스트림과 동일하다. 활성 판은 `run_meta.alpha`로 식별한다.
+모든 스킬 플래그가 OFF이면 기존 스트림과 동일하다. 활성 판은 `run_meta.alpha`로 식별한다.
+2026-09-11 이후 러너는 활성 판에 `run_meta.ruleset = "skills-v1"`을 추가한다.
+`alpha` 필드는 기존 분석기·뷰어와의 호환을 위해 유지한다. 과거 알파 기록에는 `ruleset`이 없다.
 버전 `skills-alpha-v0.1`, `skills/trpg_combat/random_skill/random_skill_effective`,
 프리셋 정의, 획득 층(3), 예산(5), 대기시간 기준(`completed_actions`)을 기록한다.
 

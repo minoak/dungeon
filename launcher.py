@@ -18,7 +18,7 @@ API(JSON):
   POST /api/party    {"slots":[{job,traits[],name,sex,background?,persona?,look?}, ...]} → sheetkit 조립 →
                      러너의 load_party 로 재검증 → party_custom.json 저장 (실패 400 + 이유 한 줄)
   POST /api/start    {"map":"normal|big","town":bool,"brain":"gemini_api|claude_cli|anthropic_api|dummy",
-                      "seed":int|null|"random","party":"custom|default","mode":"standard|alpha"} → 이전 판 보존(live.bat 규칙)
+                      "seed":int|null|"random","party":"custom|default","mode":"standard|classic"} → 이전 판 보존(live.bat 규칙)
                      → 러너 subprocess. 동시 1판(실행 중이면 409)
   GET  /api/status   {running,pid,started,seed,party,turn,outcome,viewer,game}
   POST /api/stop     러너 종료
@@ -56,6 +56,8 @@ MAPS = {                                          # 시작 옵션 → 러너 환
             "DUNGEON_LURKERS": "2", "DUNGEON_POTIONS": "1", "DUNGEON_DEPTHS": "1", "DUNGEON_TURNS": "500"},
 }
 BRAINS = ("gemini_api", "claude_cli", "anthropic_api", "dummy")
+TEXT_LIMITS = {"persona": sheetkit.PERSONA_MAX, "persona_total": sheetkit.PERSONA_TOTAL_MAX,
+               "background": sheetkit.BACKGROUND_MAX}
 BIG_KEYS = tuple(MAPS["big"])
 GAME_PREFIX = "/game/"                            # 게임 클라이언트(M3/B5): URL 접두 → game/dist/ (vite base '/game/' 와 같다)
 GAME_DIST_PREFIX = "/game/dist/"
@@ -120,13 +122,15 @@ class Runner:
                 raise BadRequest("행동 선택 방식은 menu/compose 중 하나")
             env["DUNGEON_ACTION_MODE"] = action_mode
             mode = str(opts.get("mode", "standard"))
-            if mode not in ("standard", "alpha"):
-                raise BadRequest("원정 모드는 standard/alpha 중 하나")
-            if mode == "alpha" and (action_mode != "compose" or opts.get("town")):
-                raise BadRequest("스킬 알파는 조합형 행동으로 던전 1층부터 시작한다")
-            # 일반판은 부모 콘솔의 알파 설정을 물려받지 않는다.
+            if mode == "alpha":                  # 이전 링크·클라이언트의 알파 선택도 채택된 기본 원정으로 연결
+                mode = "standard"
+            if mode not in ("standard", "classic"):
+                raise BadRequest("원정 모드는 standard/classic 중 하나")
+            if mode == "standard" and (action_mode != "compose" or opts.get("town")):
+                raise BadRequest("스킬 원정은 조합형 행동으로 던전 1층부터 시작한다")
+            # 화면에서 고른 규칙이 부모 콘솔의 설정보다 우선한다.
             for key in ("DUNGEON_SKILLS", "DUNGEON_TRPG_COMBAT", "DUNGEON_RANDOM_SKILL"):
-                env[key] = "1" if mode == "alpha" else "0"
+                env[key] = "1" if mode == "standard" else "0"
             seed = opts.get("seed")
             if seed in (None, "", "random"):
                 env["DUNGEON_SEED"] = "random"
@@ -149,14 +153,13 @@ class Runner:
                 for k in BIG_KEYS:                  # 이전 호출의 큰 판 값이 부모 env 에 남아 있어도 안 물려준다
                     env.pop(k, None) if k not in os.environ else None
             env.update(MAPS[m])
-            if mode == "alpha":
-                env.update(DUNGEON_DEPTHS="5", DUNGEON_TURNS="600", DUNGEON_SOLO="0",
-                           DUNGEON_BESTIARY_FILE="")
+            if mode == "standard":
+                env.update(DUNGEON_DEPTHS="5", DUNGEON_TURNS="600", DUNGEON_SOLO="0")
             if opts.get("town"):
                 env["DUNGEON_TOWN"] = "1"
             else:
                 env.pop("DUNGEON_TOWN", None)
-            if brain == "dummy" or mode == "alpha":  # 실험판은 도감 원장에 누적하지 않는다.
+            if brain == "dummy":                    # 규칙 두뇌는 도감 원장에 누적하지 않는다.
                 env["DUNGEON_BESTIARY_FILE"] = ""
             elif not env.get("DUNGEON_BESTIARY_FILE"):
                 env["DUNGEON_BESTIARY_FILE"] = os.path.join(self.root, "bestiary.json")
@@ -200,7 +203,8 @@ class Runner:
                     meta = json.loads(lines[0])
                     if meta.get("kind") == "run_meta":
                         out["seed"] = meta.get("seed")
-                        out["mode"] = "alpha" if meta.get("alpha") else "standard"
+                        out["mode"] = ("standard" if meta.get("ruleset") == "skills-v1" else
+                                       "alpha" if meta.get("alpha") else "classic")
                         out["action_mode"] = meta.get("action_mode", "menu" if meta.get("menu") else "free")
                         out["party"] = [{"char": p.get("char"), "name": p.get("name") or p.get("job"),
                                          "job": p.get("job")} for p in meta.get("party", [])]
@@ -294,7 +298,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _body(self):
         n = int(self.headers.get("Content-Length") or 0)
-        if n > 64 * 1024:
+        if n > 256 * 1024:                      # 3인 × 긴 성격·배경, JSON 유니코드 이스케이프까지 수용
             raise BadRequest("요청이 너무 크다")
         raw = self.rfile.read(n) if n else b""
         if not raw:
@@ -358,6 +362,8 @@ class Handler(SimpleHTTPRequestHandler):
                                     "default_party": default_party_preview(self.ctx.root),
                                     "skill_alpha": {"presets": skill_schema.PRESETS,
                                                     "default_sets": skill_schema.DEFAULT_SETS},
+                                    "default_mode": "standard", "ruleset": "skills-v1",
+                                    "text_limits": TEXT_LIMITS,
                                     "custom_saved": os.path.exists(self.ctx.party_path),
                                     "default_brain": self.ctx.default_brain or "gemini_api",
                                     "status": self.ctx.runner.status()})
@@ -426,14 +432,14 @@ def main():
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--no-browser", action="store_true")
-    ap.add_argument("--alpha", action="store_true", help="시작 화면에서 스킬 알파를 미리 선택")
+    ap.add_argument("--alpha", action="store_true", help="이전 배치 메뉴 호환용. 스킬 원정은 이제 기본이다")
     a = ap.parse_args()
     url = "http://%s:%d/launcher/" % (a.host, a.port) + ("?mode=alpha" if a.alpha else "")
     # 메뉴를 다시 골랐을 때 기존 서버를 연다. 바인드 전에 확인해야 Windows에서도 중복 실행을 막는다.
     try:
         with urlopen("http://%s:%d/api/presets" % (a.host, a.port), timeout=2) as response:
             existing = json.load(response)
-        if "skill_alpha" in existing:
+        if existing.get("ruleset") == "skills-v1" and existing.get("text_limits") == TEXT_LIMITS:
             print("[launcher] 기존 서버에서 연다: " + url)
             if not a.no_browser:
                 webbrowser.open(url)
@@ -443,8 +449,8 @@ def main():
     try:
         srv = make_server(a.host, a.port)
     except OSError as e:
-        print("[launcher] %s:%d 를 열 수 없다(%s) — 기존 뷰어 서버(python -m http.server 8000)가 떠 있으면 "
-              "그 창을 닫고 다시, 또는 --port 8001" % (a.host, a.port, e), file=sys.stderr)
+        print("[launcher] %s:%d 를 열 수 없다(%s) — 이전 런처/뷰어 서버가 떠 있다면 "
+              "진행 중인 원정이 끝난 뒤 그 창을 닫고 다시 실행해 주세요." % (a.host, a.port, e), file=sys.stderr)
         return 1
     print("[launcher] %s  (Ctrl-C 로 종료 — 진행 중인 판도 함께 멈춘다)" % url)
     if not a.no_browser:

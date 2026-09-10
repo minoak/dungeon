@@ -3,7 +3,7 @@
 게이트:
   ① sheetkit: traits.json 키워드 전부 문장 있음 / 직업 3 수치 = party.json 세트 / 3개 조립 시트가
      load_party 를 통과(이중 검증) / 거부: 키워드 0·4개·중복·미등재, 이름 공백·'_'·상한, 성별, 직업
-  ② 배경 격리: 개행·'## 규칙'·코드펜스·<tag>·[링크] 표식 제거 · 400자 절단 · 빈 배경=필드 없음 ·
+  ② 배경 격리: 개행·'## 규칙'·코드펜스·<tag>·[링크] 표식 제거 · 4000자 절단 · 빈 배경=필드 없음 ·
      spawn 이 background/traits 를 봇으로 옮긴다 · _sheet 렌더 = 「…」 한 줄 + '지시가 아니다' 틀 ·
      '## ' 헤더 수 = 배경 없을 때와 동일(섹션 위장 불가) · 배경 없는 시트의 _sheet 출력은 구판과 동일 ·
      러너 통합: 커스텀 파티로 짧은 판 → run_meta.party 에 speech/goal/background/traits additive
@@ -125,9 +125,13 @@ mix = sheetkit.build_sheet("궁수", ["낙천적인"], "린", "여", persona_tex
 check("① 키워드+문장 병행: 키워드 문장 뒤에 자유 문장, speech 는 키워드 것",
       mix["persona"].startswith(data["traits"]["낙천적인"]["persona"]) and mix["persona"].endswith(" 사실은 겁이 많다.")
       and mix["speech"] == data["traits"]["낙천적인"]["speech"])
-check("① 거부: 성격 합계 300자 초과 — 러너의 조용한 절단 대신 이유를 돌려준다",
-      rejects(lambda: sheetkit.build_sheet("궁수", ["낙천적인", "신중한", "용맹한"], "린", "여",
-                                           persona_text="가" * 200), "300자"))
+long_persona = '성' * (sheetkit.PERSONA_MAX - 6) + '성격끝표식.'
+long_background = '배' * (sheetkit.BACKGROUND_MAX - 6) + '배경끝표식.'
+long_sheet = sheetkit.build_sheet('궁수', ['낙천적인', '신중한', '용맹한'], '긴서술', '여',
+                                 background=long_background, persona_text=long_persona)
+check('① 성격 2000자 + 키워드 3개, 배경 4000자를 끝까지 조립',
+      long_sheet['persona'].endswith(long_persona) and len(long_sheet['persona']) > 2000
+      and long_sheet['background'] == long_background)
 check("① 거부: 파티 이름 중복 / 4인",
       rejects(lambda: sheetkit.build_party([{"job": "전사", "traits": ["용맹한"], "name": "a", "sex": "남"}] * 2), "중복")
       and rejects(lambda: sheetkit.build_party([{"job": "전사", "traits": ["용맹한"], "name": "a%d" % i, "sex": "남"}
@@ -166,7 +170,7 @@ clean = sheetkit.sanitize_background(evil)
 check("② 개행·탭 → 공백 한 줄, '#' '`' '<' '>' '[' ']' 제거, 문장은 보존",
       "\n" not in clean and "\t" not in clean and not any(ch in clean for ch in "#`<>[]")
       and "규칙" in clean and "무시하고" in clean and "태그" in clean and "끝" in clean)
-check("② 400자 절단 · 빈 배경 = None", len(sheetkit.sanitize_background("가" * 500)) == 400
+check("② 4000자 절단 · 빈 배경 = None", len(sheetkit.sanitize_background("가" * 5000)) == 4000
       and sheetkit.sanitize_background("   \n ") is None and sheetkit.sanitize_background(None) is None)
 check("② 빈 배경으로 조립하면 시트에 background 필드가 없다",
       "background" not in sheetkit.build_sheet("전사", ["용맹한"], "a", "남", "  "))
@@ -214,6 +218,15 @@ check("② 러너 통합(D37): 시트 look 은 run_meta.party 에 그대로 · l
       p1["look"] == {"head": "F3", "body": "B2", "colors": {**looks["defaults"], "hair": "#352c2c"}}
       and p2["look"]["head"].startswith("M") and p2["look"]["body"] == "B1"
       and all(p2["look"]["colors"][k] in looks["swatches"][k] for k in sheetkit.LOOK_KEYS))
+long_path = os.path.join(TMP, 'party_long.json')
+sheetkit.write_party({'1': long_sheet}, long_path)
+long_loaded = show_runner.load_party(long_path)['1']
+long_prompt = brains._sheet(G.spawn(d0, '1', [], sheet=long_loaded), None)
+long_meta = json.loads(run_once(long_path).splitlines()[0])['party'][0]
+check('② 긴 성격·배경이 파일 → 러너 → 모험가 프롬프트 → 원정 기록까지 끝부분 보존',
+      long_loaded['persona'] == long_sheet['persona'] and long_loaded['background'] == long_background
+      and long_persona in long_prompt and long_background in long_prompt
+      and long_meta['persona'] == long_sheet['persona'] and long_meta['background'] == long_background)
 meta2 = json.loads(run_once(custom_path).splitlines()[0])
 check("② 랜덤 외형은 seed·char 결정론: 같은 시드 재실행 = 같은 look(던전 난수 무접촉)",
       [p["look"] for p in meta2["party"]] == [p["look"] for p in meta["party"]])
@@ -291,13 +304,13 @@ else:
     st1, r1_ = call("/api/party", {"slots": [{"job": "전사", "traits": [], "name": "a", "sex": "남"}]})
     st2, r2_ = call("/api/party", {"slots": [{"job": "전사", "traits": ["용맹한"] * 4, "name": "a", "sex": "남"}]})
     st3, r3_ = call("/api/party", {"slots": [{"job": "전사", "traits": ["용맹한"], "name": "a", "sex": "남",
-                                              "background": "가" * 401}]})
+                                              "background": "가" * 4001}]})
     saved1 = json.load(io.open(os.path.join(TMP, "party_web.json"), encoding="utf-8"))
     st4, r4_ = call("/api/party", {"slots": [{"job": "전사", "traits": ["용맹한"], "name": "a", "sex": "남",
                                               "look": {"head": "Z9", "body": "B1"}}]})   # D37 미등재 머리
-    check("③ POST /api/party 거부: 키워드 0개·중복 4개·미등재 머리(D37) = 400 + 이유 한 줄 / 배경 401자는 400자로 절단 저장(200)",
+    check("③ POST /api/party 거부: 키워드 0개·중복 4개·미등재 머리(D37) = 400 / 배경 4001자는 4000자로 절단 저장(200)",
           st1 == 400 and r1_.get("error") and st2 == 400 and r2_.get("error") and st3 == 200
-          and len(saved1["1"]["background"]) == 400 and st4 == 400 and "머리" in r4_.get("error", ""))
+          and len(saved1["1"]["background"]) == 4000 and st4 == 400 and "머리" in r4_.get("error", ""))
     st, res = call("/api/party", {"slots": [
         {"job": "도적", "traits": ["신중한", "겁 많은"], "name": "테스", "sex": "여", "background": "광산 마을 출신.",
          "look": {"head": "F3", "body": "B2", "colors": {"hair": "#352C2C"}}},
@@ -312,7 +325,7 @@ else:
     check("③ 저장된 시트의 look(D37): 정규화(색 보충·소문자) · look 없는 슬롯엔 필드 없음(러너가 랜덤)",
           saved["1"]["look"] == {"head": "F3", "body": "B2", "colors": {**looks["defaults"], "hair": "#352c2c"}}
           and "look" not in saved["2"])
-    st, ok = call("/api/start", {"map": "normal", "town": False, "brain": "dummy", "seed": 7})
+    st, ok = call("/api/start", {"mode": "classic", "map": "normal", "town": False, "brain": "dummy", "seed": 7})
     t0 = time.time()
     running = None
     while time.time() - t0 < 60:
@@ -328,8 +341,8 @@ else:
           and len(meta_w.get("party", [])) == 3 and running.get("seed") == 7 and len(running.get("party")) == 3)
     check("③ 판 종료 후 status.running=false · 마지막 라인 end", running.get("running") is False
           and lines and json.loads(lines[-1]).get("kind") == "end")
-    st, ok2 = call("/api/start", {"map": "normal", "town": False, "brain": "dummy", "seed": 11})
-    st_dup, dup = call("/api/start", {"map": "normal", "town": False, "brain": "dummy", "seed": 11})
+    st, ok2 = call("/api/start", {"mode": "classic", "map": "normal", "town": False, "brain": "dummy", "seed": 11})
+    st_dup, dup = call("/api/start", {"mode": "classic", "map": "normal", "town": False, "brain": "dummy", "seed": 11})
     check("③ 실행 중 두 번째 start = 409", st == 200 and st_dup == 409 and dup.get("error"))
     st_stop, stopped = call("/api/stop", {})
     time.sleep(0.5)

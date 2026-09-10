@@ -2,7 +2,7 @@
 """Part B(시트 외부화 + N인 파티) 헤들리스 검증.
 게이트:
   ① load_party: 기본 party.json = 3인(두란·카야·피른), 필수 9필드, 관계 교차, 메타 키 무시
-  ② 폴백/방어: 파일 없음·필드 누락·char 키 위반·수치형 위반 → 내장 2인 + 경고 / 300자 절단 / 5인 초과 경고만
+  ② 폴백/방어: 파일 없음·필드 누락·char 키 위반·수치형 위반 → 내장 2인 + 경고 / 필드별 상한 / 5인 초과 경고만
   ③ spawn: sheet= 복사(선택 필드 포함) / sheet=None 하위호환(HEROES) / 3인 군집 스폰
   ④ N인 하강 gather: wait_allies(missing 정렬) → 전원 모임 = 동반 하강
   ⑤ 프롬프트 층: brains._sheet(이름·관계·roster 밖 무해) / gm.set_party(_CAST) / obs.party / render
@@ -84,9 +84,9 @@ fb, e = try_load({"10": dict(G.HEROES["1"])})
 check("폴백: char 키 위반('10') → 내장 2인", sorted(fb) == ["1", "2"])
 fb, e = try_load({"1": {**G.HEROES["1"], "hp": "14"}})
 check("폴백: 수치형 위반(hp='14' 문자열) → 내장 2인", sorted(fb) == ["1", "2"])
-ok1, e = try_load({"1": {**G.HEROES["1"], "persona": "가" * 999, "goal": "나" * 999}})
-check("자유서술 300자 절단(persona·goal)",
-      len(ok1["1"]["persona"]) == 300 and len(ok1["1"]["goal"]) == 300)
+ok1, e = try_load({"1": {**G.HEROES["1"], "persona": "가" * 3000, "goal": "나" * 999}})
+check("성격은 2500자까지, 목표는 기존 300자까지 로드",
+      len(ok1["1"]["persona"]) == 2500 and len(ok1["1"]["goal"]) == 300)
 ok6, e = try_load({str(i): dict(G.HEROES["1"]) for i in range(1, 7)})
 check("5인 초과: 경고만 내고 6인 그대로 통과",
       sorted(ok6) == [str(i) for i in range(1, 7)] and "초과" in e)

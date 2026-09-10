@@ -50,7 +50,7 @@ export function skillsHtml(alpha, bot) {
 export function alphaLabel(meta) {
   const a = meta?.alpha;
   if (!a) return '';
-  return ['스킬 알파', a.skills ? '스킬 ON' : '스킬 OFF', a.trpg_combat ? '주사위 전투' : '기본 전투',
+  return [meta.ruleset === 'skills-v1' ? '스킬 원정' : '스킬 알파', a.skills ? '스킬 ON' : '스킬 OFF', a.trpg_combat ? '주사위 전투' : '기본 전투',
     a.random_skill_effective ? '3층 랜덤 획득' : '랜덤 획득 OFF'].join(' · ');
 }
 

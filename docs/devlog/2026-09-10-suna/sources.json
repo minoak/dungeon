@@ -1,0 +1,542 @@
+{
+  "capturedAt": "2026-09-10T13:10:01.366Z",
+  "run": "runs/stream-20260910-213929.jsonl",
+  "seed": 457294,
+  "sha256": "944d1e74559132c727efa5805434bee27fbc0f60e4906fa0b123c4d46902354a",
+  "note": "2026-09-10 21:39 의 실제 원정을 같은 날 현재 게임 화면으로 재생한 스크린샷. 원본 대사·사건 무수정.",
+  "shots": [
+    {
+      "file": "01-lost.png",
+      "turn": 50,
+      "focus": "3",
+      "caption": "동료를 시야에서 놓친 수나. 아무에게도 배달되지 않는 외침.",
+      "sourceLine": 54,
+      "decisions": {
+        "3": {
+          "type": "explore",
+          "target": "w2_1",
+          "note": "동료들을 놓쳤다. 서둘러 흔적을 따라가야 한다.",
+          "to": "all",
+          "say_kind": "잡담",
+          "say": "앗, 유나! 미나! 어디 갔어? 같이 가~ 나 두고 가지 마!",
+          "reason": "유나와 미나가 시야에서 사라졌어! 리더인 유나를 놓치면 안 되니까 서둘러서 일행이 간 것으로 보이는 길을 탐색해봐야겠어.",
+          "src": "haiku",
+          "action_id": "d1:t50:a5"
+        }
+      },
+      "events": [
+        {
+          "char": "1",
+          "type": "walk",
+          "target": "@38,9",
+          "to": [
+            40,
+            9
+          ],
+          "result": "walking",
+          "parent_action_id": "d1:t47:a1",
+          "resolution": {
+            "actor": "b1",
+            "type": "explore",
+            "target": "w1_3",
+            "phase": "pending",
+            "status": null,
+            "reason": "walking"
+          },
+          "job": "전사"
+        },
+        {
+          "char": "2",
+          "type": "walk",
+          "target": "follow:b1",
+          "to": [
+            41,
+            9
+          ],
+          "result": "following",
+          "parent_action_id": "d1:t48:a4",
+          "resolution": {
+            "actor": "b2",
+            "type": "follow",
+            "target": "b1",
+            "phase": "pending",
+            "status": null,
+            "reason": "following"
+          },
+          "job": "도적"
+        },
+        {
+          "char": "3",
+          "type": "explore",
+          "target": "w2_1",
+          "result": "pathed",
+          "len": 4,
+          "bearing": "NE",
+          "parent_action_id": "d1:t50:a5",
+          "resolution": {
+            "actor": "b3",
+            "type": "explore",
+            "target": "w2_1",
+            "phase": "pending",
+            "status": null,
+            "reason": "pathed"
+          },
+          "reason": "유나와 미나가 시야에서 사라졌어! 리더인 유나를 놓치면 안 되니까 서둘러서 일행이 간 것으로 보이는 길을 탐색해봐야겠어.",
+          "job": "궁수"
+        }
+      ],
+      "url": "http://127.0.0.1:8000/game/?run=runs%2Fstream-20260910-213929.jsonl&focus=3&t=50"
+    },
+    {
+      "file": "02-treasure.png",
+      "turn": 57,
+      "focus": "3",
+      "caption": "혼자 함정을 피하고 보물을 챙긴 뒤, 보여줄 사람을 찾는다.",
+      "sourceLine": 61,
+      "decisions": {
+        "3": {
+          "type": "use",
+          "target": "d9",
+          "note": "보물을 획득했으니 유나와 미나를 찾기 위해 되돌아간다.",
+          "to": "all",
+          "say_kind": "잡담",
+          "say": "보물 챙기기 완료! 헤헤, 유나랑 미나한테 보여주면 깜짝 놀라겠지? 얘들아, 나 지금 가고 있어! 어디야?",
+          "reason": "보물은 챙겼으니 이제 동료들을 찾아야 해. 유나랑 미나가 어느 쪽으로 갔을까? 일단 왔던 문으로 다시 돌아가서 애들을 찾아보자!",
+          "src": "haiku",
+          "action_id": "d1:t57:a9"
+        }
+      },
+      "events": [
+        {
+          "char": "1",
+          "type": "walk",
+          "target": "@36,4",
+          "to": [
+            38,
+            5
+          ],
+          "result": "walking",
+          "parent_action_id": "d1:t53:a6",
+          "resolution": {
+            "actor": "b1",
+            "type": "explore",
+            "target": "w2_2",
+            "phase": "pending",
+            "status": null,
+            "reason": "walking"
+          },
+          "job": "전사"
+        },
+        {
+          "char": "2",
+          "type": "walk",
+          "target": "follow:b1",
+          "to": [
+            38,
+            6
+          ],
+          "result": "following",
+          "parent_action_id": "d1:t48:a4",
+          "resolution": {
+            "actor": "b2",
+            "type": "follow",
+            "target": "b1",
+            "phase": "pending",
+            "status": null,
+            "reason": "following"
+          },
+          "job": "도적"
+        },
+        {
+          "char": "3",
+          "type": "use",
+          "target": "d9",
+          "result": "pathed",
+          "len": 2,
+          "effect_type": "goto",
+          "parent_action_id": "d1:t57:a9",
+          "resolution": {
+            "actor": "b3",
+            "type": "use",
+            "target": "d9",
+            "phase": "pending",
+            "status": null,
+            "reason": "pathed"
+          },
+          "reason": "보물은 챙겼으니 이제 동료들을 찾아야 해. 유나랑 미나가 어느 쪽으로 갔을까? 일단 왔던 문으로 다시 돌아가서 애들을 찾아보자!",
+          "job": "궁수"
+        }
+      ],
+      "url": "http://127.0.0.1:8000/game/?run=runs%2Fstream-20260910-213929.jsonl&focus=3&t=57"
+    },
+    {
+      "file": "03-stairs.png",
+      "turn": 78,
+      "focus": "3",
+      "caption": "계단 앞 여섯 번째 시도. 결과는 매번 wait_allies.",
+      "sourceLine": 82,
+      "decisions": {
+        "1": {
+          "type": "explore",
+          "target": "w5_1",
+          "note": "수나를 찾기 위해 서쪽 통로(w5_1)를 계속 탐색하며 미나를 이끈다.",
+          "to": "2",
+          "say_kind": "제안",
+          "say": "흥, 겁쟁이 미나 주제에 대답은 잘하네? 떨어지지 말고 딱 붙어서 따라오기나 해!",
+          "reason": "수나의 행방이 여전히 묘연하므로 새로 발견한 서쪽 통로를 계속 탐색해야 한다. 미나가 겁먹은 듯하니 적당히 다그치며 데리고 간다.",
+          "src": "haiku",
+          "action_id": "d1:t78:a23"
+        },
+        "3": {
+          "type": "use",
+          "target": "f11",
+          "note": "동료들과 합류하기 위해 계단 f11을 통해 다시 2층 이동 시도.",
+          "to": "all",
+          "say_kind": "잡담",
+          "say": "유나, 미나! 진짜 이번에는 꼭 올라갈게! 거기서 딱 기다려, 금방 갈 테니까!",
+          "reason": "동료들이 이미 위층에 모여 나를 기다리고 있는 상태이므로, 계단 f11을 다시 사용하여 확실하게 2층으로 이동해 합류하겠습니다.",
+          "src": "haiku",
+          "action_id": "d1:t78:a24"
+        }
+      },
+      "events": [
+        {
+          "char": "1",
+          "type": "explore",
+          "target": "w5_1",
+          "result": "pathed",
+          "len": 6,
+          "bearing": "W",
+          "parent_action_id": "d1:t78:a23",
+          "resolution": {
+            "actor": "b1",
+            "type": "explore",
+            "target": "w5_1",
+            "phase": "pending",
+            "status": null,
+            "reason": "pathed"
+          },
+          "reason": "수나의 행방이 여전히 묘연하므로 새로 발견한 서쪽 통로를 계속 탐색해야 한다. 미나가 겁먹은 듯하니 적당히 다그치며 데리고 간다.",
+          "job": "전사"
+        },
+        {
+          "char": "2",
+          "type": "walk",
+          "target": "follow:b1",
+          "to": [
+            24,
+            3
+          ],
+          "result": "following",
+          "parent_action_id": "d1:t72:a18",
+          "resolution": {
+            "actor": "b2",
+            "type": "follow",
+            "target": "b1",
+            "phase": "pending",
+            "status": null,
+            "reason": "following"
+          },
+          "job": "도적"
+        },
+        {
+          "char": "3",
+          "type": "use",
+          "target": "f11",
+          "result": "wait_allies",
+          "dir": "up",
+          "missing": [
+            "1",
+            "2"
+          ],
+          "busy": [],
+          "effect_type": "interact",
+          "parent_action_id": "d1:t78:a24",
+          "resolution": {
+            "actor": "b3",
+            "type": "use",
+            "target": "f11",
+            "phase": "resolved",
+            "status": "failed",
+            "reason": "wait_allies"
+          },
+          "reason": "동료들이 이미 위층에 모여 나를 기다리고 있는 상태이므로, 계단 f11을 다시 사용하여 확실하게 2층으로 이동해 합류하겠습니다.",
+          "job": "궁수"
+        }
+      ],
+      "url": "http://127.0.0.1:8000/game/?run=runs%2Fstream-20260910-213929.jsonl&focus=3&t=78"
+    },
+    {
+      "file": "04-alone.png",
+      "turn": 132,
+      "focus": "3",
+      "caption": "다섯 번째 구역까지 혼자. 대답은 여전히 없다.",
+      "sourceLine": 136,
+      "decisions": {
+        "3": {
+          "type": "explore",
+          "target": "w24_1",
+          "note": "문 d20을 통해 방 r10 진입, 동료를 찾기 위해 서쪽 길 w24_1 탐색 시작.",
+          "to": "all",
+          "say_kind": "잡담",
+          "say": "아... 또 없네. 유나! 미나! 진짜 어디 있는 거야? 나 지금 방 안쪽 서쪽 길로 더 가볼게! 제발 있으면 대답 좀 해줘, 수나 진짜 무섭단 말이야~",
+          "reason": "문 d20을 열고 방 r10에 들어왔지만 여전히 동료들이 보이지 않아. 서쪽으로 길이 더 이어져 있으니까 저곳을 더 확인해봐야겠어. 혼자라 무섭지만 유나랑 미나를 찾아야 하니까!",
+          "src": "haiku",
+          "action_id": "d1:t132:a66"
+        }
+      },
+      "events": [
+        {
+          "char": "1",
+          "type": "walk",
+          "target": "m1",
+          "to": [
+            26,
+            8
+          ],
+          "result": "arrived",
+          "approach_status": "ready",
+          "parent_action_id": "d1:t129:a64",
+          "action_type": "attack",
+          "resolution": {
+            "actor": "b1",
+            "type": "attack",
+            "target": "m1",
+            "phase": "pending",
+            "status": null,
+            "reason": "arrived"
+          },
+          "job": "전사"
+        },
+        {
+          "char": "2",
+          "type": "walk",
+          "target": "m2",
+          "result": "walking",
+          "slowed": true,
+          "parent_action_id": "d1:t129:a65",
+          "action_type": "attack",
+          "resolution": {
+            "actor": "b2",
+            "type": "attack",
+            "target": "m2",
+            "phase": "pending",
+            "status": null,
+            "reason": "walking"
+          },
+          "job": "도적"
+        },
+        {
+          "char": "3",
+          "type": "explore",
+          "target": "w24_1",
+          "result": "pathed",
+          "len": 6,
+          "bearing": "W",
+          "parent_action_id": "d1:t132:a66",
+          "resolution": {
+            "actor": "b3",
+            "type": "explore",
+            "target": "w24_1",
+            "phase": "pending",
+            "status": null,
+            "reason": "pathed"
+          },
+          "reason": "문 d20을 열고 방 r10에 들어왔지만 여전히 동료들이 보이지 않아. 서쪽으로 길이 더 이어져 있으니까 저곳을 더 확인해봐야겠어. 혼자라 무섭지만 유나랑 미나를 찾아야 하니까!",
+          "job": "궁수"
+        },
+        {
+          "type": "monster_move",
+          "id": "m1",
+          "monster": "고블린",
+          "to": [
+            27,
+            9
+          ],
+          "fleeing": true
+        },
+        {
+          "type": "monster_move",
+          "id": "m2",
+          "monster": "그림자거미",
+          "to": [
+            26,
+            10
+          ],
+          "fleeing": true
+        }
+      ],
+      "url": "http://127.0.0.1:8000/game/?run=runs%2Fstream-20260910-213929.jsonl&focus=3&t=132"
+    },
+    {
+      "file": "05-reunion.png",
+      "turn": 149,
+      "focus": "3",
+      "caption": "102틱 만의 재회. 처음으로 \"유나 언니\"라고 부른다.",
+      "sourceLine": 153,
+      "decisions": {
+        "3": {
+          "type": "bond",
+          "target": "b1",
+          "form": "유나 언니에게 달려가 손을 흔들며 환하게 웃고는 곁에 딱 붙어 선다.",
+          "to": "all",
+          "say_kind": "잡담",
+          "say": "유나 언니이~! 미나랑 같이 언니 한참 찾았잖아! 다시 만나서 진짜 다행이야~ 이제 우리 셋이 꼭 붙어 다니는 거다?",
+          "reason": "미나와 다시 만났고, 시야 내에 유나 언니도 보여서 정말 다행이야! 우리 파티가 다시 모였으니 기쁜 마음을 표현하고 리더인 유나 언니를 따라가야겠어.",
+          "src": "haiku",
+          "action_id": "d1:t149:a83"
+        }
+      },
+      "events": [
+        {
+          "char": "1",
+          "type": "walk",
+          "target": "wait",
+          "result": "wait_met",
+          "allies": [
+            "3"
+          ],
+          "parent_action_id": "d1:t147:a81",
+          "resolution": {
+            "actor": "b1",
+            "type": "wait",
+            "target": null,
+            "phase": "resolved",
+            "status": "success",
+            "reason": "wait_met"
+          },
+          "job": "전사"
+        },
+        {
+          "char": "2",
+          "type": "walk",
+          "target": "follow:b1",
+          "result": "walking",
+          "slowed": true,
+          "parent_action_id": "d1:t148:a82",
+          "resolution": {
+            "actor": "b2",
+            "type": "follow",
+            "target": "b1",
+            "phase": "pending",
+            "status": null,
+            "reason": "walking"
+          },
+          "job": "도적"
+        },
+        {
+          "char": "3",
+          "type": "bond",
+          "target": "b1",
+          "form": "유나 언니에게 달려가 손을 흔들며 환하게 웃고는 곁에 딱 붙어 선다.",
+          "result": "approaching",
+          "len": 5,
+          "required_range": 1,
+          "parent_action_id": "d1:t149:a83",
+          "resolution": {
+            "actor": "b3",
+            "type": "bond",
+            "target": "b1",
+            "phase": "pending",
+            "status": null,
+            "reason": "approaching"
+          },
+          "reason": "미나와 다시 만났고, 시야 내에 유나 언니도 보여서 정말 다행이야! 우리 파티가 다시 모였으니 기쁜 마음을 표현하고 리더인 유나 언니를 따라가야겠어.",
+          "job": "궁수"
+        }
+      ],
+      "url": "http://127.0.0.1:8000/game/?run=runs%2Fstream-20260910-213929.jsonl&focus=3&t=149"
+    },
+    {
+      "file": "06-yuna.png",
+      "turn": 150,
+      "focus": "1",
+      "caption": "유나의 대답. 어디 있었냐고 묻지 않는다.",
+      "sourceLine": 154,
+      "decisions": {
+        "1": {
+          "type": "explore",
+          "target": "w27_1",
+          "note": "수나와 합류 완료. 둔화된 미나를 신경 쓰며 서쪽 길 w27_1 탐색 시작.",
+          "to": "all",
+          "say_kind": "잡담",
+          "say": "흥, 수나 너까지 오니까 시끄러워졌네! 미나 너는 아직 비실거리니까 내 뒤에 딱 붙어서 오라구. 자, 다음 방으로 간다!",
+          "reason": "미나와 수나가 모두 합류했고 정비가 끝났으므로, 다시 탐험을 시작하기 위해 서쪽 길로 이동한다. 미나가 둔화 상태이니 챙겨주는 척하며 앞장선다.",
+          "src": "haiku",
+          "action_id": "d1:t150:a84"
+        }
+      },
+      "events": [
+        {
+          "char": "1",
+          "type": "explore",
+          "target": "w27_1",
+          "result": "pathed",
+          "len": 5,
+          "bearing": "W",
+          "parent_action_id": "d1:t150:a84",
+          "resolution": {
+            "actor": "b1",
+            "type": "explore",
+            "target": "w27_1",
+            "phase": "pending",
+            "status": null,
+            "reason": "pathed"
+          },
+          "reason": "미나와 수나가 모두 합류했고 정비가 끝났으므로, 다시 탐험을 시작하기 위해 서쪽 길로 이동한다. 미나가 둔화 상태이니 챙겨주는 척하며 앞장선다.",
+          "job": "전사"
+        },
+        {
+          "char": "2",
+          "type": "walk",
+          "target": "follow:b1",
+          "to": [
+            24,
+            9
+          ],
+          "result": "walking",
+          "parent_action_id": "d1:t148:a82",
+          "resolution": {
+            "actor": "b2",
+            "type": "follow",
+            "target": "b1",
+            "phase": "pending",
+            "status": null,
+            "reason": "walking"
+          },
+          "job": "도적"
+        },
+        {
+          "char": "3",
+          "type": "walk",
+          "target": "b1",
+          "to": [
+            21,
+            10
+          ],
+          "result": "sighted",
+          "seen": [
+            {
+              "kind": "door",
+              "name": "문",
+              "id": "d13"
+            }
+          ],
+          "parent_action_id": "d1:t149:a83",
+          "action_type": "bond",
+          "approach_status": "interrupted",
+          "resolution": {
+            "actor": "b3",
+            "type": "bond",
+            "target": "b1",
+            "phase": "resolved",
+            "status": "failed",
+            "reason": "sighted"
+          },
+          "job": "궁수"
+        }
+      ],
+      "url": "http://127.0.0.1:8000/game/?run=runs%2Fstream-20260910-213929.jsonl&focus=1&t=150"
+    }
+  ]
+}

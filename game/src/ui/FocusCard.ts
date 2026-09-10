@@ -36,7 +36,7 @@ const CSS = `
 .fc-mark { color: var(--gold); font-size: 12px; margin-left: auto; }
 .fc-mark:empty { display: none; }
 .fc.dead .fc-name { filter: grayscale(1); opacity: .7; }
-.fc-sheet { color: var(--dim); font-size: 12px; line-height: 1.35; }
+.fc-sheet { color: var(--dim); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
 .fc-sheet:empty { display: none; }
 .fc-sheet b { color: var(--fg); font-weight: normal; }
 .fc-hpline { display: flex; align-items: center; gap: 6px; }

@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -27,20 +28,20 @@ class AlphaLauncherTests(unittest.TestCase):
     def test_alpha_overrides_map_and_inherited_options(self):
         with patch.dict(os.environ, {'DUNGEON_DEPTHS': '1', 'DUNGEON_SOLO': '1'}):
             result, env = self.launch_env({'mode': 'alpha', 'map': 'big'})
-        self.assertEqual(result['mode'], 'alpha')
+        self.assertEqual(result['mode'], 'standard')
         self.assertEqual([env[k] for k in ('DUNGEON_SKILLS', 'DUNGEON_TRPG_COMBAT', 'DUNGEON_RANDOM_SKILL')], ['1'] * 3)
         self.assertEqual([env[k] for k in ('DUNGEON_DEPTHS', 'DUNGEON_TURNS', 'DUNGEON_SOLO')], ['5', '600', '0'])
         self.assertEqual(env['DUNGEON_BESTIARY_FILE'], '')
         self.assertEqual(env['DUNGEON_ACTION_MODE'], 'compose')
         self.assertEqual(env['DUNGEON_STATE_DIR'], self.temp.name)
 
-    def test_standard_switches_off_inherited_alpha(self):
+    def test_classic_switches_off_inherited_skills(self):
         with patch.dict(os.environ, {k: '1' for k in ('DUNGEON_SKILLS', 'DUNGEON_TRPG_COMBAT', 'DUNGEON_RANDOM_SKILL')}):
-            _, env = self.launch_env({})
+            _, env = self.launch_env({'mode': 'classic'})
         self.assertEqual([env[k] for k in ('DUNGEON_SKILLS', 'DUNGEON_TRPG_COMBAT', 'DUNGEON_RANDOM_SKILL')], ['0'] * 3)
 
     def test_invalid_mode_or_alpha_combination_does_not_start(self):
-        for opts in ({'mode': 'wrong'}, {'mode': 'alpha', 'town': True}, {'mode': 'alpha', 'action_mode': 'menu'}):
+        for opts in ({'mode': 'wrong'}, {'town': True}, {'action_mode': 'menu'}):
             with self.subTest(opts=opts), self.assertRaises(launcher.BadRequest):
                 self.launch_env(opts)
 
@@ -48,7 +49,28 @@ class AlphaLauncherTests(unittest.TestCase):
         file = Path(self.temp.name) / 'stream.jsonl'
         for alpha in (None, {'skills': True}):
             file.write_text(json.dumps({'kind': 'run_meta', 'seed': 7, 'alpha': alpha}) + '\n', encoding='utf-8')
-            self.assertEqual(self.runner.status()['mode'], 'alpha' if alpha else 'standard')
+            self.assertEqual(self.runner.status()['mode'], 'alpha' if alpha else 'classic')
+        file.write_text(json.dumps({'kind': 'run_meta', 'seed': 7, 'ruleset': 'skills-v1', 'alpha': {'skills': True}}) + '\n', encoding='utf-8')
+        self.assertEqual(self.runner.status()['mode'], 'standard')
+
+    def test_launcher_default_enables_skills(self):
+        result, env = self.launch_env({})
+        self.assertEqual(result['mode'], 'standard')
+        self.assertEqual([env[k] for k in ('DUNGEON_SKILLS', 'DUNGEON_TRPG_COMBAT', 'DUNGEON_RANDOM_SKILL')], ['1'] * 3)
+
+    def test_runner_defaults_and_explicit_classic(self):
+        env = {k: v for k, v in os.environ.items() if not k.startswith('DUNGEON_')}
+        env.update(PYTHONUTF8='1', DUNGEON_STATE_DIR=self.temp.name, DUNGEON_ACTION_MODE='compose')
+        code = ('import json, show_runner as r; print(json.dumps([r.SKILLS_ON, r.TRPG_COMBAT_ON, '
+                'r.RANDOM_SKILL_ON, r.DEPTHS, r.MAX_TURNS]))')
+        def values(extra):
+            run = subprocess.run([sys.executable, '-c', code], cwd=launcher.HERE,
+                                 env={**env, **extra}, capture_output=True, text=True, check=True)
+            return json.loads(run.stdout)
+        self.assertEqual(values({}), [True, True, True, 5, 600])
+        self.assertEqual(values({k: '0' for k in ('DUNGEON_SKILLS', 'DUNGEON_TRPG_COMBAT', 'DUNGEON_RANDOM_SKILL')}),
+                         [False, False, False, 2, 250])
+        self.assertEqual(values({'DUNGEON_ACTION_MODE': 'menu'}), [False, False, False, 2, 250])
 
     def test_server_rejects_duplicate_port(self):
         first = launcher.make_server('127.0.0.1', 0, state_dir=self.temp.name)
@@ -59,7 +81,7 @@ class AlphaLauncherTests(unittest.TestCase):
 
     def test_menu_reuses_existing_launcher_before_binding(self):
         with patch.object(sys, 'argv', ['launcher.py', '--alpha']), patch('launcher.urlopen') as opened, \
-                patch('launcher.json.load', return_value={'skill_alpha': {}}), \
+                patch('launcher.json.load', return_value={'ruleset': 'skills-v1', 'text_limits': launcher.TEXT_LIMITS}), \
                 patch('launcher.make_server') as make, patch('launcher.webbrowser.open') as browser:
             self.assertEqual(launcher.main(), 0)
             make.assert_not_called()

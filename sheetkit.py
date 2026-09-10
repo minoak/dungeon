@@ -20,9 +20,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TRAITS_FILE = os.path.join(HERE, "traits.json")
 
 NAME_MAX = 20            # 이름 — 자유 입력 1호(한 줄, 프롬프트 호칭·도감 원장 키)
-BACKGROUND_MAX = 400     # 배경 — 자유 입력 2호(러너 load_party 도 같은 상한을 건다)
-PERSONA_MAX = 200        # 성격 자유 서술 — 자유 입력 3호(파트너 정정 09-05: "카테고리로는 갈리지 않을 것 같다")
-PERSONA_TOTAL_MAX = 300  # 키워드 문장+자유 서술 합계 상한 = 러너 FREETEXT_MAX(넘으면 조용히 잘리므로 여기서 거부)
+BACKGROUND_MAX = 4000    # 09-11: 긴 과거 서술도 저장·복원·프롬프트까지 같은 상한으로 전달한다.
+PERSONA_MAX = 2000       # 사용자가 직접 쓰는 성격. 키워드 문장 길이는 별도로 확보한다.
+PERSONA_TOTAL_MAX = 2500 # 키워드 문장+자유 서술 합계. 러너도 성격에만 이 상한을 쓴다.
 SEXES = ("남", "여")
 
 # ── 외형(D37, 2026-09-06) — 파츠 스프라이트. 시트가 정하고 러너가 기록하고 뷰어가 그린다.
@@ -82,7 +82,7 @@ def sanitize_background(text, limit=BACKGROUND_MAX):
     · 제어문자 제거 · 개행/탭/연속 공백 → 공백 하나(시트 안에서 항상 **한 줄**)
     · '#' '`' '<' '>' '[' ']' 제거 — 마크다운 헤더('## 규칙')·코드펜스·태그·링크 표식은 프롬프트
       섹션 구조를 흉내 낼 수 있는 유일한 재료다. 문장 부호(. , ! ? ' " — …)는 그대로 둔다.
-    · 상한 절단(기본 400자). 빈 결과는 None(시트에 필드 자체가 안 생긴다)."""
+    · 상한 절단(기본 BACKGROUND_MAX). 빈 결과는 None(시트에 필드 자체가 안 생긴다)."""
     if text is None:
         return None
     if not isinstance(text, str):
