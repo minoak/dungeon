@@ -175,13 +175,13 @@ check('동료 공격도 실제 피해와 피해자의 경험을 남김', r['hit'
 
 d, bots, o = scene()
 payload = {'reason': '긴 이유 ' * 60, 'type': 'give', 'target': 'b999', 'item': 'i1'}
-with patch.object(brains, '_call_claude', return_value=json.dumps(payload, ensure_ascii=False)):
+with patch.dict(os.environ, DUNGEON_BRAIN_BACKEND='gemini_api'), \
+        patch.object(brains, '_call_claude', return_value=json.dumps(payload, ensure_ascii=False)):
     decision = brains.claude_brain(o, '1', bots[0], bots)
 check('참조 오류 원문과 당시 ID를 생략 없이 보존', decision['input_error_detail']['attempted_action'] == payload
       and 'b2' in decision['input_error_detail']['target_ids'])
-check('입력 오류는 같은 판단에서 현재 스키마의 규칙 행동으로 대체', decision['src'] == 'fallback'
-      and CA.parse(decision, o)[1] is None)
-d.act(bots[0], decision, bots)
+check('실플레이 입력 오류는 행동을 만들지 않고 보류', decision['src'] == 'error'
+      and 'type' not in decision and len(decision['attempt_errors']) == 2)
 with patch.object(brains, '_call_claude', return_value='{"reason":"끊긴 JSON'):
     decision = brains.claude_brain(o, '1', bots[0], bots)
 check('JSON 자체가 불량인 경우도 실제 원문 보존', decision['input_error_detail']['raw_response'] == '{"reason":"끊긴 JSON')

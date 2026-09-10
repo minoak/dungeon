@@ -6,6 +6,7 @@ PY=$(command -v python3 || command -v python)
 export PYTHONUTF8=1
 # 과거 동작의 회귀 검사는 명시적으로 메뉴형. 조합형 게이트는 파일 안에서 compose를 설정한다.
 export DUNGEON_ACTION_MODE=menu
+export DUNGEON_BRAIN_BACKEND=dummy  # 빈 응답으로 물리를 굴리는 회귀 테스트 전용
 export DUNGEON_SKILLS=0 DUNGEON_TRPG_COMBAT=0 DUNGEON_RANDOM_SKILL=0
 FAILED=0
 for v in verify_stage1 verify_stage2 verify_stage2b verify_stage3 verify_stream \
@@ -15,7 +16,7 @@ for v in verify_stage1 verify_stage2 verify_stage2b verify_stage3 verify_stream 
          verify_wait verify_notes verify_motion verify_brain verify_ally verify_archer verify_social \
          verify_solo verify_gear verify_town verify_launcher verify_character_presets verify_status verify_rest verify_relations \
          verify_trail verify_objtags verify_floor verify_sayto verify_saykind verify_give verify_bond verify_compose verify_approach verify_action_system verify_reactions \
-         verify_skill_schema verify_skill_effects verify_skill_stream verify_skill_off verify_skill_launcher; do
+         verify_skill_schema verify_skill_effects verify_skill_stream verify_skill_off verify_skill_launcher verify_brain_pause; do
   r=$("$PY" "$v.py" 2>&1 | tail -1)
   echo "$v: $r"
   case "$r" in *"ALL PASS"*) ;; *) FAILED=1 ;; esac

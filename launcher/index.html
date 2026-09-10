@@ -188,6 +188,8 @@
 <script src="/viewer/assets/sprites/sprites.js"></script>   <!-- D37 파츠 스프라이트 합성기(뷰어와 공용) — 없어도 폼은 산다 -->
 <script type="module">
 import { skillsHtml } from '/viewer/assets/skills.js';
+import { createBrainPause } from '/viewer/assets/brain-pause.js';
+const pausePanel = createBrainPause();
 /* ═══ 상태 ═══ */
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -270,8 +272,9 @@ function show(id) { for (const s of ['sTitle', 'sParty', 'sOpts']) $(s).hidden =
 async function refreshStatus() {
   try {
     const st = await api('/api/status');
+    pausePanel.update(st);
     if (st.running) {
-      $('tStatus').innerHTML = `${modeName(st.mode)} <b>진행 중</b> — seed ${esc(st.seed ?? '…')}, t=${esc(st.turn ?? 0)}` +
+      $('tStatus').innerHTML = `${modeName(st.mode)} <b>${st.brain_pause ? '판단 대기 · 일시정지' : '진행 중'}</b> — seed ${esc(st.seed ?? '…')}, t=${esc(st.turn ?? 0)}` +
         (st.party?.length ? ` · ${st.party.map(p => esc(p.name)).join('·')}` : '');
       $('tRunRow').hidden = false;
     } else {
@@ -295,7 +298,7 @@ $('bStop').onclick = async () => { await api('/api/stop', {}); refreshStatus(); 
 async function loadPresets() {
   if (presets) { await refreshCharacters(); return; }
   presets = await api('/api/presets');
-  if (!presets.text_limits || presets.ruleset !== 'skills-v1') {
+  if (!presets.text_limits || presets.ruleset !== 'skills-v1' || presets.brain_failure_policy !== 'retry-pause-v1') {
     presets = null;
     throw new Error('이전 런처가 실행 중이야. 진행 중인 원정이 끝난 뒤 런처 창을 닫고 wonderland.bat으로 다시 열어 줘.');
   }
@@ -581,7 +584,7 @@ $('bStart').onclick = async () => {
 };
 
 refreshStatus();
-setInterval(() => { if (!$('sTitle').hidden) refreshStatus(); }, 3000);
+setInterval(refreshStatus, 3000);
 </script>
 </body>
 </html>

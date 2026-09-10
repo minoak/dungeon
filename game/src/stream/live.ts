@@ -7,6 +7,7 @@
 //                 배지도 초기화. 덤: state/ 경로를 보는 중에 판이 끝났거나 아직 없을 때 론처에서 새 판이 돌면 자동으로 다시 붙는다.
 import type { App } from '../app';
 import { el } from '../ui/dom';
+import { createBrainPause, type BrainPauseStatus } from '../../../viewer/assets/brain-pause.js';
 
 export const POLL_MS = 1500;                     // 판 파일·상태 폴링 기본 간격
 export const BACKOFF_MAX_MS = 6000;              // 실패 백오프 상한(1.5→3→6)
@@ -19,6 +20,7 @@ export async function fetchText(url: string): Promise<string> {
 }
 
 export interface LauncherStatus {
+  brain_pause?: BrainPauseStatus | null;
   running: boolean; pid?: number | null; started?: string | null; seed?: number | null;
   party?: { char: string; name: string; job: string }[]; turn?: number | null; outcome?: string | null;
   viewer?: string; game?: string;                // 론처가 주는 관전 주소(뷰어 / 게임 클라이언트)
@@ -127,6 +129,7 @@ function injectStyle(): void {
  */
 export function installLive(app: App): void {
   injectStyle();
+  const pausePanel = createBrainPause();
   const hud = app.dom.hud;
   const badge = el('span', 'badge live-hud');
   badge.hidden = true;
@@ -144,10 +147,12 @@ export function installLive(app: App): void {
   const turnStr = (): string => { const t = Math.max(last?.turn ?? -1, lastTurn()); return t >= 0 ? 't' + t : 't?'; };
 
   function render(): void {
+    pausePanel.update(RunSource.isLivePath(app.path) ? last : null);
     if (badge.parentElement !== hud) hud.appendChild(badge);   // main.ts 의 오류 표시(hud.textContent=…)가 지웠으면 다시 붙인다
     let c = 'badge live-hud', t = '';
     if (app.live) {
       if (last?.dev) { t = '론처 없음 — 라이브 아님'; c += ' on dev'; }
+      else if (last?.running && last.brain_pause) { t = `판단 ${last.brain_pause.retrying ? '재시도 중' : '정지'} · ${turnStr()}`; c += ' on stalled'; }
       else if (last && !last.running && last.outcome == null && !app.run?.end) { t = `중단됨 · ${turnStr()}`; c += ' on stalled'; }
       else { t = `LIVE · ${turnStr()}` + (failures ? ' · 론처 응답 없음' : ''); c += ' on' + (failures ? ' warn' : ''); }
     }

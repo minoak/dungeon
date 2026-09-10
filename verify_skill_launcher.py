@@ -81,14 +81,24 @@ class AlphaLauncherTests(unittest.TestCase):
 
     def test_menu_reuses_existing_launcher_before_binding(self):
         with patch.object(sys, 'argv', ['launcher.py', '--alpha']), patch('launcher.urlopen') as opened, \
-                patch('launcher.json.load', return_value={'ruleset': 'skills-v1', 'text_limits': launcher.TEXT_LIMITS}), \
+                patch('launcher.json.load', return_value={'ruleset': 'skills-v1', 'text_limits': launcher.TEXT_LIMITS,
+                                                         'brain_failure_policy': launcher.run_control.POLICY}), \
                 patch('launcher.make_server') as make, patch('launcher.webbrowser.open') as browser:
             self.assertEqual(launcher.main(), 0)
             make.assert_not_called()
             browser.assert_called_once_with('http://127.0.0.1:8000/launcher/?mode=alpha')
 
+    def test_old_launcher_without_pause_support_is_not_reused(self):
+        with patch.object(sys, 'argv', ['launcher.py', '--no-browser']), patch('launcher.urlopen'), \
+                patch('launcher.json.load', return_value={'ruleset': 'skills-v1', 'text_limits': launcher.TEXT_LIMITS}), \
+                patch('launcher.make_server', side_effect=OSError('이미 사용 중')) as make, \
+                patch('launcher.webbrowser.open') as browser:
+            self.assertEqual(launcher.main(), 1)
+            make.assert_called_once()
+            browser.assert_not_called()
 
-def serve_for_browser(root, port):
+
+def serve_for_browser(root, port, brain_fixture=False):
     """실제와 같은 API·정적 서빙을 쓰되 출력만 임시 폴더로 격리한다."""
     root = Path(root).resolve()
     state = root / 'state'
@@ -109,6 +119,11 @@ def serve_for_browser(root, port):
     launcher.Handler.translate_path = translate
     srv = launcher.make_server('127.0.0.1', port, party_path=str(root / 'party.json'),
                                state_dir=str(state), runs_dir=str(root / 'runs'), brain='dummy')
+    if brain_fixture:
+        with (state / 'runner.out').open('w', encoding='utf-8') as log:
+            srv.ctx.runner.proc = subprocess.Popen([sys.executable, str(Path(__file__).with_name('verify_brain_pause.py')),
+                                                   '--fixture', str(state)], cwd=launcher.HERE,
+                                                  stdout=log, stderr=log)
     try:
         srv.serve_forever()
     finally:

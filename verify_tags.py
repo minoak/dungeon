@@ -27,6 +27,7 @@ os.environ.pop("DUNGEON_STREAM_OBS", None)
 
 import tags as T
 import brains
+os.environ["DUNGEON_BRAIN_BACKEND"] = "dummy"  # 빈 응답 스텁은 명시적인 엔진 테스트로 실행
 brains._call_claude = lambda prompt, model="haiku": ""   # LLM 무력화 → dummy 폴백(결정론)
 os.environ["DUNGEON_BESTIARY_FILE"] = ""   # 도감 영속 차단(리뷰 픽스) — 셸/tmux env 잔재가 라이브 원장을 읽고 쓰는 오염 방지
 import show_runner

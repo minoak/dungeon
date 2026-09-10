@@ -30,6 +30,7 @@ os.environ.update(DUNGEON_GM="0", DUNGEON_TURNS="120", DUNGEON_W="40", DUNGEON_H
 os.environ["DUNGEON_BESTIARY_FILE"] = ""   # 도감 영속 차단(게이트 격리 원칙)
 
 import brains
+os.environ["DUNGEON_BRAIN_BACKEND"] = "dummy"  # 빈 응답 스텁은 명시적인 엔진 테스트로 실행
 import dungeon_gm as G
 
 

@@ -20,6 +20,8 @@ claude-memory/
 party_custom.json
 character_presets.json
 state/runner.out
+state/brain_pause.json
+state/brain_retry.json
 
 # 스프라이트 묶음(D37, 2026-09-06) — 재생성물(합성 PNG 600장+sprites.json)은 커밋 안 함.
 # 런타임 유일본은 viewer/assets/sprites/sprites.json(사본). 원본 시안·도구·README 만 art/ 에 둔다.

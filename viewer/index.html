@@ -124,6 +124,8 @@
 <script src="assets/sprites/sprites.js"></script>   <!-- D37 파츠 스프라이트 합성기(론처와 공용) — 없어도 뷰어는 산다 -->
 <script type="module">
 import { skillsHtml, alphaLabel, acquisitionHtml, skillRollHtml, skillEffectText } from './assets/skills.js';
+import { createBrainPause } from './assets/brain-pause.js';
+const pausePanel = createBrainPause();
 'use strict';
 /* ════════════════════════════════════════════════════════════════
    원더랜드 웹 타일 뷰어 v1 — stream.jsonl 순수 소비자.
@@ -818,6 +820,12 @@ async function loadRun(path, keepPos = false) {
     lastFeedRange = null;
     curRun = path;
     isLive = path.startsWith('state/') && !endLine;
+    if (isLive) {
+      try {
+        const response = await fetch('/api/status', { cache: 'no-store' });
+        if (response.ok) pausePanel.update(await response.json());
+      } catch { /* 정적 서버에서도 기존 리플레이는 계속 볼 수 있다. */ }
+    } else pausePanel.update(null);
     $('liveBadge').classList.toggle('on', isLive);
     setIdx(keepPos ? (wasAtEnd ? frames.length - 1 : prevIdx) : (isLive ? frames.length - 1 : 0));
     renderInfo();

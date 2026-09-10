@@ -208,9 +208,9 @@ def roundtrip_runner():
     """실제 러너의 새 던전·저장된 마을·재입장 경로에서 같은 원장을 이어 쓰는지 검사한다."""
     original_think = brains.think_all
     current = {}
-    def think(d, bots, inbox=None):
+    def think(d, bots, inbox=None, on_error=None):
         current['d'] = d
-        return original_think(d, bots, inbox)
+        return original_think(d, bots, inbox, on_error=on_error)
     def decide(obs, char, bot=None, roster=None, solo=False):
         ledger = SR.book(current['d'])
         floor = ledger.floor

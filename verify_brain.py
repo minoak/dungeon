@@ -124,8 +124,8 @@ check("③ claude_brain 은 위치인자 2개·키워드 0 으로 부른다"
       len(seen.get("a", ())) == 2 and not seen.get("k") and seen["a"][1] == "haiku")
 
 brains._call_claude = lambda p, m: ""     # 구식 str 반환·위치 2개 모킹 하위호환
-check("③ `lambda p, m:` 형 모킹이 그대로 통한다(폴백으로 떨어짐)",
-      brains.claude_brain(obs, "1", bots[0], bots)["src"] == "fallback")
+check("③ `lambda p, m:` 형 모킹이 그대로 통한다(행동 없는 오류로 보류)",
+      brains.claude_brain(obs, "1", bots[0], bots)["src"] == "error")
 restore()
 
 # ───────────────────────── ④ 함수-안 디스패치 ─────────────────────────

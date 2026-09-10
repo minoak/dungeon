@@ -6,7 +6,7 @@
 claude.exe -p --model haiku 로 (캐릭터 시트 + obs)를 주고 한 '행동'을 받는다.
   · 과금: 구독(정액제) → 토큰 과금 0
   · 속도: 콜드 ~5-8초/콜. 봇들은 동시 호출(ThreadPool)로 묶어 턴당 1콜 폭.
-  · 안전: 파싱 실패/타임아웃 → 엔진 규칙두뇌(dummy_brain) 폴백 → 절대 안 죽음.
+  · 실패: 같은 관측으로 한 번 재판단 → 계속 실패하면 실행 전 보류. 규칙 두뇌는 dummy 테스트 전용.
 
 진실(좌표·이동가능·주사위 판정)은 dungeon_gm 이 쥔다. 봇은 '의도'만 낸다.
 반환: {type, [target], [choice], say, reason, src}
@@ -1502,14 +1502,22 @@ def _then(obj, obs):
     return out
 
 
-def _fallback(obs, char, why="파싱 실패"):
-    """엔진 규칙두뇌(dict 반환)에 say/reason/src 옷을 입혀 돌려준다.
-    why = 실패 종류 라벨(타임아웃/빈 응답/JSON 불량/행동 해석 실패…) — 스트림·봇로그 계측."""
+def _dummy_decision(obs, char, why="테스트"):
+    """명시적인 dummy 백엔드 전용. src=fallback은 기존 테스트 기록과 호환한다."""
+    if backend_name() != "dummy":
+        raise RuntimeError("실플레이에서 규칙 두뇌를 호출할 수 없다")
     fb = dict(G.dummy_brain(obs, char))            # {type, [dir]}
     if obs.get('action_schema') == G.CA.PROFILE:
         fb = G.CA.fallback(fb, obs)
     fb.update(say="", reason="[폴백] %s -> 규칙두뇌" % why, src="fallback")
     return fb
+
+
+class DecisionBlocked(RuntimeError):
+    """실행할 행동이 없는 판단 오류. 대기·탐색으로 바꾸면 안 된다."""
+    def __init__(self, errors):
+        self.errors = errors
+        super().__init__("모델 판단 실패 — 원정 진행 보류")
 
 
 def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
@@ -1539,9 +1547,31 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
         prompt = (_sheet(bot, roster) + "\n" + (ADV_PROMPT_SOLO if solo else ADV_PROMPT)
                   + "\n\n" + _wire(obs, names)
                   + "\n\n오직 JSON 한 줄로만 답하라.")
-    res = _call_claude(prompt, "haiku")
-    # verify/스모크가 _call_claude 를 str 반환 람다로 모킹한다 — 그 표면을 깨지 않는 하위호환.
-    raw, why = res if isinstance(res, tuple) else (res, None)
+    errors = []
+    request = prompt
+    for _ in range(2):
+        res = _call_claude(request, "haiku")
+        raw, why = res if isinstance(res, tuple) else (res, None)
+        dec = _parse_decision(raw, why, obs, char, roster)
+        if dec.get("src") != "error":
+            if errors:
+                dec["brain_retries"] = errors
+            return dec
+        if backend_name() == "dummy":
+            fb = _dummy_decision(obs, char, dec["reason"])
+            fb.update({k: v for k, v in dec.items() if k not in ("src", "reason")})
+            return fb
+        errors.append({"code": dec["input_error"], "reason": dec["reason"],
+                       "detail": dec["input_error_detail"]})
+        # 원래 관측과 시트는 그대로 둔다. 대체 행동은 추천하지 않고 실패 사실만 돌려준다.
+        request = (prompt + "\n\n# 직전 응답의 입력 오류 — 아직 행동하지 않았고 시간도 흐르지 않았다\n"
+                   + json.dumps(errors[-1], ensure_ascii=False)
+                   + "\n위 오류와 현재 관측을 확인하고 네 의도에 맞는 행동을 다시 판단하라. 오직 JSON 한 줄로 답하라.")
+    return {**dec, "attempt_errors": errors}
+
+
+def _parse_decision(raw, why, obs, char, roster):
+    """응답을 행동 또는 오류로 읽는다. 오류에는 실행 가능한 type이 없다."""
     obj, jwhy = _extract(raw)
     why = why or jwhy
     if obj:
@@ -1549,7 +1579,7 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
         if COMPOSE:
             composed, input_error = _compose_pick(obj, obs)
             if input_error:
-                fb = _fallback(obs, char, input_error + ": " + _head(json.dumps(obj, ensure_ascii=False)))
+                fb = {"src": "error", "reason": input_error}
                 fb["input_error"] = input_error
                 fb['input_error_detail'] = G.CA.error_detail(obj, obs, input_error)
                 fb.update(reaction)
@@ -1627,10 +1657,8 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
                 return out
         # JSON 은 왔으나 행동으로 해석 실패(무효 choice·type·target) — 원문 머리를 계측에 남긴다
         why = "행동 해석 실패: " + _head(json.dumps(obj, ensure_ascii=False))
-    fb = _fallback(obs, char, why or "파싱 실패")
-    if COMPOSE:
-        fb['input_error'] = 'invalid_response'
-        fb['input_error_detail'] = {'code': 'invalid_response', 'reason': why, 'raw_response': raw}
+    fb = {"src": "error", "reason": why or "파싱 실패", "input_error": "invalid_response",
+          "input_error_detail": {"code": "invalid_response", "reason": why, "raw_response": raw}}
     return fb
 
 
@@ -1691,7 +1719,7 @@ def social_all(d, bots, inbox=None):
     return out
 
 
-def think_all(d, bots, inbox=None):
+def think_all(d, bots, inbox=None, on_error=None):
     """order 없는(=재결정 필요한) 살아있는 봇만 '같은 틱-시작 스냅샷'에서 동시 사고.
     order 있는 봇은 엔진 자동보행 중이라 LLM 호출 안 함(콜 절약). inbox→obs.messages 주입.
     작정(D16): 남은 계획이 있는 봇은 LLM 대신 다음 수를 집행(src='plan', 콜 0) —
@@ -1754,6 +1782,16 @@ def think_all(d, bots, inbox=None):
             out.update({c: f.result() for c, f in futs.items()})
         _brainlog(kind="tick", backend=backend_name(), n=len(thinkers),
                   ms=int((time.time() - _t0) * 1000))
+        # 성공한 결정·작정·관측은 보관한다. 실패한 봇만 같은 관측으로 재시도하며,
+        # 모두 준비되기 전에는 아래의 기억 반영이나 러너의 세계 진행으로 넘어가지 않는다.
+        while errors := {c: dec for c, dec in out.items() if dec.get("src") == "error"}:
+            if on_error is None:
+                raise DecisionBlocked(errors)
+            on_error(errors)
+            with ThreadPoolExecutor(max_workers=len(errors)) as ex:
+                futs = {b["char"]: ex.submit(claude_brain, obss[b["char"]], b["char"], b, roster, solo)
+                        for b in thinkers if b["char"] in errors}
+                out.update({c: f.result() for c, f in futs.items()})
     by = {b["char"]: b for b in live}
     trail_on = bool(getattr(d, "trail_on", False))
     for c, dec in out.items():          # 이번 판단을 자기 기억으로 저장 → 다음 결정의 obs.intent.

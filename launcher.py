@@ -22,6 +22,7 @@ API(JSON):
                      → 러너 subprocess. 동시 1판(실행 중이면 409)
   GET  /api/status   {running,pid,started,seed,party,turn,outcome,viewer,game}
   POST /api/stop     러너 종료
+  POST /api/retry    {pause_id} → 판단 정지 중인 같은 러너에서 모델 재시도
   GET  /game/        게임 클라이언트(game/dist/ 빌드 산출물 — 초점 캐릭터 카메라 뷰어, 2026-09-09 M3/B5).
                      /game → 302 /game/ · /game/… 은 game/dist/… 서빙 · 빌드가 없으면 503 한 장(빌드 명령 안내)
 
@@ -48,6 +49,7 @@ sys.path.insert(0, HERE)
 
 import sheetkit                                   # noqa: E402
 import skill_schema                              # noqa: E402
+import run_control                               # noqa: E402
 from character_presets import PresetStore         # noqa: E402
 
 MAPS = {                                          # 시작 옵션 → 러너 환경변수(wonderland.bat 메뉴 값 그대로)
@@ -165,6 +167,7 @@ class Runner:
                 env["DUNGEON_BESTIARY_FILE"] = os.path.join(self.root, "bestiary.json")
             os.makedirs(self.state_dir, exist_ok=True)
             self.preserve_previous()
+            run_control.reset(self.state_dir)
             with io.open(os.path.join(self.state_dir, "runner.out"), "w", encoding="utf-8") as out:
                 self.proc = subprocess.Popen([sys.executable, os.path.join(self.root, "show_runner.py")],
                                              cwd=self.root, env=env, stdout=out, stderr=subprocess.STDOUT)
@@ -220,7 +223,19 @@ class Runner:
                     if o.get("kind") == "tick":
                         out["turn"] = o.get("turn")
                         break
+        paused = run_control.read_json(os.path.join(self.state_dir, run_control.PAUSE_FILE))
+        out["brain_pause"] = paused if out["running"] and paused.get("pid") == out["pid"] else None
         return out
+
+    def retry(self, pause_id):
+        with self.lock:
+            if not self.running():
+                raise Conflict("진행 중인 원정이 없다")
+            try:
+                run_control.request_retry(self.state_dir, pause_id, self.proc.pid)
+            except ValueError as error:
+                raise Conflict(str(error)) from error
+            return {"ok": True}
 
 
 class Ctx:
@@ -363,6 +378,7 @@ class Handler(SimpleHTTPRequestHandler):
                                     "skill_alpha": {"presets": skill_schema.PRESETS,
                                                     "default_sets": skill_schema.DEFAULT_SETS},
                                     "default_mode": "standard", "ruleset": "skills-v1",
+                                    "brain_failure_policy": run_control.POLICY,
                                     "text_limits": TEXT_LIMITS,
                                     "custom_saved": os.path.exists(self.ctx.party_path),
                                     "default_brain": self.ctx.default_brain or "gemini_api",
@@ -407,6 +423,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(200, save_party(self.ctx, body.get("slots") or []))
             if path == "/api/start":
                 return self._json(200, self.ctx.runner.start(body, self.ctx.party_path, self.ctx.default_brain))
+            if path == "/api/retry":
+                return self._json(200, self.ctx.runner.retry(body.get("pause_id")))
             if path == "/api/stop":
                 return self._json(200, self.ctx.runner.stop())
             return self._json(404, {"error": "없는 API"})
@@ -439,7 +457,8 @@ def main():
     try:
         with urlopen("http://%s:%d/api/presets" % (a.host, a.port), timeout=2) as response:
             existing = json.load(response)
-        if existing.get("ruleset") == "skills-v1" and existing.get("text_limits") == TEXT_LIMITS:
+        if (existing.get("ruleset") == "skills-v1" and existing.get("text_limits") == TEXT_LIMITS
+                and existing.get("brain_failure_policy") == run_control.POLICY):
             print("[launcher] 기존 서버에서 연다: " + url)
             if not a.no_browser:
                 webbrowser.open(url)

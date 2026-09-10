@@ -204,7 +204,7 @@ def run_runner():
         captured['d'] = d
         return d, {b['char']: (b['x'], b['y']) for b in bots}
 
-    def decide(d, bots, inbox=None):
+    def decide(d, bots, inbox=None, on_error=None):
         out = {}
         for b in bots:
             if b.get('order') or not b['alive'] or b['won']:

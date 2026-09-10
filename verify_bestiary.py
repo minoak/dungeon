@@ -168,6 +168,7 @@ check("⑧ 첫 시선='낯선 짐승' → 발급 직후 같은 봇 obs 즉시 �
 shutil.rmtree(STATE, ignore_errors=True)
 os.makedirs(STATE, exist_ok=True)
 import brains  # noqa: E402
+os.environ["DUNGEON_BRAIN_BACKEND"] = "dummy"  # 빈 응답 스텁은 명시적인 엔진 테스트로 실행
 brains._call_claude = lambda prompt, model="haiku": ""   # LLM 무력화 → dummy 폴백(결정론)
 import show_runner  # noqa: E402
 show_runner.STEP_DELAY = 0

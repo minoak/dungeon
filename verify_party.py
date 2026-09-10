@@ -35,6 +35,7 @@ os.environ.update(DUNGEON_GM="0", DUNGEON_TURNS="400", DUNGEON_W="40", DUNGEON_H
 os.environ.pop("DUNGEON_PARTY_FILE", None)     # 기본 party.json 경로 사용(3인)
 os.environ.pop("DUNGEON_STREAM_OBS", None)
 import brains
+os.environ["DUNGEON_BRAIN_BACKEND"] = "dummy"  # 빈 응답 스텁은 명시적인 엔진 테스트로 실행
 brains._call_claude = lambda prompt, model="haiku": ""   # LLM 무력화 → dummy 폴백(결정론)
 import gm
 import dungeon_gm as G

@@ -14,8 +14,10 @@ additive 파생). t83~86 "뭉쳐서 나가자" 합의가 한 결정 만에 증�
 (기존 verify 23종은 별도 실행.)
 """
 import json
+import os
 
 import brains
+os.environ["DUNGEON_BRAIN_BACKEND"] = "dummy"  # 빈 응답 스텁은 명시적인 엔진 테스트로 실행
 import dungeon_gm as G
 from dungeon_gm import Dungeon
 

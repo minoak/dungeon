@@ -33,6 +33,7 @@ os.environ.pop("DUNGEON_STREAM_OBS", None)
 os.environ.pop("DUNGEON_STATUS", None)      # 러너 기본(1)을 잰다
 
 import brains
+os.environ["DUNGEON_BRAIN_BACKEND"] = "dummy"  # 빈 응답 스텁은 명시적인 엔진 테스트로 실행
 import dungeon_gm as G
 from dungeon_gm import Dungeon
 

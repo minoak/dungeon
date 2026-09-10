@@ -66,6 +66,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import dungeon_gm as G
 import brains
+import run_control
 import gm
 import stream
 import bestiary
@@ -797,6 +798,7 @@ def arrive_cells(d, ax, ay, k):
 
 
 def main():
+    run_control.reset(STATE)
     if SKILLS_ON and not brains.COMPOSE:
         raise SystemExit('스킬 알파는 DUNGEON_ACTION_MODE=compose에서 실행한다')
     if TOWN_ON and SOLO_ON:
@@ -818,6 +820,7 @@ def main():
     for n in ["events.log", "gm.log"] + ["bot%s.log" % c for c in chars]:
         open(os.path.join(STATE, n), "w", encoding="utf-8").close()
     sw = stream.StreamWriter(os.path.join(STATE, "stream.jsonl"))   # 실행당 truncate
+    brain_pause = run_control.BrainPause(STATE, sw, names, event)
 
     if TOWN_ON:                            # 마을 판(D29): 원정은 고향에서 시작한다
         d, tstarts = build_town()
@@ -932,6 +935,7 @@ def main():
                                        #   ⚠️ 지연·토큰·요청id 는 여기 넣지 않는다 — 실행마다 변하면
                                        #   verify_stream 결정론(라인 바이트 동일)이 즉시 깨진다.
             bestiary=iss.snapshot(),   # 판 시작 시점 지식(additive) — 도감이 obs 를 바꾸므로 리플레이·비교의 전제
+            brain_failure_policy=run_control.POLICY,
             bestiary_file=bool(BESTIARY_FILE),   # 영속 여부(실행모드 메타 — gm/menu 와 같은 급)
             party=[{**G.SK.snapshot(b), **{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
                                          "wdmg", "stealth", "search_r", "persona")},
@@ -968,7 +972,8 @@ def main():
         inbox_in = inbox    # 이번 틱 사고에 주입된 받은편지함 — 루프 끝에서 이름이 새 dict 로
                             # 재바인딩되므로(덮어씀) think_all 직전 참조를 잡아 스트림에 남긴다
         # order 없는 봇만 사고(자동보행 중인 봇은 LLM 0콜)
-        decisions = brains.think_all(d, bots, inbox)
+        decisions = brains.think_all(d, bots, inbox, on_error=lambda errors: brain_pause.wait(turn, errors))
+        brain_pause.resolved(turn)
         # 사교 콜(채널 분리) — 걷는 중에 말을 들은 봇만. 행동은 못 바꾸고 say 만 낸다.
         social = brains.social_all(d, bots, inbox)
         replies = []                          # D47 ② 반응(형태) 계측 — 제안·친목·건네기에 대한 첫 결정의 답(행동|말|없음)

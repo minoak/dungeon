@@ -4,6 +4,22 @@
 엔진 → 스트림 → **[맵뷰어 | 기계 크로니클 | GM(옵션·LLM) | 웹뷰어]** — 모든 소비자는 형제다.
 GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0콜로 만들어진다.
 
+## 판단 실패와 원정 정지 — 2026-09-11 additive
+
+`run_meta.brain_failure_policy = "retry-pause-v1"`인 실플레이에서는 규칙 두뇌가 행동을 대체하지 않는다.
+같은 관측으로 최대 2번 호출하고, 성공한 결정에 `brain_retries: [{code,reason,detail}]`로 첫 오류를 보존한다.
+두 번 다 실패하면 실행 가능한 `type`을 만들지 않으며, 해당 틱의 행동·이동·몬스터 턴·대기시간을 진행하지 않는다.
+
+- `brain_pause {turn,errors:[{char,name,src:"error",reason,input_error,input_error_detail,attempt_errors}]}`:
+  아직 실행하지 않은 틱의 판단 오류. `attempt_errors`에는 두 응답의 오류와 원문·당시 참조 목록을 보존한다.
+- `brain_retry {turn,chars}`: 사용자가 재시도를 요청했다. 성공한 동료의 판단과 관측은 보관하고 실패한 봇만 다시 묻는다.
+- `brain_resumed {turn}`: 모든 판단이 준비되어 실행 보류를 해제했다. 이후 동일한 `turn`의 `tick`이 기록된다.
+
+이 세 종류는 게임 프레임이 아니다. 기존 소비자는 무시할 수 있으며 `tick.decisions`에는 수락된 행동만 들어간다.
+현재 정지 여부는 `/api/status.brain_pause`로 읽는다. `POST /api/retry {pause_id}`는 그 정지에만 유효하다.
+제어 파일 `state/brain_pause.json`, `state/brain_retry.json`은 임시 통신용이며 리플레이 원장은 스트림이다.
+명시적인 `backend:dummy` 테스트와 과거 기록의 `src:fallback`은 호환을 위해 유지한다.
+
 ## 스킬 원정 — 2026-09-10 additive, 2026-09-11 기본 채택
 
 모든 스킬 플래그가 OFF이면 기존 스트림과 동일하다. 활성 판은 `run_meta.alpha`로 식별한다.
@@ -46,8 +62,8 @@ compose는 `menu:false`와 `compose_profile`을 함께 기록한다. `legacy-v0.
 - 관측은 `action_schema`, `actor`, `targets`, `items`, `ways`를 추가한다. 모델에 제공하는 대상 목록에는 실물 좌표나 내부 참조를 포함하지 않는다. `then`도 같은 행동 문법을 사용하며 착수 시 참조를 재검증한다.
 - **모든 접수 행동**에 `action_id`, 그 결과와 진행 이벤트에 `parent_action_id`를 부여한다. `events.resolution = {actor,type,target,phase,status,reason}`은 원래 정규 행동을 보존한다. `phase:pending`이면 `status:null`, `phase:resolved`이면 `status:success|failed|no_effect`다. 몸에 붙은 상태를 나타내는 기존 `events.status`와 구별하기 위해 중첩했다.
 - `use`의 사물 기능 결과에는 `effect_type:interact|goto`가 붙어 기존 결과 어휘를 재사용한다. 물약 사용은 `result:healed`, `heal/hp/potions/item_used`; 효과 없는 조합은 `result:no_effect`, `reason_code`다. 공격 대상이 사람인 경우 `target_kind:bot`, `target_id:b<char>`이며 `monster_hp`는 구 소비자를 위한 호환 HP 필드다.
-- `search/attack/use/give/bond`는 자동 접근한다. 실행 조건이 깨지면 실패로 남기며 임의 탐색으로 바꾸지 않는다. 입력 오류 폴백과 구별한다.
-- `input_error_detail`은 `{code,attempted_action,target_ids,known_goto_ids,item_ids,target_detail}`로 원문 객체와 그때의 참조 목록을 보존한다. `way_not_current`는 이번 관측에 없는 길이라는 뜻이며, 실제 과거에 존재한 ID라는 단정이 아니다. 추가 오류는 `missing_target/missing_item/invalid_response`; 응답 자체가 불량이면 `raw_response`와 호출·파싱 `reason`을 보존한다. 실제 결정은 같은 틱의 규칙 행동이며 `src:fallback`이다.
+- `search/attack/use/give/bond`는 자동 접근한다. 실행 조건이 깨지면 실패로 남기며 임의 탐색으로 바꾸지 않는다. 실행 전의 입력 오류와 구별한다.
+- `input_error_detail`은 `{code,attempted_action,target_ids,known_goto_ids,item_ids,target_detail}`로 원문 객체와 그때의 참조 목록을 보존한다. `way_not_current`는 이번 관측에 없는 길이라는 뜻이며, 실제 과거에 존재한 ID라는 단정이 아니다. 추가 오류는 `missing_target/missing_item/invalid_response`; 응답 자체가 불량이면 `raw_response`와 호출·파싱 `reason`을 보존한다. `retry-pause-v1` 실플레이의 오류는 위 재판단·정지 기록에 들어간다. 이전 기록 및 명시적인 dummy 테스트에서는 규칙 행동(`src:fallback`)에 실린다.
 - 선택적 reaction은 아래 별도 계약을 따른다. 기존 관계 기록과 replies는 유지한다. 시도 횟수는 decisions, 완료 결과는 resolution의 resolved 상태를 기준으로 읽고 pending을 중복 집계하지 않는다.
 
 과거 legacy 프로브의 `decisions.input_error?`는 입력 오류를 구분한다: `invalid_type`, `invalid_target`, `invalid_item`, `unexpected_target`, `unexpected_item`.
