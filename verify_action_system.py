@@ -50,7 +50,7 @@ def finish(d, bots, limit=30):
 
 
 d, b, obs = scene()
-check('현재 관측에 self·소지품·길을 분리하여 노출', obs['action_schema'] == CA.PROFILE
+check('현재 관측에 self·소지품·길을 분리하여 노출', obs['action_schema'] == CA.SCHEMA
       and obs['targets'][0]['id'] == 'self' and obs['items'][0]['id'] == 'i1' and obs['ways'])
 check('새 참조 목록에 좌표·실물 참조가 새지 않음', all(
     not ({'x', 'y', 'xy', 'origin', 'value'} & set(t)) for t in obs['targets']))
@@ -75,6 +75,15 @@ for rid in [t['id'] for t in obs['targets']]:
         matrix += 1
 check('행동 × 관측 대상 %d조합을 파싱·실행·표시' % matrix, matrix >= 60)
 
+# D48(2026-09-11) follow 폐지 — 조합형 COMMON 9종, follow 는 모르는 동사(invalid_type). 관측 계약(action_schema)은 v0.4 그대로.
+d, bots, o = scene()
+_, err = CA.parse({'type': 'follow', 'target': 'b2'}, o)
+goto_b, goto_err = CA.parse({'type': 'goto', 'target': 'b2'}, o)
+check('D48: follow 는 COMMON 밖(invalid_type) · 9종 · 프로필 v0.5 · 관측 스키마 v0.4 · 사람에게 goto 는 접수',
+      err == 'invalid_type' and 'follow' not in CA.COMMON and len(CA.COMMON) == 9
+      and CA.PROFILE == 'compose-v0.5' and CA.SCHEMA == 'compose-v0.4' and o.get('action_schema') == 'compose-v0.4'
+      and goto_err is None and goto_b == {'type': 'goto', 'target': 'b2'})
+
 for kind, rows in [('door', ['############', '#1..+..2..>#', '#...#......#', '############']),
                    ('trap', ['########', '#12.^.>#', '#......#', '########'])]:
     for typ in CA.COMMON:
@@ -84,7 +93,7 @@ for kind, rows in [('door', ['############', '#1..+..2..>#', '#...#......#', '##
         o = d.view(bots[0], bots)
         rid = next(t['id'] for t in o['targets'] if t['kind'] == kind)
         a, r = run(d, bots, o, {'type': typ, 'target': rid, **({'item': 'i1'} if typ == 'give' else {})})
-        if typ not in ('follow', 'wait', 'rest'):
+        if typ not in ('wait', 'rest'):
             events = finish(d, bots)
             r = events[-1] if events else r
         assert r['resolution']['type'] == typ, r

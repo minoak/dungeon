@@ -8,8 +8,11 @@ import copy
 import skill_core as SK
 import skill_combat as SC
 
-PROFILE = 'compose-v0.4'
-COMMON = ('goto', 'follow', 'explore', 'search', 'attack', 'use', 'give', 'bond', 'wait', 'rest')
+SCHEMA = 'compose-v0.4'    # 관측 계약(obs.action_schema) — ID 문법·대상 목록은 v0.4 그대로(verify_skill_off 의 78fbe84 기준선 해시에 포함)
+PROFILE = 'compose-v0.5'   # 행동 계약(run_meta.compose_profile) — D48(2026-09-11): COMMON 에서 follow 제거
+# D48 follow 폐지(파트너 결정 09-11) — 동행은 `goto b<char>`(보이는 동료에게 한 번 걷고, 곁에 닿으면 다시 판단)로만.
+# 엔진의 follow order(D18 A-5)는 메뉴형(비교용 옛 규칙)·구판 리플레이용으로 남는다 — 조합형 파서만 모르는 동사가 된다.
+COMMON = ('goto', 'explore', 'search', 'attack', 'use', 'give', 'bond', 'wait', 'rest')
 DISTANCE_ACTIONS = ('search', 'attack', 'use', 'give', 'bond')
 ITEM_SLOTS = {'i1': 'potion', 'i2': 'weapon', 'i3': 'armor'}
 
@@ -95,7 +98,7 @@ def observe(d, bot, bots, obs):
         candidates.append(entry)
         targets.append(dict(entry))
     bot['_target_refs'] = refs
-    obs.update(action_schema=PROFILE, actor=actor, targets=targets, items=items, ways=candidates)
+    obs.update(action_schema=SCHEMA, actor=actor, targets=targets, items=items, ways=candidates)
     return SK.observe(d, bot, obs)
 
 
@@ -277,10 +280,6 @@ def execute(d, bot, action, bots):
             bot['order'], bot['path'] = '@%d,%d' % xy, path
             return _base(bot, action, 'pathed', len=len(path), **(obj['result'] if kind == 'way' else {}))
         return d._execute_legacy_action(bot, action, bots)
-    if typ == 'follow':
-        if kind == 'bot' and obj is not bot:
-            return d._execute_legacy_action(bot, action, bots)
-        return _base(bot, action, 'no_effect', reason_code='no_follow_behavior')
     if typ == 'search':
         if kind == 'bot' and obj is bot:
             return {**d._search(bot, bots), 'target': rid}

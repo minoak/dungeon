@@ -58,7 +58,7 @@ def decide(d, bots, payload, obs=None):
 
 
 check("실험 모드와 compose-v0.4 기록", not brains.MENU and brains.COMPOSE
-      and brains.action_metadata() == {"action_mode": "compose", "compose_profile": "compose-v0.4", "auto_approach": True})
+      and brains.action_metadata() == {"action_mode": "compose", "compose_profile": "compose-v0.5", "auto_approach": True})
 d, bots = scene()
 obs = d.view(bots[0], bots)
 saved = copy.deepcopy(obs)
@@ -142,7 +142,7 @@ def run():
 
 first, second = run(), run()
 check("고정 응답 원정 2회 결정론", first == second and first[-1]["kind"] == "end")
-check("스트림에서 compose 실험을 식별", first[0]["action_mode"] == "compose" and first[0]["compose_profile"] == "compose-v0.4"
+check("스트림에서 compose 실험을 식별", first[0]["action_mode"] == "compose" and first[0]["compose_profile"] == "compose-v0.5"
       and first[0]["menu"] is False)
 decisions = [v for rec in first for v in rec.get("decisions", {}).values()]
 check("러너 결정은 직접 행동이며 관측도 보존", decisions and all("choice" not in v for v in decisions)

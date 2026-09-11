@@ -8,6 +8,8 @@ import math
 from analyze_run import load
 from composed_actions import COMMON
 
+LEGACY_COMMON = COMMON + ('follow',)   # D48(2026-09-11) 이전 판(compose-v0.4)의 follow 결정도 COMMON 으로 센다 — 구판 분석 호환
+
 
 def distribution(counts, skill_ids):
     total = sum(counts.values())
@@ -15,7 +17,7 @@ def distribution(counts, skill_ids):
     return {'decisions': total, 'counts': dict(sorted(counts.items())),
             'attack_ratio': counts.get('attack', 0) / total if total else 0,
             'skill_ratio': skills / total if total else 0,
-            'common_ratio': sum(n for typ, n in counts.items() if typ in COMMON) / total if total else 0,
+            'common_ratio': sum(n for typ, n in counts.items() if typ in LEGACY_COMMON) / total if total else 0,
             'unique_actions': len(counts),
             'entropy_bits': -sum((n / total) * math.log2(n / total) for n in counts.values()) if total else 0}
 

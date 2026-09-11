@@ -187,7 +187,7 @@ def _compose_types():
 
 def _compose_pick(obj, obs):
     """선행 프로브: 기존 동사를 직접 읽는다. 모르는 동사를 이동으로 바꾸지 않는다."""
-    if obs.get('action_schema') == G.CA.PROFILE:
+    if obs.get('action_schema') == G.CA.SCHEMA:
         return G.CA.parse(obj, obs)
     typ = str(obj.get("type") or "").strip().lower()
     if typ not in _compose_types():
@@ -1396,7 +1396,7 @@ def _wire(obs, names=None, compose=False):
             out += ["", "## 탐색 후보 — 방향"] + [
                 "- %s: %d칸, %s" % (w["bearing"], w["dist"], "가 본 길" if w.get("visited") else "안 가본 길")
                 for w in ways]
-        if obs.get('action_schema') == G.CA.PROFILE:
+        if obs.get('action_schema') == G.CA.SCHEMA:
             out += ["", "## 대상 — 지금 참조할 수 있는 ID"]
             for target in obs.get('targets', []):
                 out.append('- [%s] %s (%s)%s%s' % (
@@ -1461,7 +1461,7 @@ def _then(obj, obs):
     raw = obj.get("then")
     if not isinstance(raw, list):
         return []
-    if obs.get('action_schema') == G.CA.PROFILE:
+    if obs.get('action_schema') == G.CA.SCHEMA:
         out = []
         for item in raw[:G.PLAN_MAX]:
             if not isinstance(item, dict):
@@ -1470,7 +1470,7 @@ def _then(obj, obs):
             if error:
                 break
             out.append(step)
-            if step['type'] in ('follow', 'wait', 'rest'):
+            if step['type'] in ('wait', 'rest'):      # D48: follow 는 COMMON 밖(parse 가 먼저 거른다)
                 break
         return out
     out, valid = [], None
@@ -1507,7 +1507,7 @@ def _dummy_decision(obs, char, why="테스트"):
     if backend_name() != "dummy":
         raise RuntimeError("실플레이에서 규칙 두뇌를 호출할 수 없다")
     fb = dict(G.dummy_brain(obs, char))            # {type, [dir]}
-    if obs.get('action_schema') == G.CA.PROFILE:
+    if obs.get('action_schema') == G.CA.SCHEMA:
         fb = G.CA.fallback(fb, obs)
     fb.update(say="", reason="[폴백] %s -> 규칙두뇌" % why, src="fallback")
     return fb
@@ -1606,7 +1606,7 @@ def _parse_decision(raw, why, obs, char, roster):
         if said:                                            # D47 말의 종류 — 말이 있을 때만(잡담|제안, 기본 잡담)
             rel = {**rel, "say_kind": _parse_kind(obj.get("say_kind"))}
         if COMPOSE:
-            if composed["type"] in ("follow", "wait", "rest"):
+            if composed["type"] in ("wait", "rest"):    # 열린 결말 — then 못 이음(D48 뒤 follow 없음)
                 then = []
             return {**composed, **({"then": then} if then else {}),
                     **({"note": note} if note else {}), **rel, **reaction,
