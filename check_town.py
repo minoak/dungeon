@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """마을 격자 검사기(0콜) — town.json 또는 후보 파일을 엔진 규격(docs/town-map-contract.md)으로 검사한다.
-사용: python check_town.py town.json | art/town-v1/town-candidate.json
+사용: python check_town.py town.json | art/town-v1/town-candidate.json | art/town-v1/layout.json(town-layout-v1 원본) | {"layout": 참조} town 파일
 검사: 행 길이 동일 · 바깥 테두리 벽 · '>' 정확히 하나 · 출발 자리(1~9) 3개 이상 · NPC 좌표가 바닥 · NPC id 가 entities/npc 에 있음
      · 출발 자리 1에서 '>'와 모든 NPC 곁까지 길이 이어짐(BFS) · 엔진 from_ascii 로드."""
 import json
@@ -12,11 +12,26 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import dungeon_gm as G          # noqa: E402
 import entities as ENT          # noqa: E402
+import town_layout as TL        # noqa: E402
+
+
+def load_spec(path):
+    """town.json(map+npcs) · {"layout": 상대경로} 참조 · layout 원본(town-layout-v1) 전부 같은 꼴 {map, npcs}로."""
+    spec = json.load(open(path, encoding='utf-8'))
+    if spec.get('layout'):
+        lpath = os.path.join(os.path.dirname(os.path.abspath(path)), spec['layout'])
+        spec = json.load(open(lpath, encoding='utf-8'))
+    if spec.get('schema') == 'town-layout-v1':
+        res = TL.compile_layout(spec)                       # 제작자의 다섯 필드 → 격자(그림에서 추측 없음)
+        return {'map': res['map'], 'npcs': res['npcs'], '_compiled': True}
+    return spec
 
 
 def check(path):
-    spec = json.load(open(path, encoding='utf-8'))
+    spec = load_spec(path)
     rows, problems, notes = spec['map'], [], []
+    if spec.get('_compiled'):
+        notes.append('layout 원본(town-layout-v1)에서 컴파일한 격자')
     w = len(rows[0])
     if any(len(r) != w for r in rows):
         problems.append('행 길이가 다르다: %s' % sorted({len(r) for r in rows}))

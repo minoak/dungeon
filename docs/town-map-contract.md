@@ -1,7 +1,8 @@
 # 마을 격자 규격 — 맵 제작자에게 (2026-09-11)
 
-마을 그림(`art/town-*/`)은 시각 레이어고, 엔진은 **아스키 격자** 위를 걷는다. 맵을 만드는 쪽이 격자까지 함께 낸다(파트너 결정 09-11).
-격자는 `town.json`에 들어가며, 채택 전에는 후보 파일(예: `art/town-v1/town-candidate.json`)로 두고 `python check_town.py <파일>`로 검사한다.
+**2026-09-11 후속 결정: 저작 원본은 `layout.json`, 아스키는 생성된 검토 출력이다.** 맵 제작자는 막힌 사각형·출입구 칸·출발 칸·던전 입구 칸·NPC id와 칸을 layout에 명시한다. 엔진은 `from_layout`으로 격자를 만들고 `town.json`은 layout을 참조하는 방향이다. 기존 장면·게이트용 `from_ascii`는 유지한다.
+
+정확한 필드와 좌표 이동, 현재 연결 범위는 [마을 1차 layout 계약](../art/town-v1/LAYOUT_CONTRACT.md)을 따른다. `town_layout.compile_layout` 변환과 생성 후보가 준비되어 있고, 엔진 `Dungeon.from_layout`·러너의 `town.json` `{"layout": 상대경로}` 참조 로딩·`check_town.py`의 layout 직접 입력은 **연결됐다**(2026-09-11 밤, verify_town ⑧). 아래 아스키 규격은 **생성 결과의 호환 규격**이다. 현행 `check_town.py`는 생성된 `town-candidate.json`을 받는다.
 
 ## 격자 기호
 
@@ -46,5 +47,5 @@ python check_town.py town.json                          # 현행
 
 ## 참고 도구
 
-`art/town-v1/to_ascii.py`는 시안 `layout.json`에서 규칙(바닥 전부 통행·발자국=벽선 위 6칸·소품 앵커 1칸·문턱 홈)으로 격자를 뽑는 1차 변환기다.
-규칙이 바뀌면 손으로 고치기보다 이 스크립트의 상수를 고쳐 다시 뽑는 편이 그림과 안 어긋난다.
+`art/town-v1/to_ascii.py`는 명시된 layout 필드를 `town_layout.compile_layout`에 전달해 `town-ascii.txt`와 `town-candidate.json`을 만든다. 건물 깊이와 소품 크기를 스크립트 상수로 추측하던 이전 방식은 제거했다.
+맵 수정은 layout에서 하고 아스키는 다시 생성한다. 미리보기의 통행 불가 오버레이로 그림과 충돌을 대조한다. 같은 파일에 둬도 잘못 입력한 사각형은 있을 수 있으므로 이 시각 검토가 필요하다.

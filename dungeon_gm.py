@@ -28,6 +28,7 @@ import social_reactions as SR
 import skill_core as SK
 import skill_combat as SC
 import entities as ENT           # 엔티티 저장소(D50, 09-11) — 몬스터·함정·오브젝트·NPC 정의(수치·이름·지식 본문)
+import town_layout as TL         # 마을 layout(town-layout-v1, 맵 트랙 저작 원본) → 격자 컴파일(엔진 무의존 모듈)
 import math
 import os
 import random
@@ -790,6 +791,17 @@ class Dungeon:
         x = ((x ^ (x >> 16)) * 0x45D9F3B) & 0xFFFFFFFF
         x = ((x ^ (x >> 16)) * 0x45D9F3B) & 0xFFFFFFFF
         return (x ^ (x >> 16)) & 0x7FFFFFFF
+
+    @classmethod
+    def from_layout(cls, layout, seed=7, depth=0):
+        """마을 layout(town-layout-v1 — 맵 트랙의 저작 원본, 09-11 파트너 결정 "아스키를 손으로 그릴 필요는 없다, 격자는 있어야 한다")
+        → 격자. town_layout.compile_layout 이 제작자가 적은 다섯 필드(막힌 사각형·출입구·출발·던전 입구·NPC id/칸)로 아스키 행을
+        만들고(그림에서 벽을 추측하지 않는다), 여기서는 그 행을 from_ascii 에 그대로 넘긴다 — 판정·시야·보행이 손그림 장면과 같다.
+        반환 (d, starts). d.layout_result 에 컴파일 결과(npcs id·좌표, dungeon_entry, entrances — border 적용 좌표)를 남긴다."""
+        res = TL.compile_layout(layout)
+        d, starts = cls.from_ascii(res['map'], seed=seed, depth=depth)
+        d.layout_result = res
+        return d, starts
 
     @classmethod
     def from_ascii(cls, rows, seed=7, depth=1, monsters=None, traps=None, scan=False):

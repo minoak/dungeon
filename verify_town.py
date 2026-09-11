@@ -286,6 +286,29 @@ finally:
     show_runner.SOLO_ON = False
 check("⑦ 솔로+마을 v0 = 시작 전 정직한 거부(행선 분기 미지원)", rejected)
 
+# ── ⑧ layout 원본(town-layout-v1) → from_layout · town.json 의 layout 참조 — 09-11 파트너 결정 "아스키를 손으로 그릴 필요는 없다" ──
+import json as _json, os as _os, tempfile as _tempfile, town_layout as _TL
+lay8 = {"schema": "town-layout-v1", "size": [7, 5], "tileSize": 48, "border": 1,
+        "blocked_rects": [{"id": "hut", "rect": [1, 0, 3, 2]}],
+        "entrances": [{"id": "hut_door", "cell": [2, 1], "kind": "threshold"}],
+        "starts": {"1": [0, 3], "2": [1, 3], "3": [2, 3]},
+        "dungeon_entry": {"cell": [6, 4], "placeholder": True},
+        "npcs": [{"id": "innkeeper", "cell": [5, 2], "row": 0}]}
+res8 = _TL.compile_layout(lay8)
+d8, st8 = G.Dungeon.from_layout(lay8, seed=1, depth=0)
+check("⑧ from_layout: 다섯 필드 → 격자 = from_ascii 판정(벽·출발·입구 좌표 일치, border 적용), layout_result 보존",
+      {k: list(v) for k, v in st8.items()} == res8["starts"] and list(d8.exit) == res8["dungeon_entry"]
+      and d8.grid[1][2] == G.WALL and d8.grid[2][3] != G.WALL and d8.layout_result["npcs"] == [{"id": "innkeeper", "x": 6, "y": 3}])
+with _tempfile.TemporaryDirectory() as tmp8:
+    with open(_os.path.join(tmp8, "lay.json"), "w", encoding="utf-8") as f:
+        _json.dump(lay8, f, ensure_ascii=False)
+    with open(_os.path.join(tmp8, "town.json"), "w", encoding="utf-8") as f:
+        _json.dump({"layout": "lay.json"}, f)
+    d8b, st8b = show_runner.build_town(_os.path.join(tmp8, "town.json"))
+check("⑧ town.json {layout: 상대경로} → build_town: layout 격자·NPC 정의(innkeeper) 합침·'던전 입구' 개명·출발 3",
+      d8b.town and d8b.npc_lines.get("여관주인") and len(st8b) == 3 and d8b.features[d8b._exit_fid].name == "던전 입구"
+      and any(f.type == "npc" and f.name == "여관주인" and (f.x, f.y) == (6, 3) for f in d8b.features.values()))
+
 print("=" * 44)
 if C.failed:
     print("RESULT: %d FAIL" % C.failed)

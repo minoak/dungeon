@@ -584,13 +584,23 @@ def mon_summary(e):
 
 
 # ── 마을(D29, 2026-07-30) — 마을(0층)↔던전(1층~) 왕복의 러너 몫 ──────────────
-def build_town():
+def build_town(path=None):
     """town.json(손그림 고정 맵 — 고향은 랜덤이 아니다) → 마을 Dungeon.
     NPC 는 좌표로 심는다(맵의 '&'는 그림 표기 — from_ascii 는 바닥으로 읽음).
+    town.json 이 {"layout": "<상대경로>"} 면(09-11, 맵 트랙 저작 원본 참조 — 상대 경로는 town 파일 위치 기준) 그 layout 을
+    Dungeon.from_layout 으로 격자화하고 NPC 배치는 layout 의 id·칸을 쓴다(이름·대사·선물은 entities/npc).
     반환: (dungeon, starts) — starts=맵 숫자 표기 자리(첫 출발)."""
-    with open(os.path.join(HERE, "town.json"), encoding="utf-8") as f:
+    path = path or os.path.join(HERE, "town.json")
+    with open(path, encoding="utf-8") as f:
         spec = json.load(f)
-    d, starts = G.Dungeon.from_ascii(spec["map"], seed=DUNGEON_SEED, depth=0)
+    if spec.get("layout"):
+        with open(os.path.join(os.path.dirname(os.path.abspath(path)), spec["layout"]), encoding="utf-8") as f:
+            layout = json.load(f)
+        d, starts = G.Dungeon.from_layout(layout, seed=DUNGEON_SEED, depth=0)
+        placements = d.layout_result["npcs"]
+    else:
+        d, starts = G.Dungeon.from_ascii(spec["map"], seed=DUNGEON_SEED, depth=0)
+        placements = spec.get("npcs", [])
     d.town = True
     d.status = STATUS_ON                   # 상태 태그(D34)는 마을에서도 몸에 붙어 있다(걸으면 피가 난다)
     d.rest_verb = REST_ON                  # 휴식(D35)은 마을에서도 된다(여관은 다음 단계)
@@ -609,7 +619,7 @@ def build_town():
     d.auto_approach = brains.COMPOSE
     d.composed_actions = brains.COMPOSE
     d.skills, d.trpg_combat, d.random_skill = SKILLS_ON and brains.COMPOSE, TRPG_COMBAT_ON, RANDOM_SKILL_ON
-    for n in spec.get("npcs", []):
+    for n in placements:
         x, y = int(n["x"]), int(n["y"])
         spec_n = {**G.ENT.npc(n["id"]), **{k: v for k, v in n.items() if k in ("name", "line", "line_again", "gift")}} \
             if n.get("id") else n              # D50: 배치(id·좌표)는 town.json, 이름·대사·선물은 entities/npc — 옛 인라인 꼴도 읽힌다
