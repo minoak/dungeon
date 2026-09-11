@@ -107,6 +107,43 @@ class BrainPauseTests(unittest.TestCase):
                     self.assertNotIn('type', dec)
                     self.assertEqual(len(dec['attempt_errors']), 2)
 
+    def test_safety_block_retries_once_with_fallback_brain(self):
+        """안전 차단(rc=200 | PROHIBITED_CONTENT 등)은 같은 프롬프트를 다른 두뇌에게 — 오류 덧말 없이, 결정에 brain_fallback.
+        타임아웃·JSON 불량은 대체 두뇌 없이 옛 재시도 그대로. 대체 두뇌를 껐으면(DUNGEON_BRAIN_FALLBACK='') 옛 동작."""
+        _, bots, obs = scene()
+        seen = []
+        def call(prompt, model='haiku'):
+            seen.append((brains.backend_name(), prompt))
+            return ('', '빈 응답 rc=200 | PROHIBITED_CONTENT') if len(seen) == 1 else '{"type":"search","target":"self","reason":"살핀다"}'
+        with patch.dict(os.environ, DUNGEON_BRAIN_BACKEND='gemini_api', DUNGEON_BRAIN_FALLBACK='anthropic_api'), \
+                patch.object(brains, '_call_claude', side_effect=call), \
+                patch.object(brains.G, 'dummy_brain', side_effect=AssertionError('자동 대행 금지')):
+            dec = brains.claude_brain(obs, '1', bots[0], bots)
+            self.assertEqual(brains.backend_name(), 'gemini_api')          # 덮어쓰기는 그 호출로 끝난다
+        self.assertEqual([b for b, _ in seen], ['gemini_api', 'anthropic_api'])
+        self.assertEqual(seen[0][1], seen[1][1])                             # 같은 프롬프트(오류 덧말 없음)
+        self.assertEqual((dec['type'], dec['brain_fallback']), ('search', 'anthropic_api'))
+        self.assertEqual(dec['brain_retries'][0]['code'], 'invalid_response')
+        seen.clear()
+        with patch.dict(os.environ, DUNGEON_BRAIN_BACKEND='gemini_api', DUNGEON_BRAIN_FALLBACK=''), \
+                patch.object(brains, '_call_claude', side_effect=call), \
+                patch.object(brains.G, 'dummy_brain', side_effect=AssertionError('자동 대행 금지')):
+            dec = brains.claude_brain(obs, '1', bots[0], bots)
+        self.assertEqual([b for b, _ in seen], ['gemini_api', 'gemini_api'])
+        self.assertNotIn('brain_fallback', dec)
+        self.assertIn('직전 응답의 입력 오류', seen[1][1])
+        seen.clear()
+        def timeout(prompt, model='haiku'):
+            seen.append((brains.backend_name(), prompt)); return ('', '타임아웃 60s')
+        with patch.dict(os.environ, DUNGEON_BRAIN_BACKEND='gemini_api', DUNGEON_BRAIN_FALLBACK='anthropic_api'), \
+                patch.object(brains, '_call_claude', side_effect=timeout), \
+                patch.object(brains.G, 'dummy_brain', side_effect=AssertionError('자동 대행 금지')):
+            dec = brains.claude_brain(obs, '1', bots[0], bots)
+        self.assertEqual([b for b, _ in seen], ['gemini_api', 'gemini_api'])   # 차단이 아니면 대체 두뇌 안 부른다
+        self.assertEqual(dec['src'], 'error')
+        self.assertTrue(brains._safety_blocked('빈 응답 rc=200 | SAFETY') and not brains._safety_blocked('빈 응답 rc=200 | MAX_TOKENS')
+                        and not brains._safety_blocked('타임아웃 60s'))
+
     def test_explicit_dummy_still_runs_without_retry(self):
         _, bots, obs = scene()
         with patch.dict(os.environ, DUNGEON_BRAIN_BACKEND='dummy'), \

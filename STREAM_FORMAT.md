@@ -12,6 +12,10 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 
 - `brain_pause {turn,errors:[{char,name,src:"error",reason,input_error,input_error_detail,attempt_errors}]}`:
   아직 실행하지 않은 틱의 판단 오류. `attempt_errors`에는 두 응답의 오류와 원문·당시 참조 목록을 보존한다.
+- **안전 차단 대체 두뇌(2026-09-11 additive)**: 첫 응답이 모델의 안전 차단(`빈 응답 rc=200 | PROHIBITED_CONTENT|SAFETY|BLOCKLIST|…`)이면
+  두 번째 시도는 **같은 프롬프트를 다른 두뇌**(`DUNGEON_BRAIN_FALLBACK`, 기본=키 있는 Claude → claude_cli → gemini_api)에게 묻는다 — 오류 덧말 없이.
+  성공한 결정에 `brain_fallback: "<backend>"`가 남는다(그 판단은 그 두뇌가 했다). 규칙 두뇌 대행은 여전히 없다. 대체 두뇌도 실패하면 위 정지.
+  Gemini 요청에는 조절 가능한 4범주 `safetySettings: BLOCK_NONE`을 보낸다(전투·독설 대사의 SAFETY 차단 방지) — `PROHIBITED_CONTENT`는 조절 불가.
 - `brain_retry {turn,chars}`: 사용자가 재시도를 요청했다. 성공한 동료의 판단과 관측은 보관하고 실패한 봇만 다시 묻는다.
 - `brain_resumed {turn}`: 모든 판단이 준비되어 실행 보류를 해제했다. 이후 동일한 `turn`의 `tick`이 기록된다.
 

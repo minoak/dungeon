@@ -121,7 +121,8 @@ def backend_name():
     ⚠️ 모듈 로드 시점 상수로 굳히면 안 된다 — 게이트의 '스텁 먼저 박고 러너 나중 import'
     관용구(verify_stream 등)와 env 를 나중에 세팅하는 하니스(ab_menu)가 함께 깨진다.
     잘못된 값은 claude_cli 로 퇴화한다(판을 죽이지 않는다) + 경고 1회."""
-    name = (os.environ.get("DUNGEON_BRAIN_BACKEND") or "claude_cli").strip()
+    ov = getattr(_TLS, "backend_override", None)     # 안전 차단 재시도(09-11): 이 스레드의 이번 호출만 다른 두뇌
+    name = (ov or os.environ.get("DUNGEON_BRAIN_BACKEND") or "claude_cli").strip()
     if name not in BACKENDS:
         _warn_once("[경고] 알 수 없는 DUNGEON_BRAIN_BACKEND=%r -> claude_cli 로 폴백" % name)
         return "claude_cli"
@@ -423,6 +424,9 @@ def _call_gemini(prompt, model):
         "x-goog-api-key": key,
         "content-type": "application/json"}, {
         "contents": [{"parts": [{"text": prompt}]}],
+        "safetySettings": [{"category": c, "threshold": "BLOCK_NONE"} for c in (      # 09-11: 조절 가능한 4범주는 안 막는다
+            "HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH",                    #   (전투·독설 대사가 SAFETY 로 비는 것 방지)
+            "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT")],      #   PROHIBITED_CONTENT 는 조절 불가 → 대체 두뇌
         "generationConfig": {
             "maxOutputTokens": int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "1024")),
             "thinkingConfig": _gemini_think(mid)}})
@@ -1506,6 +1510,31 @@ def _then(obj, obs):
     return out
 
 
+_BLOCK_TAGS = ("PROHIBITED_CONTENT", "SAFETY", "BLOCKLIST", "IMAGE_SAFETY", "RECITATION", "OTHER")   # Gemini blockReason/finishReason 어휘
+
+
+def _safety_blocked(why):
+    """빈 응답 라벨이 모델의 안전 차단(입력·출력 단계)인가 — "빈 응답 rc=200 | <TAG>" 꼴만. 타임아웃·JSON 불량은 아니다."""
+    s = str(why or "")
+    return "rc=200 | " in s and any(s.rstrip().endswith(t) for t in _BLOCK_TAGS)
+
+
+def fallback_backend(current=None):
+    """안전 차단 때 같은 판단을 대신 물을 두뇌(09-11, 파트너 "계속 검열이 걸리네"): DUNGEON_BRAIN_FALLBACK 이 있으면 그것
+    (빈 문자열=끔), 없으면 키가 있는 Claude(anthropic_api → claude_cli), 그마저 현재 두뇌면 gemini_api. 현재와 같거나 dummy 면 None.
+    검열 회피가 아니라 판단 주체 교체 — 규칙 두뇌 대행은 여전히 없다(06d4b30). 어느 두뇌가 답했는지는 결정의 brain_fallback 에 남는다."""
+    cur = current or backend_name()
+    if "DUNGEON_BRAIN_FALLBACK" in os.environ:
+        cands = [os.environ["DUNGEON_BRAIN_FALLBACK"].strip()]
+    else:
+        cands = (["anthropic_api"] if os.environ.get("ANTHROPIC_API_KEY", "").strip() else []) + ["claude_cli"] \
+            + (["gemini_api"] if os.environ.get("GEMINI_API_KEY", "").strip() else [])
+    for c in cands:
+        if c and c in BACKENDS and c != cur and c != "dummy":
+            return c
+    return None
+
+
 def _dummy_decision(obs, char, why="테스트"):
     """명시적인 dummy 백엔드 전용. src=fallback은 기존 테스트 기록과 호환한다."""
     if backend_name() != "dummy":
@@ -1553,13 +1582,20 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
                   + "\n\n오직 JSON 한 줄로만 답하라.")
     errors = []
     request = prompt
-    for _ in range(2):
-        res = _call_claude(request, "haiku")
+    fallback = None                                   # 안전 차단 → 두 번째 시도의 대체 두뇌(있을 때만)
+    for attempt in range(2):
+        _TLS.backend_override = fallback if attempt == 1 else None
+        try:
+            res = _call_claude(request, "haiku")
+        finally:
+            _TLS.backend_override = None
         raw, why = res if isinstance(res, tuple) else (res, None)
         dec = _parse_decision(raw, why, obs, char, roster)
         if dec.get("src") != "error":
             if errors:
                 dec["brain_retries"] = errors
+            if attempt == 1 and fallback:
+                dec["brain_fallback"] = fallback          # 이 판단은 대체 두뇌가 했다(스트림 additive)
             return dec
         if backend_name() == "dummy":
             fb = _dummy_decision(obs, char, dec["reason"])
@@ -1567,6 +1603,11 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
             return fb
         errors.append({"code": dec["input_error"], "reason": dec["reason"],
                        "detail": dec["input_error_detail"]})
+        if attempt == 0 and _safety_blocked(dec["reason"]):
+            fallback = fallback_backend()
+            if fallback:                              # 같은 프롬프트를 다른 두뇌에게 — 오류 덧말은 이 모델에겐 뜻이 없다
+                request = prompt
+                continue
         # 원래 관측과 시트는 그대로 둔다. 대체 행동은 추천하지 않고 실패 사실만 돌려준다.
         request = (prompt + "\n\n# 직전 응답의 입력 오류 — 아직 행동하지 않았고 시간도 흐르지 않았다\n"
                    + json.dumps(errors[-1], ensure_ascii=False)
