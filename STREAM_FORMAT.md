@@ -167,6 +167,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | `turn` | 이 층에 들어선 틱(첫 층=0) |
 | `depth` `w` `h` | 층 번호·크기 |
 | `master_seed` `level_seed` | 마스터 시드와 층별 파생 시드 |
+| `visual?` | (2026-09-11 마을 v1 additive) 마을 층의 시각 레이어 `{schema:'town-visual-v1', tileSize, offset:[x,y], ground[{tile,rect}], buildings[{id,texture,x,footY,width}], props[{frame,x,y}], npcs[{id,row,cell}]}` — `art/town-v1/layout.json` 유래(`town_layout.visual_layer`). 좌표는 오프셋 전(클라이언트가 더한다). 엔진·판정 무관, 던전 층엔 없다 |
 | `grid[]` | h개의 w폭 문자열, **raw 지형만**: `#`(벽) `.`(바닥) `+`(문 타일 — D19 정정 2, 2026-07-15 SCAN 기본 1 승격부터 생성 층에 등장. 벽처럼 빛을 막고 바닥처럼 지나감). tile() 관전 글리프 아님 — 몹·피처·함정은 아래 배열로 별도(겹쳐 그리기는 소비자 몫). 웹이 엔진 없이 렌더 가능 |
 | `exit` | `[x,y]` 계단 좌표 |
 | `rooms[]` | 방 전수: `id x y w h type neighbours[]` (type ∈ entrance/exit/standard) — `feature.room_id` 의 해소처 |

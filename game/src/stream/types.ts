@@ -63,6 +63,15 @@ export interface Trap {
 
 export interface Room { id: number; x: number; y: number; w: number; h: number; type: string; neighbours?: number[] }
 
+/** 마을 v1(2026-09-11) 시각 레이어 — 엔진은 무시하고 클라이언트만 그린다(art/town-v1/layout.json 유래, 좌표는 오프셋 전). */
+export interface TownVisual {
+  schema: string; tileSize: number; offset: [number, number];
+  ground: { tile: string; rect: [number, number, number, number] }[];
+  buildings: { id: string; texture: string; x: number; footY: number; width: number }[];
+  props: { frame: number; x: number; y: number }[];
+  npcs: { id: string; row: number; cell: [number, number] }[];
+}
+
 export interface LevelLine {
   skill_acquisitions?: unknown[];
   reaction_stats?: ReactionStats;
@@ -72,6 +81,7 @@ export interface LevelLine {
   exit: [number, number];
   rooms: Room[]; features: Feature[]; traps: Trap[]; monsters: Monster[];
   party: Bot[];                                  // 이 층 개시 스냅샷(스폰 칸)
+  visual?: TownVisual;                           // 마을 v1 시각 레이어(마을 층만)
 }
 
 export interface Then { type: string; target?: string }

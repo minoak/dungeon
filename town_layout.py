@@ -113,3 +113,18 @@ def compile_layout(layout):
             'starts': shifted_starts, 'npcs': npcs, 'dungeon_entry': entry,
             'entrances': [{**e, 'cell': [e['cell'][0]+pad, e['cell'][1]+pad]} for e in entrances],
             'reachable_cells': len(seen)}
+
+
+def visual_layer(layout, compiled):
+    """클라이언트가 그릴 시각 레이어(엔진은 무시) — layout 의 그림 정보 + 격자 오프셋(border). 좌표는 오프셋 전(클라이언트가 더한다).
+    ground: 바닥 사각형(타일 이름) · buildings: 발 기준 앵커(x=중심 px, footY=정면 벽선 아래 px, width) · props: 발 좌표 px · npcs: 외형 행+칸."""
+    pad = compiled['pad']
+    out = {'schema': 'town-visual-v1', 'tileSize': layout['tileSize'], 'offset': [pad, pad],
+           'ground': [dict(g) for g in layout.get('ground', [])],
+           'buildings': [], 'props': [dict(p) for p in layout.get('props', [])],
+           'npcs': [{'id': n['id'], 'row': int(n.get('row', 0)), 'cell': list(n['cell'])} for n in layout.get('npcs', [])]}
+    if layout.get('guild'):
+        g = layout['guild']
+        out['buildings'].append({'id': 'guild', 'texture': 'guild', 'x': g['x'], 'footY': g['footY'], 'width': g['width']})
+    return out
+

@@ -43,7 +43,7 @@ python check_town.py town.json                          # 현행
 ```
 
 테두리·행 길이·`>` 하나·출발 자리·NPC 칸이 바닥인지·NPC id가 정의에 있는지·출발 자리에서 `>`와 모든 NPC까지 길이 이어지는지를 본다.
-**채택 완료(2026-09-11 밤, 파트너 "바로 시작하자")**: `town.json`은 `{"layout": "art/town-v1/layout.json"}`, 옛 손그림 마을은 `town-v0.json`(상점 v0 물리 게이트가 계속 읽는다). NPC 3 정의는 `entities/npc/`(대사는 임시 초안 — 파트너 문장으로 교체). 다음 layout 교체 때는 `check_town.py` 통과 → `town.json` 참조만 바꾸고 `verify_town ①`의 기대값(격자 크기·입구 좌표·NPC 이름)을 갱신한다.
+**채택 완료(2026-09-11 밤, 파트너 "바로 시작하자")**: `town.json`은 `{"layout": "art/town-v1/layout.json"}`, 옛 손그림 마을은 `town-v0.json`(상점 v0 물리 게이트가 계속 읽는다). NPC 3 정의는 `entities/npc/`(대사는 임시 초안 — 파트너 문장으로 교체). 다음 layout 교체 때는 `check_town.py` 통과 → `town.json` 참조만 바꾸고 `verify_town ①`의 기대값(격자 크기·입구 좌표·NPC 이름)을 갱신한다. **클라이언트 그리기도 연결됐다**: 러너가 마을 `level` 라인에 `visual`(`town_layout.visual_layer` — 바닥 사각형·건물 앵커·소품·NPC 행)을 싣고, 게임 클라이언트(`game/`)가 그걸로 타일(`wl-town-terrain`)·길드(`wl-town-guild`)·소품(`wl-town-props`)·NPC 시트(`wl-town-npcs`, 정면)를 그린다(텍스처는 `art/town-v1/runtime` 사본 → `game/src/assets/world/town-*.png`, 렌더 확인 [docs/town-v1-client.png](town-v1-client.png)). layout 을 바꾸면 `art/town-v1/runtime` 의 그림도 같이 갈고 사본을 다시 복사한다.
 
 ## 참고 도구
 

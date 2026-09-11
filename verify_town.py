@@ -272,6 +272,9 @@ check("⑤ 재입장 = 같은 1층 — 층 시드·격자 동일 + '<' 보존(�
       and all(any(f['type'] == 'stairs_up' for f in lv['features']) for lv in (d1a, d1b)))
 check("⑤ 마을 level — NPC 3 실림(관전자 등급 진실)",
       sum(1 for f in levels[0]['features'] if f['type'] == 'npc') == 3)
+check("⑤ 마을 v1 level 에 시각 레이어(visual: town-visual-v1 — 바닥 사각형·건물·소품·NPC 행) 실림, 던전 층엔 없음",
+      levels[0].get('visual', {}).get('schema') == 'town-visual-v1' and levels[0]['visual']['buildings'][0]['texture'] == 'guild'
+      and len(levels[0]['visual']['npcs']) == 3 and 'visual' not in levels[1])
 check("⑤ 클리어 — 아래 계단으로 전원 하강(outcome=escaped, depth 1)",
       end['kind'] == 'end' and end['outcome'] == 'escaped' and end['depth'] == 1)
 

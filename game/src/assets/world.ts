@@ -1,16 +1,23 @@
 // 원더랜드 전용 도트 에셋. 생성 원본·프레임 정렬 도구는 art/world-v1/에 보존한다.
 // URL은 Vite가 해시를 붙여 dist로 복사하므로 임시 뷰어 경로에 의존하지 않는다.
 import type Phaser from 'phaser';
-import type { Dir } from '../stream/types';
+import type { Dir, TownVisual } from '../stream/types';
 import terrainUrl from './world/terrain.png';
 import goblinUrl from './world/goblin.png';
 import spiderUrl from './world/spider.png';
 import propsUrl from './world/props.png';
 import trapsUrl from './world/traps.png';
+// 마을 v1(2026-09-11) — art/town-v1/runtime 의 사본(생성 원본·프롬프트·패킹은 그 폴더).
+import townTerrainUrl from './world/town-terrain.png';
+import townGuildUrl from './world/town-guild.png';
+import townPropsUrl from './world/town-props.png';
+import townNpcsUrl from './world/town-npcs.png';
 
 export const WORLD_CELL = 96;
 export const WORLD_FOOT = 92;
 export const TERRAIN_CELL = 48;
+export const TOWN_PROP_CELL = 144, TOWN_PROP_FOOT = 138, TOWN_NPC_CELL = 96, TOWN_NPC_FOOT = 91;   // art/town-v1/runtime/manifest.json
+export const TOWN_TERRAIN = ['plaza_a', 'plaza_b', 'alley', 'earth', 'grass', 'wood_floor', 'plaster_wall', 'teal_roof'];
 const DIRECTIONS: Dir[] = ['front', 'right', 'back', 'left'];
 const MONSTERS: Record<string, string> = { '고블린': 'wl-goblin', '그림자거미': 'wl-spider' };
 const PROPS: Record<string, number> = {
@@ -34,6 +41,10 @@ export function queueWorld(load: Phaser.Loader.LoaderPlugin): void {
   for (const [key, url] of [['wl-goblin', goblinUrl], ['wl-spider', spiderUrl], ['wl-props', propsUrl], ['wl-traps', trapsUrl]]) {
     load.spritesheet(key, url, { frameWidth: WORLD_CELL, frameHeight: WORLD_CELL });
   }
+  load.spritesheet('wl-town-terrain', townTerrainUrl, { frameWidth: TERRAIN_CELL, frameHeight: TERRAIN_CELL });
+  load.spritesheet('wl-town-props', townPropsUrl, { frameWidth: TOWN_PROP_CELL, frameHeight: TOWN_PROP_CELL });
+  load.spritesheet('wl-town-npcs', townNpcsUrl, { frameWidth: TOWN_NPC_CELL, frameHeight: TOWN_NPC_CELL });
+  load.image('wl-town-guild', townGuildUrl);
 }
 
 export function monsterFrame(dir: Dir): number { return DIRECTIONS.indexOf(dir) * 3; }
@@ -58,3 +69,22 @@ export function terrainFrame(grid: string[], x: number, y: number, town: boolean
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (open(x + dx, y + dy)) return 5;
   return -1;
 }
+
+/** 마을 v1 바닥 — layout 의 바닥 사각형(타일 이름)을 격자 프레임으로. 바깥 테두리·미지정 칸은 잔디. 석재 변형은 시안 미리보기와 같은 규칙. */
+export function townTerrainData(V: TownVisual, w: number, h: number): number[][] {
+  const grass = TOWN_TERRAIN.indexOf('grass');
+  const data = Array.from({ length: h }, () => Array.from({ length: w }, () => grass));
+  const [ox, oy] = V.offset;
+  for (const g of V.ground) {
+    const f = TOWN_TERRAIN.indexOf(g.tile);
+    if (f < 0) continue;
+    const [x, y, rw, rh] = g.rect;
+    for (let yy = y; yy < y + rh; yy++) for (let xx = x; xx < x + rw; xx++) {
+      const gx = xx + ox, gy = yy + oy;
+      if (gy < 0 || gy >= h || gx < 0 || gx >= w) continue;
+      data[gy][gx] = f === 0 && (xx * 37 + yy * 17) % 11 < 3 ? 1 : f;
+    }
+  }
+  return data;
+}
+

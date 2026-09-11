@@ -801,6 +801,7 @@ class Dungeon:
         res = TL.compile_layout(layout)
         d, starts = cls.from_ascii(res['map'], seed=seed, depth=depth)
         d.layout_result = res
+        d.visual = TL.visual_layer(layout, res)      # 마을 v1 시각 레이어 — level 라인에 실린다(엔진 무시, 클라이언트가 그린다)
         return d, starts
 
     @classmethod
@@ -4704,7 +4705,8 @@ class Dungeon:
                           for r in self.rooms],       # feature.room_id 의 해소처(방 하이라이트용)
                 'features': [f.as_dict() for f in self.features.values()],
                 'traps': [t.as_dict() for t in self.traps],
-                'monsters': [m.as_dict() for m in self.monsters]}
+                'monsters': [m.as_dict() for m in self.monsters],
+                **({'visual': self.visual} if getattr(self, 'visual', None) else {})}   # 마을 v1(09-11) 시각 레이어 — 던전 층엔 없다
 
 
 def new_ledger():
