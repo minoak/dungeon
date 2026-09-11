@@ -75,13 +75,26 @@ check("① D29 개정(09-06): build_town 이 러너 스위치를 미러링(hail�
       and d.hail and d.wait_verb and d.events and d.trail_on and d.objtags
       and d.selfstop is False and d.dry_signal is False)
 npcs = sorted(f.name for f in d.features.values() if f.type == 'npc')
-check("① 마을 로드 — town 스위치·손그림 격자·출발 표기",
-      d.town and d.w == 31 and d.h == 12 and starts.get('1') is not None)
-check("① NPC 3 — 장비·아이템·여관주인(파트너 확정), 전원 인사 보유",
-      npcs == ['아이템 상인', '여관주인', '장비 상인']
+check("① 마을 v1(09-11 채택) — town.json 이 layout 을 참조: 27×20 격자·출발 3·던전 입구(임시 자리)",
+      d.town and d.w == 27 and d.h == 20 and len(starts) == 3 and d.exit == (23, 18))
+check("① NPC 3 — 성직자·길드 접수원·주점 주인(entities/npc, 대사는 임시 초안), 전원 인사 보유",
+      npcs == ['길드 접수원', '성직자', '주점 주인']
       and all(d.npc_lines.get(n) for n in npcs))
 check("① 같은 '>'라도 마을에선 '던전 입구'다(개명)",
       d.features[d._exit_fid].name == '던전 입구')
+gr = next(f for f in d.features.values() if f.type == 'npc' and f.name == '길드 접수원')
+b_g = mkbot('1', gr.x, gr.y + 1)
+r_g = d._interact(b_g, 'f%d' % gr.id, [b_g])
+check("① 길드 접수원 = 기본 물품(메모 §4-4): 빈손이면 물약 1 + 단검 함께(npc_gift item '물약·단검')",
+      r_g['result'] == 'npc_gift' and r_g['item'] == '물약·단검' and b_g['potions'] == 1 and b_g['weapon']['name'] == '단검')
+r_g2 = d._interact(b_g, 'f%d' % gr.id, [b_g])
+check("① 접수원 두 번째 = 재방문 대사·중복 지급 없음",
+      r_g2['result'] == 'npc_talk' and r_g2.get('again') is True and b_g['potions'] == 1)
+# ②③ 상점 v0 물리(장비·아이템 상인·여관주인)는 옛 손그림 마을(town-v0.json)에서 계속 검증한다 — 정의·선물 규칙은 그대로 살아 있다
+d, starts = show_runner.build_town(os.path.join(show_runner.HERE, 'town-v0.json'))
+npcs = sorted(f.name for f in d.features.values() if f.type == 'npc')
+check("① 옛 마을(town-v0.json) — 31×12·상점 NPC 3 보존",
+      d.town and d.w == 31 and d.h == 12 and npcs == ['아이템 상인', '여관주인', '장비 상인'])
 
 # ───────────────────── ② 전체 시야 ─────────────────────
 print("── ② 전체 시야")

@@ -43,7 +43,7 @@ python check_town.py town.json                          # 현행
 ```
 
 테두리·행 길이·`>` 하나·출발 자리·NPC 칸이 바닥인지·NPC id가 정의에 있는지·출발 자리에서 `>`와 모든 NPC까지 길이 이어지는지를 본다.
-채택(= `town.json` 교체)은 파트너 확인 뒤 — 그때 `verify_town`·`verify_entities`(마을 NPC 정본 해시)의 기대값을 함께 갱신한다.
+**채택 완료(2026-09-11 밤, 파트너 "바로 시작하자")**: `town.json`은 `{"layout": "art/town-v1/layout.json"}`, 옛 손그림 마을은 `town-v0.json`(상점 v0 물리 게이트가 계속 읽는다). NPC 3 정의는 `entities/npc/`(대사는 임시 초안 — 파트너 문장으로 교체). 다음 layout 교체 때는 `check_town.py` 통과 → `town.json` 참조만 바꾸고 `verify_town ①`의 기대값(격자 크기·입구 좌표·NPC 이름)을 갱신한다.
 
 ## 참고 도구
 

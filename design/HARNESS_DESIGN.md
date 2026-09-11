@@ -2217,3 +2217,10 @@ hp 를 보여주면 되잖아, 왜 안 그런 걸까" → 07-11 D18 A-4 때 **�
 - 탈진: ally 모드는 도주 전환 때 `flee_turns`를 안 지운다(왕복에도 누적 → 8턴이면 필사 반전, 무한 왕복 차단).
 **검증**: verify_stage3 ④-b 5검사(동료 쪽 첫 걸음·은닉 동료 합류→WANDERING·곁이면 무도주 교전·범위 밖=옛 도주·쫓는 동료와 같은 표적) + 300시드 종료 스윕 통과 · verify_entities ② 방향 검사 · **verify_skill_off 기준선 갱신**(의도적 동작 변경 — 3시드 흔적이 달라짐, 이력을 게이트 docstring 에 기록) · 55종 ALL PASS · 클라이언트(evline·옛 뷰어) 합류 줄.
 **임시 가정(파트너 미답)**: join_range 10(=시야 5의 두 배, "근처"의 자) · 합류 뒤 동료가 자면 WANDERING(표류) · 은닉 거미 곁으로 도망치는 고블린은 추격자를 매복으로 끌어들이는 셈(의도된 창발로 둠).
+
+## [결정] D52. 마을 v1 채택 — 저작 원본은 layout, 아스키는 생성물 — 2026-09-11 밤 (파트너 "굳이 아스키 아트로 변환할 필요가 있어?" → "좋아 반영 완료" → "좋아 바로 시작하자")
+
+**결정**: 마을 맵의 저작 원본은 `art/town-v1/layout.json`(schema `town-layout-v1` — 제작자가 그림 위에 다섯 필드를 적는다: `blocked_rects`·`entrances`·`starts`·`dungeon_entry`·`npcs`). 격자는 `town_layout.compile_layout`(맵 트랙 작성, 엔진 무의존)이 만들고 엔진 `Dungeon.from_layout`이 그 행을 `from_ascii`에 넘긴다 — 아스키는 검토 출력물. 그림에서 벽을 추측하지 않는다(건물 깊이·소품 폭은 제작자 사각형).
+**채택**: `town.json` = `{"layout": "art/town-v1/layout.json"}`(27×20, 길드 앞 광장·문턱·NPC 3·던전 입구는 샛길 남쪽 **임시** 자리) · 옛 손그림 마을(31×12·상점 v0)은 `town-v0.json`으로 보존 — 상점 물리(D32)의 게이트는 그것을 계속 읽는다 · NPC 3 정의 `entities/npc/{temple_attendant,guild_receptionist,tavern_keeper}.json` — **대사·재방문 대사는 내 임시 초안(정의에 note)**, 파트너 문장으로 교체 대기 · 길드 접수원 선물 = 물약 1 + 빈손이면 단검(메모 §4-4 "기본 아이템은 길드에서") → 엔진 NPC 선물이 물약·무기를 **함께** 줄 수 있게(옛 `elif` → 둘 다, 단일 선물 NPC 는 결과 불변) · 상점 둘(장비·아이템 상인)은 마을 v1 에 없다(은퇴, 정의는 보존).
+**연결**: `build_town(path=None)`의 layout 참조 · `check_town.py` layout 입력 · verify_town ①(마을 v1: 격자·NPC·접수원 선물·재방문)+옛 마을 보존 검사, ②③ 은 `town-v0.json` · verify_entities ①(정의 20) ④(옛 마을 해시 유지 + 마을 v1 NPC 검사) · 55종 ALL PASS. 마을 NPC 시트는 `game/src/assets/world/town-npcs.png`(정의의 sprite 참조 `wl-town-npcs#행`).
+**남은 것**: 클라이언트 마을 그리기(타일·길드·소품·NPC — `layout.visual`) · 파트너 대사 · 던전 입구 자리(네 장소 배치 때) · 메모 §4-4 갱신(초안 "자유로운 개별 판단"과 어긋남) · 상점 은퇴에 따른 시작 장비 흐름 확인([L] 판).

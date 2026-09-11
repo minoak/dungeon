@@ -32,9 +32,9 @@ NPC_SHA = 'b6c1e5f26edb42b1e7ad09a6f0db05b8f62d30df43dd846cf67d649f9e8fd1b7'
 
 # ① 로드
 defs = ENT.load()
-check('① 정의 로드 — kind 4종·정의 17개(몬스터 2·함정 3·오브젝트 9·NPC 3)',
-      {d['kind'] for d in defs.values()} == set(ENT.KINDS) and len(defs) == 17
-      and len(ENT.by_kind('monster')) == 2 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('object')) == 9 and len(ENT.by_kind('npc')) == 3)
+check('① 정의 로드 — kind 4종·정의 20개(몬스터 2·함정 3·오브젝트 9·NPC 6 = 상점 v0 3 + 마을 v1 3)',
+      {d['kind'] for d in defs.values()} == set(ENT.KINDS) and len(defs) == 20
+      and len(ENT.by_kind('monster')) == 2 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('object')) == 9 and len(ENT.by_kind('npc')) == 6)
 
 # ② 엔진 유도값 == 이관 전 리터럴(동작 그대로)
 check('② TRAP_KINDS 가 정의에서 유도되어 옛 리터럴과 같다',
@@ -64,10 +64,14 @@ check('③ 지식 본문(옛 lore.json 7건) — 키·이름·본문 해시 일�
                                             'feature:chest', 'feature:fountain'})
 
 # ④ 마을 NPC 이관 — build_town 의 대사·선물·배치가 그대로
-d, _ = show_runner.build_town()
+d, _ = show_runner.build_town(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'town-v0.json'))   # 이관 기준=옛 마을(마을 v1 채택 뒤 보존본)
 npc = {'lines': d.npc_lines, 'gifts': d.npc_gifts, 'again': d.npc_lines_again,
        'features': sorted((f.type, f.name, f.x, f.y) for f in d.features.values())}
-check('④ 마을 NPC(대사·재방문 대사·선물·배치) 해시 일치 — town.json 은 배치만, 본문은 정의', canon(npc) == NPC_SHA)
+check('④ 옛 마을 NPC(대사·재방문 대사·선물·배치) 해시 일치 — town-v0.json 은 배치만, 본문은 정의', canon(npc) == NPC_SHA)
+d1, _ = show_runner.build_town()
+check('④ 마을 v1(layout 참조) — NPC 3(성직자·길드 접수원·주점 주인) 정의에서 합쳐짐, 접수원 선물 물약+단검',
+      sorted(f.name for f in d1.features.values() if f.type == 'npc') == ['길드 접수원', '성직자', '주점 주인']
+      and d1.npc_gifts.get('길드 접수원') == {'potions': 1, 'weapon': '단검'} and all(d1.npc_lines_again.get(n) for n in ('성직자', '길드 접수원', '주점 주인')))
 
 # ⑤ 생성 층의 피처 이름 = 정의 이름
 dg = G.Dungeon(seed=7, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1)

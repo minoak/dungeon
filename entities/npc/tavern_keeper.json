@@ -1,0 +1,17 @@
+{
+  "id": "tavern_keeper",
+  "name": "주점 주인",
+  "kind": "npc",
+  "tags": [
+    "npc",
+    "tavern"
+  ],
+  "sprite": "wl-town-npcs#2",
+  "note": "대사·재방문 대사는 SilenceBreaker 임시 초안(2026-09-11) — 파트너 문장으로 교체할 것. 선물은 메모 §4-4 \"기본 아이템은 길드에서\".",
+  "comps": {
+    "npc": {
+      "line": "주점은 아직 준비 중이야. 자리는 있으니 앉았다 가도 돼.",
+      "line_again": "아까 왔잖아. 아직 준비 중이라니까 — 곧 열 거야."
+    }
+  }
+}

@@ -3817,13 +3817,15 @@ class Dungeon:
             met.add(f.name)                                  # D32 개정(09-06 파트너 확정): 두 번째부터는 '아까 왔잖아'
             given = None                                     #   고정 대사(line_again) — 방문 여부 기준, 선물 여부와 무관.
             if not again and gift and f.name not in served:  #   실측: 이미 받고도 8틱마다 상인 둘을 번갈아 60틱(seed 726984)
+                got = []                                     # 마을 v1(09-11): 길드 접수원은 물약+단검을 함께 준다(기본 물품, 메모 §4-4)
                 if gift.get('potions'):
                     bot['potions'] = bot.get('potions', 0) + int(gift['potions'])
-                    given = '물약'
-                elif gift.get('weapon') and not bot.get('weapon'):   # 빈손일 때만 — 스왑·비교는 던전 몫(D28)
+                    got.append('물약')
+                if gift.get('weapon') and not bot.get('weapon'):     # 빈손일 때만 — 스왑·비교는 던전 몫(D28)
                     nm = str(gift['weapon'])
                     bot['weapon'] = {'name': nm, 'bonus': GEAR_KINDS.get(nm, 1)}
-                    given = nm
+                    got.append(nm)
+                given = '·'.join(got) if got else None
             if given:
                 served.add(f.name)
                 self._witness(bots, tx, ty,      # 마을=전체 시야 — 챙기는 걸 본 사람은 안다(ally_loot 문법 그대로)

@@ -12,7 +12,8 @@ entities/
   monster/goblin.json  shadow_spider.json
   trap/spike.json  dart.json  alarm.json
   object/exit.json  treasure.json  chest.json  fountain.json  potion.json  dagger.json  longsword.json  leather_armor.json  chain_mail.json
-  npc/gear_merchant.json  item_merchant.json  innkeeper.json
+  npc/gear_merchant.json  item_merchant.json  innkeeper.json          (상점 v0 — town-v0.json)
+  npc/temple_attendant.json  guild_receptionist.json  tavern_keeper.json   (마을 v1 — 대사는 임시 초안)
 ```
 
 파일 하나 = 정의 하나. `id`는 파일명과 같고 폴더는 `kind`와 같다. 로더는 `entities.py`(`load()` — 엔진 import 때 한 번).
@@ -46,7 +47,7 @@ entities/
 | object `name` | `_add_feature` 이름 | `'숨은 보물'`은 `treasure`의 숨김 변형 이름(코드 리터럴) |
 | object `equipment.bonus` | `GEAR_KINDS` | `GEAR_CYCLE`(배치 순환)은 코드 — 이름이 정의에 있는지 게이트가 본다 |
 | object `tags` | 조합형 관측 태그(`composed_actions.observe`) | 장비·물약 = `object+item` |
-| npc `npc.line·line_again·gift` | `show_runner.build_town` | `town.json`은 `{"id","x","y"}` 배치만(옛 인라인 꼴도 읽힘) |
+| npc `npc.line·line_again·gift` | `show_runner.build_town` | 마을 v1: `town.json`이 layout 을 참조하고 배치는 `layout.npcs`(id·칸). 옛 마을 `town-v0.json`은 `{"id","x","y"}` 배치. `gift`에 `potions`와 `weapon`을 함께 두면 둘 다 준다(길드 기본 물품) |
 | `knowledge.deep` | `Dungeon.lore` | 키 = `monster:<name>` / `trap:<id>` / `feature:<type>`. 도감 원장(`bestiary.json`)의 종키와 같다 |
 
 자리만 있고 아직 안 읽는 것: `knowledge.brief`(첫 발견 한 줄, 메모 §2-2 [제안]) · `knowledge.unlock`(해금 조건, §2-5 — 검증기는
