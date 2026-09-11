@@ -1524,15 +1524,26 @@ def fallback_backend(current=None):
     (빈 문자열=끔), 없으면 키가 있는 Claude(anthropic_api → claude_cli), 그마저 현재 두뇌면 gemini_api. 현재와 같거나 dummy 면 None.
     검열 회피가 아니라 판단 주체 교체 — 규칙 두뇌 대행은 여전히 없다(06d4b30). 어느 두뇌가 답했는지는 결정의 brain_fallback 에 남는다."""
     cur = current or backend_name()
-    if "DUNGEON_BRAIN_FALLBACK" in os.environ:
-        cands = [os.environ["DUNGEON_BRAIN_FALLBACK"].strip()]
-    else:
-        cands = (["anthropic_api"] if os.environ.get("ANTHROPIC_API_KEY", "").strip() else []) + ["claude_cli"] \
-            + (["gemini_api"] if os.environ.get("GEMINI_API_KEY", "").strip() else [])
+    # 09-12 파트너 "우회 로직은 도움이 되는 방법이 아냐, 근본 문제를 해결하자" → 기본 꺼짐(opt-in). 켜려면 DUNGEON_BRAIN_FALLBACK=<backend>.
+    cands = [os.environ.get("DUNGEON_BRAIN_FALLBACK", "").strip()]
     for c in cands:
         if c and c in BACKENDS and c != cur and c != "dummy":
             return c
     return None
+
+
+def _dump_blocked_prompt(char, obs, label, prompt):
+    """모델의 안전 차단에 걸린 프롬프트 원문을 state/brain_block.log 에 JSONL 로 남긴다(09-12 파트너 "근본적 문제를 해결하자").
+    스트림에는 안 싣는다(원문 = 시트·관측 전체). 어느 문장이 필터를 건드리는지는 이 파일로 이분한다."""
+    try:
+        path = os.path.join(os.environ.get("DUNGEON_STATE_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "state"),
+                            "brain_block.log")
+        with _LOG_LK:
+            with open(path, "a", encoding="utf-8", newline="\n") as fp:
+                fp.write(json.dumps({"t": time.time(), "turn": obs.get("turn"), "char": char, "backend": backend_name(),
+                                     "label": label, "prompt": prompt}, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
 
 
 def _dummy_decision(obs, char, why="테스트"):
@@ -1604,6 +1615,7 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
         errors.append({"code": dec["input_error"], "reason": dec["reason"],
                        "detail": dec["input_error_detail"]})
         if attempt == 0 and _safety_blocked(dec["reason"]):
+            _dump_blocked_prompt(char, obs, dec["reason"], request)   # 근본 원인 부검용(09-12): 걸린 프롬프트 원문을 state 에 남긴다
             fallback = fallback_backend()
             if fallback:                              # 같은 프롬프트를 다른 두뇌에게 — 오류 덧말은 이 모델에겐 뜻이 없다
                 request = prompt

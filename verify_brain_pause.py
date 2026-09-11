@@ -109,7 +109,7 @@ class BrainPauseTests(unittest.TestCase):
 
     def test_safety_block_retries_once_with_fallback_brain(self):
         """안전 차단(rc=200 | PROHIBITED_CONTENT 등)은 같은 프롬프트를 다른 두뇌에게 — 오류 덧말 없이, 결정에 brain_fallback.
-        타임아웃·JSON 불량은 대체 두뇌 없이 옛 재시도 그대로. 대체 두뇌를 껐으면(DUNGEON_BRAIN_FALLBACK='') 옛 동작."""
+        타임아웃·JSON 불량은 대체 두뇌 없이 옛 재시도 그대로. 기본은 꺼짐(DUNGEON_BRAIN_FALLBACK 미설정·빈 값 = 옛 동작, 09-12 파트너 결정)."""
         _, bots, obs = scene()
         seen = []
         def call(prompt, model='haiku'):
@@ -125,7 +125,8 @@ class BrainPauseTests(unittest.TestCase):
         self.assertEqual((dec['type'], dec['brain_fallback']), ('search', 'anthropic_api'))
         self.assertEqual(dec['brain_retries'][0]['code'], 'invalid_response')
         seen.clear()
-        with patch.dict(os.environ, DUNGEON_BRAIN_BACKEND='gemini_api', DUNGEON_BRAIN_FALLBACK=''), \
+        os.environ.pop('DUNGEON_BRAIN_FALLBACK', None)
+        with patch.dict(os.environ, DUNGEON_BRAIN_BACKEND='gemini_api'), \
                 patch.object(brains, '_call_claude', side_effect=call), \
                 patch.object(brains.G, 'dummy_brain', side_effect=AssertionError('자동 대행 금지')):
             dec = brains.claude_brain(obs, '1', bots[0], bots)
