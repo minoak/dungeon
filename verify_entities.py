@@ -47,9 +47,9 @@ check('② MON_STATUS 유도(그림자거미 명중=둔화, 고블린 무태그)
 g = G.Monster(0, 0, mid=0)
 s = G.Monster(0, 0, kind='그림자거미', mid=1)
 u = G.Monster(0, 0, kind='낯선 것', mid=2)
-check('② 몬스터 수치·도주 파라미터 — 고블린(6/2/2/12, 도주 3·8) · 그림자거미(5/3/3/13, 도주 3·8=이관 전 전역값) · 모르는 종=기준선 몹',
+check('② 몬스터 수치·도주 파라미터 — 고블린(6/2/2/12, 도주 3·8) · 그림자거미(5/3/3/13, 도주 없음=파트너 결정 09-11) · 모르는 종=기준선 몹',
       (g.hp, g.maxhp, g.atk, g.dmg, g.ac, g.flee_frac, g.flee_stamina) == (6, 6, 2, 2, 12, 3, 8)
-      and (s.hp, s.atk, s.dmg, s.ac, s.flee_frac, s.flee_stamina) == (5, 3, 3, 13, 3, 8)
+      and (s.hp, s.atk, s.dmg, s.ac, s.flee_frac, s.flee_stamina) == (5, 3, 3, 13, None, None)
       and (u.hp, u.atk, u.dmg, u.ac) == (6, 2, 2, 12)
       and (G.FLEE_FRAC, G.FLEE_STAMINA) == (3, 8))
 check('② 명시 수치가 정의보다 우선(장면 저작·게이트 호환)',

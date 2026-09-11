@@ -19,11 +19,7 @@
     },
     "ai": {
       "start": "sleeping",
-      "concealed": true,
-      "flee": {
-        "hp_frac": 3,
-        "stamina": 8
-      }
+      "concealed": true
     },
     "knowledge": {
       "deep": "그늘에 숨어 기다리는 매복자. 눈에 안 보여도 거기 있다 — 수색만이 미리 드러내고, 물린 뒤엔 이미 늦다."

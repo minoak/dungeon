@@ -2201,3 +2201,7 @@ hp 를 보여주면 되잖아, 왜 안 그런 걸까" → 07-11 D18 A-4 때 **�
 - 안 읽는 것(자리만): `knowledge.brief`·`unlock`(§2-2·§2-5 뒤), `ai.start`·`concealed`(스폰 코드가 명시), 오브젝트 `loot/container/heal/consumable/exit` 부품("부품은 필요할 때 하나씩"). 스프라이트 프레임 번호는 클라이언트 world.ts 소유(정의는 텍스처 참조·존재 검증까지). 상속·위험도 점수·초안 생성([제안])은 이번에 안 넣음.
 - **이관 전후 동일성**: `verify_skill_off`(78fbe84 기준선, 3시드×80틱 관측·결과·난수 해시) 그대로 통과 · `verify_entities` ③④ = 옛 lore.json·town.json NPC 본문의 정본 해시(커밋 d38669f 에서 뽑음) 일치 · 55종 ALL PASS. `verify_interrupt` 의 그림자거미 장면은 이전엔 고블린 기본값으로 만들어졌으나 정의 수치(5/3/3/13)로도 통과.
 - 다음 부품은 필요할 때: 잠금(§4-2) 때 `lock`·`health`, 도감(§2-5) 때 `knowledge.unlock` 카운트, 층별 배치 정책(정의만으로는 층에 안 나온다).
+
+### D50 보완 — 도주는 고블린만 — 2026-09-11 밤 (파트너 결정 "거미 도주는 빼는 편이 좋겠다, 도주하는 건 고블린만 우선은")
+
+`entities/monster/shadow_spider.json` 에서 `ai.flee` 제거 → `Monster.flee_frac/flee_stamina = (None, None)` = 도주 전이 없음(HUNTING 에서 저HP 라도 계속 문다, 필사 반전 경로도 안 탄다). 첫 **동작 변경**이 정의 한 줄로 이뤄진 사례 — 엔진 무수정. verify_entities ② 기대값 갱신, verify_skill_off(78fbe84 기준선 3시드) 는 그 흔적에 거미 도주가 없어 그대로 통과. 파트너의 두 번째 문장 "고블린은 도주할 때 가장 가까운 적에게로 도망가는 거야"는 방향 규칙의 변경(현재: 가장 가까운 모험가에게서 멀어지는 칸) — '적'이 누구인지(신 입장의 적=다른 몬스터에게 합류?) 장면으로 되물어 확인 뒤 구현.

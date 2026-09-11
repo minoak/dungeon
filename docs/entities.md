@@ -41,7 +41,7 @@ entities/
 |---|---|---|
 | monster `health.max`, `combat.atk·dmg·ac` | `Monster()` 기본값 | 명시 인자가 우선(장면 저작·게이트). 모르는 종은 기준선 몹(고블린)의 몸 |
 | monster `combat.on_hit` | `MON_STATUS` | 그림자거미 명중 = 둔화 |
-| monster `ai.flee.hp_frac·stamina` | `Monster.flee_frac/flee_stamina` | **없으면 도주 안 함**. 1차는 두 종 모두 이관 전 전역값(3·8) — 메모 "그림자거미는 flee 없음"은 동작 변경이라 별도 결정 |
+| monster `ai.flee.hp_frac·stamina` | `Monster.flee_frac/flee_stamina` | **없으면 도주 안 함**. 고블린만 3·8(옛 전역값), 그림자거미는 없음(파트너 결정 2026-09-11 밤 "도주하는 건 고블린만") |
 | trap `trap.dc·dmg·status` | `TRAP_KINDS` | |
 | object `name` | `_add_feature` 이름 | `'숨은 보물'`은 `treasure`의 숨김 변형 이름(코드 리터럴) |
 | object `equipment.bonus` | `GEAR_KINDS` | `GEAR_CYCLE`(배치 순환)은 코드 — 이름이 정의에 있는지 게이트가 본다 |
