@@ -331,8 +331,8 @@ class Handler(SimpleHTTPRequestHandler):
             sys.stderr.write("[launcher] %s\n" % (fmt % args))
 
     def end_headers(self):
-        if self.path.startswith("/state/") or self.path.startswith("/runs/"):
-            self.send_header("Cache-Control", "no-store")   # 라이브 스트림은 캐시 금지
+        if self.path.startswith("/state/") or self.path.startswith("/runs/") or self.path.startswith("/launcher/"):
+            self.send_header("Cache-Control", "no-store")   # 라이브 스트림·론처 페이지는 캐시 금지(09-11: 옛 론처 화면이 남아 마을 체크가 회색으로 보인 사고)
         elif urlparse(self.path).path in GAME_NO_STORE:
             self.send_header("Cache-Control", "no-store")   # 게임 클라이언트 진입 HTML — 새 빌드가 바로 보이게(해시 자산은 기본 캐시)
         super().end_headers()
