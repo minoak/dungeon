@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "checks": [
+    "7 images loaded",
+    "grid toggle",
+    "collision overlay",
+    "ASCII output displayed",
+    "NPC direction",
+    "people toggle",
+    "props toggle",
+    "connections toggle",
+    "desktop and tablet no horizontal overflow",
+    "no script or asset errors"
+  ],
+  "engineExecuted": false,
+  "llmCalls": 0
+}

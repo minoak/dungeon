@@ -1,0 +1,10 @@
+{
+  "version": "town-art-v0.1",
+  "purpose": "마을 시범 장면의 외형 자산. 엔티티 저장소 스키마와 별개이며 향후 visual 참조에 연결한다.",
+  "tileSize": 48,
+  "terrain": {"image":"terrain.png","cell":48,"columns":4,"frames":["plaza_a","plaza_b","alley","earth","grass","wood_floor","plaster_wall","teal_roof"]},
+  "guild": {"image":"guild.png","drawSize":[576,485],"origin":"bottom-center","note":"입구 좌표와 충돌은 배치별로 정한다. 건물 전체 그림을 통행 불가로 처리하지 않는다."},
+  "props": {"image":"props.png","cell":144,"columns":4,"foot":[72,138],"frames":["street_lamp","noticeboard","bench","flower_planter","signpost","fence","crate_sack","table_stools"]},
+  "npcs": {"image":"npcs.png","cell":96,"columns":4,"foot":[48,91],"rows":["temple_attendant","guild_receptionist","tavern_keeper"],"directions":["front","right","back","left"],"animation":"idle-only","note":"NPC의 성격·역할 규칙·동작 로직은 이 파일에 포함하지 않는다."},
+  "existingAdventurers":{"images":["warrior-twintails.png","rogue-ponytail.png","archer.png"],"cell":96,"columns":5,"foot":[48,91],"directions":["front","right","back","left"],"source":"viewer/assets/sprites/sd/의 변경 없는 사본"}
+}

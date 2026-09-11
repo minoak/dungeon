@@ -1,0 +1,22 @@
+{
+  "geometry_passed": true,
+  "checks": [
+    "벽 위 출발점",
+    "중복 NPC 자리",
+    "맵 밖 사각형",
+    "길드 문턱 없는 진짜 문",
+    "샛길 입구 격리",
+    "원본 불변·결정론",
+    "생성 파일과 일치",
+    "엔진 벽·출발·입구 좌표 일치",
+    "모든 출발점에서 목적지 경로"
+  ],
+  "missing_npc_definitions": [
+    "temple_attendant",
+    "guild_receptionist",
+    "tavern_keeper"
+  ],
+  "live_town_changed": false,
+  "from_layout_integrated": false,
+  "llm_calls": 0
+}
