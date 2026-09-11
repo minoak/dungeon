@@ -164,6 +164,20 @@ HISTORY_MAX = 10          # 되돌려줄 선택 수(직전 포함) — 파트너
 DIALOGUE_ON = os.environ.get("DUNGEON_DIALOGUE", "1") != "0"   # 대화 기억(D43, 09-07 파트너 "대화 내용도 과거로 조금만 더
                                                                   #   확장") — 표현층 스위치(notes 선례, 기본 켬). 들은 말+내 말
 DIALOGUE_MAX = 6          # 되돌려줄 마디 수 — 파트너 미확정 임시 가정(09-07 밤). 한 마디 ~40자 → 250자 안팎(+6%)
+PROMPT_CONTEXT_ON = os.environ.get("DUNGEON_PROMPT_CONTEXT", "1") != "0"   # D54(09-12): 판단 요청 맨 앞의 맥락 한 줄 — 파트너
+                                                                            #   "이 정도로 응답을 거부해버리면 그것도 문제, 응답 가능한
+                                                                            #   천장을 높여야". 표현층 스위치(기본 켬, dialogue 와 같은 급).
+CONTEXT_LINE = ("이 글은 성인 모험가들이 등장하는 판타지 던전 게임의 판단 요청이다. "
+                "성적 내용이 없고, 폭력은 게임 규칙의 전투 판정뿐이다.")
+#   ↑ 모델의 안전 분류기(Gemini PROHIBITED_CONTENT = 프롬프트 단계·조절 불가)에 빠져 있던 맥락(장르·성인·비성적)을 준다 —
+#     지시나 우회 문구가 아니라 사실 진술이어야 한다(세계관: 모험가는 성인 — 파트너 문서 §4-0 톤에 적는 것이 전제, ⚠️임시 가정).
+#     실측(09-12, 결정론적 차단 원문 3건 — 유나 t154·수나 t357·수나 t547): 이 줄 하나로 3/3 통과. 문장을 바꾸면 그 원문들
+#     (state/brain_block.log 채집)로 다시 재야 한다(1콜/건). 재회의 포옹·쓰다듬 같은 몸짓 서술은 파트너 결정으로 그대로 둔다.
+
+
+def _with_context(prompt):
+    """판단 요청 맨 앞에 맥락 한 줄(켜져 있을 때만). 시트 머리글('# 시트 — …')은 그 뒤에 그대로."""
+    return (CONTEXT_LINE + "\n\n" + prompt) if PROMPT_CONTEXT_ON else prompt
 NOTE_MAX = 5             # 유지 줄 수(합의 5~7 하한) — 넘치면 오래된 것부터 바랜다(FIFO,
                          #   사람도 옛 기억부터 바래듯). 판 간 영속은 없음(월드 러너 상 재론).
 NOTE_LEN = 80            # 한 줄 상한 — 수필 방지(say 160 의 절반: 기억은 말보다 압축된다)
@@ -1591,6 +1605,7 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
         prompt = (_sheet(bot, roster) + "\n" + (ADV_PROMPT_SOLO if solo else ADV_PROMPT)
                   + "\n\n" + _wire(obs, names)
                   + "\n\n오직 JSON 한 줄로만 답하라.")
+    prompt = _with_context(prompt)                    # D54 맥락 한 줄(세 조립 공통) — 재시도·대체 두뇌도 같은 요청
     errors = []
     request = prompt
     fallback = None                                   # 안전 차단 → 두 번째 시도의 대체 두뇌(있을 때만)
@@ -1778,10 +1793,10 @@ def social_all(d, bots, inbox=None):
         obss[b['char']] = o
 
     def ask(b):
-        prompt = (_sheet(b, roster) + "\n"
-                  + (SOCIAL_PROMPT_SOLO if getattr(d, 'solo', False) else SOCIAL_PROMPT)
-                  + "\n\n" + _wire(obss[b['char']], names)
-                  + "\n\n오직 JSON 한 줄로만 답하라.")
+        prompt = _with_context(_sheet(b, roster) + "\n"
+                               + (SOCIAL_PROMPT_SOLO if getattr(d, 'solo', False) else SOCIAL_PROMPT)
+                               + "\n\n" + _wire(obss[b['char']], names)
+                               + "\n\n오직 JSON 한 줄로만 답하라.")
         raw, why = _call_claude(prompt, "haiku")
         obj, _jwhy = _extract(raw)
         if not obj:

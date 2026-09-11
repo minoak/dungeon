@@ -28,6 +28,7 @@
 import json
 import os
 import sys
+import time
 
 UNKNOWN_BEAST = '낯선 짐승'
 
@@ -146,7 +147,14 @@ class Issuer:
         tmp = path + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(body, f, ensure_ascii=False, indent=1)
-        os.replace(tmp, path)
+        for i in range(20):                       # Windows: 방금 쓴 파일을 색인기·백신이 잠깐 잡으면 rename 이 WinError 5 —
+            try:                                  #   D53 뒤 조우마다 저장해 빈도가 늘자 게이트에서 1회 재현(09-12). 짧게 물러섰다 재시도.
+                os.replace(tmp, path)
+                break
+            except PermissionError:
+                if i == 19:
+                    raise
+                time.sleep(0.05 * (i + 1))
         self.dirty = False
 
     def _acquire(self, char, key, turn, out):

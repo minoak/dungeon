@@ -947,6 +947,7 @@ def main():
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
             history=brains.HISTORY_ON,    # D38 개정 2 최근 판단 장부 여부 — 표현층 메타(notes 와 같은 급)
             dialogue=brains.DIALOGUE_ON,  # D43 대화 기억 여부 — 표현층 메타(notes 와 같은 급)
+            prompt_context=brains.PROMPT_CONTEXT_ON,   # D54(09-12 additive) 판단 요청 맨 앞 맥락 한 줄 여부 — 같은 급
             backend=brains.backend_name(),   # 두뇌 백엔드(2026-07-25 additive) — claude_cli/
                                        #   anthropic_api/gemini_api/dummy. gm·menu 와 같은 급의
                                        #   실행모드 메타: 같은 시드라도 백엔드가 다르면 다른 판이다

@@ -115,18 +115,29 @@ class BrainPauseTests(unittest.TestCase):
         def call(prompt, model='haiku'):
             seen.append((brains.backend_name(), prompt))
             return ('', '빈 응답 rc=200 | PROHIBITED_CONTENT') if len(seen) == 1 else '{"type":"search","target":"self","reason":"살핀다"}'
-        with patch.dict(os.environ, DUNGEON_BRAIN_BACKEND='gemini_api', DUNGEON_BRAIN_FALLBACK='anthropic_api'), \
+        # ⚠️ 흉내 낸 차단도 brains 가 프롬프트 원문을 DUNGEON_STATE_DIR/brain_block.log 에 채집한다 — 격리 안 하면
+        #    실 판의 진단 로그(state/brain_block.log)에 가짜 항목(턴 0 두란)이 섞인다(09-12 실사고: 게이트 4회 = 가짜 8건).
+        iso = tempfile.mkdtemp(prefix='brain_pause_block_')
+        with patch.dict(os.environ, DUNGEON_BRAIN_BACKEND='gemini_api', DUNGEON_BRAIN_FALLBACK='anthropic_api', DUNGEON_STATE_DIR=iso), \
                 patch.object(brains, '_call_claude', side_effect=call), \
                 patch.object(brains.G, 'dummy_brain', side_effect=AssertionError('자동 대행 금지')):
             dec = brains.claude_brain(obs, '1', bots[0], bots)
             self.assertEqual(brains.backend_name(), 'gemini_api')          # 덮어쓰기는 그 호출로 끝난다
         self.assertEqual([b for b, _ in seen], ['gemini_api', 'anthropic_api'])
         self.assertEqual(seen[0][1], seen[1][1])                             # 같은 프롬프트(오류 덧말 없음)
+        self.assertTrue(seen[0][1].startswith(brains.CONTEXT_LINE + '\n\n# 시트'))   # D54 맥락 한 줄이 맨 앞, 시트 머리글은 그 뒤
+        seen.clear()
+        with patch.dict(os.environ, DUNGEON_BRAIN_BACKEND='gemini_api', DUNGEON_BRAIN_FALLBACK='anthropic_api', DUNGEON_STATE_DIR=iso), \
+                patch.object(brains, 'PROMPT_CONTEXT_ON', False), \
+                patch.object(brains, '_call_claude', side_effect=call), \
+                patch.object(brains.G, 'dummy_brain', side_effect=AssertionError('자동 대행 금지')):
+            brains.claude_brain(obs, '1', bots[0], bots)
+        self.assertTrue(seen[0][1].startswith('# 시트'))                     # 스위치 끄면 옛 프롬프트 그대로
         self.assertEqual((dec['type'], dec['brain_fallback']), ('search', 'anthropic_api'))
         self.assertEqual(dec['brain_retries'][0]['code'], 'invalid_response')
         seen.clear()
         os.environ.pop('DUNGEON_BRAIN_FALLBACK', None)
-        with patch.dict(os.environ, DUNGEON_BRAIN_BACKEND='gemini_api'), \
+        with patch.dict(os.environ, DUNGEON_BRAIN_BACKEND='gemini_api', DUNGEON_STATE_DIR=iso), \
                 patch.object(brains, '_call_claude', side_effect=call), \
                 patch.object(brains.G, 'dummy_brain', side_effect=AssertionError('자동 대행 금지')):
             dec = brains.claude_brain(obs, '1', bots[0], bots)
