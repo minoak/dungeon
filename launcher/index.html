@@ -139,7 +139,7 @@
     <div id="alphaInfo" hidden>
       <h3 style="margin-top:14px">스킬을 고르고, 주사위로 겨룬다</h3>
       <p>각 모험가는 스킬 2개로 시작해. 명중·피해를 주사위로 정하고, <b>3층에 도착하면 랜덤 스킬을 하나씩</b> 얻어.<br>
-        던전 1~5층 · 최대 600틱 · 마을 없이 시작</p>
+        던전 1~5층 · 최대 600틱 · 마을에서 시작하려면 아래 체크(0층 마을 → 던전 입구)</p>
       <p class="wl-skill-note">예: 1d6은 6면 주사위 하나, 피해 1~6을 뜻해. 스킬은 모험가가 직접 선택해 사용해.<br>
         사용 후 재사용 대기는 다른 행동을 완료할 때 줄어들어. 관전 화면에서 설명과 남은 대기를 볼 수 있어.</p>
       <div id="alphaPreview" class="wl-alpha-preview"></div>
@@ -534,8 +534,7 @@ function updateMode() {
   const alpha = $('runMode').value === 'standard';
   $('alphaInfo').hidden = !alpha;
   $('standardInfo').hidden = alpha;
-  $('town').disabled = alpha;
-  if (alpha) $('town').checked = false;
+  $('town').disabled = false;                 // 마을 시작은 두 모드 다 된다(09-11 마을 v1 — 파트너 "스킬 원정에서 마을 시작이 안 돼")
   $('bStart').textContent = alpha ? '원정 시작 → 관전' : '이전 규칙으로 시작';
   $('alphaBrainHint').textContent = $('brain').value === 'dummy'
     ? '규칙 두뇌는 스킬을 선택하지 않아. 스킬을 쓰는 모습을 보려면 Gemini나 Claude를 선택해.'

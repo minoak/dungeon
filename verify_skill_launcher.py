@@ -41,9 +41,17 @@ class AlphaLauncherTests(unittest.TestCase):
         self.assertEqual([env[k] for k in ('DUNGEON_SKILLS', 'DUNGEON_TRPG_COMBAT', 'DUNGEON_RANDOM_SKILL')], ['0'] * 3)
 
     def test_invalid_mode_or_alpha_combination_does_not_start(self):
-        for opts in ({'mode': 'wrong'}, {'town': True}, {'action_mode': 'menu'}):
+        for opts in ({'mode': 'wrong'}, {'action_mode': 'menu'}):
             with self.subTest(opts=opts), self.assertRaises(launcher.BadRequest):
                 self.launch_env(opts)
+
+    def test_standard_can_start_in_town(self):
+        """마을 v1(09-11): 스킬 원정도 마을 0층에서 시작할 수 있다(파트너 요청) — 스킬 켜짐 + DUNGEON_TOWN=1."""
+        result, env = self.launch_env({'town': True})
+        self.assertEqual(result['mode'], 'standard')
+        self.assertTrue(result['town'])
+        self.assertEqual(env['DUNGEON_TOWN'], '1')
+        self.assertEqual([env[k] for k in ('DUNGEON_SKILLS', 'DUNGEON_TRPG_COMBAT', 'DUNGEON_RANDOM_SKILL')], ['1'] * 3)
 
     def test_status_reads_mode_from_record(self):
         file = Path(self.temp.name) / 'stream.jsonl'

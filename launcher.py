@@ -128,8 +128,8 @@ class Runner:
                 mode = "standard"
             if mode not in ("standard", "classic"):
                 raise BadRequest("원정 모드는 standard/classic 중 하나")
-            if mode == "standard" and (action_mode != "compose" or opts.get("town")):
-                raise BadRequest("스킬 원정은 조합형 행동으로 던전 1층부터 시작한다")
+            if mode == "standard" and action_mode != "compose":
+                raise BadRequest("스킬 원정은 조합형 행동으로 시작한다")   # 마을 시작은 두 모드 다 된다(09-11 마을 v1, 파트너 요청)
             # 화면에서 고른 규칙이 부모 콘솔의 설정보다 우선한다.
             for key in ("DUNGEON_SKILLS", "DUNGEON_TRPG_COMBAT", "DUNGEON_RANDOM_SKILL"):
                 env[key] = "1" if mode == "standard" else "0"
