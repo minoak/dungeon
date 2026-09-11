@@ -49,7 +49,7 @@ export function resolveTarget(t: unknown, f: Frame, run: Run): string {
   if (s === 'wait') return '기다림';
   if (s === 'rest') return '휴식';
   let m: RegExpExecArray | null;
-  if ((m = /^(?:follow:)?b(.+)$/.exec(s))) return run.names[m[1]] || s;
+  if ((m = /^(?:follow:|chase:)?b(.+)$/.exec(s))) return run.names[m[1]] || s;
   if ((m = /^m(\d+)$/.exec(s))) { const mob = f.monsters.find(x => x.id === +m![1]); return mob ? mob.kind : '적'; }
   if ((m = /^f(\d+)$/.exec(s))) { const ft = f.features.find(x => x.id === +m![1]); return ft ? ft.name : '무언가'; }
   if (/^d\d+$/.test(s)) return '문';
@@ -73,7 +73,7 @@ export function evChars(e: StreamEvent, run: Run): Char[] {
   add(e.char);
   add(e.to);                                     // give·bond 의 받는 봇(walk 의 to 는 [x,y] 라 걸러진다)
   let m: RegExpExecArray | null;
-  if (typeof e.target === 'string' && (m = /^(?:follow:)?b(.+)$/.exec(e.target))) add(m[1]);
+  if (typeof e.target === 'string' && (m = /^(?:follow:|chase:)?b(.+)$/.exec(e.target))) add(m[1]);
   if (e.type.startsWith('monster_')) add(e.target);   // 몹의 표적은 봇 번호
   const swap = obj(e.swap); if (swap) add(swap.char);
   add(e.paced);
@@ -108,6 +108,7 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
 
   if (t === 'goto') {
     if (e.result === 'blocked') return L('notable', `⚑ ${esc(tgt())} — 길 막힘(${listNames(e.allies, run) || '동료'}가 길목에)`);
+    if (e.result === 'already_beside') return L('dim', `⚑ ${esc(tgt())} — 이미 곁에 멈춰 있어 갈 곳 없음`);   // D48 개정 goto<아군>
     return L('dim', `⚑ ${esc(tgt())}${e.result === 'arrived' ? ' — 이미 곁에' : '에게 핑'}`);
   }
   if (t === 'explore') {
@@ -249,6 +250,7 @@ function walkLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
   // ── D18 동행 ──
   if (r === 'following') return { cls: 'dim', html: 'to' in e ? `⇢ ${esc(tgt())} 뒤를 따라 걷는다 — 동행` : `${esc(tgt())} 곁에 머문다 — 동행` };
   if (r === 'idle') { const n = esc(tgt()); return { cls: 'dim', html: `${n}${iga(n)} 움직이지 않는다 — 동행 끝` }; }
+  if (r === 'beside') return { cls: 'dim', html: `${esc(tgt())} 곁에 붙어 있다 — 따라간다` };   // D48 개정 추적(chase:b)
   // ── D25 대기 ──
   if (r === 'waiting') return { cls: 'dim', html: '기다린다' };
   if (r === 'wait_met') { const n = listNames(e.allies, run) || '동료'; return { cls: 'notable', html: `기다리다 ${n}${iga(n)} 보였다` }; }

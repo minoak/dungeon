@@ -351,6 +351,9 @@ def probe(spec, n, jobs):
         for k in ("say", "say_kind", "to", "item", "form", "note", "floor_line"):   # 말·종류(D47)·상대(D41)·건네기 물건·친목 몸짓(D47 ②)·남긴 한 줄·결산 한 줄(D40)도 프로브의 답이다(09-06)
             if dec.get(k):
                 print("         %s: %s" % (k, dec[k]))
+        for k in ("brain_retries", "attempt_errors"):   # 판단 재시도(06d4b30)·D48 개정 already_beside — 첫 응답이 무효였으면 무엇이었나
+            if dec.get(k):
+                print("         %s: %s" % (k, " / ".join("%s(%s %s)" % (e.get("code"), (e.get("detail") or {}).get("attempted_action", {}).get("type", "?"), (e.get("detail") or {}).get("attempted_action", {}).get("target", "")) for e in dec[k])))
         if dec.get("relation"):                      # 관계 살(D36) — 초대 받은 결정의 relation_line
             print("         relation_line(→봇%s): %s" % (dec["relation"].get("to"), dec["relation"].get("line")))
     print("── 분포 ──")

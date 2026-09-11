@@ -378,7 +378,8 @@ def act_summary(res):
         if res["result"] == "blocked" and res.get("allies"):   # D18: 동료發 대우회 — 멈춰 보고
             return "%s — 동료(%s)가 길목에 서 있어 크게 돌아야 함, 멈춰 보고" % (
                 res.get("target", "?"), ", ".join(a["name"] for a in res["allies"]))
-        tag = {"pathed": "핑 -> 자동보행 개시", "arrived": "이미 곁에", "no_path": "길이 없다"}
+        tag = {"pathed": "핑 -> 자동보행 개시", "arrived": "이미 곁에", "no_path": "길이 없다",
+               "already_beside": "이미 곁에 있고 멈춰 있음 — 갈 곳 없음"}   # D48 개정 goto<아군>
         return "%s %s" % (res.get("target", "?"), tag.get(res["result"], res["result"]))
     if t == "follow":                                          # 동행(D18 A-5)
         r = res["result"]
@@ -464,6 +465,8 @@ def act_summary(res):
         if r == "following":                           # 동행(D18 A-5) — 지속 order, 완결 아님
             tgt = str(res.get("target", "?")).replace("follow:", "")
             return ("%s 곁을 따라 걷는다" if res.get("to") else "%s 곁을 지키며 따른다") % tgt
+        if r == "beside":                              # 추적(D48 개정) — 곁을 지키는 틱(대상이 움직이는 중)
+            return "%s 곁에 붙어 있다 (추적 중)" % str(res.get("target", "?")).replace("chase:", "")
         if r == "idle":                                # 동행 고착 해약(FOLLOW_IDLE) — 재결정 반환
             tgt = str(res.get("target", "?")).replace("follow:", "")
             return "동행을 접는다 — %s가 한동안 제자리 (같이 서 있기만 했다, 재결정)" % tgt
@@ -474,10 +477,10 @@ def act_summary(res):
         tag = {"walking": "자동보행", "arrived": "도착", "at_exit": "계단 앞에 섰다",
                "treasure": "$ 획득", "potion": "! 물약 획득", "blocked": "길 막힘"}
         if r == "arrived" and "to" not in res:         # 움직이는 목표(몹·동료) 곁 도달 = 걷기 전 완료
-            return "%s 곁에 도착 — 재결정" % res.get("target", "?")
+            return "%s 곁에 도착 — 재결정" % str(res.get("target", "?")).replace("chase:", "")
         if r == "lost":                                # 유령 좌표의 끝(07-05 부검 정직화) — 허탕 보고.
             # '곁에 없다'까지만 단정 — 대각 한 칸에 비껴 서 있을 수도 있다(그건 sights 가 보여준다)
-            return "%s를 마지막 본 자리까지 갔지만 — 곁에 없다 (재결정)" % res.get("target", "?")
+            return "%s를 마지막 본 자리까지 갔지만 — 곁에 없다 (재결정)" % str(res.get("target", "?")).replace("follow:", "").replace("chase:", "")
         if res.get("paced"):                           # 교대(D18 개정) 양보 — 같은 방향 행군 한 박자
             return "동료(봇%s)가 앞서 걷는 중 — 한 박자 양보(제자리)" % res["paced"]
         pre = ("동료(%s)와 자리 교대 — " % res["swap"]["name"]) if res.get("swap") else ""

@@ -206,5 +206,37 @@ events = finish(d, bots)
 check('이동 중 새 관측이 와도 요청한 장비의 정체를 보존', events[-1]['resolution']['status'] == 'failed'
       and bots[0]['weapon']['name'] == '다른 검')
 
+# ── D48 개정(09-11 메모 §2-4): goto <아군> = 추적. 곁 + 대상 정지 = 갈 곳 없음(already_beside) / 움직이면 매 틱 뒤쫓다 곁에서 멈추면 arrived ──
+d, bots, o = scene(['########', '#12...>#', '#......#', '########'])   # 1·2 인접, 둘 다 정지
+r = d.act(bots[0], {'type': 'goto', 'target': 'b2'}, bots)
+check('D48 개정: 곁에 멈춘 동료에게 goto = already_beside(no_effect, order 없음)',
+      r['result'] == 'already_beside' and r['resolution']['status'] == 'no_effect' and not bots[0].get('order'))
+dec = brains._parse_decision(json.dumps({'reason': 'x', 'type': 'goto', 'target': 'b2'}, ensure_ascii=False), None, o, '1', bots)
+check('D48 개정: 결정 시점 선판정 — 입력 무효 already_beside(같은 틱 재판단 경로), 사유 문장 동봉',
+      dec.get('src') == 'error' and dec.get('input_error') == 'already_beside' and '곁' in str(dec.get('reason')))
+bots[1]['_xy_end'] = (bots[1]['x'] - 1, bots[1]['y'])   # 동료가 이번 틱 한 칸 옮긴 셈 — 움직이는 중
+r = d.act(bots[0], {'type': 'goto', 'target': 'b2'}, bots)
+check('D48 개정: 곁이라도 움직이는 동료면 추적 order(chase:b2)·pathed len 0',
+      r['result'] == 'pathed' and r.get('len') == 0 and bots[0].get('order') == 'chase:b2')
+d, bots, o = scene(['##########', '#1...2...#', '#>.......#', '##########'])   # 계단은 처음부터 보이는 자리(새로 보임 정지 없음)
+r = d.act(bots[0], {'type': 'goto', 'target': 'b2'}, bots)
+bots[1]['order'], bots[1]['path'] = '@8,1', d.path_to(bots[1]['x'], bots[1]['y'], 8, 1, bots)   # 동료는 동쪽으로 세 칸 걸어가 멈춘다
+walked, final = [], None
+for tick in range(1, 20):
+    d.turn = tick
+    for b in bots:
+        if b.get('order'):
+            ev = d.step_order(b, bots)
+            if b is bots[0]:
+                walked.append(ev)
+    d.monster_turn(bots)                                # 틱 경계 자리 기록(is_moving 의 재료)
+    if not bots[0].get('order'):
+        final = walked[-1]
+        break
+check('D48 개정: 움직이는 동료를 매 틱 뒤쫓고(chase:b2 걸음), 곁에서 그가 멈추면 arrived 로 해제',
+      r['result'] == 'pathed' and any(e.get('result') == 'walking' and e.get('target') == 'chase:b2' for e in walked)
+      and final is not None and final.get('result') == 'arrived' and not bots[0].get('order') and not G.is_moving(bots[1])
+      and G.Dungeon._beside_xy(bots[0]['x'], bots[0]['y'], bots[1]['x'], bots[1]['y'], 'bot'))
+
 TMP.cleanup()
 print('ALL PASS — verify_action_system (%d checks, 실 LLM 0콜)' % checks)

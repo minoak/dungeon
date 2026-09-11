@@ -181,7 +181,29 @@ WITNESS_LABELS = {              # 목격 사건(witnessed kind) → 집계 라�
     'ally_mishap': '동료 사고', 'ally_use': '동료 사용', 'mon_use': '몹 문 사용', 'ally_status': '동료 상태',
     'ally_give': '동료 건넴', 'ally_bond': '동료 친목',   # D47 ②(09-09) 건네기·친목 목격
 }
-_RUN_RESULTS = {'walking': '걸음', 'following': '틱 동행', 'waiting': '틱 대기', 'resting': '틱 휴식'}
+_RUN_RESULTS = {'walking': '걸음', 'following': '틱 동행', 'beside': '틱 곁',   # beside = D48 개정 goto<아군> 추적의 곁 유지 틱
+                'waiting': '틱 대기', 'resting': '틱 휴식'}
+
+
+def is_moving(bot):
+    """D48 개정(09-11 메모 §2-4) '대상이 멈추면'의 판정 — 마지막 틱 경계(monster_turn 진입, _record_positions) 이후
+    자리를 옮겼거나 직전 완료 틱에 옮겼으면 움직이는 중. 경계 기록이 없으면(첫 틱·경계 없는 하니스) 멈춘 것으로 본다.
+    봇 내부 키(_xy_end·_xy_end_prev)만 읽는다 — 스냅샷·관측에 안 나간다(verify_skill_off 기준선 무접촉)."""
+    end = bot.get('_xy_end')
+    if end is None:
+        return False
+    end = tuple(end)
+    return (bot['x'], bot['y']) != end or end != tuple(bot.get('_xy_end_prev') or end)
+
+
+def _followed_char(order):
+    """'follow:b2'(동행 D18)·'chase:b2'(추적 D48 개정) → '2'(따라가는 상대). 아니면 None."""
+    s = str(order or '')
+    if s.startswith('follow:b'):
+        return s[8:]
+    if s.startswith('chase:b'):
+        return s[7:]
+    return None
 
 
 def place_word(tgt, ctx='walk'):
@@ -310,12 +332,15 @@ def event_tags(rec, names=None):
     if t == 'bonded':
         return [('bonded', '친목 받음', '%s: %s' % (nm(rec.get('from')), rec.get('form', '몸짓')))]
     if t in ('goto', 'explore', 'follow'):
+        who = nm(tgt[1:]) if (tgt[:1] == 'b' and tgt[1:].isdigit()) else place_word(tgt, 'decide')   # 사람 대상 goto(D48 개정)=이름
         if r == 'pathed':
-            return [('start', '이동 시작', (place_word(tgt, 'decide') + ' 쪽') if tgt and tgt != 'auto' else '새 길')]
+            return [('start', '이동 시작', (who + ' 쪽') if tgt and tgt != 'auto' else '새 길')]
+        if r == 'already_beside':
+            return [('misc', '이미 곁', who + ' — 멈춰 있다, 갈 곳 없음')]
         if r == 'following':
             return [('start', '동행 시작', nm(tgt[1:]) if tgt.startswith('b') else tgt)]
         if r == 'arrived':
-            return [('arrive', '도착', place_word(tgt, 'decide') + ' — 이미 곁')]
+            return [('arrive', '도착', who + ' — 이미 곁')]
         if r == 'no_path':
             return [('exhausted', '막다름', '새 길 없음' if rec.get('exhausted') else '지금 갈 길 없음')]
         if r == 'blocked':
@@ -2648,7 +2673,7 @@ class Dungeon:
                                for o in jam]}
         return {**base, 'result': 'pathed', 'len': len(path)}
 
-    def _set_follow(self, bot, target_id, bots):
+    def _set_follow(self, bot, target_id, bots, chase=False):
         """동행(D18 A-5) 개시: order='follow:b<char>' — 곁(체비셰프≤1)을 유지하며 따라 걷는
         지속 order(도착 개념 없음 — 열린 결말이라 작정(then)을 못 잇는다, act 가 비운다).
         곁이면 이 틱은 대기부터(following), 아니면 대상 현재 좌표로 경로. 매 틱 재경로는
@@ -2660,15 +2685,22 @@ class Dungeon:
           종결을 보장하나, 관찰되면 재론 카드(사회층에서 '누가 이끄나'로 풀 문제)."""
         s = str(target_id or '')
         tid = s if s[:1] == 'b' else 'b%s' % s           # 'b2'/'2' 관용(자유서술 흔들림 흡수)
+        typ, prefix = ('goto', 'chase:') if chase else ('follow', 'follow:')   # chase = D48 개정(09-11 메모 §2-4) goto<아군> 추적
         resolved = self._resolve_target(tid, bots, bot)  # bot=시야 밖 동료면 None(D18 개정)
         if resolved is None or resolved[0] != 'bot':
             if self.composed_actions:
-                return {'char': bot['char'], 'type': 'follow', 'target': tid, 'result': 'no_target'}
+                return {'char': bot['char'], 'type': typ, 'target': tid, 'result': 'no_target'}
             return self._set_explore(bot, None, bots)    # 무효 대상 → 탐색(무효 핑과 대칭)
         tx, ty = resolved[1]
-        base = {'char': bot['char'], 'type': 'follow', 'target': tid}
+        base = {'char': bot['char'], 'type': typ, 'target': tid}
         bot['follow_idle'] = None                        # 개시 = 제자리 카운터 리셋(FOLLOW_IDLE)
         if self._beside(bot, (tx, ty), 'bot'):
+            if chase:                                    # D48 개정: 곁 + 대상 정지 = 갈 곳 없음(결정 시점 선판정은 brains._already_beside)
+                other = next((o for o in bots if o['char'] == tid[1:]), None)
+                if other is None or not is_moving(other):
+                    return {**base, 'result': 'already_beside'}
+                bot['order'], bot['path'] = prefix + tid, []   # 곁인데 움직이는 중 — 붙어서 따라 걷는다
+                return {**base, 'result': 'pathed', 'len': 0}
             bot['order'], bot['path'] = 'follow:' + tid, []
             return {**base, 'result': 'following'}
         path = self.path_to(bot['x'], bot['y'], tx, ty, bots)
@@ -2684,7 +2716,7 @@ class Dungeon:
             return {**base, 'result': 'blocked',
                     'allies': [{'char': o['char'], 'name': o.get('name') or o['job']}
                                for o in jam]}
-        bot['order'], bot['path'] = 'follow:' + tid, path
+        bot['order'], bot['path'] = prefix + tid, path
         return {**base, 'result': 'pathed', 'len': len(path)}
 
     def _set_wait(self, bot, bots):
@@ -3084,15 +3116,16 @@ class Dungeon:
         if order_s == 'rest':                             # 휴식(D35): 회복이 붙은 wait
             return self._rest_tick(bot, bots, base)
         follow = order_s.startswith('follow:')            # 동행(A-5): 'follow:b<char>' 지속 order
-        tid = order_s[7:] if follow else bot.get('order')
+        chase = order_s.startswith('chase:')              # 추적(D48 개정, 09-11 메모 §2-4): goto<아군> — 곁+대상 정지면 해제
+        tid = order_s[7:] if follow else order_s[6:] if chase else bot.get('order')
         res0 = self._resolve_target(tid, bots)
-        if follow and (res0 is None or res0[0] != 'bot'):
+        if (follow or chase) and (res0 is None or res0[0] != 'bot'):
             bot['order'], bot['path'], bot['plan'] = None, [], []
             self._perceive(bot)               # 동행 대상 사망/하강 — 해석 실패 = lost(허탕 의미론)
             return {**base, 'result': 'lost'}
         if (not approaching and res0 and res0[0] in ('monster', 'bot')
                 and self._beside(bot, res0[1], res0[0])):
-            if follow:                        # 곁 유지 — 이 틱은 대기, order 지속(도착 개념 없음)
+            if follow or chase:               # 곁 유지 — 이 틱은 대기, order 지속(도착 개념 없음)
                 bot['path'] = []
                 newly = self._perceive(bot)   # 대기 중에도 눈은 뜨고 — 새 것이 보이면 멈춰 묻는다
                 if newly:
@@ -3103,6 +3136,13 @@ class Dungeon:
                 sres = self._sighted_stop(bot, base)     # "새 일이 생기면 멈추고 묻는다"(동행 라벨
                 if sres:                                 #   문구 그대로 — 몹 아닌 오브젝트도 새 일)
                     return sres
+                if chase:                                # D48 개정: 곁 + 대상 정지 = 도착(해제·재결정) / 움직이면 붙어 간다
+                    other = next((o for o in bots if o['char'] == tid[1:]), None)
+                    if other is None or not is_moving(other):
+                        bot['order'], bot['path'] = None, []
+                        return {**base, 'result': 'arrived'}
+                    self._wander_beat(bot)               # 곁 유지 틱도 맴돎 박자(동행과 같이)
+                    return {**base, 'result': 'beside'}
                 prev = bot.get('follow_idle')            # 고착 해약(FOLLOW_IDLE): 대상이 연속
                 n = (prev[2] + 1 if prev and (prev[0], prev[1]) == res0[1]
                      else 1)                             #   제자리면 카운트, 움직이면 리셋
@@ -3322,7 +3362,7 @@ class Dungeon:
         ripe = bool(run and wander_hit and run['n'] >= WANDER_N)   # 판단은 두뇌 몫(질문·조향 금지)
         if not bot['path']:
             res = self._order_done(bot, bots, base)
-            if ripe and res.get('result') == 'following':   # 곁 도달로 경로가 끝나도 follow 는
+            if ripe and res.get('result') in ('following', 'beside'):   # 곁 도달로 경로가 끝나도 follow/chase 는
                 bot['order'], bot['path'], bot['plan'] = None, [], []   # 무결정 지속 — 이 걸음이
                 steps = run['n']                      #   되밟기+N이면 맴돎이 우선(07-24 둘째 구멍:
                 bot['wander'] = None                  #   한 칸 추격의 마지막 걸음이 관문을 건너뜀).
@@ -3394,11 +3434,18 @@ class Dungeon:
             # 접근 경로 끝은 LLM 재결정점이 아니다. 다음 틱에 거리·대상·새 사건을 다시 확인한다.
             return {**base, 'result': 'arrived', 'approach_status': 'ready'}
         s = str(base.get('target') or '')
-        if s.startswith('follow:'):                   # 동행(A-5): 경로 소진은 완결이 아니다 —
-            res = self._resolve_target(s[7:], bots)
+        if s.startswith('follow:') or s.startswith('chase:'):   # 동행(A-5)·추적(D48 개정): 경로 소진은 완결이 아니다 —
+            chase = s.startswith('chase:')
+            tid = s[6:] if chase else s[7:]
+            res = self._resolve_target(tid, bots)
             if res and self._beside(bot, res[1], 'bot'):
+                if chase:                             #   추적: 곁 + 대상 정지 = 도착(해제·재결정), 움직이면 붙어 간다
+                    other = next((o for o in bots if o['char'] == tid[1:]), None)
+                    if other is None or not is_moving(other):
+                        bot['order'], bot['path'] = None, []
+                        return {**base, 'result': 'arrived'}
                 bot['path'] = []                      #   곁이면 지속(다음 틱 대기/재경로)
-                return {**base, 'result': 'following'}
+                return {**base, 'result': 'beside' if chase else 'following'}
             bot['order'], bot['path'], bot['plan'] = None, [], []
             return {**base, 'result': 'lost'}         #   유령 좌표 허탕/대상 소멸 — 동행 끝
         bot['order'], bot['path'] = None, []
@@ -3679,8 +3726,7 @@ class Dungeon:
                   if not o.get('order') or o['order'] == target_id}
         while True:
             add = [o for o in near if o['char'] not in group
-                   and str(o.get('order') or '').startswith('follow:b')
-                   and str(o['order'])[8:] in group]
+                   and _followed_char(o.get('order')) in group]   # follow:b·chase:b(D48 개정) 둘 다 한 무리
             if not add:
                 return [o for o in near if o['char'] not in group]
             group |= {o['char'] for o in add}
@@ -4427,12 +4473,19 @@ class Dungeon:
                 return                                # 이동 이벤트=봇 시야 안일 때만(도주/배회와 정책 통일)
 
     def monster_turn(self, bots):
+        self._record_positions(bots)                 # D48 개정: 틱 경계 자리 기록(is_moving 의 재료) — 판정·난수 무접촉
         if not self.skills:
             return self._monster_turn(bots)
         starts = {m.id: (m.x, m.y) for m in self.monsters}
         result = self._monster_turn(bots)
         result.extend(SK.monster_status_after_move(self, bots, starts))
         return result
+
+    def _record_positions(self, bots):
+        """틱 경계의 자리 기록(D48 개정) — is_moving 의 재료. 스냅샷·관측에 안 나가는 봇 내부 키."""
+        for b in bots:
+            b['_xy_end_prev'] = b.get('_xy_end')
+            b['_xy_end'] = (b['x'], b['y'])
 
     def _monster_turn(self, bots):
         """독립 시계 몹 AI(2b): SLEEPING/WANDERING/HUNTING + LOS 발각굴림 + 대칭 기습 + 강등.

@@ -279,6 +279,8 @@ def execute(d, bot, action, bots):
                 return _base(bot, action, 'arrived' if xy == (bot['x'], bot['y']) else 'no_path')
             bot['order'], bot['path'] = '@%d,%d' % xy, path
             return _base(bot, action, 'pathed', len=len(path), **(obj['result'] if kind == 'way' else {}))
+        if typ == 'goto' and kind == 'bot' and obj is not bot:   # D48 개정(09-11 메모 §2-4): 사람에게 goto = 추적(곁+정지면 해제)
+            return d._set_follow(bot, rid, bots, chase=True)
         return d._execute_legacy_action(bot, action, bots)
     if typ == 'search':
         if kind == 'bot' and obj is bot:
@@ -396,12 +398,12 @@ def damage_actor(d, bot, recipient, damage, bots, critical=False):
 def decorate(bot, action, result):
     """기존 이벤트의 상태 태그와 result를 유지하며 공통 결과를 resolution에 추가한다."""
     r = result.get('result')
-    pending = bool(bot.get('order')) and (r in ('approaching', 'pathed', 'walking', 'following', 'resting', 'waiting') or result.get('approach_status') == 'ready')
+    pending = bool(bot.get('order')) and (r in ('approaching', 'pathed', 'walking', 'following', 'beside', 'resting', 'waiting') or result.get('approach_status') == 'ready')
     if pending:
         status = None
     elif r in ('lost', 'no_target', 'too_far', 'no_path', 'blocked', 'nothing', 'no_potion', 'no_room', 'wait_allies', 'disabled', 'skill_failed', 'skill_missed'):
         status = 'failed'
-    elif r == 'no_effect' or (action['type'] == 'search' and not result.get('found')):
+    elif r in ('no_effect', 'already_beside') or (action['type'] == 'search' and not result.get('found')):
         status = 'no_effect'
     elif r == 'attack' and not result.get('hit'):
         status = 'failed'

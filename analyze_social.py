@@ -70,7 +70,7 @@ def main(path):
     longest = max((len(x) for x in runs), default=0)
 
     # follow 진행·회전 / lost / 되밟기
-    follow_ticks = cyc = 0
+    follow_ticks = cyc = chase_ticks = 0      # chase = D48 개정 goto<아군> 추적 order(09-11)
     hist = defaultdict(list)
     back, moves = Counter(), Counter()
     for r in ticks:
@@ -78,6 +78,8 @@ def main(path):
                if str(b.get("order") or "").startswith("follow:b")}
         if fol:
             follow_ticks += 1
+        if any(str(b.get("order") or "").startswith("chase:b") for b in r.get("bots", [])):
+            chase_ticks += 1
         if any(fol.get(t) == a or (fol.get(t) and fol.get(fol.get(t)) == a) for a, t in fol.items()):
             cyc += 1
         for b in r.get("bots", []):
@@ -108,8 +110,8 @@ def main(path):
     print("  말 걸림 정지 %d회(%.2f/틱) · 전원 제자리 %d틱(%.0f%%) · 최장 정체 %d틱 · 결정 %d(say %.0f%%)"
           % (hails, hails / max(n, 1), len(stall_turns), 100.0 * len(stall_turns) / max(n, 1), longest,
              n_dec, 100.0 * says / max(n_dec, 1)))
-    print("  follow 진행 %d틱(%.0f%%) · 회전 follow %d틱 · 결정 분포 %s"
-          % (follow_ticks, 100.0 * follow_ticks / max(n, 1), cyc, dict(dec_types.most_common(6))))
+    print("  follow 진행 %d틱(%.0f%%) · 사람 추적 goto %d틱(%.0f%%) · 회전 follow %d틱 · 결정 분포 %s"
+          % (follow_ticks, 100.0 * follow_ticks / max(n, 1), chase_ticks, 100.0 * chase_ticks / max(n, 1), cyc, dict(dec_types.most_common(6))))
     print("  lost %d회 %s" % (len(lost), lost[:10]))
     print("  5틱 내 되밟기: " + " · ".join("%s %d/%d" % (names.get(c, c), back[c], moves[c]) for c in sorted(moves)))
     print("  커버리지 %d칸(%.2f칸/틱)" % (len(visited), len(visited) / max(n, 1)))

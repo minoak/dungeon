@@ -589,7 +589,7 @@ def _tgt_name(tgt, names=None):
     ⚠️ 'follow:' 는 엔진 내부 접두다. 프롬프트에 그대로 새면 캐릭터가 자기 세계에 없는
     기계어를 읽는다(2026-07-26 부검에서 lost 보고 6건 전부 노출 확인). 동료도 id(b2)가
     아니라 이름으로 부른다 — 같은 파티원을 번호로 부르는 사람은 없다."""
-    s = str(tgt or "").replace("follow:", "")
+    s = str(tgt or "").replace("follow:", "").replace("chase:", "")   # chase: = D48 개정 goto<아군> 추적 order
     if s.startswith("b") and (names or {}).get(s[1:]):
         return names[s[1:]]
     return s
@@ -700,6 +700,8 @@ def _last_prose(last, names=None):
             return ("%s을(를) 마지막 본 자리까지 갔지만 곁에 없다"
                     " (지금 시야에 보이면 비껴 선 것, 안 보이면 어디로 갔는지 모른다)"
                     % _tgt_name(tgt, names))
+        if r == "beside":                     # D48 개정 추적 — 곁을 지키는 틱(대상이 움직이는 중)
+            return "%s 곁에 붙어 있다 — 그가 움직이면 따라 걷는다" % _tgt_name(tgt, names)
         if r == "idle":
             return ("동행을 접었다 — %s이(가) 한동안 제자리라 같이 서 있기만 했다."
                     " 이제 뭘 할지 네가 정하라" % _tgt_name(tgt, names))
@@ -831,7 +833,9 @@ def _last_prose(last, names=None):
             return ("가려던 길이 막혔다 — 동료(%s)가 길목에 서 있어 크게 돌아야 한다"
                     % ", ".join(a.get("name", "?") for a in last["allies"]))
         if r == "arrived":
-            return "%s — 이미 곁이다" % (tgt or "?")
+            return "%s — 이미 곁이다" % (_tgt_name(tgt, names) or "?")
+        if r == "already_beside":             # D48 개정: 곁에 멈춘 사람에게 goto — 갈 곳 없음
+            return "%s — 이미 곁에 있고 멈춰 있다, 갈 곳이 없다" % (_tgt_name(tgt, names) or "?")
         if r == "no_path":
             if last.get("exhausted"):         # D19 개정: 보이는 새 길·기억의 계단·기억 속 안 가 본 문 전부 없음
                 return ("탐색하려 했지만 — 새 길이 없다: 보이는 길은 전부 가 봤고,"
@@ -840,12 +844,12 @@ def _last_prose(last, names=None):
         if r == "following":
             return "%s 곁에서 동행을 시작했다" % tgt
         if r == "pathed":
-            return ("%s 쪽으로 걷기 시작했다" % tgt
+            return ("%s 쪽으로 걷기 시작했다" % _tgt_name(tgt, names)
                     if tgt and tgt != "auto" else "새 길로 걷기 시작했다")
     return json.dumps(last, ensure_ascii=False)        # 미지 형태 — 정직한 폴백(숨기지 않는다)
 
 
-_TRAIL_RUNS = {"walking": "%d걸음", "following": "%d틱 동행",
+_TRAIL_RUNS = {"walking": "%d걸음", "following": "%d틱 동행", "beside": "%d틱 곁",   # beside = D48 개정 추적의 곁 유지 틱
                "waiting": "%d틱 대기", "resting": "%d틱 휴식"}
 _VERB_KR = {"goto": "이동", "follow": "동행", "explore": "탐색", "attack": "공격", "interact": "상호작용",
             "search": "수색", "wait": "기다림", "rest": "휴식", "drink": "물약",
@@ -1570,6 +1574,24 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
     return {**dec, "attempt_errors": errors}
 
 
+def _already_beside(composed, char, roster):
+    """goto <아군>인데 그 사람이 이미 곁(체비셰프 1)에 있고 멈춰 있으면 사유 문장, 아니면 None(D48 개정, 09-11 메모 §2-4 [제안]
+    "이미 곁에 있는 아군에게 goto 하면 '이미 곁에 있다' 결과 + 같은 틱 재판단 — 기존 입력 무효 처리와 같은 방식").
+    엔진 _set_follow(chase) 의 already_beside 와 같은 판정을 결정 시점(틱 시작 스냅샷)에 미리 한다."""
+    if composed.get("type") != "goto":
+        return None
+    tgt = str(composed.get("target") or "")
+    if tgt[:1] != "b" or tgt[1:] == str(char):
+        return None
+    me = next((o for o in (roster or []) if str(o.get("char")) == str(char)), None)
+    other = next((o for o in (roster or []) if str(o.get("char")) == tgt[1:]), None)
+    if not me or not other or "x" not in me or "x" not in other:
+        return None
+    if G.Dungeon._beside_xy(me["x"], me["y"], other["x"], other["y"], "bot") and not G.is_moving(other):
+        return "%s은(는) 이미 곁에 있고 멈춰 있다 — 곁에 멈춘 사람에게는 갈 수 없다" % (other.get("name") or other.get("job") or tgt)
+    return None
+
+
 def _parse_decision(raw, why, obs, char, roster):
     """응답을 행동 또는 오류로 읽는다. 오류에는 실행 가능한 type이 없다."""
     obj, jwhy = _extract(raw)
@@ -1582,6 +1604,12 @@ def _parse_decision(raw, why, obs, char, roster):
                 fb = {"src": "error", "reason": input_error}
                 fb["input_error"] = input_error
                 fb['input_error_detail'] = G.CA.error_detail(obj, obs, input_error)
+                fb.update(reaction)
+                return fb
+            ab = _already_beside(composed, char, roster)   # D48 개정(메모 §2-4 [제안]): 곁에 멈춘 사람에게 goto = 입력 무효 → 같은 틱 재판단
+            if ab:
+                fb = {"src": "error", "reason": ab, "input_error": "already_beside",
+                      "input_error_detail": {**G.CA.error_detail(obj, obs, "already_beside"), "reason": ab}}
                 fb.update(reaction)
                 return fb
             # 번호 작정은 이 모드의 문법이 아니다. 기존 객체 작정 검증은 그대로 재사용.
