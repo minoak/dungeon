@@ -5,6 +5,7 @@
 좌표/실물 참조는 봇 내부에만 보관하고 모델에는 기존 방위·거리 표현을 보낸다.
 """
 import copy
+import entities as ENT
 import skill_core as SK
 import skill_combat as SC
 
@@ -31,11 +32,10 @@ def observe(d, bot, bots, obs):
         for obj in sights.get(label, []):
             rid = obj['id']
             refs[rid] = {'kind': kind, 'key': rid, **({'char': rid[1:]} if kind == 'bot' else {})}
-            tags = (['agent', 'living', 'damageable', 'movable'] if kind in ('bot', 'monster') else ['object'])
+            tags = (['agent', 'living', 'damageable', 'movable'] if kind in ('bot', 'monster')
+                    else ENT.feature_tags(obj.get('type')))     # 오브젝트 태그 = 정의(D50): 장비·물약 = object+item
             if kind == 'bot':
                 tags += ['inventory_holder']
-            if obj.get('type') in ('weapon', 'armor', 'potion'):
-                tags += ['item']
             targets.append({'id': rid, 'kind': kind, 'tags': tags,
                             **{k: obj[k] for k in ('name', 'dist', 'bearing') if k in obj}})
     if sights.get('exit'):

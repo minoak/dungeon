@@ -1,0 +1,11 @@
+{
+  "id": "treasure",
+  "name": "보물",
+  "kind": "object",
+  "type": "treasure",
+  "tags": [
+    "object"
+  ],
+  "sprite": "wl-props#4",
+  "comps": {}
+}

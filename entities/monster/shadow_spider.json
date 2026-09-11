@@ -1,0 +1,32 @@
+{
+  "id": "shadow_spider",
+  "name": "그림자거미",
+  "kind": "monster",
+  "tags": [
+    "monster",
+    "ambusher"
+  ],
+  "sprite": "wl-spider",
+  "comps": {
+    "health": {
+      "max": 5
+    },
+    "combat": {
+      "atk": 3,
+      "dmg": 3,
+      "ac": 13,
+      "on_hit": "둔화"
+    },
+    "ai": {
+      "start": "sleeping",
+      "concealed": true,
+      "flee": {
+        "hp_frac": 3,
+        "stamina": 8
+      }
+    },
+    "knowledge": {
+      "deep": "그늘에 숨어 기다리는 매복자. 눈에 안 보여도 거기 있다 — 수색만이 미리 드러내고, 물린 뒤엔 이미 늦다."
+    }
+  }
+}

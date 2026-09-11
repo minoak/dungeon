@@ -1,0 +1,31 @@
+{
+  "id": "goblin",
+  "name": "고블린",
+  "kind": "monster",
+  "tags": [
+    "monster",
+    "small",
+    "coward"
+  ],
+  "sprite": "wl-goblin",
+  "comps": {
+    "health": {
+      "max": 6
+    },
+    "combat": {
+      "atk": 2,
+      "dmg": 2,
+      "ac": 12
+    },
+    "ai": {
+      "start": "sleeping",
+      "flee": {
+        "hp_frac": 3,
+        "stamina": 8
+      }
+    },
+    "knowledge": {
+      "deep": "겁 많은 소형 마물. 잠들거나 배회할 땐 먼저 치면 기습이 된다. 피를 많이 보면 달아나지만, 궁지에 몰리면 이빨을 드러낸다."
+    }
+  }
+}

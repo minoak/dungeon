@@ -1,0 +1,17 @@
+{
+  "id": "leather_armor",
+  "name": "가죽 갑옷",
+  "kind": "object",
+  "type": "armor",
+  "tags": [
+    "object",
+    "item"
+  ],
+  "sprite": "wl-props#7",
+  "comps": {
+    "equipment": {
+      "slot": "armor",
+      "bonus": 1
+    }
+  }
+}

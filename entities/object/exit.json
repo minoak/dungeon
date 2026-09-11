@@ -1,0 +1,10 @@
+{
+  "id": "exit",
+  "name": "출구",
+  "kind": "object",
+  "type": "exit",
+  "tags": [
+    "object"
+  ],
+  "comps": {}
+}

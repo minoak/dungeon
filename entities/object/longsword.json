@@ -1,0 +1,17 @@
+{
+  "id": "longsword",
+  "name": "장검",
+  "kind": "object",
+  "type": "weapon",
+  "tags": [
+    "object",
+    "item"
+  ],
+  "sprite": "wl-props#6",
+  "comps": {
+    "equipment": {
+      "slot": "weapon",
+      "bonus": 2
+    }
+  }
+}

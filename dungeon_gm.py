@@ -27,6 +27,7 @@ import composed_actions as CA
 import social_reactions as SR
 import skill_core as SK
 import skill_combat as SC
+import entities as ENT           # 엔티티 저장소(D50, 09-11) — 몬스터·함정·오브젝트·NPC 정의(수치·이름·지식 본문)
 import math
 import os
 import random
@@ -47,7 +48,7 @@ STAIRS_UP, NPC = '<', '&'       # 마을(D29, 2026-07-30): '<'=위로 오르는 
 WEAPON, ARMOR = ')', '['        # 장비(2026-07-30, 뼈대): 슬롯 2(무기·방어구)+단순 보정. 착용=캐릭터
                                 # 판단(interact — 자동 줍기 아님·보물/물약과 다른 문법). 스왑=헌 장비를
                                 # 그 자리에 놓는다(인벤토리 없음 — 슬롯이 소지의 전부).
-GEAR_KINDS = {'단검': 1, '장검': 2, '가죽 갑옷': 1, '사슬 갑옷': 2}   # 이름→보정(피처는 이름만 들고
+GEAR_KINDS = ENT.gear_kinds()   # ← entities/object/*.json equipment.bonus(D50)   # 이름→보정(피처는 이름만 들고
                                 # 보정은 여기서 푼다 — Feature __slots__/스트림 계약 무접촉).
                                 # 저주·미식별·강화=2차 서랍(07-30 합의).
 GEAR_CYCLE = [('weapon', '단검'), ('armor', '가죽 갑옷'),             # 배치 순환(함정 kinds 선례 —
@@ -454,7 +455,7 @@ STATUS_KINDS = {
 BLEED_STEPS = 3          # 출혈: 이만큼 걸을 때마다 HP 1 (첫 판 관찰값 — 튜닝은 판 뒤)
 SLOW_EVERY = 2           # 둔화: 자동보행 이 틱마다 한 칸(=한 틱 걷고 한 틱 쉼)
 POISON_MOD = 2           # 중독: 명중(_attack mod)·회피(_monster_attack ac) 감산
-MON_STATUS = {'그림자거미': '둔화'}   # 몹의 특수 = 태그(명중 시). 고블린=무태그(기준선 몹 — 대비의 자)
+MON_STATUS = ENT.mon_status()   # ← entities/monster combat.on_hit(D50)   # 몹의 특수 = 태그(명중 시). 고블린=무태그(기준선 몹 — 대비의 자)
 REST_HP = 1              # 휴식(D35): 틱마다 차는 HP (hp 2 → 만피 14 가 열두 틱쯤 = WAIT_MAX 눈금)
 REST_MIN = 5             # 휴식 완료 하한: 만피여도 이만큼은 쉬어야 몸 상태가 낫는다("푹 쉬어야 낫는다")
 
@@ -505,11 +506,18 @@ class Monster:
     """던전에 실재하는 적. GM이 지어내는 게 아니라 여기 좌표로 존재한다.
     state(2b): SLEEPING(잠·발각굴림만) / WANDERING(배회·발각 +2) / HUNTING(추격). LOS 발각으로 전이.
     target/last_seen/lost: HUNTING 추격·강등용. skip_turns: 기습당해 행동 스킵(대상 턴 스킵).
-    concealed: 숨은 적(Stage 3 인지판정). id: 핑 대상."""
-    def __init__(self, x, y, kind='고블린', hp=6, atk=2, dmg=2, ac=12, mid=0):
+    concealed: 숨은 적(Stage 3 인지판정). id: 핑 대상.
+    수치(hp·atk·dmg·ac)·도주 파라미터는 엔티티 정의(entities/monster, D50)가 기본값 — 명시 인자가 우선(장면 저작·게이트)."""
+    def __init__(self, x, y, kind='고블린', hp=None, atk=None, dmg=None, ac=None, mid=0):
+        spec = ENT.monster_stats(kind)       # 모르는 종은 기준선 몹(고블린)의 몸
+        hp = spec['hp'] if hp is None else hp
+        atk = spec['atk'] if atk is None else atk
+        dmg = spec['dmg'] if dmg is None else dmg
+        ac = spec['ac'] if ac is None else ac
         self.x, self.y, self.kind = x, y, kind
         self.hp, self.maxhp = hp, hp
         self.atk, self.dmg, self.ac = atk, dmg, ac
+        self.flee_frac, self.flee_stamina = ENT.monster_flee(kind)   # ai.flee — 없으면 (None, None)=도주 안 함
         self.alive = True
         self.id = mid
         self.state = 'SLEEPING'      # 2b: 발각굴림으로 HUNTING 전이, LOS 상실로 WANDERING 강등. 3: 저HP→FLEEING
@@ -539,11 +547,7 @@ class Monster:
 # 함정 패밀리(Stage 3, SPD 33종→3종 린 스타터): 베이스 클래스 1개 + kind 테이블.
 #   spike = 기본 피해 / dart = 독침(가벼운 피해·회피 어려움) / alarm = 경보(피해 0, 층의 몹 일제 각성
 #   = justAlerted 굴림 우회 → 함정이 인식 시스템에 결합되는 지점. 줄당 연출 최고).
-TRAP_KINDS = {
-    'spike': {'name': '가시 함정', 'dc': 13, 'dmg': 3, 'status': '출혈'},   # 특수(D34): 피해와 별개로 태그
-    'dart':  {'name': '독침 함정', 'dc': 14, 'dmg': 2, 'status': '중독'},   #   (판정 실패·생존 시)
-    'alarm': {'name': '경보 함정', 'dc': 13, 'dmg': 0},
-}
+TRAP_KINDS = ENT.trap_kinds()    # ← entities/trap/*.json(D50): spike 13/3 출혈 · dart 14/2 중독 · alarm 13/0 — status(D34)=피해와 별개 태그
 
 
 class Trap:
@@ -853,19 +857,19 @@ class Dungeon:
                     continue
                 d.grid[y][x] = FLOOR
                 if ch == EXIT:
-                    d._exit_fid = d._add_feature('exit', '출구', x, y)
+                    d._exit_fid = d._add_feature('exit', ENT.object_name('exit'), x, y)
                 elif ch == TREASURE:
-                    d._add_feature('treasure', '보물', x, y)
+                    d._add_feature('treasure', ENT.object_name('treasure'), x, y)
                 elif ch == '=':
-                    d._add_feature('chest', '상자', x, y)
+                    d._add_feature('chest', ENT.object_name('chest'), x, y)
                 elif ch == '~':
-                    d._add_feature('fountain', '샘', x, y)
+                    d._add_feature('fountain', ENT.object_name('fountain'), x, y)
                 elif ch == POTION:
-                    d._add_feature('potion', '회복 물약', x, y)
+                    d._add_feature('potion', ENT.object_name('potion'), x, y)
                 elif ch == WEAPON:         # 장비(07-30) — 장면 저작용은 1티어 고정(단검·가죽 갑옷).
-                    d._add_feature('weapon', '단검', x, y)     # 상위 티어 장면은 호출측이
+                    d._add_feature('weapon', ENT.object_name('dagger'), x, y)     # 상위 티어 장면은 호출측이
                 elif ch == ARMOR:                              # _add_feature('weapon','장검',…)로 직접
-                    d._add_feature('armor', '가죽 갑옷', x, y)
+                    d._add_feature('armor', ENT.object_name('leather_armor'), x, y)
                 elif ch == STAIRS_UP:      # 마을(D29) — 위로 오르는 계단(복귀. 하강 '>'와 대칭)
                     d._add_feature('stairs_up', '위로 오르는 계단', x, y)
                 elif ch == TRAP:
@@ -878,9 +882,9 @@ class Dungeon:
             raise ValueError("장면 맵에 출구('>')가 없다 — 층의 필수 피처")
         for i, (sym, x, y) in enumerate(mslots):
             t = dict((monsters or {}).get(sym) or {})
-            m = Monster(x, y, kind=t.get('kind', '고블린'), hp=t.get('hp', 6),
-                        atk=t.get('atk', 2), dmg=t.get('dmg', 2),
-                        ac=t.get('ac', 12), mid=i)
+            m = Monster(x, y, kind=t.get('kind', '고블린'), hp=t.get('hp'),      # 장면이 안 준 수치는 정의 기본값(D50)
+                        atk=t.get('atk'), dmg=t.get('dmg'),
+                        ac=t.get('ac'), mid=i)
             m.state = t.get('state', 'SLEEPING')
             m.concealed = bool(t.get('concealed'))
             m.target = t.get('target')
@@ -977,12 +981,12 @@ class Dungeon:
         self.rng.shuffle(floors)
         room_floors = [c for c in floors if self._room_id_at(*c) is not None]
         ex, ey = room_floors[0] if room_floors else floors[-1]
-        self._exit_fid = self._add_feature('exit', '출구', ex, ey)
+        self._exit_fid = self._add_feature('exit', ENT.object_name('exit'), ex, ey)
         used = {(ex, ey)}
         pool = [c for c in floors if c not in used]
         for _ in range(min(3, len(pool))):
             x, y = pool.pop()
-            self._add_feature('treasure', '보물', x, y)
+            self._add_feature('treasure', ENT.object_name('treasure'), x, y)
         for i in range(n_monsters):
             if pool:
                 x, y = pool.pop()
@@ -990,8 +994,7 @@ class Dungeon:
         for i in range(n_lurkers):            # 매복몹: 봇 obs·맵(봇시야)에 안 나감 → they-ambush 의 몸통
             if pool:
                 x, y = pool.pop()
-                lurk = Monster(x, y, kind='그림자거미', hp=5, atk=3, dmg=3, ac=13,
-                               mid=n_monsters + i)
+                lurk = Monster(x, y, kind='그림자거미', mid=n_monsters + i)   # 수치 = 정의(D50)
                 lurk.concealed = True
                 self.monsters.append(lurk)
         kinds = ['spike', 'alarm', 'dart']    # 종류 순환 — 함정 2개 이상이면 경보가 반드시 들어간다
@@ -1001,10 +1004,10 @@ class Dungeon:
                 self.traps.append(Trap(x, y, kind=kinds[i % len(kinds)]))
         if pool:                              # 상자: 열면 보물 2개 or 독침(리스크/보상 도박)
             x, y = pool.pop()
-            self._add_feature('chest', '상자', x, y)
+            self._add_feature('chest', ENT.object_name('chest'), x, y)
         if pool:                              # 샘: 마시면 회복 or 오염(가벼운 도박, 대체로 이득)
             x, y = pool.pop()
-            self._add_feature('fountain', '샘', x, y)
+            self._add_feature('fountain', ENT.object_name('fountain'), x, y)
         if pool:                              # 숨은 보물: 인지(도적)로만 드러난다 — 직업 보상의 몸통
             x, y = pool.pop()
             self._add_feature('treasure', '숨은 보물', x, y,
@@ -1012,7 +1015,7 @@ class Dungeon:
         for _ in range(n_potions):            # 회복 물약(07-17): 들고 다니는 확정 회복(PD 문법).
             if pool:                          #   맨 마지막 배치 = 같은 시드의 기존 배치 전부 불변
                 x, y = pool.pop()             #   (pool.pop 은 RNG 무소비 — additive 재현성)
-                self._add_feature('potion', '회복 물약', x, y)
+                self._add_feature('potion', ENT.object_name('potion'), x, y)
         for i in range(n_gear):               # 장비(07-30): 물약 뒤 = 같은 additive 규율.
             if pool:                          #   순환 배치(RNG 무소비) — 기본 3개면 단검·가죽 갑옷·
                 x, y = pool.pop()             #   장검이 깔려 한 층 안에서 '더 좋은 것' 비교가 생긴다
@@ -4521,8 +4524,8 @@ class Dungeon:
                     ev['from_hiding'] = True
                     events.append(ev)
                 continue
-            if (m.state == 'HUNTING' and not m.desperate
-                    and m.hp * FLEE_FRAC <= m.maxhp):
+            if (m.state == 'HUNTING' and not m.desperate and m.flee_frac
+                    and m.hp * m.flee_frac <= m.maxhp):      # 정의의 ai.flee(D50) — 없으면 도주 안 함
                 m.state, m.target, m.lost = 'FLEEING', None, 0    # 저HP → 도주(SPD FLEEING 린 채용)
                 m.flee_turns = 0
                 events.append({'type': 'monster_flee', 'id': 'm%d' % m.id, 'monster': m.kind})
@@ -4536,7 +4539,7 @@ class Dungeon:
                     continue
                 m.lost = 0                                # 봇이 보이면 '연속 상실' 리셋(HUNTING과 동일 스펙)
                 m.flee_turns += 1
-                if m.flee_turns >= FLEE_STAMINA:          # 탈진 → 필사 반전: 몰린 쥐가 고양이를 문다
+                if m.flee_turns >= m.flee_stamina:        # 탈진 → 필사 반전: 몰린 쥐가 고양이를 문다(정의의 ai.flee.stamina)
                     b = min(near, key=lambda b: (self._cheb(m.x, m.y, b['x'], b['y']), b['char']))
                     m.state, m.desperate = 'HUNTING', True
                     m.target, m.last_seen, m.lost = b['char'], (b['x'], b['y']), 0

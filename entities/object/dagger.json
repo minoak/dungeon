@@ -1,0 +1,17 @@
+{
+  "id": "dagger",
+  "name": "단검",
+  "kind": "object",
+  "type": "weapon",
+  "tags": [
+    "object",
+    "item"
+  ],
+  "sprite": "wl-props#6",
+  "comps": {
+    "equipment": {
+      "slot": "weapon",
+      "bonus": 1
+    }
+  }
+}

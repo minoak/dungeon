@@ -1,0 +1,18 @@
+{
+  "id": "item_merchant",
+  "name": "아이템 상인",
+  "kind": "npc",
+  "tags": [
+    "npc",
+    "merchant"
+  ],
+  "comps": {
+    "npc": {
+      "line": "물약 하나 가져가게. 한 사람에 하나씩이야 — 던전에선 그게 목숨값이지.",
+      "line_again": "아까 왔잖아. 이번 원정 몫은 이미 줬어 — 살아 돌아오면 또 하나 주지.",
+      "gift": {
+        "potions": 1
+      }
+    }
+  }
+}

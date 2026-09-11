@@ -1,0 +1,19 @@
+{
+  "id": "alarm",
+  "name": "경보 함정",
+  "kind": "trap",
+  "tags": [
+    "trap",
+    "hazard"
+  ],
+  "sprite": "wl-traps#2",
+  "comps": {
+    "trap": {
+      "dc": 13,
+      "dmg": 0
+    },
+    "knowledge": {
+      "deep": "몸은 안 다친다 — 대신 층의 잠든 것들이 전부 깨어난다. 어떤 의미로 최악의 함정."
+    }
+  }
+}

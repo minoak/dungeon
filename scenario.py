@@ -83,11 +83,7 @@ def build(spec):
                       ("explore_dirs", "DUNGEON_EXPLORE_DIRS"),                              # D19 개정 4 방향 탐색 열거(09-07)
                       ("give_verb", "DUNGEON_GIVE"), ("bond_verb", "DUNGEON_BOND")):           # D47 ② 건네기·친목(09-09)
         setattr(d, attr, os.environ.get(env, "1") != "0")   # 전부 러너 기본 1 — 끄려면 env 로
-    try:
-        with open(os.path.join(HERE, "lore.json"), encoding="utf-8") as f:
-            d.lore = json.load(f)
-    except Exception:
-        pass
+    d.lore = G.ENT.lore()                      # 지식 본문 = 엔티티 저장소(D50, 옛 lore.json)
     if not starts:
         raise ValueError("장면 맵에 봇 자리(숫자 1~9)가 없다")
     sheets = load_sheets()

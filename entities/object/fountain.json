@@ -1,0 +1,15 @@
+{
+  "id": "fountain",
+  "name": "샘",
+  "kind": "object",
+  "type": "fountain",
+  "tags": [
+    "object"
+  ],
+  "sprite": "wl-props#3",
+  "comps": {
+    "knowledge": {
+      "deep": "마시면 대체로 몸을 치유한다. 가끔 오염된 물이 있지만 얕게 상한다 — 다쳤을 때 걸어볼 만한 도박."
+    }
+  }
+}

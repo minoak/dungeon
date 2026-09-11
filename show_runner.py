@@ -197,7 +197,7 @@ GIVE_ON = os.environ.get("DUNGEON_GIVE", "1") != "0"         # 건네기(D47 ②
 BOND_ON = os.environ.get("DUNGEON_BOND", "1") != "0"         # 친목(D47 ②, 09-09 파트너 "['대화' '친목' '머리를 쓰다듬기']") —
                                                              #   러너 기본 1, 엔진 기본 0. 곁의 동료에게 하는 몸짓(응답 form
                                                              #   자유 문구) — 물리 없음, 기록·목격·뼈. 반응은 상대의 다음 결정
-LORE_FILE = os.path.join(HERE, "lore.json")
+# 지식 본문(옛 lore.json)은 엔티티 저장소(entities/, D50)의 knowledge.deep — G.ENT.lore()
 STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적용 후 맵이 보이게(헤들리스=0)
 
 # 캐릭터 시트 계약(party.json): 필수 9필드(수치형/문자형) + 선택 4필드(프롬프트 전용)
@@ -608,14 +608,16 @@ def build_town():
     d.skills, d.trpg_combat, d.random_skill = SKILLS_ON and brains.COMPOSE, TRPG_COMBAT_ON, RANDOM_SKILL_ON
     for n in spec.get("npcs", []):
         x, y = int(n["x"]), int(n["y"])
+        spec_n = {**G.ENT.npc(n["id"]), **{k: v for k, v in n.items() if k in ("name", "line", "line_again", "gift")}} \
+            if n.get("id") else n              # D50: 배치(id·좌표)는 town.json, 이름·대사·선물은 entities/npc — 옛 인라인 꼴도 읽힌다
         if d.grid[y][x] != G.FLOOR:            # 좌표-그림 어긋남은 시작 전에 죽는 게 낫다
-            raise ValueError("town.json NPC %r 좌표 (%d,%d)가 바닥이 아니다" % (n["name"], x, y))
-        d._add_feature("npc", n["name"], x, y)
-        d.npc_lines[n["name"]] = n.get("line", "…")
-        if n.get("gift"):                      # D32 상점 v0 — 고정 선물(물약 1/방문·빈손이면 단검)
-            d.npc_gifts[n["name"]] = dict(n["gift"])
-        if n.get("line_again"):                #   두 번째 대사(정해진 문장만)
-            d.npc_lines_again[n["name"]] = n["line_again"]
+            raise ValueError("town.json NPC %r 좌표 (%d,%d)가 바닥이 아니다" % (spec_n["name"], x, y))
+        d._add_feature("npc", spec_n["name"], x, y)
+        d.npc_lines[spec_n["name"]] = spec_n.get("line") or "…"
+        if spec_n.get("gift"):                 # D32 상점 v0 — 고정 선물(물약 1/방문·빈손이면 단검)
+            d.npc_gifts[spec_n["name"]] = dict(spec_n["gift"])
+        if spec_n.get("line_again"):           #   두 번째 대사(정해진 문장만)
+            d.npc_lines_again[spec_n["name"]] = spec_n["line_again"]
     d.features[d._exit_fid].name = "던전 입구"   # 같은 '>'라도 마을에선 탈출구가 아니라 입구다
     return d, starts
 
@@ -814,7 +816,7 @@ def main():
                 random.Random("look:%d:%s" % (DUNGEON_SEED, c)), sheets[c]["sex"])}   # 로 따로(dungeon.rng 무접촉)
     chars = sorted(sheets)
     names = {c: (sheets[c].get("name") or "봇%s" % c) for c in chars}
-    lore = bestiary.load_lore(LORE_FILE)                  # 지식 '본문'(D9) — 판정 무접촉, obs 전용
+    lore = G.ENT.lore()                                   # 지식 '본문'(D9) — 엔티티 저장소(D50), 판정 무접촉, obs 전용
     iss = bestiary.Issuer(names)                          # 도감 발급기 = 스트림 소비자(D9 '획득')
     if BESTIARY_FILE:
         iss.load(BESTIARY_FILE)                           # 지난 원정의 지식 이월 — 죽어도 남는 재산(D4)

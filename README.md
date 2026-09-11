@@ -136,6 +136,10 @@ python analyze_social.py runs/stream-XXXX.jsonl
 
 ## 데이터와 에셋
 
+**엔티티 저장소(D50, 2026-09-11)**: 몬스터·함정·오브젝트·마을 NPC 의 정의(수치·이름·지식 본문·대사·선물)는 `entities/<kind>/<id>.json`
+한 곳에 있고 엔진이 거기서 읽는다(옛 `lore.json`·코드 상수·`town.json` 대사를 이관 — 같은 시드의 결과는 해시까지 그대로).
+새 정의를 넣는 법과 검증(`verify_entities.py`)은 [docs/entities.md](docs/entities.md).
+
 `runs/`(지난 판 스트림)·`bestiary.json`(판을 넘어 이월되는 캐릭터별 도감)은 실LLM으로 얻은
 원본 데이터라 저장소에 보존한다. 외부 배포 타일 등 에셋은 **CC0만** 사용(Kenney).
 캐릭터 파츠 스프라이트(D37, 2026-09-06)는 파트너 자작 — 원본 시안·변환 도구는 `art/sprites-v1/`, 뷰어·론처가 읽는 런타임본은

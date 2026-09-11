@@ -1,0 +1,20 @@
+{
+  "id": "spike",
+  "name": "가시 함정",
+  "kind": "trap",
+  "tags": [
+    "trap",
+    "hazard"
+  ],
+  "sprite": "wl-traps#0",
+  "comps": {
+    "trap": {
+      "dc": 13,
+      "dmg": 3,
+      "status": "출혈"
+    },
+    "knowledge": {
+      "deep": "바닥에서 가시가 솟는다. 민첩하면 피하고, 드러난 뒤엔 걸음이 알아서 피해 간다."
+    }
+  }
+}

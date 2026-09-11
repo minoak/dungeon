@@ -1,0 +1,20 @@
+{
+  "id": "dart",
+  "name": "독침 함정",
+  "kind": "trap",
+  "tags": [
+    "trap",
+    "hazard"
+  ],
+  "sprite": "wl-traps#1",
+  "comps": {
+    "trap": {
+      "dc": 14,
+      "dmg": 2,
+      "status": "중독"
+    },
+    "knowledge": {
+      "deep": "벽에서 독침이 날아온다. 가시보다 얕지만 피하기 어렵다."
+    }
+  }
+}

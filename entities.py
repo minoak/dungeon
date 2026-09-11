@@ -1,0 +1,199 @@
+# -*- coding: utf-8 -*-
+"""엔티티 저장소(D50, 2026-09-11 — 파트너 설계 메모 `WONDERLAND_CHANGES_2026-09-11.md` §4-1 [제안] 구조의 1차:
+저장소 틀 먼저, 동작은 그대로).
+
+정의(Def) = 바뀌지 않는 것: id·name·kind·tags·sprite·comps(부품). 인스턴스(게임 중 바뀌는 것 — 좌표·hp·상태)는
+지금처럼 엔진의 Monster/Trap/Feature 객체가 든다. 엔진은 여기서 수치·이름·지식 본문을 읽는다:
+  · 몬스터: health.max / combat.atk·dmg·ac·on_hit(명중 시 태그) / ai.flee.hp_frac·stamina(없으면 도주 안 함)
+  · 함정: trap.dc·dmg·status → dungeon_gm.TRAP_KINDS
+  · 오브젝트: type(엔진 피처 type)·name → _add_feature 이름 / equipment.slot·bonus → GEAR_KINDS / tags → 조합형 관측 태그
+  · NPC: npc.line·line_again·gift → show_runner.build_town (town.json 은 배치=id·좌표만)
+  · 지식: knowledge.deep → Dungeon.lore (옛 lore.json 본문 그대로. 키 = monster:<name> / trap:<id> / feature:<type>)
+자리만 있고 아직 안 읽는 것: knowledge.brief·unlock(메모 §2-2·§2-5 뒤), ai.start·ai.concealed(스폰 코드가 명시),
+loot·container·heal·consumable·exit 부품(메모 "부품은 필요할 때 하나씩"). 클라이언트 스프라이트 프레임 번호는
+game/src/assets/world.ts 가 소유 — sprite 필드는 텍스처 참조(wl-<이름>[#프레임])이고 검증은 텍스처 파일 존재까지.
+검증은 로드 단계(verify_entities 게이트): 모르는 kind·부품, id≠파일명, 중복, 없는 텍스처, 모르는 해금 사건, 수치 결손.
+"""
+import glob
+import json
+import os
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.join(HERE, 'entities')
+SPRITE_DIR = os.path.join(HERE, 'game', 'src', 'assets', 'world')
+KINDS = ('monster', 'trap', 'object', 'npc')
+COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
+         'trap': {'trap', 'knowledge'},
+         'object': {'equipment', 'consumable', 'loot', 'container', 'heal', 'exit', 'knowledge'},
+         'npc': {'npc', 'knowledge'}}
+UNLOCK_EVENTS = {'kill', 'search_first', 'trap_avoid', 'trap_disarm', 'visit', 'talk'}   # 메모 §2-5 예시 어휘 — 코드는 아직 안 센다
+BASELINE_MONSTER = '고블린'   # 모르는 종(장면 저작의 임의 이름)은 기준선 몹의 몸 — 낯선 짐승도 몸은 있다
+
+
+class EntityError(ValueError):
+    """정의 파일의 문제 — 전부 모아 한 번에 알린다(로드 단계에서 죽는 게 낫다)."""
+
+
+def _problems(pairs, root):
+    out, ids = [], {}
+    for path, d in pairs:
+        rel = os.path.relpath(path, root)
+        stem = os.path.splitext(os.path.basename(path))[0]
+        folder = os.path.basename(os.path.dirname(path))
+        if not isinstance(d, dict):
+            out.append('%s: JSON 객체가 아니다' % rel)
+            continue
+        eid, kind = d.get('id'), d.get('kind')
+        if eid != stem:
+            out.append('%s: id %r ≠ 파일명 %r' % (rel, eid, stem))
+        if kind not in KINDS:
+            out.append('%s: 모르는 kind %r' % (rel, kind))
+        elif folder != kind:
+            out.append('%s: kind %r 인데 폴더가 %r' % (rel, kind, folder))
+        if not d.get('name'):
+            out.append('%s: name 없음' % rel)
+        if eid in ids:
+            out.append('%s: id %r 중복(%s)' % (rel, eid, ids[eid]))
+        ids[eid] = rel
+        comps = d.get('comps')
+        if not isinstance(comps, dict):
+            out.append('%s: comps 가 객체가 아니다' % rel)
+            comps = {}
+        for c in comps:
+            if kind in COMPS and c not in COMPS[kind]:
+                out.append('%s: 엔진이 모르는 부품 %r' % (rel, c))
+        ev = ((comps.get('knowledge') or {}).get('unlock') or {}).get('event')
+        if ev is not None and ev not in UNLOCK_EVENTS:
+            out.append('%s: 존재하지 않는 해금 사건 %r' % (rel, ev))
+        sp = d.get('sprite')
+        if sp:
+            tex = str(sp).split('#')[0]
+            if not tex.startswith('wl-') or not os.path.exists(os.path.join(SPRITE_DIR, tex[3:] + '.png')):
+                out.append('%s: 없는 스프라이트 텍스처 %r' % (rel, sp))
+        if kind == 'object' and not d.get('type'):
+            out.append('%s: object 는 type(엔진 피처 type) 필요' % rel)
+        if kind == 'monster':
+            for c, keys in (('health', ('max',)), ('combat', ('atk', 'dmg', 'ac'))):
+                for k in keys:
+                    if not isinstance((comps.get(c) or {}).get(k), int):
+                        out.append('%s: %s.%s 정수 필요' % (rel, c, k))
+        if kind == 'trap':
+            for k in ('dc', 'dmg'):
+                if not isinstance((comps.get('trap') or {}).get(k), int):
+                    out.append('%s: trap.%s 정수 필요' % (rel, k))
+        if kind == 'npc' and not (comps.get('npc') or {}).get('line'):
+            out.append('%s: npc.line 필요' % rel)
+    return out
+
+
+def read(root=ROOT):
+    """폴더의 정의 전부 → {id: def}. 문제가 하나라도 있으면 EntityError(전부 나열)."""
+    files = sorted(glob.glob(os.path.join(root, '*', '*.json')))
+    pairs = []
+    for p in files:
+        with open(p, encoding='utf-8') as f:
+            pairs.append((p, json.load(f)))
+    problems = _problems(pairs, root) if pairs else ['정의가 없다: %s' % root]
+    if problems:
+        raise EntityError('\n'.join(problems))
+    return {d['id']: d for _, d in pairs}
+
+
+_DEFS = None
+
+
+def load():
+    """모듈 수명 동안 한 번 읽는다(엔진 import 시점). 파일을 고쳤으면 reload()."""
+    global _DEFS
+    if _DEFS is None:
+        _DEFS = read()
+    return _DEFS
+
+
+def reload():
+    global _DEFS
+    _DEFS = None
+    return load()
+
+
+def by_kind(kind):
+    return [d for d in load().values() if d['kind'] == kind]
+
+
+def get(eid):
+    return load()[eid]
+
+
+def monster(name_or_id):
+    """몬스터 정의 — id('goblin') 또는 엔진 kind 이름('고블린'). 모르면 None."""
+    defs = load()
+    d = defs.get(name_or_id)
+    if d and d['kind'] == 'monster':
+        return d
+    return next((d for d in by_kind('monster') if d['name'] == name_or_id), None)
+
+
+def monster_stats(kind_name):
+    """{'hp','atk','dmg','ac'} — 모르는 종은 기준선 몹(BASELINE_MONSTER)의 몸."""
+    d = monster(kind_name) or monster(BASELINE_MONSTER)
+    c = d['comps']
+    return {'hp': c['health']['max'], 'atk': c['combat']['atk'], 'dmg': c['combat']['dmg'], 'ac': c['combat']['ac']}
+
+
+def monster_flee(kind_name):
+    """(hp_frac, stamina) — ai.flee 가 없는 종은 (None, None)=도주 안 함. 모르는 종은 기준선 몹."""
+    d = monster(kind_name) or monster(BASELINE_MONSTER)
+    fl = (d['comps'].get('ai') or {}).get('flee')
+    return (fl['hp_frac'], fl['stamina']) if fl else (None, None)
+
+
+def mon_status():
+    """몬스터 명중 시 태그 {kind 이름: 태그} — combat.on_hit 이 있는 종만."""
+    return {d['name']: d['comps']['combat']['on_hit'] for d in by_kind('monster') if d['comps']['combat'].get('on_hit')}
+
+
+def trap_kinds():
+    """dungeon_gm.TRAP_KINDS 꼴 {id: {name, dc, dmg[, status]}}."""
+    out = {}
+    for d in by_kind('trap'):
+        t = d['comps']['trap']
+        out[d['id']] = {'name': d['name'], 'dc': t['dc'], 'dmg': t['dmg'], **({'status': t['status']} if t.get('status') else {})}
+    return out
+
+
+def gear_kinds():
+    """dungeon_gm.GEAR_KINDS 꼴 {장비 이름: 보정} — equipment 부품이 있는 오브젝트."""
+    return {d['name']: d['comps']['equipment']['bonus'] for d in by_kind('object') if d['comps'].get('equipment')}
+
+
+def object_name(eid):
+    """오브젝트 id → 엔진 피처 이름('treasure' → '보물', 'dagger' → '단검')."""
+    return get(eid)['name']
+
+
+def feature_tags(ftype):
+    """조합형 관측의 피처 태그 — 정의의 tags(없는 type, 예: 마을 npc 피처 = ['object'])."""
+    d = next((d for d in by_kind('object') if d.get('type') == ftype), None)
+    return list(d['tags']) if d and d.get('tags') else ['object']
+
+
+def npc(eid):
+    """마을 NPC 정의 → {'name', 'line', 'line_again', 'gift'} (없는 칸은 None)."""
+    d = get(eid)
+    if d['kind'] != 'npc':
+        raise EntityError('%s 은(는) npc 가 아니다' % eid)
+    c = d['comps']['npc']
+    return {'name': d['name'], 'line': c.get('line'), 'line_again': c.get('line_again'), 'gift': c.get('gift')}
+
+
+def lore():
+    """Dungeon.lore 꼴 {종키: {name, lore}} — knowledge.deep 이 있는 정의만(옛 lore.json 과 같은 키·본문)."""
+    out = {}
+    for d in load().values():
+        deep = (d['comps'].get('knowledge') or {}).get('deep')
+        if not deep:
+            continue
+        key = {'monster': 'monster:' + d['name'], 'trap': 'trap:' + d['id'],
+               'object': 'feature:' + d.get('type', d['id']), 'npc': 'npc:' + d['id']}[d['kind']]
+        out[key] = {'name': d['name'], 'lore': deep}
+    return out

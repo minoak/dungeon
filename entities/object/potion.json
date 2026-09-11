@@ -1,0 +1,12 @@
+{
+  "id": "potion",
+  "name": "회복 물약",
+  "kind": "object",
+  "type": "potion",
+  "tags": [
+    "object",
+    "item"
+  ],
+  "sprite": "wl-props#5",
+  "comps": {}
+}

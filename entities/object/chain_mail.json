@@ -1,0 +1,17 @@
+{
+  "id": "chain_mail",
+  "name": "사슬 갑옷",
+  "kind": "object",
+  "type": "armor",
+  "tags": [
+    "object",
+    "item"
+  ],
+  "sprite": "wl-props#7",
+  "comps": {
+    "equipment": {
+      "slot": "armor",
+      "bonus": 2
+    }
+  }
+}

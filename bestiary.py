@@ -6,7 +6,7 @@
 지식 스키마 3분리(D9):
   · 획득 = 이 파일 — 조건은 **스트림 어휘로 닫힌다**(say/reason 해석 금지, 결정론).
   · 주입 = dungeon_gm.view() 의 obs 조인(bot['known'] set + Dungeon.lore).
-  · 본문 = lore.json — 본문 수정은 원장 불침.
+  · 본문 = entities/*/*.json 의 knowledge.deep(D50, 옛 lore.json) — 본문 수정은 원장 불침.
 원장 = bestiary.json {캐릭터이름: {종키: {turn, depth}}} — **죽어도 남는 성장 재산**
 (D4: 시트·태그 원장은 죽음으로 소멸하지 않는다. 캐릭터 식별=시트 name).
 
@@ -34,7 +34,7 @@ except Exception:
 
 
 def load_lore(path):
-    """lore.json → {종키: {name, lore}}. 없거나 깨져도 게임은 죽지 않는다(빈 로어 = 이름만 등재)."""
+    """(구형) lore.json 꼴 파일 → {종키: {name, lore}}. 본문의 정본은 entities.lore()(D50) — 옛 파일을 읽는 호출자 호환용."""
     try:
         with open(path, encoding='utf-8') as f:
             raw = json.load(f)
@@ -102,7 +102,7 @@ class Issuer:
     def save(self, path):
         """원자적 저장(tmp+rename) — 판 도중 크래시에도 원장이 반쪽으로 깨지지 않는다."""
         body = {'_readme': '도감 원장 — 캐릭터의 죽어도 남는 지식(D4·D9). '
-                           '획득 규칙=bestiary.py(스트림 소비자), 본문=lore.json(수정해도 여기 불침).'}
+                           '획득 규칙=bestiary.py(스트림 소비자), 본문=entities/*/*.json knowledge.deep(D50 — 수정해도 여기 불침).'}
         for name in sorted(self.meta):
             body[name] = {k: self.meta[name][k] for k in sorted(self.meta[name])}
         tmp = path + '.tmp'
@@ -189,7 +189,8 @@ def main(argv):
     if not paths:
         print(__doc__)
         return 1
-    lore = load_lore(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lore.json'))
+    import entities
+    lore = entities.lore()                    # D50: 본문은 엔티티 저장소에서
     for p in paths:
         sp = os.path.join(p, 'stream.jsonl') if os.path.isdir(p) else p
         if not os.path.exists(sp):
