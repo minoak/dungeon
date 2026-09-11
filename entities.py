@@ -9,7 +9,9 @@
   · 오브젝트: type(엔진 피처 type)·name → _add_feature 이름 / equipment.slot·bonus → GEAR_KINDS / tags → 조합형 관측 태그
   · NPC: npc.line·line_again·gift → show_runner.build_town (town.json 은 배치=id·좌표만)
   · 지식: knowledge.deep → Dungeon.lore (옛 lore.json 본문 그대로. 키 = monster:<name> / trap:<id> / feature:<type>)
-자리만 있고 아직 안 읽는 것: knowledge.brief·unlock(메모 §2-2·§2-5 뒤), ai.start·ai.concealed(스폰 코드가 명시),
+    D53(09-12): knowledge.brief(처음 알게 된 한 줄)·unlock{event, count}(심층 해금 조건 — 코드가 센다, LLM 0콜)도 같은
+    항목에 실린다. 지금 세는 사건은 encounter(개체 하나를 새로 인지한 순간 = aware_of 증분, 몬스터만)뿐 — 나머지 어휘는 자리.
+자리만 있고 아직 안 읽는 것: ai.start·ai.concealed(스폰 코드가 명시),
 loot·container·heal·consumable·exit 부품(메모 "부품은 필요할 때 하나씩"). 클라이언트 스프라이트 프레임 번호는
 game/src/assets/world.ts 가 소유 — sprite 필드는 텍스처 참조(wl-<이름>[#프레임])이고 검증은 텍스처 파일 존재까지.
 검증은 로드 단계(verify_entities 게이트): 모르는 kind·부품, id≠파일명, 중복, 없는 텍스처, 모르는 해금 사건, 수치 결손.
@@ -26,7 +28,8 @@ COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
          'trap': {'trap', 'knowledge'},
          'object': {'equipment', 'consumable', 'loot', 'container', 'heal', 'exit', 'knowledge'},
          'npc': {'npc', 'knowledge'}}
-UNLOCK_EVENTS = {'kill', 'search_first', 'trap_avoid', 'trap_disarm', 'visit', 'talk'}   # 메모 §2-5 예시 어휘 — 코드는 아직 안 센다
+UNLOCK_EVENTS = {'encounter', 'kill', 'search_first', 'trap_avoid', 'trap_disarm', 'visit', 'talk'}   # 메모 §2-5 어휘.
+#   코드가 세는 건 encounter 뿐(bestiary.Issuer, D53) — 나머지는 검증기만 아는 예약어(정의에 적어도 아직 안 센다).
 BASELINE_MONSTER = '고블린'   # 모르는 종(장면 저작의 임의 이름)은 기준선 몹의 몸 — 낯선 짐승도 몸은 있다
 
 
@@ -62,9 +65,16 @@ def _problems(pairs, root):
         for c in comps:
             if kind in COMPS and c not in COMPS[kind]:
                 out.append('%s: 엔진이 모르는 부품 %r' % (rel, c))
-        ev = ((comps.get('knowledge') or {}).get('unlock') or {}).get('event')
+        kn = comps.get('knowledge') or {}
+        ev = (kn.get('unlock') or {}).get('event')
         if ev is not None and ev not in UNLOCK_EVENTS:
             out.append('%s: 존재하지 않는 해금 사건 %r' % (rel, ev))
+        if kn.get('unlock') is not None:
+            cnt = (kn.get('unlock') or {}).get('count')
+            if ev is None or not (isinstance(cnt, int) and cnt >= 1):
+                out.append('%s: knowledge.unlock 은 event + count(정수≥1) 필요' % rel)
+            if not kn.get('deep'):
+                out.append('%s: 해금 조건이 있는데 knowledge.deep(해금할 본문)이 없다' % rel)
         sp = d.get('sprite')
         if sp:
             tex = str(sp).split('#')[0]
@@ -202,13 +212,25 @@ def npc(eid):
 
 
 def lore():
-    """Dungeon.lore 꼴 {종키: {name, lore}} — knowledge.deep 이 있는 정의만(옛 lore.json 과 같은 키·본문)."""
+    """Dungeon.lore 꼴 {종키: {name, lore, brief?, unlock?}} — knowledge.deep 이 있는 정의만(옛 lore.json 과 같은 키·본문).
+    D53: brief(처음 알게 된 한 줄)·unlock({event, count} — 심층 해금 조건)은 있을 때만 실린다. 둘 다 없으면 옛 2층
+    (모름/앎)이라 등재 즉시 본문(lore) 전체가 주입된다 — 함정·상자·샘이 지금 그렇다(몬스터만 3층, 파트너 결정 09-12)."""
     out = {}
     for d in load().values():
-        deep = (d['comps'].get('knowledge') or {}).get('deep')
+        kn = d['comps'].get('knowledge') or {}
+        deep = kn.get('deep')
         if not deep:
             continue
         key = {'monster': 'monster:' + d['name'], 'trap': 'trap:' + d['id'],
                'object': 'feature:' + d.get('type', d['id']), 'npc': 'npc:' + d['id']}[d['kind']]
         out[key] = {'name': d['name'], 'lore': deep}
+        if kn.get('brief'):
+            out[key]['brief'] = kn['brief']
+        if kn.get('unlock'):
+            out[key]['unlock'] = {'event': kn['unlock']['event'], 'count': int(kn['unlock']['count'])}
     return out
+
+
+def unlock_rules():
+    """{종키: {event, count}} — 심층 해금 조건이 있는 종만(발급기 bestiary.Issuer 가 센다)."""
+    return {k: v['unlock'] for k, v in lore().items() if v.get('unlock')}

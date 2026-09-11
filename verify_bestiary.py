@@ -14,6 +14,11 @@
   ⑧ 언노운→기명 전이: 발급기 set 과 bot['known']이 같은 객체 — 획득 즉시 다음 obs 에 원명+lore
   ⑨ 이월 판 투영(리뷰 3렌즈 합치 픽스): 2판째 스트림의 오프라인 소급이 run_meta.bestiary 를
      시작 지식으로 시드해 라이브 원장과 정확히 일치 — 이월 판에서도 '같은 스트림→같은 원장'
+  ⑩ D53 지식 3층(09-12 파트너 "5번 조우하면 심층 — 공통 프리셋, 일단 몬스터만"): book(원장 기록) 배선 시
+     등재~해금 전 = brief 한 줄 + deep_progress{encounter n/need}, 조건을 채우는 조우에 'deep' 발급 → 다음 obs 본문 전체.
+     book 미배선(옛 하네스) = 옛 2층(등재 즉시 본문). 조건 없는 종(함정)은 book 있어도 즉시 본문. 프롬프트 접미 '(심층: 조우 n/5)'.
+  ⑪ 옛 원장(n 없음) 로드 = 조우 1 / 저장 왕복에 n·deep 보존 / 층이 바뀌면 같은 id 도 새 개체(다시 1)
+  ⑫ 라이브·소급 일치는 진행도(n·deep)까지 — run_meta.bestiary_progress 시드
 """
 import contextlib
 import io
@@ -127,12 +132,12 @@ def issue_seq():
 
 
 iss_a, acq_a = issue_seq()
-check("④ aware_of 증분 = 캐릭터 귀속 획득(첫 시선)", acq_a[0] == ('두란', 'monster:고블린'))
+check("④ aware_of 증분 = 캐릭터 귀속 획득(첫 시선) — 등재 사건 'brief'", acq_a[0] == ('두란', 'monster:고블린', 'brief'))
 check("④ 재획득 없음 + 함정 밟음/간파 + 샘 경험 획득",
-      acq_a.count(('두란', 'monster:고블린')) == 1
-      and ('카야', 'monster:고블린') in acq_a and ('카야', 'monster:그림자거미') in acq_a
-      and ('두란', 'trap:alarm') in acq_a and ('카야', 'trap:spike') in acq_a
-      and ('카야', 'feature:fountain') in acq_a)
+      acq_a.count(('두란', 'monster:고블린', 'brief')) == 1 and not any(t == 'deep' for _, _, t in acq_a)
+      and ('카야', 'monster:고블린', 'brief') in acq_a and ('카야', 'monster:그림자거미', 'brief') in acq_a
+      and ('두란', 'trap:alarm', 'brief') in acq_a and ('카야', 'trap:spike', 'brief') in acq_a
+      and ('카야', 'feature:fountain', 'brief') in acq_a)
 iss_b, acq_b = issue_seq()
 check("⑤ 결정론: 같은 시퀀스 2회 = 같은 획득 순서", acq_a == acq_b)
 
@@ -141,9 +146,70 @@ os.makedirs(STATE, exist_ok=True)
 rt = os.path.join(STATE, "roundtrip.json")
 iss_a.save(rt)
 iss_rt = bestiary.Issuer().load(rt)
-check("⑥ 원장 save/load 왕복(원자적 저장)",
+check("⑥ 원장 save/load 왕복(원자적 저장) — 진행도(n)까지",
       {n: sorted(s) for n, s in iss_rt.book.items() if s}
-      == {n: sorted(s) for n, s in iss_a.book.items() if s})
+      == {n: sorted(s) for n, s in iss_a.book.items() if s}
+      and iss_rt.progress() == iss_a.progress() and iss_rt.record('두란')['monster:고블린']['n'] == 1)
+
+
+def led_prog(led):
+    """원장 파일 → 진행도 투영(Issuer.progress 와 같은 꼴)."""
+    return {n: {k: {'n': int(r.get('n', 1)), **({'deep': True} if r.get('deep') else {})} for k, r in sorted(v.items())}
+            for n, v in sorted(led.items()) if not n.startswith('_') and v}
+
+
+# ── ⑩ D53 지식 3층 — book 배선 시 brief+진행도 → 조건 채우면 deep ──
+d10 = arena(seed=10)
+d10.monsters = [Monster(6, 5, mid=i) for i in range(5)] + [Monster(7, 6, kind='그림자거미', mid=5)]
+d10.lore = {'monster:고블린': {'name': '고블린', 'lore': 'LORE_G', 'brief': 'BRIEF_G', 'unlock': {'event': 'encounter', 'count': 3}},
+            'trap:spike': {'name': '가시 함정', 'lore': 'LORE_S'}}
+iss10 = bestiary.Issuer({'1': '두란'}, rules={'monster:고블린': {'event': 'encounter', 'count': 3}})
+b10 = mkbot('1', 5, 5)
+b10['known'] = iss10.known('두란')
+b10['book'] = iss10.record('두란')
+iss10.consume('level', {'kind': 'level', 'depth': 1, 'monsters': [{'id': i, 'kind': '고블린'} for i in range(5)] + [{'id': 5, 'kind': '그림자거미'}]})
+seen10 = []
+for n in range(1, 5):
+    ev = iss10.consume('tick', {'kind': 'tick', 'turn': n, 'monsters': [], 'events': [],
+                                'bots': [{'char': '1', 'aware_of': list(range(n))}]})
+    m = next(x for x in d10.view(b10, [b10])['sights']['monsters'] if x['id'] == 'm0')
+    seen10.append((ev, m.get('lore'), m.get('deep_progress')))
+check("⑩ 등재(조우 1) = 원명 + brief 한 줄 + 진행도 1/3 — 본문(lore) 비노출",
+      seen10[0] == ([('두란', 'monster:고블린', 'brief')], 'BRIEF_G', {'event': 'encounter', 'n': 1, 'need': 3}))
+check("⑩ 조우 2 = 사건 없음(dirty 만) · 진행도 2/3", seen10[1] == ([], 'BRIEF_G', {'event': 'encounter', 'n': 2, 'need': 3}) and iss10.dirty)
+check("⑩ 조우 3 = 'deep' 발급 → 다음 obs 본문 전체·진행도 없음", seen10[2] == ([('두란', 'monster:고블린', 'deep')], 'LORE_G', None))
+check("⑩ 해금 뒤 조우는 n 만 오르고 재발급 없음", seen10[3] == ([], 'LORE_G', None) and iss10.record('두란')['monster:고블린']['n'] == 4
+      and iss10.record('두란')['monster:고블린']['deep'] == {'turn': 3, 'depth': 1})
+m10s = next(x for x in d10.view(b10, [b10])['sights']['monsters'] if x['id'] == 'm5')
+check("⑩ 미등재 종(그림자거미)은 그대로 '낯선 짐승'·진행도 없음", m10s['kind'] == UNKNOWN_BEAST and 'deep_progress' not in m10s and 'lore' not in m10s)
+b10b = mkbot('1', 5, 5)
+b10b['known'] = {'monster:고블린', 'trap:spike'}          # book 미배선 = 옛 2층
+m10b = next(x for x in d10.view(b10b, [b10b])['sights']['monsters'] if x['id'] == 'm0')
+check("⑩ book 미배선(옛 하네스) = 등재 즉시 본문 전체(하위호환 솔기)", m10b.get('lore') == 'LORE_G' and 'deep_progress' not in m10b)
+import brains as _brains  # noqa: E402
+b10d = mkbot('1', 5, 5)
+b10d['known'] = iss10.known('두란')
+b10d['book'] = {'monster:고블린': {'turn': 1, 'depth': 1, 'n': 2}}     # 해금 전 기록을 직접 꽂아 접미 렌더 확인
+wire10 = _brains._wire(d10.view(b10d, [b10d]), {'1': '두란'})
+check("⑩ 프롬프트 접미 — '… 습성: BRIEF_G (심층: 조우 2/3)'",
+      any('BRIEF_G (심층: 조우 2/3)' in ln for ln in wire10.split('\n')) and 'LORE_G' not in wire10)
+
+# ── ⑪ 옛 원장 로드·저장 왕복·층 전환 ──
+old_led = os.path.join(STATE, "old_format.json")
+with open(old_led, 'w', encoding='utf-8') as f:
+    json.dump({'_readme': 'x', '두란': {'monster:고블린': {'turn': 44, 'depth': 1}}}, f, ensure_ascii=False)
+iss11 = bestiary.Issuer({'1': '두란'}, rules={'monster:고블린': {'event': 'encounter', 'count': 3}}).load(old_led)
+check("⑪ 옛 원장(n 없음) = 조우 1 로 읽고 known 에 등재", iss11.record('두란')['monster:고블린']['n'] == 1 and 'monster:고블린' in iss11.known('두란')
+      and iss11.progress() == {'두란': {'monster:고블린': {'n': 1}}})
+iss11.consume('level', {'kind': 'level', 'depth': 1, 'monsters': [{'id': 0, 'kind': '고블린'}]})
+ev1 = iss11.consume('tick', {'kind': 'tick', 'turn': 1, 'monsters': [], 'events': [], 'bots': [{'char': '1', 'aware_of': [0]}]})
+iss11.consume('level', {'kind': 'level', 'depth': 2, 'monsters': [{'id': 0, 'kind': '고블린'}]})   # 새 층 = 같은 id 라도 새 개체
+ev2 = iss11.consume('tick', {'kind': 'tick', 'turn': 9, 'monsters': [], 'events': [], 'bots': [{'char': '1', 'aware_of': [0]}]})
+check("⑪ 층이 바뀌면 같은 id 도 새 개체로 센다(1→2→3=해금, depth 2 에서)",
+      ev1 == [] and ev2 == [('두란', 'monster:고블린', 'deep')] and iss11.record('두란')['monster:고블린']['deep'] == {'turn': 9, 'depth': 2})
+iss11.save(old_led)
+iss11b = bestiary.Issuer().load(old_led)
+check("⑪ 저장 왕복에 n·deep 보존 + save 가 dirty 를 내린다", not iss11.dirty and iss11b.record('두란')['monster:고블린'] == {'turn': 44, 'depth': 1, 'n': 3, 'deep': {'turn': 9, 'depth': 2}})
 
 # ── ⑧ 언노운→기명 전이: 발급기 set == bot['known'] (공유 객체 — 러너 배선 시맨틱) ──
 iss8 = bestiary.Issuer({'1': '두란'})
@@ -195,12 +261,15 @@ check("⑦ 판에서 몬스터 지식 획득 발생(원장 파일 생성)",
       any(k.startswith('monster:') for ks in book_led.values() for k in ks))
 iss_off, _acq = bestiary.replay(os.path.join(STATE, "stream.jsonl"))
 book_off = {n: sorted(s) for n, s in iss_off.book.items() if s}
-check("⑦ 라이브 원장 = 스트림 오프라인 소급(결정론 투영 일치 — D5)", book_off == book_led)
+check("⑦ 라이브 원장 = 스트림 오프라인 소급(결정론 투영 일치 — D5) — 진행도(n·deep)까지(⑫)",
+      book_off == book_led and iss_off.progress() == led_prog(led))
+check("⑫ 1판 run_meta.bestiary_progress = {}(첫 원정) · 원장 n 은 전부 ≥1", meta1.get("bestiary_progress") == {}
+      and all(int(r.get('n', 0)) >= 1 for n, v in led.items() if not n.startswith('_') for r in v.values()))
 
 recs2 = run_once()
 meta2 = recs2[0]
-check("⑥ 2판째 run_meta.bestiary = 1판 종료 원장(지식 이월 — 죽어도 남는 재산 D4)",
-      meta2.get("bestiary") == book_led)
+check("⑥ 2판째 run_meta.bestiary = 1판 종료 원장(지식 이월 — 죽어도 남는 재산 D4) · bestiary_progress 도 1판 종료 진행도",
+      meta2.get("bestiary") == book_led and meta2.get("bestiary_progress") == led_prog(led))
 
 # ── ⑨ 이월 판 투영: 2판 스트림 소급(run_meta.bestiary 시드) == 2판 종료 원장 ──
 iss_off2, _acq2 = bestiary.replay(os.path.join(STATE, "stream.jsonl"))
@@ -208,8 +277,8 @@ book_off2 = {n: sorted(s) for n, s in iss_off2.book.items() if s}
 with open(BFILE, encoding="utf-8") as f:
     led2 = json.load(f)
 book_led2 = {n: sorted(v) for n, v in led2.items() if not n.startswith('_')}
-check("⑨ 이월 판(2판째) 오프라인 소급 = 2판 종료 원장(순수 투영 — 리뷰 픽스)",
-      book_off2 == book_led2)
+check("⑨ 이월 판(2판째) 오프라인 소급 = 2판 종료 원장(순수 투영 — 리뷰 픽스) — 진행도까지",
+      book_off2 == book_led2 and iss_off2.progress() == led_prog(led2))
 
 print("=" * 44)
 print("RESULT: " + ("ALL PASS — 도감(D11③ obs 되먹임) 건전"

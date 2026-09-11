@@ -48,10 +48,11 @@ entities/
 | object `equipment.bonus` | `GEAR_KINDS` | `GEAR_CYCLE`(배치 순환)은 코드 — 이름이 정의에 있는지 게이트가 본다 |
 | object `tags` | 조합형 관측 태그(`composed_actions.observe`) | 장비·물약 = `object+item` |
 | npc `npc.line·line_again·gift` | `show_runner.build_town` | 마을 v1: `town.json`이 layout 을 참조하고 배치는 `layout.npcs`(id·칸). 옛 마을 `town-v0.json`은 `{"id","x","y"}` 배치. `gift`에 `potions`와 `weapon`을 함께 두면 둘 다 준다(길드 기본 물품) |
-| `knowledge.deep` | `Dungeon.lore` | 키 = `monster:<name>` / `trap:<id>` / `feature:<type>`. 도감 원장(`bestiary.json`)의 종키와 같다 |
+| `knowledge.deep` | `Dungeon.lore[key].lore` | 키 = `monster:<name>` / `trap:<id>` / `feature:<type>`. 도감 원장(`bestiary.json`)의 종키와 같다 |
+| `knowledge.brief` · `knowledge.unlock{event, count}` | `Dungeon.lore[key].brief/unlock` → `view()` 의 `_knowledge` + `bestiary.Issuer.rules` | **지식 3층(D53, 2026-09-12)**: 모름(`낯선 짐승`) → 등재(brief 한 줄 + 진행도 `deep_progress{event,n,need}`) → 심층(deep 본문). 카운트는 발급기(`bestiary.py`)가 스트림에서 센다(LLM 0콜). 지금 세는 사건은 `encounter`(개체 하나를 새로 인지 = `aware_of` 증분)뿐이고 프리셋은 몬스터 2종 공통 `{encounter, 5}`(파트너 "5번 조우하면 심층 — 공통으로, 일단 몬스터만"). `unlock` 이 없는 종(함정·상자·샘)은 옛 2층(등재 즉시 본문). `unlock` 이 있으면 `deep` 필수, `count` 정수≥1 |
 
-자리만 있고 아직 안 읽는 것: `knowledge.brief`(첫 발견 한 줄, 메모 §2-2 [제안]) · `knowledge.unlock`(해금 조건, §2-5 — 검증기는
-사건 어휘 `kill / search_first / trap_avoid / trap_disarm / visit / talk`만 확인) · `ai.start`·`ai.concealed`(스폰 코드가 명시) ·
+자리만 있고 아직 안 읽는 것: `knowledge.unlock.event` 의 나머지 어휘(`kill / search_first / trap_avoid / trap_disarm / visit / talk` —
+검증기만 안다, 발급기는 `encounter` 만 센다) · `ai.start`·`ai.concealed`(스폰 코드가 명시) ·
 오브젝트의 `loot / container / heal / consumable / exit` 부품(메모 "부품은 필요할 때 하나씩"). 도주 규칙 밖의 몬스터 AI 상수
 (`LOSE_GRACE`, 시야)는 전역 그대로.
 
@@ -67,5 +68,6 @@ entities/
 ## 파급
 
 - `lore.json`은 제거됐다(본문은 각 정의의 `knowledge.deep`). `bestiary.json`의 `_readme`가 아직 `lore.json`을 가리키지만
-  원장 파일은 실LLM 원본 데이터라 손대지 않았다.
+  원장 파일은 실LLM 원본 데이터라 손대지 않았다(다음 라이브 저장 때 발급기가 새 `_readme`·`n` 필드로 다시 쓴다).
+- D53 뒤 원장 항목은 `{turn, depth, n, deep?}` — 옛 항목(`n` 없음)은 조우 1로 읽는다(⚠️임시 가정). 조우 수만 올라도 저장한다.
 - `verify_interrupt`의 그림자거미 장면은 이전엔 기본값(고블린 수치)으로 만들어졌다 — 이제 정의 수치(5/3/3/13)를 받는다.

@@ -1180,8 +1180,8 @@ def _wire(obs, names=None, compose=False):
             else:
                 L.append("- %s: 벽" % KR[b])
         for m in s.get("monsters", []):
-            if m.get("lore"):
-                L.append("  · %s 습성(네가 아는 것): %s" % (m.get("kind", "?"), m["lore"]))
+            if m.get("lore") or m.get("deep_progress"):   # D53: 심층 전엔 한 줄 + 진행도 접미
+                L.append("  · %s 습성(네가 아는 것): %s%s" % (m.get("kind", "?"), m.get("lore") or "아직 잘 모른다", G._deep_sfx(m)))
     else:
         L += ["", "## 지금 보이는 것"]
         n0 = len(L)
@@ -1190,8 +1190,8 @@ def _wire(obs, names=None, compose=False):
             L.append("- 계단(exit) — %s" % at(ex))
         for m in s.get("monsters", []):
             L.append("- %s — %s" % (G._mfact(m), at(m)))
-            if m.get("lore"):
-                L.append("  · 네가 아는 습성: %s" % m["lore"])
+            if m.get("lore") or m.get("deep_progress"):   # D53: 심층 전엔 한 줄 + 진행도 접미
+                L.append("  · 네가 아는 습성: %s%s" % (m.get("lore") or "아직 잘 모른다", G._deep_sfx(m)))
         for f in s.get("features", []):
             L.append("- %s %s — %s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
                                          " (와 본 자리)" if f.get("visited") else "") + G._tagsfx(f))   # D39 태그 접미

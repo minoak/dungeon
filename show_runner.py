@@ -863,6 +863,7 @@ def main():
             b['x'], b['y'] = spot
             d.visited.add(spot)
         b['known'] = iss.known(names[c])   # 도감 주입 켬 — 발급기의 set 과 *같은 객체*(획득 즉시 다음 obs 반영)
+        b['book'] = iss.record(names[c])   # D53 진행도(조우 수·심층 여부)도 같은 객체 — 해금 즉시 다음 obs 에 본문
         if LEDGER_ON:
             b['ledger'] = G.new_ledger()   # 공간 장부(D17) 켬 — 이 층에서 본 것의 원장
         bots.append(b)
@@ -953,6 +954,8 @@ def main():
                                        #   ⚠️ 지연·토큰·요청id 는 여기 넣지 않는다 — 실행마다 변하면
                                        #   verify_stream 결정론(라인 바이트 동일)이 즉시 깨진다.
             bestiary=iss.snapshot(),   # 판 시작 시점 지식(additive) — 도감이 obs 를 바꾸므로 리플레이·비교의 전제
+            bestiary_progress=iss.progress(),   # D53(09-12 additive): 시작 진행도 {이름:{종키:{n, deep?}}} — 심층 해금
+                                       #   시점이 obs 를 바꾸므로 이것도 전제. 오프라인 소급(bestiary.replay)의 시드
             brain_failure_policy=run_control.POLICY,
             bestiary_file=bool(BESTIARY_FILE),   # 영속 여부(실행모드 메타 — gm/menu 와 같은 급)
             party=[{**G.SK.snapshot(b), **{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
@@ -1093,9 +1096,12 @@ def main():
 
         # 도감 획득(D9) — 스트림의 결정론 투영(LLM 0콜). 등재 즉시 봇 known(공유 set)에 반영.
         new_knowledge = iss.consume("tick", tick_rec)
-        for nm, key in new_knowledge:
-            event('   \U0001f4d6 %s — 도감 등재: %s' % (nm, bestiary.label(key, lore)))
-        if new_knowledge and BESTIARY_FILE:
+        for nm, key, tier in new_knowledge:
+            if tier == 'deep':                  # D53 심층 해금 — 다음 obs 부터 본문 전체
+                event('   \U0001f4d6 %s — 도감 심층 해금: %s' % (nm, bestiary.label(key, lore)))
+            else:
+                event('   \U0001f4d6 %s — 도감 등재: %s' % (nm, bestiary.label(key, lore)))
+        if iss.dirty and BESTIARY_FILE:         # 조우 수만 올라도 저장(원장의 n 이 스트림 투영과 어긋나지 않게)
             iss.save(BESTIARY_FILE)
 
         # ④ GM 진행자(옵션 소비자): 이번 틱 events를 장면으로 연출.
@@ -1190,6 +1196,7 @@ def main():
                 n["floor"] = {"since": turn, "n": {}, "w": {}}   # 새 층의 집계는 지금부터(스폰 시각이 아니라 이 틱)
                 n["critical"] = bool(b.get("critical"))   # 위급 플래그(D40) — 몸은 층을 넘어도 그 몸이다
                 n["known"] = iss.known(names[b["char"]])  # 도감은 층을 넘어도 그대로(지식=영속층)
+                n["book"] = iss.record(names[b["char"]])  # D53 진행도도 그대로(같은 원장 객체)
                 if LEDGER_ON:
                     n["ledger"] = G.new_ledger()          # 장부는 새 원장(층의 기억 — id 층-로컬, D17)
                 lm = mem.get(b["char"]) or {}             # 가 본 층 = 그 층의 기억도 그대로(D29 —

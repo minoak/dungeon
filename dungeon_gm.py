@@ -69,6 +69,17 @@ UNKNOWN_BEAST = '낯선 짐승'     # 도감(D9) 미등재 몬스터의 obs 표�
 #   되잖아, 위급·부상 이렇게 나눌 필요가 없다". 동료도 몹·나와 같은 자(HP 숫자)로 읽는다. 몹 도주 경계 FLEE_FRAC 은 무관.
 
 
+_UNLOCK_KR = {'encounter': '조우'}   # 해금 사건의 표시 어휘(⚠️임시 — 파트너 문장 대기). 메모 §2-6 [제안] "고블린 (심층: 승리 3/5)"
+
+
+def _deep_sfx(m):
+    """obs 몬스터 항목의 심층 진행도 → ' (심층: 조우 3/5)'. 없으면 ''(해금됐거나 조건 없는 종)."""
+    pr = m.get('deep_progress') if isinstance(m, dict) else None
+    if not pr:
+        return ''
+    return ' (심층: %s %d/%d)' % (_UNLOCK_KR.get(pr.get('event'), pr.get('event')), pr.get('n', 0), pr.get('need', 0))
+
+
 def _mfact(m):
     """몹 한 줄 사실 문장 — 리모컨 라벨과 wire 직렬화(D17-3)가 같은 문구를 쓴다(단일 소스).
     state 코드의 한국어 번역이 여기 산다 — 프롬프트의 번역표는 폐기(obs 자기설명)."""
@@ -1624,20 +1635,30 @@ class Dungeon:
                     # 상자 '위'에 서기도 한다(_interact도 dist≤1 허용). ==1이면 발밑 피처를 못 만지는 모순.
         known = bot.get('known')   # 도감 게이팅(D9 '주입'=obs 조인). None=끄기(하위호환 솔기 —
                                    #   기존 verify/헤들리스 하네스 무변경 통과). 러너가 set 을 꽂아 켠다.
+        book = bot.get('book')     # D53 원장 기록 {종키: {n, deep?}} — 러너가 발급기의 dict 를 공유로 꽂는다.
+                                   #   None(옛 하네스·게이트) = 옛 2층(모름/앎): 등재 즉시 본문 전체.
 
         def _knowledge(kind_key, entry):
             """아는 종 = lore 주입, 모르는 몹 = 정체 은닉(낯선 짐승). 시야-온리 불변 —
             무엇이 '보이는가'는 그대로, 바뀌는 건 그것을 '무엇이라 아는가'뿐.
-            획득은 발급기(bestiary.py, 스트림 소비자) 소관 — 도감에 있어도 매복은 당한다(D9)."""
+            획득은 발급기(bestiary.py, 스트림 소비자) 소관 — 도감에 있어도 매복은 당한다(D9).
+            D53(09-12, 메모 §2-2·§2-5·§2-6): 해금 조건(정의 knowledge.unlock)이 있는 종은 심층 전엔 brief 한 줄 +
+            진행도(deep_progress{event, n, need})만, 해금 뒤 본문(lore). 조건 없는 종(함정·상자·샘)은 옛 2층 그대로."""
             if known is None:
                 return entry
             if kind_key not in known:
                 if kind_key.startswith('monster:'):
                     entry['kind'] = UNKNOWN_BEAST          # 처음 겪는 종 — 이름·습성 미상
-            else:
-                lo = self.lore.get(kind_key, {}).get('lore')
-                if lo:
-                    entry['lore'] = lo
+                return entry
+            info = self.lore.get(kind_key) or {}
+            rule = info.get('unlock')
+            rec = (book or {}).get(kind_key) or {}
+            if rule and book is not None and not rec.get('deep'):
+                if info.get('brief'):
+                    entry['lore'] = info['brief']          # 처음 알게 된 한 줄(메모 §2-2 [제안] "고블린: 겁 많은 소형 마물")
+                entry['deep_progress'] = {'event': rule['event'], 'n': int(rec.get('n', 1)), 'need': int(rule['count'])}
+            elif info.get('lore'):
+                entry['lore'] = info['lore']
             return entry
 
         mons = [_knowledge('monster:' + m.kind,
@@ -4797,6 +4818,7 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'order': None, 'path': [],      # 핑 목표 id + 엔진이 BFS로 깐 자동보행 경로
             'aware_of': set(),              # 인지한 몹 id (newly 판정 + 매트릭스 봇쪽 비트)
             'known': None,                  # 도감(D9): 아는 종키 set — None=게이팅 끔(하위호환).
+            'book': None,                   # 도감 원장 기록(D53): {종키: {n, deep?}} — None=옛 2층(등재 즉시 본문).
                                             #   러너가 발급기(bestiary)의 set 을 꽂는다(획득 즉시 obs 반영)
             'last': None,                   # 직전 행동/피격 결과 메모(D1 개정) — view 가 obs.last 로 노출
             'trail': [], 'trail_gap': 0,    # 자기 행동 궤적(D38, 09-06) — 마지막 view() 이후 결과 목록(노출 후 소거)

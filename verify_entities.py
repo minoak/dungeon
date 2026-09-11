@@ -57,11 +57,20 @@ check('② D51 도주 방향 — 고블린 ally(합류 범위 10) · 그림자�
 check('② 명시 수치가 정의보다 우선(장면 저작·게이트 호환)',
       G.Monster(0, 0, kind='그림자거미', atk=100, mid=3).atk == 100 and G.Monster(0, 0, hp=1, mid=4).hp == 1)
 
-# ③ 지식 본문 이관 — 옛 lore.json 과 키·본문이 같다
+# ③ 지식 본문 이관 — 옛 lore.json 과 키·본문이 같다(D53 뒤 lore() 항목에 brief·unlock 이 얹히므로 name·lore 투영으로 잰다)
 lo = ENT.lore()
-check('③ 지식 본문(옛 lore.json 7건) — 키·이름·본문 해시 일치',
-      canon(lo) == LORE_SHA and set(lo) == {'monster:고블린', 'monster:그림자거미', 'trap:spike', 'trap:dart', 'trap:alarm',
-                                            'feature:chest', 'feature:fountain'})
+check('③ 지식 본문(옛 lore.json 7건) — 키·이름·본문(deep) 해시 일치',
+      canon({k: {'name': v['name'], 'lore': v['lore']} for k, v in lo.items()}) == LORE_SHA
+      and set(lo) == {'monster:고블린', 'monster:그림자거미', 'trap:spike', 'trap:dart', 'trap:alarm',
+                      'feature:chest', 'feature:fountain'})
+
+# ⑧ D53 지식 3층 프리셋(파트너 09-12 "5번 조우하면 심층 — 공통 프리셋, 일단 몬스터만")
+check('⑧ 몬스터 2종 = brief 한 줄 + unlock{encounter, 5} · 함정·오브젝트는 해금 조건 없음(옛 2층 그대로)',
+      all(lo[k].get('brief') and lo[k].get('unlock') == {'event': 'encounter', 'count': 5} for k in ('monster:고블린', 'monster:그림자거미'))
+      and not any(lo[k].get('unlock') or lo[k].get('brief') for k in lo if not k.startswith('monster:'))
+      and ENT.unlock_rules() == {'monster:고블린': {'event': 'encounter', 'count': 5}, 'monster:그림자거미': {'event': 'encounter', 'count': 5}}
+      and 'encounter' in ENT.UNLOCK_EVENTS
+      and lo['monster:고블린']['brief'] == '겁 많은 소형 마물')   # 메모 §2-2 [제안]의 예시 문구 그대로
 
 # ④ 마을 NPC 이관 — build_town 의 대사·선물·배치가 그대로
 d, _ = show_runner.build_town(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'town-v0.json'))   # 이관 기준=옛 마을(마을 v1 채택 뒤 보존본)
@@ -95,6 +104,8 @@ with tempfile.TemporaryDirectory() as tmp:
         os.path.join(root, 'trap', 'pit.json'): {'id': 'hole', 'name': '구덩이', 'kind': 'trap', 'comps': {'trap': {'dc': 12, 'dmg': 2},
                                                   'knowledge': {'deep': 'x', 'unlock': {'event': 'dance', 'count': 1}}}},
         os.path.join(root, 'object', 'goblin.json'): {'id': 'goblin', 'name': '중복', 'kind': 'object', 'type': 'x', 'comps': {}},
+        os.path.join(root, 'object', 'relic.json'): {'id': 'relic', 'name': '유물', 'kind': 'object', 'type': 'relic',
+                                                     'comps': {'knowledge': {'unlock': {'event': 'encounter'}}}},   # count·deep 결손(D53)
     }
     for p, d in bad.items():
         with open(p, 'w', encoding='utf-8') as f:
@@ -104,8 +115,9 @@ with tempfile.TemporaryDirectory() as tmp:
         rejected, msg = False, ''
     except ENT.EntityError as e:
         rejected, msg = True, str(e)
-    check('⑦ 검증기 거절 — 모르는 부품·없는 텍스처·id≠파일명·없는 해금 사건·중복 id 를 한 번에 나열',
-          rejected and '모르는 부품' in msg and '스프라이트' in msg and '파일명' in msg and '해금 사건' in msg and '중복' in msg)
+    check('⑦ 검증기 거절 — 모르는 부품·없는 텍스처·id≠파일명·없는 해금 사건·중복 id·해금 count/deep 결손을 한 번에 나열',
+          rejected and '모르는 부품' in msg and '스프라이트' in msg and '파일명' in msg and '해금 사건' in msg and '중복' in msg
+          and 'count(정수≥1)' in msg and '해금할 본문' in msg)
 check('⑦ 정본 폴더는 재로드해도 같은 정의', ENT.reload() == defs)
 
 print('ALL PASS — verify_entities (%d checks, 실 LLM 0콜)' % checks)
