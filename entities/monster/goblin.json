@@ -21,7 +21,9 @@
       "start": "sleeping",
       "flee": {
         "hp_frac": 3,
-        "stamina": 8
+        "stamina": 8,
+        "to": "ally",
+        "join_range": 10
       }
     },
     "knowledge": {

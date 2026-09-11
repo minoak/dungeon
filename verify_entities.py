@@ -52,6 +52,8 @@ check('② 몬스터 수치·도주 파라미터 — 고블린(6/2/2/12, 도주 
       and (s.hp, s.atk, s.dmg, s.ac, s.flee_frac, s.flee_stamina) == (5, 3, 3, 13, None, None)
       and (u.hp, u.atk, u.dmg, u.ac) == (6, 2, 2, 12)
       and (G.FLEE_FRAC, G.FLEE_STAMINA) == (3, 8))
+check('② D51 도주 방향 — 고블린 ally(합류 범위 10) · 그림자거미 flee 없음=away 0', G.Monster(0, 0, mid=5).flee_to == 'ally' and G.Monster(0, 0, mid=5).flee_join_range == 10
+      and ENT.monster_flee_mode('그림자거미') == ('away', 0))
 check('② 명시 수치가 정의보다 우선(장면 저작·게이트 호환)',
       G.Monster(0, 0, kind='그림자거미', atk=100, mid=3).atk == 100 and G.Monster(0, 0, hp=1, mid=4).hp == 1)
 

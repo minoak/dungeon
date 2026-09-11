@@ -4,7 +4,7 @@
 
 정의(Def) = 바뀌지 않는 것: id·name·kind·tags·sprite·comps(부품). 인스턴스(게임 중 바뀌는 것 — 좌표·hp·상태)는
 지금처럼 엔진의 Monster/Trap/Feature 객체가 든다. 엔진은 여기서 수치·이름·지식 본문을 읽는다:
-  · 몬스터: health.max / combat.atk·dmg·ac·on_hit(명중 시 태그) / ai.flee.hp_frac·stamina(없으면 도주 안 함)
+  · 몬스터: health.max / combat.atk·dmg·ac·on_hit(명중 시 태그) / ai.flee.hp_frac·stamina(없으면 도주 안 함)·to·join_range(D51: ally=근처 몹에게 합류)
   · 함정: trap.dc·dmg·status → dungeon_gm.TRAP_KINDS
   · 오브젝트: type(엔진 피처 type)·name → _add_feature 이름 / equipment.slot·bonus → GEAR_KINDS / tags → 조합형 관측 태그
   · NPC: npc.line·line_again·gift → show_runner.build_town (town.json 은 배치=id·좌표만)
@@ -77,6 +77,13 @@ def _problems(pairs, root):
                 for k in keys:
                     if not isinstance((comps.get(c) or {}).get(k), int):
                         out.append('%s: %s.%s 정수 필요' % (rel, c, k))
+        if kind == 'monster':
+            fl = (comps.get('ai') or {}).get('flee')
+            if fl is not None:
+                if fl.get('to', 'away') not in ('away', 'ally'):
+                    out.append('%s: ai.flee.to 는 away|ally (%r)' % (rel, fl.get('to')))
+                if fl.get('to') == 'ally' and not (isinstance(fl.get('join_range'), int) and fl['join_range'] >= 1):
+                    out.append('%s: ai.flee.to=ally 는 join_range(정수≥1) 필요' % rel)
         if kind == 'trap':
             for k in ('dc', 'dmg'):
                 if not isinstance((comps.get('trap') or {}).get(k), int):
@@ -145,6 +152,14 @@ def monster_flee(kind_name):
     d = monster(kind_name) or monster(BASELINE_MONSTER)
     fl = (d['comps'].get('ai') or {}).get('flee')
     return (fl['hp_frac'], fl['stamina']) if fl else (None, None)
+
+
+def monster_flee_mode(kind_name):
+    """(방향, 합류 범위) — ai.flee.to: 'away'(봇에게서 멀어짐, 기본) | 'ally'(근처 다른 몹에게 붙어 같이 싸운다, D51).
+    합류 범위 = BFS 걸음 수 상한(join_range). flee 가 없는 종은 ('away', 0)."""
+    d = monster(kind_name) or monster(BASELINE_MONSTER)
+    fl = (d['comps'].get('ai') or {}).get('flee') or {}
+    return (fl.get('to', 'away'), int(fl.get('join_range') or 0))
 
 
 def mon_status():

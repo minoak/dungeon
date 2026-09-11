@@ -264,6 +264,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | `monster_notice` | `id monster target` | 몹이 봇 발각(발각굴림 성공) — 추적 개시 |
 | `monster_flee` | `id monster` | 저HP 도주 전환 |
 | `monster_desperate` | `id monster` | 도주 탈진 → 필사 반전 |
+| `monster_join` | `id monster ally(m<n>) ally_kind state(HUNTING|WANDERING)` | (2026-09-11 D51 additive) 도주하던 몹이 근처 다른 몹 곁에 닿아 합류 — 보이는 봇이 있으면 함께 문다(HUNTING), 없으면 곁에서 진정. 합류 전 이동은 `monster_move`에 `fleeing:true, joining:true` |
 | `monster_attack` | `id monster target roll mod total ac hit`, `surprise? from_hiding? dmg? hp? down? grave? status?` | 몹의 공격. surprise=몹 기습(they-ambush), from_hiding=매복자가 정체 드러내는 일격. **hit 이면 피격 인터럽트**(D1 개정): 당한 봇의 진행 중 order 가 그 자리에서 비워진다(다음 틱 스냅샷 `order:null` + 그 봇 재결정으로 관측 가능). 피격은 시드 RNG 결정론이므로 리플레이 무해. `status`(2026-09-06 D34 additive, `run_meta.status` 판만) = 몹의 특수로 붙은 태그(그림자거미=둔화, 생존 시). `ac` 는 중독이면 −2 된 값 그대로. `grave`(2026-07-20 D22 additive, `DUNGEON_GRAVES` 판만) = down 과 함께 `{id,name,x,y}` — 쓰러진 자리에 선 '~의 묘' 피처(글리프 `T`). trap/chest_trap/fountain_harm 의 down 에도 같은 문법으로 병기 |
 | `monster_move` | `id monster to=[x,y]`, `fleeing?`, `door?` | 몹 이동 — **봇 시야에 들어온 이동만** 기록(시야 밖 배회는 무음. 전체 위치는 스냅샷 monsters 로 시킹) |
 

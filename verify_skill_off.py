@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""알파 OFF의 행동·관측·상태·RNG를 compose-v0.4 기준선(78fbe84)의 해시와 대조한다."""
+"""알파 OFF의 행동·관측·상태·RNG를 기준선 해시와 대조한다.
+기준선 이력: 78fbe84(compose-v0.4, 2026-09-10) → **2026-09-11 D51 갱신**: 고블린 도주가 "근처 다른 몹에게 붙어 같이 싸운다"로
+의도적으로 바뀌어(파트너 결정) 시드 7의 흔적이 달라졌다(37·217 은 그대로) — 새 해시는 D51 커밋의 코드에서 뽑았다. 그 외(엔티티 저장소 D50·거미 도주 제거)는
+해시가 그대로였다. 기준선을 옮길 때는 반드시 여기 이력과 커밋 메시지에 사유를 적는다."""
 import hashlib
 import json
 import os
@@ -37,7 +40,7 @@ def trace(seed):
 
 
 EXPECTED = {
-    7: '3f990af78965b011453bfe379e9c25d87f1dd518b05873cb2f4b6233d78e3b7c',
+    7: 'bda3f38836fa508676ba1e2612fa7f2bc06fb2b4bede2b0c5b1e964ceb175c4e',
     37: 'f84670885c17aab6b650bae743fd89b5d40e7a5282da8855c62a0aeaf63ce6cf',
     217: 'c0e2631329c3e00b859f15a849e4882e69ea69fd4e5c31c658c22be8e162cb80',
 }
@@ -48,4 +51,4 @@ if __name__ == '__main__':
         actual = trace(seed)
         assert actual == EXPECTED[seed], (seed, actual, EXPECTED[seed])
         print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치' % seed)
-    print('ALL PASS — verify_skill_off (3 seeds × 80 ticks, 78fbe84 기준선)')
+    print('ALL PASS — verify_skill_off (3 seeds × 80 ticks, 기준선 = 78fbe84 + D51 갱신 2026-09-11)')

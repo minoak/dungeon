@@ -562,6 +562,9 @@ def mon_summary(e):
         return "%s 파티를 발견 — 봇%s 추적 개시!" % (e["monster"], e["target"])
     if e["type"] == "monster_flee":                        # 저HP → 도주 전환
         return "%s 겁에 질려 달아나기 시작한다!" % e["monster"]
+    if e["type"] == "monster_join":                        # D51 합류: 동료 곁에 붙어 같이 싸운다
+        return "%s %s 곁에 붙는다 — %s" % (e["monster"], e.get("ally_kind", "동료"),
+                                         "함께 싸운다!" if e.get("state") == "HUNTING" else "숨을 고른다")
     if e["type"] == "monster_desperate":                   # 도주 탈진 → 필사 반전
         return "%s 더는 도망칠 곳이 없다 — 이빨을 드러낸다!" % e["monster"]
     if e["type"] == "monster_attack":

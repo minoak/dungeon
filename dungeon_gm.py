@@ -518,6 +518,7 @@ class Monster:
         self.hp, self.maxhp = hp, hp
         self.atk, self.dmg, self.ac = atk, dmg, ac
         self.flee_frac, self.flee_stamina = ENT.monster_flee(kind)   # ai.flee — 없으면 (None, None)=도주 안 함
+        self.flee_to, self.flee_join_range = ENT.monster_flee_mode(kind)   # D51: 'ally'=근처 다른 몹에게 붙어 같이 싸운다
         self.alive = True
         self.id = mid
         self.state = 'SLEEPING'      # 2b: 발각굴림으로 HUNTING 전이, LOS 상실로 WANDERING 강등. 3: 저HP→FLEEING
@@ -4431,6 +4432,68 @@ class Dungeon:
                                        'what': '문', 'door': dr.id})
         return dr.id
 
+    def _ally_monster_beside(self, m):
+        """D51: 살아있는 다른 몹이 곁(체비셰프≤1)에 있나 — 있으면 저HP 라도 도주하지 않고 같이 싸운다."""
+        return any(o is not m and o.alive and max(abs(o.x - m.x), abs(o.y - m.y)) <= 1 for o in self.monsters)
+
+    def _nearest_ally_monster(self, m, bots):
+        """D51 합류 대상(파트너 09-11 "근처의 모든 다른 몬스터 아무 곳이나 붙어서 그 친구랑 같이 싸우는 거야"):
+        몬스터 보행 규칙(_monster_walkable: 벽·봇·몹 칸 제외)의 BFS 로 join_range 걸음 안에서 곁(체비셰프≤1)에 닿는
+        가장 가까운 살아있는 다른 몹 — 종 무관, 은닉 매복자 포함('모든'). 반환 (ally, 첫 걸음) / 이미 곁이면 (ally, None) /
+        없으면 (None, None). 결정론: 이웃 순서 고정·동률은 낮은 id."""
+        allies = [o for o in self.monsters if o is not m and o.alive]
+        if not allies:
+            return None, None
+        here = [o for o in allies if max(abs(o.x - m.x), abs(o.y - m.y)) <= 1]
+        if here:
+            return min(here, key=lambda o: o.id), None
+        start = (m.x, m.y)
+        prev = {start: None}
+        frontier = deque([(start, 0)])
+        while frontier:
+            (x, y), dist = frontier.popleft()
+            if dist >= m.flee_join_range:
+                continue
+            for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0)):
+                nx, ny = x + dx, y + dy
+                if (nx, ny) in prev or not self._monster_walkable(nx, ny, bots):
+                    continue
+                prev[(nx, ny)] = (x, y)
+                cand = [o for o in allies if max(abs(o.x - nx), abs(o.y - ny)) <= 1]
+                if cand:
+                    cur = (nx, ny)
+                    while prev[cur] != start:
+                        cur = prev[cur]
+                    return min(cand, key=lambda o: o.id), cur
+                frontier.append(((nx, ny), dist + 1))
+        return None, None
+
+    def _join_step(self, m, first, bots, events):
+        """D51 동료 쪽으로 한 칸(BFS 첫 걸음). 봇 시야 안이면 관전 이벤트(fleeing·joining 표식)."""
+        if first is None or not self._monster_walkable(first[0], first[1], bots):
+            return False
+        m.x, m.y = first
+        door = self._mon_door(m, bots)
+        live = [o for o in bots if o['alive'] and not o['won']]
+        if any((m.x, m.y) in self.visible_cells(o['x'], o['y'], MON_SIGHT) for o in live):
+            events.append({'type': 'monster_move', 'id': 'm%d' % m.id, 'monster': m.kind,
+                           'to': [m.x, m.y], 'fleeing': True, 'joining': True, **({'door': door} if door else {})})
+        return True
+
+    def _join_ally(self, m, ally, near, events):
+        """D51 합류: 곁에 닿았다 — 그 뒤는 동료를 따른다(파트너 "그 친구랑 같이 싸우는 거야"): 동료가 쫓는 중이면 같은
+        표적을 함께 문다(HUNTING), 동료가 자거나 배회 중이면 곁에서 진정(WANDERING — 봇이 오면 동료와 같이 깬다).
+        혼자 봇에게 되돌아 달려가지 않는다(합류 직후 홀로 돌격 → 다시 도주의 2틱 왕복을 막는다). flee_turns 는 안 지운다."""
+        live_near = {b['char']: b for b in near}
+        if ally.state in ('HUNTING',) and ally.target and (ally.target in live_near or ally.last_seen):
+            tb = live_near.get(ally.target)
+            m.state, m.target, m.lost = 'HUNTING', ally.target, 0
+            m.last_seen = (tb['x'], tb['y']) if tb else ally.last_seen
+        else:
+            m.state, m.target, m.lost = 'WANDERING', None, 0
+        events.append({'type': 'monster_join', 'id': 'm%d' % m.id, 'monster': m.kind,
+                       'ally': 'm%d' % ally.id, 'ally_kind': ally.kind, 'state': m.state})
+
     def _flee_step(self, m, near, bots, events):
         """도주 한 칸: '보이는 모든 봇과의 최소 맨해튼 거리'가 **엄격히 늘어나는** 직교 칸으로.
         ⚠️ '가장 가까운 봇 한 명' 기준이면 협공(양쪽에 봇) 사이에서 좌우 셔틀 진동 —
@@ -4525,14 +4588,23 @@ class Dungeon:
                     events.append(ev)
                 continue
             if (m.state == 'HUNTING' and not m.desperate and m.flee_frac
-                    and m.hp * m.flee_frac <= m.maxhp):      # 정의의 ai.flee(D50) — 없으면 도주 안 함
+                    and m.hp * m.flee_frac <= m.maxhp       # 정의의 ai.flee(D50) — 없으면 도주 안 함
+                    and not (m.flee_to == 'ally' and self._ally_monster_beside(m))):   # D51: 동료가 곁이면 도주 대신 같이 싸운다
                 m.state, m.target, m.lost = 'FLEEING', None, 0    # 저HP → 도주(SPD FLEEING 린 채용)
-                m.flee_turns = 0
+                if m.flee_to != 'ally':
+                    m.flee_turns = 0                          # D51 ally 모드는 합류↔도주 왕복에도 탈진이 누적된다
                 events.append({'type': 'monster_flee', 'id': 'm%d' % m.id, 'monster': m.kind})
-            if m.state == 'FLEEING':                      # ②.5 도주: 가까운 봇에게서 멀어진다
+            if m.state == 'FLEEING':                      # ②.5 도주: 가까운 봇에게서 멀어진다 / D51 동료에게 붙는다
                 seen = self.visible_cells(m.x, m.y, MON_SIGHT)
                 near = [b for b in live if (b['x'], b['y']) in seen]
+                ally, first = (self._nearest_ally_monster(m, bots) if m.flee_to == 'ally' else (None, None))
+                if ally is not None and first is None:     # D51 이미 곁 = 합류: 보이는 봇이 있으면 함께 싸운다, 없으면 곁에서 진정
+                    self._join_ally(m, ally, near, events)
+                    continue
                 if not near:                              # 봇이 안 보이면 → 진정(배회 강등, HP는 안 돈다)
+                    if ally is not None:                  #   D51: 갈 동료가 있으면 봇 시야 밖에서도 그쪽으로 계속
+                        self._join_step(m, first, bots, events)
+                        continue
                     m.lost += 1
                     if m.lost >= LOSE_GRACE:
                         m.state, m.lost = 'WANDERING', 0
@@ -4546,6 +4618,8 @@ class Dungeon:
                     events.append({'type': 'monster_desperate', 'id': 'm%d' % m.id,
                                    'monster': m.kind})
                     continue                              # 전이 = 턴 소모(턴당 상태전이 1회)
+                if ally is not None and self._join_step(m, first, bots, events):   # D51: 동료 쪽으로 한 칸(막히면 아래 기존 도주)
+                    continue
                 if not self._flee_step(m, near, bots, events):
                     adj = [b for b in near
                            if abs(m.x - b['x']) + abs(m.y - b['y']) == 1]

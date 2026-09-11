@@ -202,6 +202,56 @@ check("도주 탈진(%d턴) → 필사 반전(monster_desperate → HUNTING)" % 
 ev2 = dd2.monster_turn([bd])
 check("필사 반전 후엔 다시 도주하지 않는다", gd.state != 'FLEEING')
 
+# ── ④-b D51(2026-09-11 파트너 결정): 고블린 도주 = 근처 아무 다른 몬스터에게 붙어서 같이 싸운다 ──
+dj = arena(seed=25)
+ga = Monster(8, 5, mid=0)
+ga.hp, ga.state, ga.target, ga.last_seen = 2, 'HUNTING', '1', (5, 5)
+gb2 = Monster(12, 5, kind='그림자거미', mid=1)             # 동쪽 4칸의 동료 — 은닉 매복자(표류 없음, '모든 다른 몬스터'에 포함)
+gb2.concealed = True
+dj.monsters = [ga, gb2]
+bj = mkbot('1', 5, 5)
+ev = dj.monster_turn([bj])
+check("D51 저HP 고블린 = 도주 전환 + 첫 걸음이 봇 반대가 아니라 동료 쪽(동쪽)",
+      ga.state == 'FLEEING' and any(e['type'] == 'monster_flee' for e in ev) and (ga.x, ga.y) == (9, 5))
+joined = None
+for _ in range(6):
+    for e in dj.monster_turn([bj]):
+        if e['type'] == 'monster_join':
+            joined = e
+    if joined:
+        break
+check("D51 동료 곁에 닿으면 합류(monster_join) — 동료가 자고 있으면 곁에서 진정(WANDERING), 은닉 동료도 합류 대상",
+      bool(joined) and joined['ally'] == 'm1' and max(abs(ga.x - gb2.x), abs(ga.y - gb2.y)) <= 1 and ga.state == 'WANDERING')
+dk = arena(seed=27)
+gk = Monster(8, 5, mid=0)
+gk.hp, gk.state, gk.target, gk.last_seen = 2, 'HUNTING', '1', (7, 5)
+gk2 = Monster(9, 5, mid=1)                               # 곁의 동료
+dk.monsters = [gk, gk2]
+bk = mkbot('1', 7, 5)
+ev = dk.monster_turn([bk])
+check("D51 동료가 곁이면 저HP 라도 도주하지 않고 같이 싸운다(monster_attack, flee 없음)",
+      gk.state == 'HUNTING' and not any(e['type'] == 'monster_flee' for e in ev)
+      and any(e['type'] == 'monster_attack' and e['id'] == 'm0' for e in ev))
+dm = arena(seed=29, w=30, h=12)
+gm_ = Monster(8, 5, mid=0)
+gm_.hp, gm_.state, gm_.target, gm_.last_seen = 2, 'HUNTING', '1', (7, 5)
+far = Monster(26, 5, mid=1)                              # join_range(10) 밖
+dm.monsters = [gm_, far]
+bm = mkbot('1', 7, 5)
+dm.monster_turn([bm])
+check("D51 동료가 join_range 밖이면 기존 도주(봇에게서 멀어지는 칸)", gm_.state == 'FLEEING' and (gm_.x, gm_.y) == (9, 5))
+dj2 = arena(seed=31)
+gh = Monster(8, 5, mid=0)
+gh.hp, gh.state, gh.target, gh.last_seen = 2, 'HUNTING', '1', (7, 5)
+gh2 = Monster(10, 5, mid=1)                              # 두 칸 앞의 동료 — 한 걸음이면 곁. 봇을 쫓는 중
+gh2.state, gh2.target, gh2.last_seen = 'HUNTING', '1', (7, 5)
+dj2.monsters = [gh, gh2]
+bh = mkbot('1', 7, 5)
+dj2.monster_turn([bh])                                   # 도주 전환 + 동쪽 한 걸음(9,5) = 곁
+ev = dj2.monster_turn([bh])                              # 합류 — 봇(7,5)이 보이니 함께 싸운다
+check("D51 합류 뒤엔 동료를 따른다 — 동료가 쫓는 중이면 같은 표적을 함께 문다(HUNTING)",
+      any(e['type'] == 'monster_join' and e['state'] == 'HUNTING' for e in ev) and gh.state == 'HUNTING' and gh.target == '1')
+
 dw = arena(seed=23)
 mw = Monster(6, 5, mid=0)
 mw.state, mw.waking = 'HUNTING', 1

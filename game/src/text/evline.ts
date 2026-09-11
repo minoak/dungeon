@@ -201,6 +201,7 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
     return { cls: 'notable', html: `${mon}${iga(mon)} ${nameSpan(run, e.target)}를 발견 — 추적 개시!` };
   if (t === 'monster_flee') return { cls: 'ev', html: `${mon} 겁에 질려 달아나기 시작한다!` };
   if (t === 'monster_desperate') return { cls: 'combat', html: `${mon} 더는 도망칠 곳이 없다 — 이빨을 드러낸다!` };
+  if (t === 'monster_join') return { cls: 'ev', html: `${mon} ${esc(str(e.ally_kind, '동료'))} 곁에 붙는다 — ${e.state === 'HUNTING' ? '함께 싸운다!' : '숨을 고른다'}` };   // D51
   if (t === 'monster_attack') {
     const sneak = e.from_hiding ? `매복!! 어둠에서 ${mon}${iga(mon)} 튀어나온다 — ` : (e.surprise ? '기습! ' : '');
     const mod = num(e.mod);
