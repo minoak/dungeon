@@ -14,6 +14,8 @@
   ⑦ 창 배타: 대기 틱은 맴돎(wander)·무발견(dry) 어느 창에도 안 쌓인다
   ⑧ 문장: wait_bored/wait_met 렌더 — 물음표 0(관찰 사실만)
   ⑨ 작정: plan_step 의 wait 수 유효("계단 가서 기다려" 저작 가능)
+  ⑩ 동료 관측(D25 개정 2026-09-12): 기다리는 동료 항목에 waiting=true → 동료 줄 "(대기중)" · 대기 틱에도 유지 ·
+     깨면(hail_stop) 사라짐 · 꺼진 판(wait_verb=0)엔 없음 — 파트너 "대기중이라는 걸 추가해볼까? 하나씩"
 (기존 verify 22종은 별도 실행.)
 """
 import brains
@@ -151,4 +153,31 @@ print()
 if C.failed:
     print("FAIL — %d개 실패" % C.failed)
     raise SystemExit(1)
-print("ALL PASS — verify_wait (D25 제자리 대기: 사건이 깨운다·숫자 없음·셔틀의 고정점)")
+print("── ⑩ 동료 관측 — 대기중 태그(D25 개정 2026-09-12)")
+names10 = {'1': '두란', '2': '카야'}
+d10, b10, c10, bots10 = stage()
+c10['x'], c10['y'] = 4, 1                                      # 동료(2)를 시야 안(④와 같은 자리)에 — 기다리는 몸이 보인다
+d10.act(b10, {'type': 'wait'}, bots10)
+o10 = d10.view(c10, bots10)
+a10 = next(a for a in o10['sights']['bots'] if a['char'] == '1')
+check("⑩ 동료 항목 waiting=True(기다리는 몸이 보인다)", a10.get('waiting') is True and a10.get('resting') is None)
+check("⑩ 동료 줄 '(대기중)'", "(대기중)" in brains._wire(o10, names10))
+d10.step_order(b10, bots10)                                    # 대기 틱(아직 아무 일 없음)
+o10b = d10.view(c10, bots10)
+check("⑩ 대기 틱에도 유지", next(a for a in o10b['sights']['bots'] if a['char'] == '1').get('waiting') is True)
+d10.hail = True; d10.turn = 5                                  # 말 걸림 스위치(⑥과 같은 전제)
+d10.hail_stop(b10, ['2'])                                      # 말 걸림이 대기를 끊는다(⑥) → 태그도 사라진다
+o10c = d10.view(c10, bots10)
+check("⑩ 깨면(hail_stop) 태그 사라짐",
+      not next(a for a in o10c['sights']['bots'] if a['char'] == '1').get('waiting') and "(대기중)" not in brains._wire(o10c, names10))
+d10x, b10x, c10x, bots10x = stage(wait_verb=False)
+c10x['x'], c10x['y'] = 4, 1
+d10x.act(b10x, {'type': 'wait'}, bots10x)                      # 꺼진 판 = 탐색 폴백 → order 는 wait 가 아니다
+o10x = d10x.view(c10x, bots10x)
+check("⑩ 꺼진 판(wait_verb=0) 동료 항목에 waiting 없음",
+      'waiting' not in next(a for a in o10x['sights']['bots'] if a['char'] == '1'))
+
+if C.failed:                                                   # 09-12: 검사 실패가 있으면 ALL PASS 를 찍지 않는다(게이트 러너는 그 문자열로 판정)
+    print("FAILED — verify_wait: %d 검사 실패" % C.failed)
+    raise SystemExit(1)
+print("ALL PASS — verify_wait (D25 제자리 대기: 사건이 깨운다·숫자 없음·셔틀의 고정점 · ⑩ 대기중 태그)")

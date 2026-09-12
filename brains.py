@@ -1251,7 +1251,8 @@ def _wire(obs, names=None, compose=False):
                                             (" · " + " · ".join(b["status"])) if b.get("status") else "",   # D34 — scan 분기 누락 수선
                                             b.get("dist", 0),
                                             " (이동중)" if b.get("moving") else "",
-                                            " (휴식중)" if b.get("resting") else ""))       # D35 — scan 분기 누락 수선
+                                            (" (휴식중)" if b.get("resting") else "")       # D35 — scan 분기 누락 수선
+                                            + (" (대기중)" if b.get("waiting") else "")))   # D25 개정(09-12) 대기중
         if under:
             L.append("- 발밑: " + " / ".join(under))
         KR = {"N": "북쪽", "NE": "북동쪽", "E": "동쪽", "SE": "남동쪽",
@@ -1302,7 +1303,8 @@ def _wire(obs, names=None, compose=False):
                      % (who(b.get("char", "?")), b.get("hp", "?"), b.get("maxhp", "?"),
                         (" · " + " · ".join(b["status"])) if b.get("status") else "",   # D34 상태
                         at(b), " (이동중)" if b.get("moving") else "",
-                        " (휴식중)" if b.get("resting") else ""))                      # D35 휴식
+                        (" (휴식중)" if b.get("resting") else "")                      # D35 휴식
+                        + (" (대기중)" if b.get("waiting") else "")))                  # D25 개정(09-12) 대기중
         for w in s.get("ways", []):
             L.append("- %s쪽으로 트인 길 — 거리 %d, %s%s"
                      % (w.get("bearing", "?"), w.get("dist", 0),

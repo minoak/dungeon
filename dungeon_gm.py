@@ -1758,7 +1758,9 @@ class Dungeon:
                    **({'status': sorted(b['status'])}                # 상태 태그(D34) — 겉으로 드러난다
                       if ((self.status or self.skills) and b.get('status')) else {}),   #   (파트너 확정: 같은 단어)
                    **({'resting': True} if (self.rest_verb            # 휴식중(D35) — 쉬는 몸도 보인다
-                       and b.get('order') == 'rest') else {})}
+                       and b.get('order') == 'rest') else {}),
+                   **({'waiting': True} if (self.wait_verb            # 대기중(D25 개정 09-12) — 서 있는 몸도 보인다
+                       and b.get('order') == 'wait') else {})}        #   (파트너 "대기중이라는 걸 추가해볼까? 하나씩")
                   for b in bots
                   if b['alive'] and not b['won'] and b['char'] != bot['char']
                   and self._ally_seen(bot, b, seen)]
