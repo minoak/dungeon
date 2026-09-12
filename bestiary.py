@@ -13,6 +13,11 @@
   뒤에도 조우를 센다(n). 정의의 knowledge.unlock{event:"encounter", count} 를 채우면 deep={turn, depth} 가 붙고
   그때부터 obs 에 심층 본문이 주입된다(그 전엔 brief 한 줄 + 진행도). 옛 원장의 항목(n 없음)은 n=1 로 읽는다
   (⚠️임시 가정: 등재 = 조우 1회. 파트너 미답).
+  D55(09-12, 메모 §2-5 [결정] "해금 순간에 캐릭터가 첫 인식을 한 줄 쓴다 … N번이 차면 기존 인식을 보여주고 고칠 기회"):
+  해금 순간 항목에 due='deep' 이 붙고(초대 대기), 그 캐릭터의 다음 *실* 결정(src≠plan) 이 초대를 닫는다 — 답(`decisions.book_line
+  {key, text}`)이 있으면 note={text, turn, depth, n} 로 남고(≤80자, 엔진 불가침 — 내용은 안 읽는다), 없어도 닫힌다(D40 결산 선례).
+  그 뒤 조우가 asked_n(마지막 초대 시점의 n)에서 review 조건(count, 기본=해금 count)만큼 더 쌓이면 due='review'
+  (기존 note 를 보여주고 고칠 기회 — 그대로 둘 수 있다). 초대·note 전부 스트림 어휘(decisions)로 닫혀 오프라인 소급이 같다.
 
 획득 규칙(전부 스트림 어휘 — 오프라인 재적용 = 결정론 투영, 태그 발급기와 거울 구조):
   · 몬스터: tick.bots[].aware_of 에 몹 id 가 *새로* 오른 순간 그 종 획득 — 시야·수색 발각·
@@ -60,6 +65,33 @@ def load_lore(path):
         return {}
 
 
+NOTE_LEN = 80   # 인식 한 줄 상한(brains.NOTE_LEN 과 같은 값 — 발급기는 brains 를 import 하지 않는다)
+
+
+def _default_review():
+    """인식 갱신 조건(D55) — 정의 knowledge.review 가 있으면 그것, 없으면 해금 조건과 같은 사건·횟수(⚠️임시 가정)."""
+    try:
+        import entities
+        return entities.review_rules()
+    except Exception:
+        return {}
+
+
+def _prog_entry(r):
+    """원장 항목 → run_meta.bestiary_progress 한 칸 {n, deep?, deep_n?, asked_n?, due?, note?{text, n}} (D53·D55 additive)."""
+    e = {'n': int(r.get('n', 1))}
+    if r.get('deep'):
+        e['deep'] = True
+        if isinstance(r['deep'], dict) and 'n' in r['deep']:
+            e['deep_n'] = int(r['deep']['n'])
+    for fld in ('asked_n', 'due'):
+        if fld in r:
+            e[fld] = r[fld]
+    if isinstance(r.get('note'), dict) and r['note'].get('text'):
+        e['note'] = {'text': r['note']['text'], 'n': int(r['note'].get('n', 1))}
+    return e
+
+
 def label(key, lore=None):
     """종키 → 표시 이름(로어 name 우선, 없으면 키 꼬리)."""
     if lore and key in lore and lore[key].get('name'):
@@ -72,11 +104,14 @@ class Issuer:
     라이브: 러너가 tick emit 직후 같은 dict 를 먹인다 + bot['known']에 book 의 set 을 *공유*로
     꽂아 획득이 다음 obs 에 즉시 반영된다. 오프라인: 같은 코드로 소급(결정론 투영 검증 가능)."""
 
-    def __init__(self, names=None, rules=None):
+    def __init__(self, names=None, rules=None, review=None):
         self.names = dict(names or {})   # char -> 캐릭터이름(원장 키). 오프라인은 run_meta 에서 유도
         self.book = {}                   # 이름 -> set(종키)  (bot['known'] 과 같은 객체를 공유)
         self.meta = {}                   # 이름 -> {종키: {turn, depth, n, deep?}}  (원장 파일 몸통 — bot['book'] 과 공유)
         self.rules = dict(rules) if rules is not None else _default_rules()   # 종키 -> {event, count} (심층 해금 조건, 정의에서)
+        self.review = (dict(review) if review is not None                    # 종키 -> {event, count} (인식 갱신 조건, D55)
+                       else {k: dict(v) for k, v in self.rules.items()} if rules is not None   # 명시 규칙 = 그 규칙과 같은 문턱(테스트)
+                       else _default_review())                                 # 정의(knowledge.review, 없으면 unlock)
         self.dirty = False               # 마지막 save 뒤 원장이 바뀌었나(조우 수만 올라도 참 — 러너 저장 신호)
         self._idkind = {}                # 이번 층 몹 id(int) -> kind
         self._aware = {}                 # char -> 직전 스냅샷 aware_of set
@@ -100,8 +135,7 @@ class Issuer:
         deep 는 해금된 종에만 True. 오프라인 소급이 이걸로 시드해야 심층 해금 시점이 라이브와 같다."""
         out = {}
         for name in sorted(self.meta):
-            m = {k: {'n': int(r.get('n', 1)), **({'deep': True} if r.get('deep') else {})}
-                 for k, r in sorted(self.meta[name].items()) if k in self.known(name)}
+            m = {k: _prog_entry(r) for k, r in sorted(self.meta[name].items()) if k in self.known(name)}
             if m:
                 out[name] = m
         return out
@@ -141,7 +175,9 @@ class Issuer:
         """원자적 저장(tmp+rename) — 판 도중 크래시에도 원장이 반쪽으로 깨지지 않는다."""
         body = {'_readme': '도감 원장 — 캐릭터의 죽어도 남는 지식(D4·D9). '
                            '획득 규칙=bestiary.py(스트림 소비자), 본문=entities/*/*.json knowledge.brief/deep(D50 — 수정해도 여기 불침). '
-                           'turn·depth=처음 안 순간, n=조우 수, deep={turn, depth}=심층 해금 순간(D53 — 정의의 knowledge.unlock 을 채운 때).'}
+                           'turn·depth=처음 안 순간, n=조우 수, deep={turn, depth, n}=심층 해금 순간(D53 — 정의의 knowledge.unlock 을 채운 때). '
+                           'note={text, turn, depth, n}=캐릭터가 남긴 인식 한 줄(D55, 내용은 기계가 안 읽는다), asked_n=마지막 초대 시점의 조우 수, '
+                           'due=대기 중 초대(deep|review).'}
         for name in sorted(self.meta):
             body[name] = {k: self.meta[name][k] for k in sorted(self.meta[name])}
         tmp = path + '.tmp'
@@ -175,12 +211,52 @@ class Issuer:
         self.dirty = True
         rule = self.rules.get(key)
         if rule and rule.get('event') == 'encounter' and not rec.get('deep') and rec['n'] >= int(rule.get('count', 0)):
-            rec['deep'] = {'turn': turn, 'depth': self.depth}
+            rec['deep'] = {'turn': turn, 'depth': self.depth, 'n': rec['n']}
             out.append((name, key, 'deep'))
+        self._invite(name, key, rec, out)
+
+    def _invite(self, name, key, rec, out):
+        """D55 인식 초대 — 해금된 종만. asked_n(마지막 초대 시점의 조우 수)이 없으면 해금 직후 = 'deep' 초대,
+        있으면 review 조건(count)만큼 조우가 더 쌓였을 때 'review' 초대. 초대는 due 로 대기하다 그 캐릭터의
+        다음 실 결정이 닫는다(consume 의 decisions 처리). 답을 안 해도 asked_n 은 초대 시점으로 옮겨 가
+        같은 문턱이 매 결정마다 되풀이되지 않는다."""
+        if not rec.get('deep') or rec.get('due'):
+            return
+        base = rec.get('asked_n')
+        if base is None:
+            rec['due'], rec['asked_n'] = 'deep', rec['n']
+            out.append((name, key, 'invite'))
+            return
+        rv = self.review.get(key) or {}
+        if rv.get('event') == 'encounter' and rec['n'] - int(base) >= int(rv.get('count', 0) or 0) > 0:
+            rec['due'], rec['asked_n'] = 'review', rec['n']
+            out.append((name, key, 'invite'))
+
+    def _settle(self, char, dec, turn, out):
+        """실 결정 1개 → 그 캐릭터의 대기 중 초대를 닫고, 답(book_line{key, text})이 있으면 note 로 남긴다(D55).
+        작정 수(src=plan)·미실행(skipped)은 실 결정이 아니다(프롬프트가 안 나갔다). 내용은 안 읽는다(엔진 불가침)."""
+        if char is None or not isinstance(dec, dict) or dec.get('src') == 'plan' or dec.get('skipped'):
+            return
+        name = self.names.get(char) or ('봇%s' % char)
+        recs = self.record(name)
+        bl = dec.get('book_line')
+        if isinstance(bl, dict) and bl.get('key') in recs and str(bl.get('text') or '').strip():
+            rec = recs[bl['key']]
+            rec['note'] = {'text': str(bl['text']).strip()[:NOTE_LEN], 'turn': turn, 'depth': self.depth,
+                           'n': int(rec.get('n', 1))}
+            self.dirty = True
+            out.append((name, bl['key'], 'note'))
+        first = next((k for k in sorted(recs) if recs[k].get('due')), None)   # 보여준 초대 = 종키 순 첫 due(엔진 _book_invite 와 같은 규칙)
+        if first is not None:
+            del recs[first]['due']
+            self.dirty = True
 
     def consume(self, kind, rec):
-        """스트림 레코드 1개 소비 → 새 사건 [(이름, 종키, 'brief'|'deep')] 반환(발급 순서 = 결정론).
-        'brief' = 처음 등재(한 줄 지식 켜짐), 'deep' = 심층 해금(D53). 조우 수만 오른 틱은 빈 리스트(dirty 만 참)."""
+        """스트림 레코드 1개 소비 → 새 사건 [(이름, 종키, 'brief'|'deep'|'invite'|'note')] 반환(발급 순서 = 결정론).
+        'brief' = 처음 등재(한 줄 지식 켜짐), 'deep' = 심층 해금(D53), 'invite' = 인식 초대 대기(D55),
+        'note' = 캐릭터가 인식 한 줄을 남김(D55). 조우 수만 오른 틱은 빈 리스트(dirty 만 참).
+        틱 안의 순서: 이 틱의 결정(초대 닫기·note) → 이 틱의 조우(새 초대). 결정은 이 틱 판단 때 본 obs 에서 났으므로
+        이 틱의 조우가 만든 초대를 볼 수 없었다 — 그래서 결정을 먼저 처리해야 새 초대가 다음 결정까지 살아남는다."""
         out = []
         if kind == 'run_meta':
             for p in rec.get('party') or []:           # 오프라인 이름 유도 — 라이브가 준 names 우선.
@@ -196,13 +272,20 @@ class Issuer:
                     pr = (prog.get(name) or {}).get(k) or {}
                     r = recs.setdefault(k, {'turn': 0, 'depth': 0, 'n': int(pr.get('n', 1))})
                     if pr.get('deep') and not r.get('deep'):
-                        r['deep'] = {'turn': 0, 'depth': 0}   # 해금 시점은 지난 판의 것(원장 파일에만) — 여기선 여부만
+                        r['deep'] = {'turn': 0, 'depth': 0, 'n': int(pr.get('deep_n', pr.get('n', 1)))}   # 해금 시점은 지난 판의 것(원장 파일에만) — 여기선 여부만
+                    for fld in ('asked_n', 'due'):            # D55 초대 상태도 시드(리뷰 문턱·판 넘김 초대가 라이브와 같게)
+                        if fld in pr and fld not in r:
+                            r[fld] = pr[fld]
+                    if pr.get('note') and not r.get('note'):
+                        r['note'] = {'text': pr['note'].get('text', ''), 'turn': 0, 'depth': 0, 'n': int(pr['note'].get('n', 1))}
         elif kind == 'level':
             self.depth = rec.get('depth', self.depth)
             self._idkind = {m['id']: m['kind'] for m in rec.get('monsters') or []}
             self._aware = {}                           # 새 층 = 새 몹 id 공간(스폰 봇 aware_of 도 초기화)
         elif kind == 'tick':
             turn = rec.get('turn', 0)
+            for ch, dec in sorted((rec.get('decisions') or {}).items()):   # D55: 결정 먼저(초대 닫기·note) — 위 docstring
+                self._settle(ch, dec, turn, out)
             for m in rec.get('monsters') or []:
                 self._idkind[m['id']] = m['kind']
             for b in rec.get('bots') or []:            # ① 몬스터: aware_of 증분 = 인지의 순간
@@ -264,7 +347,8 @@ def main(argv):
         iss, acq = replay(sp)
         print('== %s — 획득 %d건 ==' % (p, len(acq)))
         for turn, name, key, tier in acq:
-            print('  t%03d  %-6s %s (%s)%s' % (turn, name, label(key, lore), key, '  ← 심층 해금' if tier == 'deep' else ''))
+            sfx = {'deep': '  ← 심층 해금', 'invite': '  ← 인식 초대(D55)', 'note': '  ← 인식 한 줄 남김(D55)'}.get(tier, '')
+            print('  t%03d  %-6s %s (%s)%s' % (turn, name, label(key, lore), key, sfx))
     return 0
 
 

@@ -75,6 +75,12 @@ def _problems(pairs, root):
                 out.append('%s: knowledge.unlock 은 event + count(정수≥1) 필요' % rel)
             if not kn.get('deep'):
                 out.append('%s: 해금 조건이 있는데 knowledge.deep(해금할 본문)이 없다' % rel)
+        if kn.get('review') is not None:                     # D55 인식 갱신 조건(선택) — 있으면 unlock 과 같은 꼴
+            rv = kn.get('review') or {}
+            if rv.get('event') not in UNLOCK_EVENTS or not (isinstance(rv.get('count'), int) and rv['count'] >= 1):
+                out.append('%s: knowledge.review 는 event(해금 사건 어휘) + count(정수≥1) 필요' % rel)
+            if kn.get('unlock') is None:
+                out.append('%s: 인식 갱신 조건(review)은 해금 조건(unlock)이 있어야 뜻이 있다' % rel)
         sp = d.get('sprite')
         if sp:
             tex = str(sp).split('#')[0]
@@ -228,9 +234,17 @@ def lore():
             out[key]['brief'] = kn['brief']
         if kn.get('unlock'):
             out[key]['unlock'] = {'event': kn['unlock']['event'], 'count': int(kn['unlock']['count'])}
+        if kn.get('review'):
+            out[key]['review'] = {'event': kn['review']['event'], 'count': int(kn['review']['count'])}
     return out
 
 
 def unlock_rules():
     """{종키: {event, count}} — 심층 해금 조건이 있는 종만(발급기 bestiary.Issuer 가 센다)."""
     return {k: v['unlock'] for k, v in lore().items() if v.get('unlock')}
+
+
+def review_rules():
+    """{종키: {event, count}} — 인식 갱신 조건(D55). 정의에 review 가 없으면 해금 조건을 그대로 쓴다
+    (⚠️임시 가정 — 메모 §2-5 "갱신 카운트의 기준은 해금 조건과 달라도 된다": 다르게 두려면 정의에 review 를 적는다)."""
+    return {k: (v.get('review') or v['unlock']) for k, v in lore().items() if v.get('unlock')}

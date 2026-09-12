@@ -1100,6 +1100,11 @@ def main():
         for nm, key, tier in new_knowledge:
             if tier == 'deep':                  # D53 심층 해금 — 다음 obs 부터 본문 전체
                 event('   \U0001f4d6 %s — 도감 심층 해금: %s' % (nm, bestiary.label(key, lore)))
+            elif tier == 'invite':              # D55 인식 초대 대기 — 다음 실 결정의 프롬프트에 "## 도감" 절
+                event('   \U0001f4d6 %s — 도감 생각 한 줄 초대: %s' % (nm, bestiary.label(key, lore)))
+            elif tier == 'note':                # D55 캐릭터가 남긴 인식(원장 note — 내용은 기계가 안 읽는다)
+                rec_ = (iss.record(nm).get(key) or {}).get('note') or {}
+                event('   \U0001f4d6 %s — %s에 대한 생각: "%s"' % (nm, bestiary.label(key, lore), rec_.get('text', '')))
             else:
                 event('   \U0001f4d6 %s — 도감 등재: %s' % (nm, bestiary.label(key, lore)))
         if iss.dirty and BESTIARY_FILE:         # 조우 수만 올라도 저장(원장의 n 이 스트림 투영과 어긋나지 않게)

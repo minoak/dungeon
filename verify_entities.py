@@ -106,6 +106,10 @@ with tempfile.TemporaryDirectory() as tmp:
         os.path.join(root, 'object', 'goblin.json'): {'id': 'goblin', 'name': '중복', 'kind': 'object', 'type': 'x', 'comps': {}},
         os.path.join(root, 'object', 'relic.json'): {'id': 'relic', 'name': '유물', 'kind': 'object', 'type': 'relic',
                                                      'comps': {'knowledge': {'unlock': {'event': 'encounter'}}}},   # count·deep 결손(D53)
+        os.path.join(root, 'monster', 'imp.json'): {'id': 'imp', 'name': '임프', 'kind': 'monster', 'sprite': 'wl-goblin',
+                                                    'comps': {'health': {'max': 4}, 'combat': {'atk': 1, 'dmg': 1, 'ac': 10},
+                                                              'knowledge': {'deep': 'x', 'unlock': {'event': 'encounter', 'count': 2},
+                                                                            'review': {'event': 'encounter'}}}},   # review count 결손(D55)
     }
     for p, d in bad.items():
         with open(p, 'w', encoding='utf-8') as f:
@@ -115,9 +119,9 @@ with tempfile.TemporaryDirectory() as tmp:
         rejected, msg = False, ''
     except ENT.EntityError as e:
         rejected, msg = True, str(e)
-    check('⑦ 검증기 거절 — 모르는 부품·없는 텍스처·id≠파일명·없는 해금 사건·중복 id·해금 count/deep 결손을 한 번에 나열',
+    check('⑦ 검증기 거절 — 모르는 부품·없는 텍스처·id≠파일명·없는 해금 사건·중복 id·해금 count/deep 결손·review 결손(D55)을 한 번에 나열',
           rejected and '모르는 부품' in msg and '스프라이트' in msg and '파일명' in msg and '해금 사건' in msg and '중복' in msg
-          and 'count(정수≥1)' in msg and '해금할 본문' in msg)
+          and 'count(정수≥1)' in msg and '해금할 본문' in msg and 'knowledge.review' in msg)
 check('⑦ 정본 폴더는 재로드해도 같은 정의', ENT.reload() == defs)
 
 print('ALL PASS — verify_entities (%d checks, 실 LLM 0콜)' % checks)

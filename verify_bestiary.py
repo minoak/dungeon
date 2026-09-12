@@ -19,6 +19,10 @@
      book 미배선(옛 하네스) = 옛 2층(등재 즉시 본문). 조건 없는 종(함정)은 book 있어도 즉시 본문. 프롬프트 접미 '(심층: 조우 n/5)'.
   ⑪ 옛 원장(n 없음) 로드 = 조우 1 / 저장 왕복에 n·deep 보존 / 층이 바뀌면 같은 id 도 새 개체(다시 1)
   ⑫ 라이브·소급 일치는 진행도(n·deep)까지 — run_meta.bestiary_progress 시드
+  ⑬ D55 캐릭터 인식 한 줄(09-12, 메모 §2-5 [결정] "해금 순간에 첫 인식 한 줄 … N번이 차면 고칠 기회"): 해금 조우에 'invite'
+     (원장 due='deep'·asked_n) → obs book_invite → 프롬프트 "## 도감" 절 → 응답 book_line → decisions.book_line{key, text} →
+     발급기가 원장 note 로(내용 안 읽음) · 작정 수는 초대를 못 닫음 · 초대 없는 결정의 book_line 무시 · asked_n+review 에
+     'review' 초대(기존 생각 노출) · 답 없어도 닫힘(되풀이 없음) · 저장 왕복·progress·run_meta 시드까지 같은 문턱
 """
 import contextlib
 import io
@@ -153,8 +157,8 @@ check("⑥ 원장 save/load 왕복(원자적 저장) — 진행도(n)까지",
 
 
 def led_prog(led):
-    """원장 파일 → 진행도 투영(Issuer.progress 와 같은 꼴)."""
-    return {n: {k: {'n': int(r.get('n', 1)), **({'deep': True} if r.get('deep') else {})} for k, r in sorted(v.items())}
+    """원장 파일 → 진행도 투영(Issuer.progress 와 같은 꼴 — D55 뒤 note·asked_n·due·deep_n 까지)."""
+    return {n: {k: bestiary._prog_entry(r) for k, r in sorted(v.items())}
             for n, v in sorted(led.items()) if not n.startswith('_') and v}
 
 
@@ -177,9 +181,10 @@ for n in range(1, 5):
 check("⑩ 등재(조우 1) = 원명 + brief 한 줄 + 진행도 1/3 — 본문(lore) 비노출",
       seen10[0] == ([('두란', 'monster:고블린', 'brief')], 'BRIEF_G', {'event': 'encounter', 'n': 1, 'need': 3}))
 check("⑩ 조우 2 = 사건 없음(dirty 만) · 진행도 2/3", seen10[1] == ([], 'BRIEF_G', {'event': 'encounter', 'n': 2, 'need': 3}) and iss10.dirty)
-check("⑩ 조우 3 = 'deep' 발급 → 다음 obs 본문 전체·진행도 없음", seen10[2] == ([('두란', 'monster:고블린', 'deep')], 'LORE_G', None))
+check("⑩ 조우 3 = 'deep' 발급(+D55 인식 초대) → 다음 obs 본문 전체·진행도 없음",
+      seen10[2] == ([('두란', 'monster:고블린', 'deep'), ('두란', 'monster:고블린', 'invite')], 'LORE_G', None))
 check("⑩ 해금 뒤 조우는 n 만 오르고 재발급 없음", seen10[3] == ([], 'LORE_G', None) and iss10.record('두란')['monster:고블린']['n'] == 4
-      and iss10.record('두란')['monster:고블린']['deep'] == {'turn': 3, 'depth': 1})
+      and iss10.record('두란')['monster:고블린']['deep'] == {'turn': 3, 'depth': 1, 'n': 3})
 m10s = next(x for x in d10.view(b10, [b10])['sights']['monsters'] if x['id'] == 'm5')
 check("⑩ 미등재 종(그림자거미)은 그대로 '낯선 짐승'·진행도 없음", m10s['kind'] == UNKNOWN_BEAST and 'deep_progress' not in m10s and 'lore' not in m10s)
 b10b = mkbot('1', 5, 5)
@@ -206,10 +211,13 @@ ev1 = iss11.consume('tick', {'kind': 'tick', 'turn': 1, 'monsters': [], 'events'
 iss11.consume('level', {'kind': 'level', 'depth': 2, 'monsters': [{'id': 0, 'kind': '고블린'}]})   # 새 층 = 같은 id 라도 새 개체
 ev2 = iss11.consume('tick', {'kind': 'tick', 'turn': 9, 'monsters': [], 'events': [], 'bots': [{'char': '1', 'aware_of': [0]}]})
 check("⑪ 층이 바뀌면 같은 id 도 새 개체로 센다(1→2→3=해금, depth 2 에서)",
-      ev1 == [] and ev2 == [('두란', 'monster:고블린', 'deep')] and iss11.record('두란')['monster:고블린']['deep'] == {'turn': 9, 'depth': 2})
+      ev1 == [] and ev2 == [('두란', 'monster:고블린', 'deep'), ('두란', 'monster:고블린', 'invite')]
+      and iss11.record('두란')['monster:고블린']['deep'] == {'turn': 9, 'depth': 2, 'n': 3})
 iss11.save(old_led)
 iss11b = bestiary.Issuer().load(old_led)
-check("⑪ 저장 왕복에 n·deep 보존 + save 가 dirty 를 내린다", not iss11.dirty and iss11b.record('두란')['monster:고블린'] == {'turn': 44, 'depth': 1, 'n': 3, 'deep': {'turn': 9, 'depth': 2}})
+check("⑪ 저장 왕복에 n·deep(·D55 due·asked_n) 보존 + save 가 dirty 를 내린다", not iss11.dirty
+      and iss11b.record('두란')['monster:고블린'] == {'turn': 44, 'depth': 1, 'n': 3, 'deep': {'turn': 9, 'depth': 2, 'n': 3},
+                                                     'asked_n': 3, 'due': 'deep'})
 
 # ── ⑧ 언노운→기명 전이: 발급기 set == bot['known'] (공유 객체 — 러너 배선 시맨틱) ──
 iss8 = bestiary.Issuer({'1': '두란'})
@@ -229,6 +237,83 @@ check("⑧ 첫 시선='낯선 짐승' → 발급 직후 같은 봇 obs 즉시 �
       v1['sights']['monsters'][0]['kind'] == UNKNOWN_BEAST
       and v2['sights']['monsters'][0]['kind'] == '고블린'
       and v2['sights']['monsters'][0].get('lore') == 'LORE')
+
+# ── ⑬ D55 캐릭터 인식 한 줄 — 해금 초대 → 응답 book_line → 원장 note → 갱신 초대(메모 §2-5) ──
+d13 = arena(seed=13)
+d13.monsters = [Monster(6, 5, mid=i) for i in range(9)]
+d13.lore = {'monster:고블린': {'name': '고블린', 'lore': 'LORE_G', 'brief': 'BRIEF_G', 'unlock': {'event': 'encounter', 'count': 3}}}
+R13 = {'monster:고블린': {'event': 'encounter', 'count': 3}}
+iss13 = bestiary.Issuer({'1': '두란'}, rules=R13)          # review 미지정 = 명시 규칙과 같은 문턱(3)
+b13 = mkbot('1', 5, 5)
+b13['known'] = iss13.known('두란')
+b13['book'] = iss13.record('두란')
+iss13.consume('level', {'kind': 'level', 'depth': 1, 'monsters': [{'id': i, 'kind': '고블린'} for i in range(9)]})
+
+
+def enc13(n, turn, decisions=None):
+    return iss13.consume('tick', {'kind': 'tick', 'turn': turn, 'monsters': [], 'events': [], 'decisions': decisions or {},
+                                  'bots': [{'char': '1', 'aware_of': list(range(n))}]})
+
+
+ev_a = enc13(2, 1)
+check("⑬ 해금 전엔 초대 없음(obs 에 book_invite 없음)",
+      ev_a == [('두란', 'monster:고블린', 'brief')] and 'book_invite' not in d13.view(b13, [b13]))
+ev_b = enc13(3, 2)
+rec13 = iss13.record('두란')['monster:고블린']
+inv13 = d13.view(b13, [b13]).get('book_invite')
+check("⑬ 해금 조우 = 'deep' + 'invite' · 원장 due='deep'·asked_n=3 · obs book_invite{key, name, why deep, n 3}",
+      ev_b == [('두란', 'monster:고블린', 'deep'), ('두란', 'monster:고블린', 'invite')]
+      and rec13.get('due') == 'deep' and rec13.get('asked_n') == 3
+      and inv13 == {'key': 'monster:고블린', 'name': '고블린', 'why': 'deep', 'n': 3})
+txt13 = _brains._wire(d13.view(b13, [b13]), {'1': '두란'})
+check("⑬ 렌더: '## 도감 — 네 생각 한 줄 (선택)' · '고블린의 심층 정보가 열렸다(지금까지 3번 겪음)' · `book_line` 안내",
+      "## 도감 — 네 생각 한 줄 (선택)" in txt13 and "고블린의 심층 정보가 열렸다(지금까지 3번 겪음)" in txt13 and "`book_line`" in txt13)
+ev_c = enc13(3, 3, {'1': {'type': 'goto', 'src': 'plan', 'book_line': {'key': 'monster:고블린', 'text': '무시돼야 한다'}}})
+check("⑬ 작정 수(src=plan)는 초대를 닫지도 note 를 남기지도 않는다(프롬프트가 안 나갔다)",
+      ev_c == [] and rec13.get('due') == 'deep' and 'note' not in rec13)
+_brains._call_claude = lambda prompt, model="haiku": '{"reason": "x", "choice": 1, "say": "", "book_line": "겁쟁이지만 셋이면 문다"}'
+dec13 = _brains.think_all(d13, [b13])['1']
+check("⑬ 응답 book_line → decisions.book_line{key, text}(초대가 있는 결정에서만)",
+      dec13.get('book_line') == {'key': 'monster:고블린', 'text': '겁쟁이지만 셋이면 문다'})
+ev_d = enc13(3, 4, {'1': dec13})
+check("⑬ 실 결정 → 원장 note{text, turn 4, depth 1, n 3} · due 닫힘 · 사건 'note'",
+      ev_d == [('두란', 'monster:고블린', 'note')] and 'due' not in rec13
+      and rec13.get('note') == {'text': '겁쟁이지만 셋이면 문다', 'turn': 4, 'depth': 1, 'n': 3})
+ob13 = d13.view(b13, [b13])
+m13 = ob13['sights']['monsters'][0]
+txt13b = _brains._wire(ob13, {'1': '두란'})
+check("⑬ obs: 몹 항목 note=생각(사실 lore 와 다른 칸) · book_invite 없음 · 렌더 '네 생각(네가 적어 둔 것): …'",
+      m13.get('note') == '겁쟁이지만 셋이면 문다' and m13.get('lore') == 'LORE_G' and 'book_invite' not in ob13
+      and "네 생각(네가 적어 둔 것): 겁쟁이지만 셋이면 문다" in txt13b and "## 도감" not in txt13b)
+check("⑬ 초대 없는 결정의 book_line 은 무시(엔진 불가침)", 'book_line' not in _brains.think_all(d13, [b13])['1'])
+ev_e = enc13(5, 5)
+ev_f = enc13(6, 6)
+inv13b = d13.view(b13, [b13]).get('book_invite')
+txt13c = _brains._wire(d13.view(b13, [b13]), {'1': '두란'})
+check("⑬ 조우 5 는 조용 · 조우 6(=asked_n 3 + review 3) 에 'invite' review · due='review'·asked_n 6 · obs line=기존 생각",
+      ev_e == [] and ev_f == [('두란', 'monster:고블린', 'invite')] and rec13.get('due') == 'review' and rec13.get('asked_n') == 6
+      and inv13b == {'key': 'monster:고블린', 'name': '고블린', 'why': 'review', 'n': 6, 'line': '겁쟁이지만 셋이면 문다'})
+check("⑬ 갱신 렌더: '적어 둔 생각: \"겁쟁이지만 셋이면 문다\"' · '그대로 두려면 비워 둔다'",
+      '적어 둔 생각: "겁쟁이지만 셋이면 문다"' in txt13c and "그대로 두려면 비워 둔다" in txt13c)
+ev_g = enc13(6, 7, {'1': {'type': 'wait', 'src': 'haiku'}})
+ev_h = enc13(7, 8)
+check("⑬ 답 없는 실 결정도 초대를 닫는다(note 그대로·asked_n 6) · 다음 조우(7)엔 초대 없음(다음 문턱 9)",
+      ev_g == [] and ev_h == [] and 'due' not in rec13 and rec13['note']['text'] == '겁쟁이지만 셋이면 문다' and rec13['asked_n'] == 6)
+p13 = os.path.join(STATE, "d55_roundtrip.json")
+iss13.save(p13)
+check("⑬ 저장 왕복: note·asked_n·deep.n 보존", bestiary.Issuer().load(p13).record('두란')['monster:고블린'] == rec13)
+pr13 = iss13.progress()['두란']['monster:고블린']
+check("⑬ progress(run_meta 시드) = {n 7, deep, deep_n 3, asked_n 6, note{text, n 3}}",
+      pr13 == {'n': 7, 'deep': True, 'deep_n': 3, 'asked_n': 6, 'note': {'text': '겁쟁이지만 셋이면 문다', 'n': 3}})
+iss13c = bestiary.Issuer({'1': '두란'}, rules=R13)
+iss13c.consume('run_meta', {'kind': 'run_meta', 'party': [{'char': '1', 'name': '두란'}],
+                            'bestiary': {'두란': ['monster:고블린']}, 'bestiary_progress': iss13.progress()})
+r13c = iss13c.record('두란')['monster:고블린']
+iss13c.consume('level', {'kind': 'level', 'depth': 1, 'monsters': [{'id': i, 'kind': '고블린'} for i in range(3)]})
+ev_i = iss13c.consume('tick', {'kind': 'tick', 'turn': 1, 'monsters': [], 'events': [], 'bots': [{'char': '1', 'aware_of': [0, 1]}]})
+check("⑬ 소급(run_meta 시드)도 같은 문턱: n 7·deep n 3·asked_n 6·note 이월 → 조우 9 에 review 초대",
+      r13c['n'] == 9 and r13c['deep']['n'] == 3 and r13c['note']['text'] == '겁쟁이지만 셋이면 문다'
+      and ev_i == [('두란', 'monster:고블린', 'invite')] and r13c.get('due') == 'review' and r13c['asked_n'] == 9)
 
 # ── ⑦⑥ 라이브 통합(show_runner 헤들리스 2판 — 격리 STATE·격리 원장) ──
 shutil.rmtree(STATE, ignore_errors=True)

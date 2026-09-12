@@ -103,6 +103,8 @@ def build(spec):
             b["potions"] = int(ov["potions"])
         if "known" in ov:                      # 도감 게이팅 켬 — 장면 전제 지식(메모리 전용)
             b["known"] = set(ov["known"])
+        if "book" in ov:                       # 도감 원장 기록(D53 진행도·D55 인식 초대) 프리셋 — {종키: {n, deep?, due?, note?, asked_n?}}
+            b["book"] = {k: dict(v) for k, v in ov["book"].items()}
         if "plan" in ov:                       # 작정(D16) 프리셋 — 큐 물리를 LLM 없이 실험
             b["plan"] = [dict(s) for s in ov["plan"]][:G.PLAN_MAX]
         if "intent" in ov:
@@ -344,7 +346,7 @@ def probe(spec, n, jobs):
         elif dec.get("reason"):
             line += "  | " + dec.get("reason", "")[:60]
         print(line)
-        for k in ("say", "say_kind", "to", "item", "form", "note", "floor_line"):   # 말·종류(D47)·상대(D41)·건네기 물건·친목 몸짓(D47 ②)·남긴 한 줄·결산 한 줄(D40)도 프로브의 답이다(09-06)
+        for k in ("say", "say_kind", "to", "item", "form", "note", "floor_line", "book_line"):   # 말·종류(D47)·상대(D41)·건네기 물건·친목 몸짓(D47 ②)·남긴 한 줄·결산 한 줄(D40)·도감 인식(D55)도 프로브의 답이다(09-06)
             if dec.get(k):
                 print("         %s: %s" % (k, dec[k]))
         for k in ("brain_retries", "attempt_errors"):   # 판단 재시도(06d4b30)·D48 개정 already_beside — 첫 응답이 무효였으면 무엇이었나

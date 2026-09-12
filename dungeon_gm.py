@@ -1659,7 +1659,28 @@ class Dungeon:
                 entry['deep_progress'] = {'event': rule['event'], 'n': int(rec.get('n', 1)), 'need': int(rule['count'])}
             elif info.get('lore'):
                 entry['lore'] = info['lore']
+            note = (rec.get('note') or {}).get('text') if isinstance(rec.get('note'), dict) else None
+            if note:                                       # D55 캐릭터 인식 — 사실(lore)과 다른 칸(메모 §2-5 [제안] "도감: / 생각:")
+                entry['note'] = note
             return entry
+
+        def _book_invite():
+            """D55 대기 중인 인식 초대 — 원장 항목의 due(발급기가 해금·갱신 문턱에 붙임). 결정당 하나(종키 순).
+            {key, name, why: deep|review, n, line?} — line 은 기존 인식(갱신 초대 때 보여주고 고칠 기회)."""
+            if not book:
+                return None
+            for key in sorted(book):
+                rec = book[key]
+                if isinstance(rec, dict) and rec.get('due') in ('deep', 'review'):
+                    info = self.lore.get(key) or {}
+                    inv = {'key': key, 'name': info.get('name') or key.split(':', 1)[-1],
+                           'why': rec['due'], 'n': int(rec.get('n', 1))}
+                    line = (rec.get('note') or {}).get('text') if isinstance(rec.get('note'), dict) else None
+                    if line:
+                        inv['line'] = line
+                    return inv
+            return None
+        binv = _book_invite()
 
         mons = [_knowledge('monster:' + m.kind,
                            {'id': 'm%d' % m.id, 'kind': m.kind, 'state': m.state,
@@ -2135,6 +2156,7 @@ class Dungeon:
                                               # 자기 행동 궤적(D38, 09-06) — 마지막 결정 이후 일어난 일의 순서,
                                               #   있을 때만(intent 선례). last 는 그 마지막 항목과 같다
                 **self._floor_obs(bot),       # 층 집계·지난 층 결산(D40 ②) — 있을 때만
+                **({'book_invite': binv} if binv else {}),   # D55 인식 초대 — 대기 중일 때만(결정당 하나)
                 'last': bot.get('last'),      # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의
                                               #   결과를 관측할 수 있어야 한다". 자기 경험=시야-온리 무위반
                 'order': ('explore' if str(bot.get('order') or '')[:1] == '@'

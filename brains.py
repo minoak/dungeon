@@ -1013,6 +1013,7 @@ _WIRE_KEYS = frozenset((
     "sights", "party", "options", "messages", "intent", "notes",   # party: 파티 명단 — 기억 갈래 첫 절(09-08 D44 정정으로 존치)
     "status",  # 상태 태그(D34): 아래 _wire "## 네 몸 상태" 절이 그린다
     "relations",   # 관계 장부(D36): 뼈 횟수·초대는 _wire, 살(한 줄)은 _sheet 가 그린다
+    "book_invite",   # 도감 인식 초대(D55): 해금·갱신 문턱에서 한 줄을 청한다 — 아래 "## 도감" 절
     "exhausted",   # 탐색 소진(D19 개정 09-06): '탐색' 어휘 대신 사실 한 줄
     "town",    # 마을(D29): 안전한 층의 사실 한 줄 — 아래 _wire 가 그린다
     "gear"))   # 장비(07-30): 아는 키지만 wire 는 일부러 안 그린다 — 착용 정보의 표현은
@@ -1196,6 +1197,8 @@ def _wire(obs, names=None, compose=False):
         for m in s.get("monsters", []):
             if m.get("lore") or m.get("deep_progress"):   # D53: 심층 전엔 한 줄 + 진행도 접미
                 L.append("  · %s 습성(네가 아는 것): %s%s" % (m.get("kind", "?"), m.get("lore") or "아직 잘 모른다", G._deep_sfx(m)))
+            if m.get("note"):                              # D55: 캐릭터 자신의 인식 — 사실과 다른 줄(섞지 않는다)
+                L.append("  · %s에 대한 네 생각(네가 적어 둔 것): %s" % (m.get("kind", "?"), m["note"]))
     else:
         L += ["", "## 지금 보이는 것"]
         n0 = len(L)
@@ -1206,6 +1209,8 @@ def _wire(obs, names=None, compose=False):
             L.append("- %s — %s" % (G._mfact(m), at(m)))
             if m.get("lore") or m.get("deep_progress"):   # D53: 심층 전엔 한 줄 + 진행도 접미
                 L.append("  · 네가 아는 습성: %s%s" % (m.get("lore") or "아직 잘 모른다", G._deep_sfx(m)))
+            if m.get("note"):                              # D55: 캐릭터 자신의 인식 — 사실과 다른 줄(섞지 않는다)
+                L.append("  · 네 생각(네가 적어 둔 것): %s" % m["note"])
         for f in s.get("features", []):
             L.append("- %s %s — %s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
                                          " (와 본 자리)" if f.get("visited") else "") + G._tagsfx(f))   # D39 태그 접미
@@ -1331,6 +1336,19 @@ def _wire(obs, names=None, compose=False):
         if last.get("invite") and not last.get("line"):
             M.append("- 방금 떠난 %s을(를) 한 줄로 남기려면 응답 JSON 의 `floor_line` 필드"
                      " (선택, 80자 — 다음 층들에서도 다시 본다)" % _floor_name(last.get("depth")))
+
+    bi = obs.get("book_invite")             # D55 도감 인식 초대 — 해금 순간 첫 인식, N번마다 고칠 기회(메모 §2-5)
+    if bi:
+        M += ["", "## 도감 — 네 생각 한 줄 (선택)"]
+        if bi.get("why") == "review":
+            M.append('- %s을(를) 그 뒤로 더 겪었다(지금까지 %d번). 적어 둔 생각: %s — 고쳐 쓰려면 응답 JSON 의 `book_line` 필드'
+                     " (선택, 80자), 그대로 두려면 비워 둔다"
+                     % (bi.get("name", "?"), int(bi.get("n") or 0),
+                        ('"%s"' % bi["line"]) if bi.get("line") else "없음"))
+        else:
+            M.append("- %s의 심층 정보가 열렸다(지금까지 %d번 겪음). 이 상대를 어떻게 생각하는지 한 줄로 남기려면 응답 JSON 의"
+                     " `book_line` 필드 (선택, 80자 — 도감에 남아 다음 판에서도 본다. 틀려도 된다)"
+                     % (bi.get("name", "?"), int(bi.get("n") or 0)))
 
     nts = obs.get("notes")
     if nts:                                 # D26 의미 기억 — 스스로 남긴 한 줄들(주관, 엔진 불가침)
@@ -1695,6 +1713,10 @@ def _parse_decision(raw, why, obs, char, roster):
                  if any(f.get("invite") for f in (obs.get("floors") or [])) else "")   #   첫 결정)에서만 받는다
         if fline:
             rel = {**rel, "floor_line": fline}
+        bi = obs.get("book_invite")                                          # D55 인식 한 줄 — 초대가 있을 때만 받는다
+        bline = (str(obj.get("book_line", "") or "").strip()[:NOTE_LEN] if bi else "")
+        if bline:
+            rel = {**rel, "book_line": {"key": bi["key"], "text": bline}}   # 발급기(bestiary)가 원장 note 로 남긴다(엔진 불가침)
         to_ = _parse_to(obj.get("to"), char, roster, obs)   # D41 지목 — 말의 상대(없으면 혼잣말)
         said = bool(str(obj.get("say", "") or "").strip())
         if to_ and said:
