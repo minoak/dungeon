@@ -676,7 +676,8 @@ class Dungeon:
                  motion=False, ally_sight=False, social=False, solo=False, n_gear=0,
                  town=False, status=False, rest_verb=False, relations=False, trail=False,
                  objtags=False, floor=False, explore_dirs=False, give_verb=False, bond_verb=False,
-                 auto_approach=False, composed_actions=False, skills=False, trpg_combat=False, random_skill=False):
+                 auto_approach=False, composed_actions=False, skills=False, trpg_combat=False, random_skill=False,
+                 ally_doing=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -751,6 +752,9 @@ class Dungeon:
         self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
                                    #   전달층(시야 내 사건 목격 주입, A-3 어휘 확장 — 휘발=다음 결정
                                    #   1회)+기억층(목격한 전사=지속 기억 fallen, 휘발 0).
+        self.ally_doing = bool(ally_doing)   # 동료 행동 표시(D27 개정 09-12, 파트너 "동료의 현재 어떤 행동을
+                                   #   선택했는지에 대한 상태를 보여주면") — 기본 꺼짐. 러너가 DUNGEON_ALLY_DOING
+                                   #   (기본 1)로 켠다. 보이는 동료의 order 를 종류로(doing) — 좌표는 비노출.
         self.status = bool(status) # 상태 태그(D34, 09-06) — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_STATUS(기본 1)로 켠다. 몹·함정의 특수가 태그를 붙이고
                                    #   (출혈·둔화·중독) 효과는 걸음·굴림에만, 지우기는 휴식(D35)뿐.
@@ -857,6 +861,7 @@ class Dungeon:
         d.hail = False             # 말 걸림 정지(D24) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.wait_verb = False        # wait 동사(D25) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.motion = False           # 이동중 표시(D27) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.ally_doing = False       # 동료 행동 표시(D27 개정 09-12) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.graves = d.events = False   # D22 스위치(묘·사건층) — 같은 규율(기존 장면 비트 동일)
         d.social = False           # 채널 분리 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.ally_sight = False       # 동료 시야 면제 — 손그림 장면도 기본 꺼짐(호출측이 켠다)
@@ -1760,7 +1765,9 @@ class Dungeon:
                    **({'resting': True} if (self.rest_verb            # 휴식중(D35) — 쉬는 몸도 보인다
                        and b.get('order') == 'rest') else {}),
                    **({'waiting': True} if (self.wait_verb            # 대기중(D25 개정 09-12) — 서 있는 몸도 보인다
-                       and b.get('order') == 'wait') else {})}        #   (파트너 "대기중이라는 걸 추가해볼까? 하나씩")
+                       and b.get('order') == 'wait') else {}),        #   (파트너 "대기중이라는 걸 추가해볼까? 하나씩")
+                   **({'doing': dd} if (self.ally_doing                # 고른 행동(D27 개정 09-12) — 몸짓 깃발은 그대로,
+                       and (dd := self._ally_doing(b))) else {})}      #   뜻(무엇을 하러 가는지)을 더한다. 좌표 비노출
                   for b in bots
                   if b['alive'] and not b['won'] and b['char'] != bot['char']
                   and self._ally_seen(bot, b, seen)]
@@ -2632,6 +2639,39 @@ class Dungeon:
         if tgt is not None:
             out['target'] = tgt
         return out
+
+    def _ally_doing(self, b):
+        """보이는 동료가 지금 고른 행동(D27 개정 2026-09-12, 파트너 "동료의 현재 어떤 행동을 선택했는지에 대한
+        상태를 보여주면 될 것 같아"). 엔진이 세운 order 를 종류로 옮긴다 — 좌표('@x,y')는 '탐색'으로만(D17-4 좌표
+        비노출), 사람은 char, 사물·몹은 이름+id. order 가 없으면 None(막 결정 전·서 있음). 몸짓 깃발(moving/resting/
+        waiting)은 그대로 두고 이 항목이 뜻을 더한다. 발단: 재촉 발화 부검 — 이미 오는 중·곁에 선 동료에게 "빨리 와"
+        (판 953220 48회 중 22, 949625 계단 장면 20+회) = 정보 제공 부족(파트너)."""
+        s = str(b.get('order') or '')
+        if not s:
+            return None
+        if s == 'wait':
+            return {'act': 'wait'}
+        if s == 'rest':
+            return {'act': 'rest'}
+        if s.startswith('follow:b'):
+            return {'act': 'follow', 'target': s[len('follow:b'):]}
+        if s.startswith('chase:b'):
+            return {'act': 'chase', 'target': s[len('chase:b'):]}
+        if s[:1] == 'b' and s[1:]:                       # 메뉴형 goto 사람(order 'b<char>' 그대로) — 같은 뜻
+            return {'act': 'chase', 'target': s[1:]}
+        if s[:1] == '@':
+            return {'act': 'explore'}
+        if s == 'exit':
+            return {'act': 'goto', 'target': 'exit', 'name': '던전 입구' if self.town else '출구'}
+        if self.scan and s in self.doors:
+            return {'act': 'goto', 'target': s, 'name': '문'}
+        if s[:1] == 'f' and s[1:].isdigit():
+            f = self.features.get(int(s[1:]))
+            return {'act': 'goto', 'target': s, 'name': (f.name if f else '어딘가')}
+        if s[:1] == 'm' and s[1:].isdigit():
+            m = next((m for m in self.monsters if m.id == int(s[1:])), None)
+            return {'act': 'goto', 'target': s, 'name': (m.kind if m else '적')}   # Monster 는 kind 가 이름
+        return {'act': 'goto', 'target': s}
 
     def _resolve_target(self, target_id, bots=None, bot=None):
         """핑 id → (kind, (x,y)). 'exit' / 'f<n>' 피처 / 'm<n>' 몹 / '@x,y' 셀(explore) / 'b<char>' 동료

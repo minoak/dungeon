@@ -9,6 +9,10 @@
   ③ wait 동료 = 키 없음(겉보기 '서 있음'과 동일 — 마음 비노출)
   ④ 경로 비노출: 동료 항목에 heading/path/목적지 필드 없음
   ⑤ wire 렌더: 걷는 동료만 "(이동중)" 접미 — 두 렌더 경로(스캔 트리·플랫)
+  ⑥ 고른 행동(D27 개정 2026-09-12, 파트너 "동료의 현재 어떤 행동을 선택했는지에 대한 상태를 보여주면"):
+     스위치 ally_doing(엔진 기본 0·from_ascii 0) 켠 판만 동료 항목에 doing{act,target?,name?} — 탐색(@좌표는 'explore'뿐)·
+     계단 goto(이름)·동료 goto(chase, char)·wait — 서 있는 동료(order 없음)엔 키 없음 · 렌더 "(탐색 중)"·"(이동 중 → 출구)"·
+     "(두란에게 가는 중)"·"(기다리는 중)"이 몸짓 깃발 대신 · 꺼진 판엔 doing 없음(⑤ 문안 불변)
 (기존 verify 24종은 별도 실행.)
 """
 import brains
@@ -103,8 +107,40 @@ w5b = brains._wire(d5.view(a5, bots5), {'1': '두란', '2': '카야'})
 check("⑤ 플랫 렌더 경로에도 '(이동중)'",
       any('동료' in ln and '(이동중)' in ln for ln in w5b.splitlines()))
 
+print("── ⑥ 고른 행동(D27 개정 2026-09-12)")
+check("⑥ 엔진 직생성 기본 ally_doing=0 / from_ascii 기본 0",
+      Dungeon(seed=7).ally_doing is False and Dungeon.from_ascii(ROWS, scan=True)[0].ally_doing is False)
+d6, a6, b6, c6, bots6 = stage(wait_verb=True)          # 봇2 = @8,2 로 걷는 중
+d6.ally_doing = True
+o6 = d6.view(a6, bots6)
+check("⑥ 탐색 중인 동료 = doing{act:explore}(좌표 비노출) · 서 있는 동료 = 키 없음",
+      (ally(o6, '2') or {}).get('doing') == {'act': 'explore'} and 'doing' not in (ally(o6, '3') or {}))
+d6.act(c6, {'type': 'goto', 'target': 'exit'}, bots6)   # 봇3 = 계단으로
+o6b = d6.view(a6, bots6)
+check("⑥ 계단 goto = doing{act:goto, target:exit, name:출구}",
+      (ally(o6b, '3') or {}).get('doing') == {'act': 'goto', 'target': 'exit', 'name': '출구'})
+names6 = {'1': '두란', '2': '카야', '3': '피른'}
+w6 = brains._wire(o6b, names6)
+check("⑥ 렌더: '(탐색 중)' · '(이동 중 → 출구)' 가 몸짓 깃발 대신(이동중 표기 없음)",
+      any('카야' in ln and '(탐색 중)' in ln for ln in w6.splitlines())
+      and any('피른' in ln and '(이동 중 → 출구)' in ln for ln in w6.splitlines()) and '(이동중)' not in w6)
+d6.act(c6, {'type': 'goto', 'target': 'b1'}, bots6)     # 봇3 = 두란에게(D48 추적)
+o6c = d6.view(a6, bots6)
+check("⑥ 동료 goto = doing{act:chase, target:'1'} → '(두란에게 가는 중)'",
+      (ally(o6c, '3') or {}).get('doing') == {'act': 'chase', 'target': '1'}
+      and any('피른' in ln and '두란' in ln and '에게 가는 중)' in ln for ln in brains._wire(o6c, names6).splitlines()))   # who()='동료 두란(봇1)'
+d6.act(c6, {'type': 'wait'}, bots6)                     # 봇3 = 대기
+o6d = d6.view(a6, bots6)
+check("⑥ wait = doing{act:wait} + waiting 깃발 공존 → 렌더는 '(기다리는 중)' 하나",
+      (ally(o6d, '3') or {}).get('doing') == {'act': 'wait'} and (ally(o6d, '3') or {}).get('waiting') is True
+      and any('피른' in ln and '(기다리는 중)' in ln and '(대기중)' not in ln for ln in brains._wire(o6d, names6).splitlines()))
+d6.ally_doing = False
+o6e = d6.view(a6, bots6)
+check("⑥ 꺼진 판 = doing 키 없음(몸짓 깃발 문안 불변)",
+      all('doing' not in x for x in o6e['sights']['bots']) and '(이동중)' in brains._wire(o6e, names6))
+
 print()
 if C.failed:
     print("FAIL — %d개 실패" % C.failed)
     raise SystemExit(1)
-print("ALL PASS — verify_motion (D27 이동중 표시: 깃발 하나·방향 비노출·몸짓만)")
+print("ALL PASS — verify_motion (D27 이동중 표시: 깃발 하나·방향 비노출·몸짓만 · ⑥ 고른 행동 D27 개정)")

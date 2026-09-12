@@ -126,6 +126,8 @@ SELF_ON = os.environ.get("DUNGEON_SELFSTOP", "1") != "0"     # 자기 관찰 정
 DRY_ON = os.environ.get("DUNGEON_DRY", "1") != "0"           # 무발견 신호(07-24) — 러너 기본 1, 엔진
                                                              #   기본 0. 마지막 새 목격 이후 25걸음
                                                              #   = 다음 결정 obs 한 줄(도달 1회만)
+ALLY_DOING_ON = os.environ.get("DUNGEON_ALLY_DOING", "1") != "0"   # 동료 행동 표시(D27 개정 09-12) — 러너 기본 1,
+                                                             #   엔진 기본 0. 보이는 동료 항목에 doing(고른 행동)
 MOTION_ON = os.environ.get("DUNGEON_MOTION", "1") != "0"     # 이동중 표시(07-24 D27) — 러너 기본 1,
                                                              #   엔진 기본 0. 보이는 동료 상태에
                                                              #   (이동중) 깃발 하나(몸짓도 시야를 탄다)
@@ -612,6 +614,7 @@ def build_town(path=None):
     # 끈다 — 전체 시야라 seen_cells 증분이 항상 0 이라 맴돎·무발견 신호가 뜻을 잃는다(상인 왕복에 맴돎 정지를
     # 걸지는 후속 재론).
     d.hail, d.wait_verb, d.motion = HAIL_ON, WAIT_ON, MOTION_ON       # D24 말 걸림 정지 · D25 wait · D27 이동중
+    d.ally_doing = ALLY_DOING_ON                                       # D27 개정(09-12) 동료 행동 표시
     d.events, d.graves = EVENTS_ON, GRAVES_ON                          # D22 사건층(상인 선물 목격·입구 사용 목격)
     d.ally_sight, d.social = ALLY_SIGHT_ON, SOCIAL_ON                  # 동료 시야 면제 · 채널 분리
     d.trail_on, d.objtags = TRAIL_ON, OBJTAGS_ON                       # D38 궤적 · D39 오브젝트 태그
@@ -849,7 +852,7 @@ def main():
         d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION,
                       n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,
                       loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
-                      dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON,
+                      dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON, ally_doing=ALLY_DOING_ON,
                       ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
                       status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON,
                       auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE,
@@ -921,6 +924,7 @@ def main():
             hail=HAIL_ON,              # 말 걸림 정지(D24) 여부 — 정지 물리 메타(selfstop 과 같은 급)
             wait=WAIT_ON,              # wait 동사(D25) 여부 — 메뉴·정지 물리 메타
             motion=MOTION_ON,          # 이동중 표시(D27) 여부 — obs 동료 항목 메타
+            ally_doing=ALLY_DOING_ON,  # 동료 행동 표시(D27 개정 09-12) 여부 — obs 동료 항목(doing) 표현층 메타
             social=SOCIAL_ON,          # 채널 분리(07-26) 여부 — 말 걸림이 작정을 부수는지
                                        #   여부가 달라진다(정지 물리 + 콜 구조 메타)
             ally_sight=ALLY_SIGHT_ON,  # 동료 시야 면제(07-26) 여부 — **시야 물리 메타**(scan 과 같은 급).
@@ -1174,7 +1178,7 @@ def main():
                               n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
                               scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
                               graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
-                              wait_verb=WAIT_ON, motion=MOTION_ON,
+                              wait_verb=WAIT_ON, motion=MOTION_ON, ally_doing=ALLY_DOING_ON,
                               ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
                               n_gear=N_GEAR, status=STATUS_ON, rest_verb=REST_ON,
                               relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON,

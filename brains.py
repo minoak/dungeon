@@ -978,6 +978,33 @@ def _dlg_who(m, nm):
     return "%s(혼잣말)" % who
 
 
+def _doing_str(d, who):
+    """동료가 고른 행동(D27 개정 09-12) → 사람말. ⚠️문구는 임시 가정(파트너 문장 대기)."""
+    a = d.get("act")
+    if a == "wait":
+        return "기다리는 중"
+    if a == "rest":
+        return "쉬는 중"
+    if a == "explore":
+        return "탐색 중"
+    if a == "follow":
+        return "%s를 따라가는 중" % who(d.get("target", "?"))
+    if a == "chase":
+        return "%s에게 가는 중" % who(d.get("target", "?"))
+    tid, nm = d.get("target") or "", d.get("name") or ""
+    what = nm if tid == "exit" else (nm + " " + tid).strip()
+    return "이동 중 → " + (what or "어딘가")
+
+
+def _ally_sfx(b, who):
+    """동료 줄 접미 — 고른 행동이 보이면 그것 하나(D27 개정), 아니면 몸짓 깃발(이동중 D27·휴식중 D35·대기중 D25 개정)."""
+    if b.get("doing"):
+        return " (%s)" % _doing_str(b["doing"], who)
+    return ((" (이동중)" if b.get("moving") else "")
+            + (" (휴식중)" if b.get("resting") else "")
+            + (" (대기중)" if b.get("waiting") else ""))
+
+
 def _tag_str(tags):
     """꼬리표 목록 → '[라벨] 사실 · [라벨] 사실'."""
     return " · ".join(("[%s] %s" % (lb, s)).rstrip() for _, lb, s in tags)
@@ -1250,9 +1277,8 @@ def _wire(obs, names=None, compose=False):
                                             b.get("hp", "?"), b.get("maxhp", "?"),          # 09-08 D45: 숫자+태그(겉보기 4단 폐지)
                                             (" · " + " · ".join(b["status"])) if b.get("status") else "",   # D34 — scan 분기 누락 수선
                                             b.get("dist", 0),
-                                            " (이동중)" if b.get("moving") else "",
-                                            (" (휴식중)" if b.get("resting") else "")       # D35 — scan 분기 누락 수선
-                                            + (" (대기중)" if b.get("waiting") else "")))   # D25 개정(09-12) 대기중
+                                            "",                                             # (자리 유지)
+                                            _ally_sfx(b, who)))                             # D27 개정(09-12) 고른 행동 · 몸짓 깃발
         if under:
             L.append("- 발밑: " + " / ".join(under))
         KR = {"N": "북쪽", "NE": "북동쪽", "E": "동쪽", "SE": "남동쪽",
@@ -1302,9 +1328,8 @@ def _wire(obs, names=None, compose=False):
             L.append("- %s — HP %s/%s%s — %s%s%s"                                    # 09-08 D45: 숫자+태그(겉보기 4단 폐지)
                      % (who(b.get("char", "?")), b.get("hp", "?"), b.get("maxhp", "?"),
                         (" · " + " · ".join(b["status"])) if b.get("status") else "",   # D34 상태
-                        at(b), " (이동중)" if b.get("moving") else "",
-                        (" (휴식중)" if b.get("resting") else "")                      # D35 휴식
-                        + (" (대기중)" if b.get("waiting") else "")))                  # D25 개정(09-12) 대기중
+                        at(b), "",                                                     # (자리 유지)
+                        _ally_sfx(b, who)))                                            # D27 개정(09-12) 고른 행동 · 몸짓 깃발
         for w in s.get("ways", []):
             L.append("- %s쪽으로 트인 길 — 거리 %d, %s%s"
                      % (w.get("bearing", "?"), w.get("dist", 0),
