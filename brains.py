@@ -167,8 +167,23 @@ DIALOGUE_MAX = 6          # 되돌려줄 마디 수 — 파트너 미확정 임�
 PROMPT_CONTEXT_ON = os.environ.get("DUNGEON_PROMPT_CONTEXT", "1") != "0"   # D54(09-12): 판단 요청 맨 앞의 맥락 한 줄 — 파트너
                                                                             #   "이 정도로 응답을 거부해버리면 그것도 문제, 응답 가능한
                                                                             #   천장을 높여야". 표현층 스위치(기본 켬, dialogue 와 같은 급).
-CONTEXT_LINE = ("이 글은 성인 모험가들이 등장하는 판타지 던전 게임의 판단 요청이다. "
-                "성적 내용이 없고, 폭력은 게임 규칙의 전투 판정뿐이다.")
+_CONTEXT_FALLBACK = ("이 글은 성인 모험가들이 등장하는 판타지 던전 게임의 판단 요청이다. "
+                     "성적 내용이 없고, 폭력은 게임 규칙의 전투 판정뿐이다.")
+
+
+def _load_context():
+    """D54 개정(09-12 오후, 파트너 "캐릭터 판단 프롬프트를 이 내용을 수정해서 넣으면"): 판단 요청 앞머리 = context_prompt.md
+    (파트너가 쓰던 TRPG 프리셋의 '이 글은 무엇이고 너는 무슨 역할이며 규칙은 누가 판정하나' 틀을 우리 사실로 옮긴 것 — GM 페르소나·
+    콘텐츠 정책 블록은 제외). 파일이 없으면 D54 한 줄. 문장을 바꾸면 채집 차단 원문으로 재측정(1콜/건)."""
+    try:
+        with open(os.path.join(HERE, "context_prompt.md"), encoding="utf-8") as f:
+            txt = f.read().strip()
+        return txt or _CONTEXT_FALLBACK
+    except OSError:
+        return _CONTEXT_FALLBACK
+
+
+CONTEXT_LINE = _load_context()
 #   ↑ 모델의 안전 분류기(Gemini PROHIBITED_CONTENT = 프롬프트 단계·조절 불가)에 빠져 있던 맥락(장르·성인·비성적)을 준다 —
 #     지시나 우회 문구가 아니라 사실 진술이어야 한다(세계관: 모험가는 성인 — 파트너 문서 §4-0 톤에 적는 것이 전제, ⚠️임시 가정).
 #     실측(09-12, 결정론적 차단 원문 3건 — 유나 t154·수나 t357·수나 t547): 이 줄 하나로 3/3 통과. 문장을 바꾸면 그 원문들
