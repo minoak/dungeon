@@ -164,6 +164,10 @@ HISTORY_MAX = 10          # 되돌려줄 선택 수(직전 포함) — 파트너
 DIALOGUE_ON = os.environ.get("DUNGEON_DIALOGUE", "1") != "0"   # 대화 기억(D43, 09-07 파트너 "대화 내용도 과거로 조금만 더
                                                                   #   확장") — 표현층 스위치(notes 선례, 기본 켬). 들은 말+내 말
 DIALOGUE_MAX = 6          # 되돌려줄 마디 수 — 파트너 미확정 임시 가정(09-07 밤). 한 마디 ~40자 → 250자 안팎(+6%)
+NOTEBOOK_ON = os.environ.get("DUNGEON_NOTEBOOK", "1") != "0"   # D59 수첩(09-12): 층을 떠날 때 캐릭터가 쓰는 한 장 = 장기기억.
+                                                                #   표현층 스위치(dialogue 와 같은 급). 층당 캐릭터당 1콜, 실패=뼈만.
+NOTEBOOK_LEN = 300        # 수첩 한 장 상한(⚠️임시 가정 — 파트너 "300자" 미확정)
+NOTEBOOK_PREV = 2         # 새 장을 쓸 때 보여 주는 지난 장 수(⚠️임시)
 PROMPT_CONTEXT_ON = os.environ.get("DUNGEON_PROMPT_CONTEXT", "1") != "0"   # D54(09-12): 판단 요청 맨 앞의 맥락 한 줄 — 파트너
                                                                             #   "이 정도로 응답을 거부해버리면 그것도 문제, 응답 가능한
                                                                             #   천장을 높여야". 표현층 스위치(기본 켬, dialogue 와 같은 급).
@@ -201,6 +205,59 @@ def _gear_word(g, slot):
 def _with_context(prompt):
     """판단 요청 맨 앞에 맥락 한 줄(켜져 있을 때만). 시트 머리글('# 시트 — …')은 그 뒤에 그대로."""
     return (CONTEXT_LINE + "\n\n" + prompt) if PROMPT_CONTEXT_ON else prompt
+
+
+# ── D59 수첩(09-12 파트너 "층이 끝나면 결산을 통해 수첩에 요약 — 플레이와 다르게 장기기억, 층 단위라 캐싱도 쉽다") ──
+NOTEBOOK_MARK = "# 수첩 — 지금 떠나는 층의 한 장"
+
+
+def notebook_page(bot, entry, names, roster=None, up=False):
+    """층을 떠나는 순간 캐릭터가 쓰는 수첩 한 장(캐릭터당 1콜, 재시도 0 — 실패·차단이면 None 으로 판을 세우지 않는다).
+    재료 = 그 층의 결산 뼈(entry.n/w, D40) + 그 층에서 내가 남긴 한 줄(notes)·최근 대화(dialogue)·판단 장부(history) + 지난 장 몇 개.
+    관계 장부·도감은 재료에 안 넣는다(각자 살아 있다 — 도감 한줄평이 개체 층, 수첩은 이 층의 이야기와 내 마음).
+    엔진·러너는 내용을 읽지 않는다(엔진 불가침 — floor_line·relation_line 과 같은 살)."""
+    if not NOTEBOOK_ON:
+        return None
+    nm = lambda c: names.get(str(c), "봇%s" % c)
+    fname = _floor_name(entry.get("depth"))
+    L = [NOTEBOOK_MARK, "",
+         "%s을(를) 떠난다. 아래는 이 층에서 세계가 센 횟수와 네가 남긴 기록이다. 이 층에서 무슨 일이 있었고 너는 어땠는지, "
+         "네 문장으로 수첩 한 장을 쓴다(%d자 안). 상대 하나하나의 평가는 도감 한줄평이 따로 맡으니, 여기엔 이 층의 이야기와 "
+         "네 마음을 적는다. 다음 층에서도 이 장을 다시 읽는다." % (fname, NOTEBOOK_LEN), ""]
+    L.append("## 세계가 센 횟수 (t%d~t%d, %d틱)" % (int(entry.get("t0") or 0), int(entry.get("t1") or 0),
+                                                 int(entry.get("t1") or 0) - int(entry.get("t0") or 0)))
+    L.append("- " + (_floor_counts(entry.get("n") or {}) or "특별한 일 없음"))
+    if entry.get("w"):
+        L.append("- 목격: " + _floor_counts(entry["w"]))
+    notes = bot.get("notes") or []
+    if notes:
+        L += ["", "## 네가 이 층에서 남긴 한 줄들"] + ['- "%s"' % s for s in notes]
+    dlg = (bot.get("dialogue") or [])[-DIALOGUE_MAX:]
+    if dlg:
+        L += ["", "## 최근 대화 (오래된 것부터)"] + ['- %s (t%s%s): "%s"' % (_dlg_who(m, nm), m.get("turn", "?"),
+                                                                     ", 제안" if m.get("kind") == "제안" else "",
+                                                                     m.get("text", "")) for m in dlg]
+    hist = (bot.get("history") or [])[-HISTORY_MAX:]
+    if hist:
+        L += ["", "## 네 판단들 (오래된 것부터)", "- " + " · ".join(_hist_item(h) for h in hist)]
+    prev = [f for f in (bot.get("floors") or []) if f.get("page")][-NOTEBOOK_PREV:]
+    if prev:
+        L += ["", "## 지난 층들의 수첩 (이미 쓴 것)"] + ['- %s: "%s"' % (_floor_name(f.get("depth")), f["page"]) for f in prev]
+    L += ["", '응답은 JSON 한 줄: {"page": "수첩 한 장"}']
+    prompt = _with_context(_sheet(bot, roster) + "\n" + "\n".join(L))
+    try:
+        res = _call_claude(prompt, "haiku")
+    except Exception as e:                            # 두뇌 예외도 판을 세우지 않는다(수첩은 살 — 없으면 뼈만 남는다)
+        _brainlog(kind="notebook", char=bot.get("char"), error=_head(e))
+        return None
+    raw, why = res if isinstance(res, tuple) else (res, None)
+    obj, _ = _extract(raw)
+    page = str((obj or {}).get("page") or "").strip() if isinstance(obj, dict) else ""
+    if not page and raw and not str(raw).lstrip().startswith("{"):
+        page = str(raw).strip()                       # JSON 없이 문장만 돌아오면 그대로 받는다(관대 — 살은 내용을 안 읽는다)
+    page = page[:NOTEBOOK_LEN]
+    _brainlog(kind="notebook", char=bot.get("char"), depth=entry.get("depth"), ok=bool(page), why=why)
+    return page or None
 NOTE_MAX = 5             # 유지 줄 수(합의 5~7 하한) — 넘치면 오래된 것부터 바랜다(FIFO,
                          #   사람도 옛 기억부터 바래듯). 판 간 영속은 없음(월드 러너 상 재론).
 NOTE_LEN = 80            # 한 줄 상한 — 수필 방지(say 160 의 절반: 기억은 말보다 압축된다)
@@ -1346,22 +1403,28 @@ def _wire(obs, names=None, compose=False):
             M.append("- 목격: " + _floor_counts(fl["w"]))
         if fl.get("rooms"):
             M.append("- 가 본 곳: 방·통로 %d" % int(fl["rooms"]))
-    fls = obs.get("floors")                 # D40 ② 지난 층 결산 — 뼈(횟수)+살(네가 남긴 한 줄)
+    fls = obs.get("floors")                 # D40 ② 지난 층 결산 — 뼈(횟수)+살(네가 남긴 한 줄 / D59 수첩 한 장)
+    NB = []                                 # D59: 수첩 갈래(지침 뒤·기억 앞 — 층 안에서 불변이라 접두사 캐싱이 이어진다)
     if fls:
-        M += ["", "## 지난 층 (결산 — 세계가 센 횟수 + 네가 남긴 한 줄)"]
+        NB += ["## 지난 층 (결산 — 세계가 센 횟수 + 네가 남긴 것)"]
         for f in fls:
             body = _floor_counts(f.get("n") or {}) or "특별한 일 없음"
             if f.get("w"):
                 body += " — 목격: " + _floor_counts(f["w"])
             if f.get("line"):
                 body += ' — "%s"' % f["line"]
-            M.append("- %s (t%d~t%d, %d틱): %s" % (_floor_name(f.get("depth")), int(f.get("t0") or 0),
-                                                  int(f.get("t1") or 0),
-                                                  int(f.get("t1") or 0) - int(f.get("t0") or 0), body))
+            NB.append("- %s (t%d~t%d, %d틱): %s" % (_floor_name(f.get("depth")), int(f.get("t0") or 0),
+                                                   int(f.get("t1") or 0),
+                                                   int(f.get("t1") or 0) - int(f.get("t0") or 0), body))
+            if f.get("page"):                   # D59 수첩 한 장 — 캐릭터가 층을 떠나며 쓴 것(뼈 옆에 살)
+                NB.append('  수첩: "%s"' % f["page"])
         last = fls[-1]
-        if last.get("invite") and not last.get("line"):
-            M.append("- 방금 떠난 %s을(를) 한 줄로 남기려면 응답 JSON 의 `floor_line` 필드"
-                     " (선택, 80자 — 다음 층들에서도 다시 본다)" % _floor_name(last.get("depth")))
+        if last.get("invite") and not last.get("line") and not last.get("page"):
+            NB.append("- 방금 떠난 %s을(를) 한 줄로 남기려면 응답 JSON 의 `floor_line` 필드"
+                      " (선택, 80자 — 다음 층들에서도 다시 본다)" % _floor_name(last.get("depth")))
+        if not NOTEBOOK_ON:
+            M += [""] + NB
+            NB = []
 
     bi = obs.get("book_invite")             # D55 도감 인식 초대 — 해금 순간 첫 인식, N번마다 고칠 기회(메모 §2-5)
     if bi:
@@ -1434,6 +1497,8 @@ def _wire(obs, names=None, compose=False):
     #   들은 것(장소·동료가 한 말)이 선택지 바로 위에 오도록(과거→현재→행동, D41 지목 응답이 '동료가 한 말' 인접성에 기대 왔다).
     #   파트너 열거는 관측→기억 — 뒤집으려면 아래 두 덩이만 바꾼다. 기억이 비면(첫 결정) 머리글도 없다.
     out = []
+    if NB:                                   # D59 수첩 갈래 — 시트·지침 뒤, 이 층의 기억 앞(장기 → 단기 → 지금)
+        out += ["# 수첩 — 지난 층들 (층을 떠날 때 네가 쓴 한 장 + 세계가 센 횟수)"] + NB + [""]
     if M:
         out += ["# 기억 — 무엇을 기억하나"] + M + [""]
     out += ["# 판단 공간 — 지금 보고 듣는 것" if compose else "# 관측 — 지금 보고 듣는 것", ""] + L

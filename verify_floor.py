@@ -125,8 +125,9 @@ bn['floor'] = {'since': 26, 'n': {}, 'w': {}}
 dn.turn = 26
 obn = dn.view(bn, botsn)
 txt1 = brains._wire(obn, NAMES)
-check("⑥ 첫 결정 렌더: '## 지난 층' · '- 1층 (t10~t25, 15틱): [발견] ×2 …' · floor_line 안내",
-      "## 지난 층" in txt1 and "- 1층 (t10~t25, 15틱): [발견] ×2" in txt1 and "`floor_line`" in txt1)
+check("⑥ 첫 결정 렌더: '## 지난 층'(D59 뒤엔 '# 수첩' 갈래 아래) · '- 1층 (t10~t25, 15틱): [발견] ×2 …' · floor_line 안내",
+      "## 지난 층" in txt1 and "- 1층 (t10~t25, 15틱): [발견] ×2" in txt1 and "`floor_line`" in txt1
+      and (("# 수첩" in txt1) == brains.NOTEBOOK_ON))
 out = brains.think_all(dn, botsn)
 check("⑥ 응답 floor_line → decisions 에 실리고 floors[-1].line 저장 · invite 닫힘",
       out['1'].get('floor_line') == '1층은 고블린 둘로 험했다'

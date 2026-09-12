@@ -949,6 +949,7 @@ def main():
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
             history=brains.HISTORY_ON,    # D38 개정 2 최근 판단 장부 여부 — 표현층 메타(notes 와 같은 급)
             dialogue=brains.DIALOGUE_ON,  # D43 대화 기억 여부 — 표현층 메타(notes 와 같은 급)
+            notebook=brains.NOTEBOOK_ON,  # D59 수첩 여부 — 층 전이 descend/ascend.pages·floors[].page·notes 층에서 닫힘
             prompt_context=brains.PROMPT_CONTEXT_ON,   # D54(09-12 additive) 판단 요청 맨 앞 맥락 한 줄 여부 — 같은 급
             backend=brains.backend_name(),   # 두뇌 백엔드(2026-07-25 additive) — claude_cli/
                                        #   anthropic_api/gemini_api/dummy. gm·menu 와 같은 급의
@@ -1144,8 +1145,20 @@ def main():
                     for b in survivors}}
             frozen = ({b["char"]: G.floor_freeze(b, d.depth, turn) for b in survivors}   # D40 ② 결산: 떠나는
                       if FLOOR_ON else {})                                            #   층의 집계를 얼린다
+            pages = {}
+            if FLOOR_ON and brains.NOTEBOOK_ON:       # D59 수첩: 층을 떠나는 순간 캐릭터당 1콜(재시도 0 — 실패면 뼈만)
+                for b in sorted(survivors, key=lambda b: b["char"]):
+                    fl = frozen[b["char"]]
+                    page = brains.notebook_page(b, fl[-1], names, bots, up=up)
+                    if page:
+                        fl[-1]["page"], fl[-1]["invite"] = page, False   # 한 장이 있으면 한 줄 초대는 접는다
+                        pages[b["char"]] = page
+                        event('   \U0001f4d3 %s — 수첩 한 장: "%s"' % (names[b["char"]], page))
+                    else:
+                        event('   \U0001f4d3 %s — 수첩 없음(두뇌 응답 없음) — 뼈만 남긴다' % names[b["char"]])
             nd = d.depth - 1 if up else d.depth + 1
             sw.emit("ascend" if up else "descend", turn=turn, to_depth=nd,
+                    **({'pages': pages} if pages else {}),    # D59 additive — 캐릭터별 수첩 한 장(플레이 데이터)
                     **({'reaction_summary': reaction_book.close_floor(turn)} if reaction_book is not None else {}),
                     party=[{"char": b["char"], "hp": b["hp"], "bag": b["bag"],
                             "potions": b.get("potions", 0)}
@@ -1200,7 +1213,8 @@ def main():
                 n["memories"] = list(b.get("memories") or [])   # 기억도 이월(D22) — 전사는 원정급
                                                           # 사건(장부=층의 기억과 대비. 구역 이름은
                                                           # 그 층의 것 — 층수 없인 모호하나 v0 수용)
-                n["notes"] = list(b.get("notes") or [])   # 남긴 한 줄도 이월(D26) — 같은 원정의 기억
+                n["notes"] = ([] if brains.NOTEBOOK_ON else   # D59: 수첩이 층의 기억을 흡수 — 단기 절(한 줄들)은 층에서 닫힌다
+                              list(b.get("notes") or []))     # (수첩 끔 = D26 그대로 이월)
                 n["floors"] = frozen.get(b["char"], [dict(x) for x in (b.get("floors") or [])])   # 결산(D40 ②) 이월
                 n["floor"] = {"since": turn, "n": {}, "w": {}}   # 새 층의 집계는 지금부터(스폰 시각이 아니라 이 틱)
                 n["critical"] = bool(b.get("critical"))   # 위급 플래그(D40) — 몸은 층을 넘어도 그 몸이다
