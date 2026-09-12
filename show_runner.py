@@ -69,6 +69,7 @@ import brains
 import run_control
 import gm
 import stream
+import run_summary                 # D58 판 결산 — 스트림 소비자(Tap 으로 모든 레코드를 흘려 세고, end.summary + events.log 표)
 import bestiary
 import sheetkit                 # D31(09-05) 배경 정제(자유 입력 격리) — 러너도 같은 자를 쓴다
 
@@ -837,7 +838,8 @@ def main():
         os.remove(p)
     for n in ["events.log", "gm.log"] + ["bot%s.log" % c for c in chars]:
         open(os.path.join(STATE, n), "w", encoding="utf-8").close()
-    sw = stream.StreamWriter(os.path.join(STATE, "stream.jsonl"))   # 실행당 truncate
+    rs = run_summary.Collector()                                    # D58 판 결산(기계가 센 숫자 — 판정은 사람이)
+    sw = run_summary.Tap(stream.StreamWriter(os.path.join(STATE, "stream.jsonl")), rs)   # 실행당 truncate · 모든 emit 이 결산에도
     brain_pause = run_control.BrainPause(STATE, sw, names, event)
 
     if TOWN_ON:                            # 마을 판(D29): 원정은 고향에서 시작한다
@@ -1263,12 +1265,16 @@ def main():
         event("    (더 길게: DUNGEON_TURNS=400 bash ~/dungeon/start.sh)")
     if reaction_book is not None:
         reaction_book.close_floor(turn)
+    summary = rs.result(outcome=outcome, depth=d.depth, survivors=won, fallen=dead)   # D58: end 직전까지의 모든 레코드
     sw.emit("end", turn=turn, outcome=outcome, depth=d.depth,
             **({'reaction_summary': reaction_book.summary(), 'reaction_floors': reaction_book.floors}
                if reaction_book is not None else {}),
             survivors=won, fallen=dead, remaining=left,
-            bots=[G.bot_snapshot(b) for b in bots])
+            bots=[G.bot_snapshot(b) for b in bots],
+            summary=summary)                          # D58 additive — 오프라인 `python run_summary.py` 와 같은 계산
     sw.close()
+    for ln in run_summary.render(summary, names):    # 1차 부검은 여기서(파트너 "이러려고 결산 기능을 만든 거잖아")
+        event(ln)
     if GM_ON:                                     # 마지막 연출은 기다려 준다(최대 타임아웃+여유)
         gm_q.put(None)
         gm_thread.join(timeout=gm.TIMEOUT + 10)

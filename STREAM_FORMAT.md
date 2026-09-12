@@ -214,6 +214,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | `depth` | 종료 시 층 |
 | `survivors[]` `fallen[]` `remaining[]` | 탈출/사망/(timeout 시)던전 잔류 char 목록 — 셋이 전체 파티의 분할 |
 | `bots[]` | **최종 층 파티만**의 스냅샷 — 이전 층 전사자의 마지막 모습은 그 층 마지막 `tick` 에서 찾을 것(fallen 명단에는 있음) |
+| `summary` | (2026-09-12 D58 additive) **판 결산** — 러너가 `end` 직전까지의 모든 레코드를 `run_summary.Collector` 로 센 것 `{v, seed, ticks, levels, depth_max, outcome, depth, survivors, fallen, decisions{real, plan, per_tick, src{}, input_retries{코드:n}, fallback}, pauses{n, by_code{}, blocked, retries}, actions{char:{n, plan, types{}, goto_ally, repeat, longest_run{n,type,target,t0,t1}}}, party{together_pct, multi_ticks, split_max, lost}, social{say{}, hails, give, bond, reactions{}}, gear{equip{}, rewear{char:{id:n}}, streak{char:{n,t0,t1}}}, bestiary{book_lines}, events{상위 12}, flags[]}`. 기계가 센 숫자만(판정 없음) — `flags` 는 임시 문턱(`run_summary.FLAGS`)을 넘은 항목의 사실 문장. 같은 스트림을 `python run_summary.py <파일>` 로 소급하면 같은 dict 가 나온다(결정론 투영 — verify_summary ②). 파생 가능 = 새 원천 없음 |
 
 ## 스냅샷 스키마
 
