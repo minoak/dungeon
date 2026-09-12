@@ -1,0 +1,6 @@
+{
+  "_readme": "정적 배포(챔피언십 제출)에 첨부할 판 목록 — scripts/static-bundle.mjs 가 읽는다. 리포 루트 기준 경로, 첫 항목이 기본으로 열린다. 명령 인자나 WL_RUNS 환경변수로 덮어쓸 수 있다.",
+  "runs": [
+    "runs/stream-20260909-203709.jsonl"
+  ]
+}

@@ -51,11 +51,17 @@ function wlStatic(): Plugin {
   };
 }
 
-export default defineConfig({
-  base: '/game/',
-  plugins: [wlStatic()],
-  // WL_NOHMR=1 → HMR 끔(다른 손이 편집 중인 트리에서 dev 서버 상대로 스모크를 돌릴 때 페이지 재로드를 막는다 — B6)
-  server: { port: 5173, host: '127.0.0.1', ...(process.env.WL_NOHMR ? { hmr: false } : {}) },
-  preview: { port: 4173, host: '127.0.0.1' },
-  build: { outDir: 'dist', emptyOutDir: true, sourcemap: false, chunkSizeWarningLimit: 2000 },
+// 정적 배포(2026-09-12, 챔피언십 제출 — 메모 §3-2): `vite build --mode static` → base './' · dist-static/ · wlStatic 없음.
+// 론처도 리포 서빙도 없는 진짜 정적 조건 — preview 도 같은 --mode static 으로 띄워야 검사가 정직하다(npm run preview:static).
+// 에셋·첨부 판·runs/index.json 복사는 scripts/static-bundle.mjs(npm run build:static 이 순서대로 한다). 코드 분기는 src/paths.ts.
+export default defineConfig(({ mode }) => {
+  const isStatic = mode === 'static';
+  return {
+    base: isStatic ? './' : '/game/',
+    plugins: isStatic ? [] : [wlStatic()],
+    // WL_NOHMR=1 → HMR 끔(다른 손이 편집 중인 트리에서 dev 서버 상대로 스모크를 돌릴 때 페이지 재로드를 막는다 — B6)
+    server: { port: 5173, host: '127.0.0.1', ...(process.env.WL_NOHMR ? { hmr: false } : {}) },
+    preview: { port: 4173, host: '127.0.0.1' },
+    build: { outDir: isStatic ? 'dist-static' : 'dist', emptyOutDir: true, sourcemap: false, chunkSizeWarningLimit: 2000 },
+  };
 });

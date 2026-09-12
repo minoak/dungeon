@@ -4,8 +4,9 @@
 // 선택값 = look.sprite + look.hairstyle. look.sprite 가 없는 옛 판 = 직업별 기본 SD 로 폴백(계획 §8 제안).
 import type Phaser from 'phaser';
 import type { Dir, Look, PartyMember } from '../stream/types';
+import { ROOT } from '../paths';
 
-export const SD_DIR = '/viewer/assets/sprites/sd/';
+export const SD_DIR = ROOT + 'viewer/assets/sprites/sd/';   // 론처 '/viewer/…' · 정적 './viewer/…'(static-bundle.mjs 복사본)
 export const SD_ATLAS_URL = SD_DIR + 'atlas.json';
 export const FOOT_Y = 91;                        // 셀 안 발 바닥 y
 

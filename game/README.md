@@ -16,6 +16,8 @@ npm run dev                      # http://127.0.0.1:5173/game/?run=runs/stream-2
 npm run build                    # tsc --noEmit && vite build → dist/  (론처가 /game/ 으로 서빙 — M3/B5)
 npm run smoke                    # 빌드 산출물을 vite preview 로 띄우고 헤드리스 Edge 로 대표 판 재생(verify/smoke.mjs, 스냅샷 verify/out/)
 WL_GAME_URL=http://127.0.0.1:8000/game/ npm run smoke   # 론처 상대로
+npm run build:static             # 정적 배포 묶음 → dist-static/ (아래 "정적 배포")
+npm run smoke:static             # dist-static/ 을 vite preview --mode static 으로 띄워 같은 스모크(론처·리포 서빙 없음)
 ```
 
 개발·프리뷰 서버는 `vite.config.ts` 의 `wlStatic` 플러그인이 리포 루트의 `/viewer /runs /state /art` 를 대신 서빙한다(론처 불필요).
@@ -173,9 +175,25 @@ npm run smoke:launcher                             # = WL_GAME_URL=http://127.0.
 
 ⚠️ 론처의 정적 서빙은 **리포 root** 기준이라 `make_server(state_dir=임시)` 로 격리해도 `/state/stream.jsonl` 은 실제 `state/` 를 준다(러너 쓰기만 격리). 라이브 검증은 임시 폴더·더미 두뇌로 하되 이 점을 알고 할 것.
 
+## 정적 배포(챔피언십 제출, 2026-09-12 — 메모 §3-2 "론처 없이 정적 호스팅에서 열려야 한다")
+
+`npm run build:static` = `tsc --noEmit && vite build --mode static && node scripts/static-bundle.mjs` → **`dist-static/`** 한 폴더가
+어떤 정적 서버(GitHub Pages·`python -m http.server`)에서든 그대로 열린다. 론처·`/api/status`·`/runs/` 색인이 없어도 된다.
+
+| 무엇 | 어떻게 |
+|---|---|
+| 경로 | `vite --mode static` → `base './'`, `dist-static/`, `wlStatic` 플러그인 없음(`vite.config.ts`). 코드 분기는 `src/paths.ts` 한 곳 — `STATIC`(= `import.meta.env.MODE === 'static'`)·`ROOT`(정적 `./`, 론처 `/`). 절대경로였던 fetch 5곳(sd·tiles·DungeonScene·live·Controls)이 `ROOT +` 를 쓴다 |
+| 에셋 | `scripts/static-bundle.mjs` 가 `viewer/tiles.json`·타일 시트 폴더(License 포함)·`viewer/assets/sprites/sd/*` 를 같은 상대 자리로 복사. `src/assets/world/*.png` 는 원래 Vite 가 번들에 넣는다 |
+| 첨부 판 | `game/static-runs.json` 의 목록(리포 루트 기준 경로, **첫 항목이 기본으로 열린다**) → `dist-static/runs/` 로 복사 + `runs/index.json`(라벨 = 날짜·시각·파티 이름·seed, run_meta 첫 줄에서). 인자 `node scripts/static-bundle.mjs runs/a.jsonl …` 또는 `WL_RUNS=` 로 덮어쓴다 |
+| 정적일 때 다른 점 | 기본 판 = index.json 첫 항목(`state/stream.jsonl` 아님) · 판 선택 목록 = index.json(목록 순서) · `/api/status` 요청을 내지 않고 라이브 배지 숨김 · 헤더의 시작 화면 링크 → GitHub 리포 |
+| 호스팅 | `.github/workflows/pages.yml` — main 푸시(game/·viewer/·runs/ 변경)마다 `npm ci && npm run build:static` → GitHub Pages. **한 번 켜야 한다**: 리포 Settings → Pages → Source = "GitHub Actions". 주소는 `https://minoak.github.io/dungeon/` |
+| 검증 | `npm run smoke:static`(WL_STATIC=1 → `vite preview --mode static`, `/game/` 접두 없음, B5 status 검사는 생략). 더 정직한 검사 = `cd dist-static && python -m http.server 4197` 뒤 `WL_GAME_URL=http://127.0.0.1:4197/ WL_STATIC=1 npm run smoke` (2026-09-12: 29 통과·0 실패·생략 2, 오류 0) |
+
+`dist-static/` 은 .gitignore(빌드 산출물). 론처 배포(`dist/`)와 같은 소스·같은 스모크를 쓰므로 두 모드는 함께 검사한다.
+
 ## 검증 규율
 
-커밋은 `npm run build`(tsc + vite) + `npm run smoke` 통과 조건부. 엔진 게이트 43종은 무관(엔진 무접촉 — `git diff --stat` 로 증명).
+커밋은 `npm run build`(tsc + vite) + `npm run smoke` 통과 조건부 — 정적 배포에 닿는 변경은 `npm run smoke:static` 도. 엔진 게이트 43종은 무관(엔진 무접촉 — `git diff --stat` 로 증명).
 실 LLM 판은 파트너가 론처 [L] 로. 여기서는 리플레이 파일(`runs/`)과 더미 두뇌 판만 쓴다.
 
 ## 열린 결정(파트너)

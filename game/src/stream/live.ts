@@ -7,6 +7,7 @@
 //                 배지도 초기화. 덤: state/ 경로를 보는 중에 판이 끝났거나 아직 없을 때 론처에서 새 판이 돌면 자동으로 다시 붙는다.
 import type { App } from '../app';
 import { el } from '../ui/dom';
+import { ROOT, STATIC } from '../paths';
 import { createBrainPause, type BrainPauseStatus } from '../../../viewer/assets/brain-pause.js';
 
 export const POLL_MS = 1500;                     // 판 파일·상태 폴링 기본 간격
@@ -28,6 +29,7 @@ export interface LauncherStatus {
 }
 
 export async function fetchStatus(): Promise<LauncherStatus | null> {
+  if (STATIC) return null;                       // 정적 배포 — 론처가 없다(요청도 내지 않는다)
   try {
     const r = await fetch('/api/status', { cache: 'no-store' });
     if (!r.ok) return null;
@@ -56,7 +58,7 @@ export class RunSource {
   static isLivePath(path: string): boolean { return path.startsWith('state/'); }
 
   async load(): Promise<void> {
-    const t = await fetchText('/' + this.path);
+    const t = await fetchText(ROOT + this.path);   // 론처 '/runs/…' · 정적 './runs/…'
     if (!this.stopped) this.onText(t);
   }
 
@@ -76,7 +78,7 @@ export class RunSource {
     if (this.busy || this.stopped) return;
     this.busy = true;
     try {
-      const t = await fetchText('/' + this.path);
+      const t = await fetchText(ROOT + this.path);
       if (!this.stopped) this.onText(t);
       this.failures = 0; this.delay = this.base;
     } catch (e) {
@@ -164,7 +166,7 @@ export function installLive(app: App): void {
   const watching = (): boolean => RunSource.isLivePath(app.path) && !last?.dev;
 
   function schedule(): void {
-    if (timer !== null || last?.dev) return;     // dev 더미는 바뀌지 않는다 — 폴링 종료
+    if (timer !== null || last?.dev || STATIC) return;   // dev 더미·정적 배포는 바뀌지 않는다 — 폴링 종료
     const ms = app.live ? backoffMs(POLL_MS, failures) : (watching() ? Math.max(WATCH_MS, backoffMs(POLL_MS, failures)) : 0);
     if (!ms) return;
     timer = window.setTimeout(() => { timer = null; void tick(); }, ms);

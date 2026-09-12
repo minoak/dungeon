@@ -11,6 +11,7 @@ import { TILE, tileIndex, type Tileset, type TilesCfg } from '../assets/tiles';
 import { FOOT_Y, frameIndex, portraitCanvas, queueSdSheets, registerAnims, resolveMember, sheetKey,
          walkAnimKey, type SdAtlas } from '../assets/sd';
 import { cellKey } from '../world/Sight';
+import { ROOT } from '../paths';
 import { queueWorld, registerWorldAnims, terrainFrame, TERRAIN_CELL, WORLD_CELL, WORLD_FOOT,
          worldVisual, monsterFrame, monsterWalk } from '../assets/world';
 
@@ -61,7 +62,7 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.spritesheet('tiny', '/viewer/' + this.ts.sheet, { frameWidth: this.ts.tile, frameHeight: this.ts.tile });
+    this.load.spritesheet('tiny', ROOT + 'viewer/' + this.ts.sheet, { frameWidth: this.ts.tile, frameHeight: this.ts.tile });
     queueSdSheets(this.load, this.atlas);
     queueWorld(this.load);
   }

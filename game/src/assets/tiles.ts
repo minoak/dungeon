@@ -1,12 +1,14 @@
 // 구형 타일 폴백 = viewer/tiles.json(Kenney Tiny Dungeon, CC0)의 글리프→타일 매핑 재사용.
 // 새 맵·몬스터·주요 오브젝트는 world.ts. 이 매핑은 NPC·미등록 종류와 기존 tileFrame API를 유지한다.
 // 표시 타일 48px(원본 16px ×3). SD 96px = 2타일 높이(RPG 만들기 비율). 뷰어 매핑에 없는 키만 EXTRA 로 보충.
+import { ROOT } from '../paths';
+
 export const TILE = 48;
 
 export interface Tileset { label: string; license?: string; sheet: string; tile: number; map: Record<string, [number, number]> }
 export interface TilesCfg { _readme?: string; default: string; tilesets: Record<string, Tileset> }
 
-export const TILES_URL = '/viewer/tiles.json';
+export const TILES_URL = ROOT + 'viewer/tiles.json';   // 론처 '/viewer/…' · 정적 './viewer/…'(static-bundle.mjs 복사본)
 
 export async function fetchTiles(): Promise<TilesCfg> {
   const r = await fetch(TILES_URL, { cache: 'no-store' });

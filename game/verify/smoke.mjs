@@ -3,6 +3,8 @@
 //   WL_GAME_URL=http://127.0.0.1:8000/game/  → 론처(launcher.py) 상대로 검사(preview 안 띄움). dev 서버(npx vite)도 같은 방식
 //   WL_RUN=runs/….jsonl                    → 다른 판
 //   WL_PORT=4199                           → preview 포트
+//   WL_STATIC=1                            → 정적 배포 검사(2026-09-12): dist-static/ 을 `vite preview --mode static` 으로(론처·리포 서빙 없음,
+//                                            판은 static-bundle.mjs 가 복사한 것만 — 기본 판이 목록에 있어야 한다). npm run smoke:static
 //
 // 검사 구조(B6): 검사 하나가 실패해도 멈추지 않고 다음 검사를 계속한다. 각 검사는 check('한글 이름', fn) 로 감싸고,
 // 실패는 fails 목록에 모아 마지막에 한꺼번에 낸다 — 통합자가 "무엇이 남았는지" 한 번에 본다.
@@ -59,15 +61,16 @@ async function waitHttp(url, ms = 20000) {
 
 let base = process.env.WL_GAME_URL;
 let server = null;
+const STATIC = !!process.env.WL_STATIC;          // 정적 배포 검사 — dist-static/ · --mode static · 루트 서빙('/game/' 접두 없음)
 if (!base) {
-  if (!fs.existsSync(path.join(gameDir, 'dist', 'index.html'))) {
-    const b = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build'], { cwd: gameDir, stdio: 'inherit', shell: process.platform === 'win32' });
+  if (!fs.existsSync(path.join(gameDir, STATIC ? 'dist-static' : 'dist', 'index.html'))) {
+    const b = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', STATIC ? 'build:static' : 'build'], { cwd: gameDir, stdio: 'inherit', shell: process.platform === 'win32' });
     if (b.status !== 0) throw new Error('build 실패');
   }
-  server = spawn(process.execPath, [path.join(gameDir, 'node_modules', 'vite', 'bin', 'vite.js'), 'preview',
+  server = spawn(process.execPath, [path.join(gameDir, 'node_modules', 'vite', 'bin', 'vite.js'), 'preview', ...(STATIC ? ['--mode', 'static'] : []),
     '--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], { cwd: gameDir, stdio: ['ignore', 'pipe', 'pipe'] });
   server.stderr.on('data', d => process.stderr.write('[preview] ' + d));
-  base = `http://127.0.0.1:${PORT}/game/`;
+  base = `http://127.0.0.1:${PORT}/` + (STATIC ? '' : 'game/');
   await waitHttp(base);
 }
 if (!base.endsWith('/')) base += '/';
@@ -386,7 +389,8 @@ try {
   });
 
   /* ═══════════════ B5 라이브·배포 — 론처 상대일 때만 game 필드, 라이브일 때만 배지 ═══════════════ */
-  await check('B5 /api/status 응답(론처면 game 필드)', async () => {
+  if (STATIC) skip('B5 /api/status 응답', '정적 배포 — 론처 없음(/api/status 는 404 가 정상)');
+  else await check('B5 /api/status 응답(론처면 game 필드)', async () => {
     const r = await fetch(new URL('/api/status', base));
     assert(r.ok, 'HTTP ' + r.status);
     const j = await r.json();

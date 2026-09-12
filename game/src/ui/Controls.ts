@@ -5,6 +5,7 @@ import { SPEEDS } from '../play/Playback';
 import { ZOOMS } from '../scene/DungeonScene';
 import { $, esc, typing } from './dom';
 import { fetchText } from '../stream/live';
+import { STATIC, fetchRunIndex } from '../paths';
 import { icon } from './icons';
 import { alphaLabel } from '../../../viewer/assets/skills.js';
 
@@ -89,9 +90,11 @@ export function installControls(app: App): void {
   // 판 목록 — 론처의 /runs/ 자동 색인(<a href>)에서(뷰어와 같은 규칙). 없어도 URL 파라미터·라이브로 동작.
   const sel = $('runSel') as HTMLSelectElement;
   async function buildRunList(): Promise<void> {
-    const opts: [string, string][] = [['state/stream.jsonl', '진행 중인 원정 · LIVE']];
+    const opts: [string, string][] = STATIC ? [] : [['state/stream.jsonl', '진행 중인 원정 · LIVE']];
+    if (STATIC)                                  // 정적 배포 — 론처 색인 대신 static-bundle.mjs 가 만든 runs/index.json(순서 = 목록 순서)
+      for (const r of (await fetchRunIndex())?.runs ?? []) opts.push([r.path, r.label]);
     try {
-      const html = await fetchText('/runs/');
+      const html = STATIC ? '' : await fetchText('/runs/');
       const seen = new Set<string>();
       for (const m of html.matchAll(/href="([^"]+)"/g)) {
         let h = decodeURIComponent(m[1]);
@@ -104,7 +107,7 @@ export function installControls(app: App): void {
         opts.push([h, label]);
       }
     } catch { /* 목록 없음 */ }
-    opts.sort((a, b) => (a[0].startsWith('state/') ? -1 : b[0].startsWith('state/') ? 1 : b[0].localeCompare(a[0])));
+    if (!STATIC) opts.sort((a, b) => (a[0].startsWith('state/') ? -1 : b[0].startsWith('state/') ? 1 : b[0].localeCompare(a[0])));
     sel.innerHTML = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
     sel.onchange = () => {
       pb.pause();
