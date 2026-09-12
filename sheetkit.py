@@ -4,8 +4,9 @@ party 시트 dict 로 조립한다. LLM 0콜·순수 함수. 러너의 load_part
 여기서 만든 시트는 그 검증을 그대로 통과해야 한다(이중 검증 = 론처 저장이 러너 계약을 어기지 못함).
 
 왜 키워드인가: 성격 키워드가 행동을 재현한다는 근거가 있다 — 피른 '호기심'은 솔로 판 탐색을
-0→26회로, 카야 '과묵'은 사교 콜 3/3 침묵으로. 키워드만 프롬프트에 넣으면 현 두 문장 성격
-서술보다 약해서, 키워드마다 우리가 쓴 persona/speech 문장을 매겨 두고 이어 붙인다(traits.json).
+0→26회로, 카야 '과묵'은 사교 콜 3/3 침묵으로. 처음(09-05)엔 키워드마다 우리가 쓴 persona/speech
+문장을 매겨 이어 붙였으나, 2026-09-12(파트너 메모 §3-3 [결정]) 키워드를 **그대로** 시트 성격 줄에
+넣는다 — traits.json 은 키워드 목록만, 말투(speech)는 손으로 쓴 시트에서만 온다.
 
 배경(background)은 사용자의 **자유 입력**이다 — 시트 UGC 의 프롬프트 인젝션 관문이 여기서
 열린다. 막을 수는 없고(LLM 특성) 격리한다: 길이 상한 + 개행·마크다운 표식 제거(시트 섹션 위장
@@ -39,17 +40,22 @@ _WS = re.compile(r"\s+")
 
 
 def load_traits(path=TRAITS_FILE):
-    """traits.json → dict. 형식 검증(키워드마다 persona/speech 문자열, jobs 수치 전수)."""
+    """traits.json → dict. 형식 검증(traits = 키워드 문자열 목록·중복 없음, jobs 수치 전수).
+    옛 형식(키워드→{persona,speech} 사전, 2026-09-05~09-11)은 키 목록으로 읽는다 — 문장은 버린다."""
     with io.open(path, encoding="utf-8") as f:
         data = json.load(f)
-    traits = data.get("traits") or {}
+    traits = data.get("traits") or []
     jobs = data.get("jobs") or {}
+    if isinstance(traits, dict):                 # 옛 사전 형식(오래 켜 둔 론처·옛 파일) — 키워드만 취한다
+        traits = list(traits)
     if not traits or not jobs:
         raise ValueError("traits.json: traits/jobs 가 비었다")
-    for k, v in traits.items():
-        if not (isinstance(v, dict) and isinstance(v.get("persona"), str) and v["persona"].strip()
-                and isinstance(v.get("speech"), str) and v["speech"].strip()):
-            raise ValueError("traits.json: 키워드 %r 에 persona/speech 문장이 없다" % k)
+    if not isinstance(traits, list) or any(not isinstance(t, str) or not t.strip() for t in traits):
+        raise ValueError("traits.json: traits 는 비어 있지 않은 키워드 문자열 목록")
+    traits = [t.strip() for t in traits]
+    if len(set(traits)) != len(traits):
+        raise ValueError("traits.json: 키워드 중복")
+    data["traits"] = traits
     for j, v in jobs.items():
         for f in ("hp", "str", "dex", "wdmg", "stealth", "search_r", "atk_range"):
             if not isinstance(v.get(f), int) or isinstance(v.get(f), bool):
@@ -196,12 +202,13 @@ def build_sheet(job, traits, name, sex, background=None, data=None, persona_text
     """커스터마이징 입력 → party 시트 dict(load_party 계약 형태).
     job: traits.json jobs 키 / traits: 키워드 0~max_traits / name: 자유 입력(한 줄) /
     sex: '남'|'여' / background: 자유 입력(정제·상한) 또는 None /
-    persona_text: 성격 자유 서술(파트너 정정 09-05 — 키워드 문장 뒤에 이어붙이고, 키워드 0개면 이것만).
+    persona_text: 성격 자유 서술(파트너 정정 09-05 — 키워드 뒤에 이어붙이고, 키워드 0개면 이것만).
     키워드와 자유 서술 중 하나는 있어야 한다. 합계가 PERSONA_TOTAL_MAX 를 넘으면 거부(조용한 절단 금지).
-    반환 시트에는 원본 키워드도 `traits` 로 남긴다 — 프롬프트엔 안 나가고(문장이 대신 나간다)
-    run_meta 로 기록돼 "어떤 키워드가 어떤 행동이 되었나"를 부검할 수 있게."""
+    persona = 키워드 그대로(2026-09-12 개정, 파트너 메모 §3-3): "신중한, 겁 많은" · 자유 서술이 있으면
+    "신중한, 겁 많은. <서술>" — 문장 템플릿 없음. speech 는 만들지 않는다(손 시트의 speech 만 산다).
+    반환 시트에는 원본 키워드도 `traits` 로 남긴다 — run_meta 기록(부검)·론처 복원에 쓴다."""
     data = data or load_traits()
-    jobs, table = data["jobs"], data["traits"]
+    jobs, keywords = data["jobs"], data["traits"]
     if job not in jobs:
         raise ValueError("직업은 %s 중 하나" % "/".join(jobs))
     if sex not in SEXES:
@@ -216,19 +223,19 @@ def build_sheet(job, traits, name, sex, background=None, data=None, persona_text
     if len(set(traits)) != len(traits):
         raise ValueError("성격 키워드가 중복됐다")
     for t in traits:
-        if t not in table:
+        if t not in keywords:
             raise ValueError("등재되지 않은 성격 키워드: %r" % (t,))
+    kw = ", ".join(traits)                       # 키워드 그대로 — 복수는 ', ' 로(⚠️임시 가정, 파트너 미답)
+    persona = (kw + ". " + ptxt) if (kw and ptxt) else (kw or ptxt)
     body = jobs[job]
     sheet = {
         "job": job, "sex": sex,
         "hp": body["hp"], "str": body["str"], "dex": body["dex"], "wdmg": body["wdmg"],
         "stealth": body["stealth"], "search_r": body["search_r"], "atk_range": body["atk_range"],
-        "persona": " ".join([table[t]["persona"].strip() for t in traits] + ([ptxt] if ptxt else [])),
+        "persona": persona,
         "name": sanitize_name(name),
         "traits": list(traits),
     }
-    if traits:                                   # 말투는 키워드에서만 온다(자유 서술은 성격 한 칸)
-        sheet["speech"] = " ".join(table[t]["speech"].strip() for t in traits)
     if len(sheet["persona"]) > PERSONA_TOTAL_MAX:
         raise ValueError("성격 문장 합계가 %d자를 넘는다(%d자) — 키워드를 줄이거나 문장을 줄여라"
                          % (PERSONA_TOTAL_MAX, len(sheet["persona"])))

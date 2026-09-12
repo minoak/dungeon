@@ -118,7 +118,7 @@
       <label class="on"><input type="radio" name="pm" value="custom" checked>커스텀 파티</label>
       <label><input type="radio" name="pm" value="default">기본 파티 (두란·카야·피른)</label>
     </div>
-    <span class="muted">성격은 키워드(최대 3개)로 고르거나 직접 쓴다 — 문장이 행동을 만든다. 배경은 자유롭게.</span>
+    <span class="muted">성격은 키워드(최대 3개)로 고르거나 직접 쓴다 — 키워드는 문장으로 바뀌지 않고 그대로 시트에 들어간다. 배경은 자유롭게.</span>
   </div>
   <div class="cards" id="cards"></div>
   <div id="presetStatus" class="hint" role="status"></div>
@@ -316,7 +316,8 @@ async function loadPresets() {
     '<div class="muted" style="margin-top:6px">외형은 판마다 랜덤으로 뽑힌다 — 뽑힌 얼굴은 판 기록에 남아 리플레이에서도 같다.</div>';
 }
 function renderCards() {
-  const jobs = Object.keys(presets.jobs), traits = Object.keys(presets.traits);
+  const jobs = Object.keys(presets.jobs);
+  const traits = Array.isArray(presets.traits) ? presets.traits : Object.keys(presets.traits);   // 09-12: 키워드 목록(옛 사전 형식도 키만)
   $('cards').innerHTML = slots.map((s, i) => `
     <div class="card" data-i="${i}">
       <h3><span class="dot" style="background:${COLORS[i]}"></span>모험가 ${i + 1}</h3>
@@ -340,7 +341,7 @@ function renderCards() {
       ${presets.looks && s.look ? lookBlock(s, presets.looks) : ''}
       <label class="f">성격 키워드 <span class="cnt" data-cnt="traits">${s.traits.length}/${presets.max_traits}</span></label>
       <div class="traits" data-k="traits">${traits.map(t =>
-        `<label class="${s.traits.includes(t) ? 'on' : ''}" title="${esc(presets.traits[t].persona)}"><input type="checkbox" value="${esc(t)}">${esc(t)}</label>`).join('')}</div>
+        `<label class="${s.traits.includes(t) ? 'on' : ''}"><input type="checkbox" value="${esc(t)}">${esc(t)}</label>`).join('')}</div>
       <label class="f">성격 자유 서술 (키워드와 함께, 또는 문장만) <span class="cnt" data-cnt="pt">${s.persona.length}/${textLimits.persona}</span></label>
       <textarea maxlength="${textLimits.persona}" data-k="persona" placeholder="말투, 습관, 좋아하는 것, 두려워하는 것, 갈등할 때의 태도 등을 자유롭게 써 줘.">${esc(s.persona)}</textarea>
       <div class="hint" data-persona>${esc(personaOf(s))}</div>
@@ -425,10 +426,10 @@ function bindPresetControls(card, i) {
   }
 }
 function jobDesc(j) { const b = presets.jobs[j]; return `HP ${b.hp} · 힘 ${b.str} · 민첩 ${b.dex} · 은신 ${b.stealth} · 인지 ${b.search_r} · 사거리 ${b.atk_range}`; }
-function personaOf(s) {
-  const parts = s.traits.map(t => presets.traits[t].persona);
-  if (s.persona.trim()) parts.push(s.persona.trim());
-  return parts.join(' ') || '키워드를 고르거나 문장을 쓰면 성격이 여기 조립된다.';
+function personaOf(s) {                       // sheetkit.build_sheet 와 같은 규칙 — 키워드 그대로, 자유 서술은 '. ' 뒤에
+  const kw = s.traits.join(', '), free = s.persona.trim();
+  const out = (kw && free) ? kw + '. ' + free : (kw || free);
+  return out || '키워드를 고르거나 문장을 쓰면 성격이 여기 조립된다.';
 }
 function bindCard(card, i) {
   bindPresetControls(card, i);

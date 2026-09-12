@@ -60,8 +60,12 @@ party_bytes_before = io.open(os.path.join(HERE, "party.json"), "rb").read()
 # ───────────────────── ① sheetkit ─────────────────────
 print("── ① sheetkit — 키워드 사전·직업 수치·조립·거부")
 data = sheetkit.load_traits()
-check("① traits.json: 키워드 12종, 각각 persona/speech 문장", len(data["traits"]) == 12
-      and all(v["persona"].strip() and v["speech"].strip() for v in data["traits"].values()))
+check("① traits.json: 키워드 12종 목록 — 문장 없음(09-12 §3-3 키워드 그대로 주입)",
+      isinstance(data["traits"], list) and len(data["traits"]) == 12
+      and all(isinstance(t, str) and t.strip() for t in data["traits"]) and len(set(data["traits"])) == 12)
+legacy_traits = {**data, "traits": {t: {"persona": "옛 문장 " + t, "speech": "옛 말투 " + t} for t in data["traits"]}}
+check("① 옛 사전 형식(키워드→문장)을 넘겨도 키워드만 쓴다 — 문장은 프롬프트에 안 나간다",
+      "옛 문장" not in sheetkit.build_sheet("도적", ["신중한"], "a", "여", data=legacy_traits)["persona"])
 party_json = json.load(io.open(os.path.join(HERE, "party.json"), encoding="utf-8"))
 body_ok = True
 for c, s in party_json.items():
@@ -75,9 +79,8 @@ check("① 직업 3종 수치 = party.json 두란·카야·피른의 몸 세트 
 
 sheet = sheetkit.build_sheet("도적", ["신중한", "겁 많은", "과묵한"], "테스", "여",
                              "어릴 적 광산 마을에서 자랐다. 무너진 갱도에서 혼자 살아 나온 뒤로 어둠을 믿지 않는다.")
-check("① 조립: persona/speech = 키워드 문장 3개 이어붙임, 자동 목표 없음, traits 원본 보존",
-      all(data["traits"][t]["persona"] in sheet["persona"] for t in ("신중한", "겁 많은", "과묵한"))
-      and all(data["traits"][t]["speech"] in sheet["speech"] for t in ("신중한", "겁 많은", "과묵한"))
+check("① 조립: persona = 키워드 3개 그대로(', ' 구분), speech 없음, 자동 목표 없음, traits 원본 보존",
+      sheet["persona"] == "신중한, 겁 많은, 과묵한" and "speech" not in sheet
       and "goal" not in sheet and sheet["traits"] == ["신중한", "겁 많은", "과묵한"]
       and sheet["name"] == "테스" and sheet["sex"] == "여" and sheet["hp"] == 10 and sheet["dex"] == 3
       and sheet["background"].startswith("어릴 적 광산 마을"))
@@ -123,15 +126,14 @@ check("① 자유 성격(파트너 정정): 키워드 0개+문장 → persona=�
       "\n" not in free["persona"] and not any(ch in free["persona"] for ch in "#<>")
       and "겁이 없다" in free["persona"] and "speech" not in free and free["traits"] == [])
 mix = sheetkit.build_sheet("궁수", ["낙천적인"], "린", "여", persona_text="사실은 겁이 많다.")
-check("① 키워드+문장 병행: 키워드 문장 뒤에 자유 문장, speech 는 키워드 것",
-      mix["persona"].startswith(data["traits"]["낙천적인"]["persona"]) and mix["persona"].endswith(" 사실은 겁이 많다.")
-      and mix["speech"] == data["traits"]["낙천적인"]["speech"])
+check("① 키워드+문장 병행: '키워드. 자유 문장' 한 줄, speech 없음",
+      mix["persona"] == "낙천적인. 사실은 겁이 많다." and "speech" not in mix)
 long_persona = '성' * (sheetkit.PERSONA_MAX - 6) + '성격끝표식.'
 long_background = '배' * (sheetkit.BACKGROUND_MAX - 6) + '배경끝표식.'
 long_sheet = sheetkit.build_sheet('궁수', ['낙천적인', '신중한', '용맹한'], '긴서술', '여',
                                  background=long_background, persona_text=long_persona)
 check('① 성격 2000자 + 키워드 3개, 배경 4000자를 끝까지 조립',
-      long_sheet['persona'].endswith(long_persona) and len(long_sheet['persona']) > 2000
+      long_sheet['persona'] == '낙천적인, 신중한, 용맹한. ' + long_persona and len(long_sheet['persona']) > 2000
       and long_sheet['background'] == long_background)
 check("① 거부: 파티 이름 중복 / 4인",
       rejects(lambda: sheetkit.build_party([{"job": "전사", "traits": ["용맹한"], "name": "a", "sex": "남"}] * 2), "중복")
@@ -208,10 +210,11 @@ raw = run_once(custom_path)
 meta = json.loads(raw.splitlines()[0])
 p1 = next(p for p in meta["party"] if p["char"] == "1")
 p2 = next(p for p in meta["party"] if p["char"] == "2")
-check("② 러너 통합: run_meta.party 에 speech/goal/background/traits additive(있을 때만)",
+check("② 러너 통합: run_meta.party 에 background/traits additive(있을 때만) · 키워드 시트엔 speech/goal 없음",
       meta["kind"] == "run_meta" and len(meta["party"]) == 3
       and p1["background"] == "어릴 적 광산 마을에서 자랐다." and p1["traits"] == ["신중한", "겁 많은", "과묵한"]
-      and p1["speech"] and all("goal" not in p for p in meta["party"])
+      and p1["persona"] == "신중한, 겁 많은, 과묵한"
+      and all("speech" not in p and "goal" not in p for p in meta["party"])
       and "background" not in p2 and p2["traits"] == ["용맹한"])
 check("② 러너 통합: 배너에 seed 표시", "seed=7" in io.open(os.path.join(show_runner.STATE, "events.log"),
                                                              encoding="utf-8").read())
