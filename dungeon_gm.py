@@ -156,7 +156,8 @@ WAIT_MAX = 15            # wait(D25) 지루함 상한: 이만큼 틱을 기다�
                          #   합의 15~20 중 하한 채택. 튜닝은 큰 판 실측 후(튜닝마라).
 TRAIL_MAX = 12           # 자기 행동 궤적(D38, 09-06) 상한: 마지막 view() 이후 보존할 결과 수. 넘치면 앞을
                          #   버리고 생략 표식 한 칸(gap n) — 결정 사이가 보통 10틱 안이라 실전에선 안 찬다
-OBJ_VERBS = {'npc': '말 걸어 봄'}   # 오브젝트 태그(D39, 09-06): **쓰고도 남아 있는 오브젝트만** — 지금은 NPC 뿐
+OBJ_VERBS = {'npc': '말 걸어 봄',   # 오브젝트 태그(D39, 09-06): **쓰고도 남아 있는 오브젝트만**
+             'weapon': '착용해 봄', 'armor': '착용해 봄'}   # D57(09-12): 장비는 개체(번호 유지)라 내려놓아도 태그가 남는다
                                     #   (샘·상자·보물·물약·장비는 쓰면 사라져 "×N"이 뜻이 없다. 문·몹은 서랍)
 
 
@@ -319,8 +320,9 @@ def event_tags(rec, names=None):
         elif r == 'fountain_harm':
             out.append(('trap', '함정', '오염된 샘 −1 (HP %d)' % rec.get('hp', 0)))
         elif r == 'equip':
-            return [('use', '착용', '%s%s' % (rec.get('item', '?'),
-                                             (' (헌것 %s 내려놓음)' % rec['dropped']) if rec.get('dropped') else ''))]
+            return [('use', '착용', '%s%s%s' % (rec.get('item', '?'), (' ' + rec['id']) if rec.get('id') else '',   # D57 번호
+                                               (' (헌것 %s%s 내려놓음)' % (rec['dropped'], (' ' + rec['dropped_id']) if rec.get('dropped_id') else ''))
+                                               if rec.get('dropped') else ''))]
         elif r == 'no_effect' and rec.get('slot'):        # D56: 같거나 못한 장비 — 그대로 둠
             return [('misc', '그대로', '%s — 지금 것과 %s' % (rec.get('item', '?'), '같다' if rec.get('why') == 'same' else '못하다'))]
         elif r == 'npc_gift':
@@ -1304,6 +1306,30 @@ class Dungeon:
                                      concealed=concealed, perception_gate=perception_gate)
         return fid
 
+    def _alloc_fid(self):
+        """D57(09-12 파트너 "단검을 엔티티화하면"): 장비 개체 번호 — 손에서 태어나는 장비(NPC 선물)·층 전이 입양도 여기서."""
+        fid = self._next_fid
+        self._next_fid += 1
+        return fid
+
+    def _put_gear(self, slot, g, x, y, wearer=None):
+        """슬롯의 장비 개체를 **같은 번호**로 바닥에 되돌린다(D57). 번호 없는 옛 dict·충돌이면 새 번호. 착용 이력(worn) 이어받음.
+        판 51828: 내려놓을 때마다 새 번호(f13→f64)가 붙어 캐릭터가 '새 단검'으로 읽었다 — 세계가 개체를 새로 찍은 것이 뿌리."""
+        fid = g.get('id')
+        if fid is None or fid in self.features:
+            fid = self._alloc_fid()
+        f = Feature(fid, slot, g['name'], x, y, room_id=self._room_id_at(x, y))
+        f.worn = set(g.get('worn') or ()) | ({wearer} if wearer else set())   # 내려놓는 이는 입고 있었다
+        self.features[fid] = f
+        return fid
+
+    def adopt_gear(self, bot):
+        """이 던전 밖에서 온 슬롯 장비(층 전이 이월·외부 시트)에 이 층의 새 번호를 준다(D57 — 번호는 층-로컬, 몹·피처와 같은 자)."""
+        for slot in ('weapon', 'armor'):
+            g = bot.get(slot)
+            if g:
+                g['id'] = self._alloc_fid()
+
     def _room_id_at(self, x, y):
         for r in self.rooms:
             if r.contains(x, y):
@@ -1704,8 +1730,8 @@ class Dungeon:
                             {'id': 'f%d' % f.id, 'type': f.type, 'name': f.name,
                              'visited': (f.x, f.y) in self.visited, **bear(f.x, f.y),
                              **self._obj_tag_obs(bot, f),       # D39 오브젝트 태그(있을 때만)
-                             **({'new': True} if (f.type in ('weapon', 'armor')            # D56: 내가 착용한 적 없는 장비만 표시
-                                                 and bot['char'] not in (getattr(f, 'worn', None) or ())) else {})})
+                             **({'new': True} if (f.type in ('weapon', 'armor')            # D57: 아무도 착용한 적 없는 장비(객체 사실,
+                                                 and not getattr(f, 'worn', None)) else {})})   #   파트너 "진짜 착용한 적이 없는 것만 new")
                  for f in self.features.values()
                  if f.type != 'exit' and not f.concealed and (f.x, f.y) in seen]
         if self.events:                        # D22 개정(09-06 파트너 발제 "두란의 묘지를 발견한다면
@@ -1911,14 +1937,8 @@ class Dungeon:
                     cur = bot.get(f['type'])
                     now = ('%s %s +%d — 바꾸면 헌것은 그 자리에 놓는다'
                            % (cur['name'], word, cur['bonus'])) if cur else '기본 무장'
-                    if cur and GEAR_KINDS.get(f['name'], 0) <= int(cur.get('bonus', 0)):   # D56: 같거나 못한 것
-                        _add('interact', f['id'], '장비: %s %s (발밑/인접) — 지금 든 %s과(와) %s(%s +%d), 바꿔도 달라지는 것 없음'
-                             % (f['name'], f['id'], cur['name'],
-                                '같다' if GEAR_KINDS.get(f['name'], 0) == int(cur.get('bonus', 0)) else '못하다',
-                                word, GEAR_KINDS.get(f['name'], 0)))
-                    else:
-                        _add('interact', f['id'], '장비: %s %s (발밑/인접) — 걸치면 %s +%d (지금: %s)'
-                             % (f['name'], f['id'], word, GEAR_KINDS.get(f['name'], 0), now))
+                    _add('interact', f['id'], '장비: %s %s (발밑/인접) — 걸치면 %s +%d (지금: %s)'   # D57: 결론 없이 사실만
+                         % (f['name'], f['id'], word, GEAR_KINDS.get(f['name'], 0), now))
                 else:
                     _add('interact', f['id'], '상호작용: %s %s (발밑/인접)%s' % (f['name'], f['id'], _tagsfx(f)))
         if bot.get('potions'):                 # 물약(07-17): 소지 중일 때만 어휘가 된다 — 즉시행동군.
@@ -3896,7 +3916,8 @@ class Dungeon:
                     got.append('물약')
                 if gift.get('weapon') and not bot.get('weapon'):     # 빈손일 때만 — 스왑·비교는 던전 몫(D28)
                     nm = str(gift['weapon'])
-                    bot['weapon'] = {'name': nm, 'bonus': GEAR_KINDS.get(nm, 1)}
+                    bot['weapon'] = {'id': self._alloc_fid(), 'name': nm, 'bonus': GEAR_KINDS.get(nm, 1),
+                                     'worn': [bot['char']]}   # D57: 손에서 태어나도 개체 — 내려놓으면 같은 번호
                     got.append(nm)
                 given = '·'.join(got) if got else None
             if given:
@@ -3927,23 +3948,18 @@ class Dungeon:
             slot = f.type                        #   즉 캐릭터의 '결정'이다(밟고 지나가면 그대로 둔 것).
             old = bot.get(slot)
             bonus = GEAR_KINDS.get(f.name, 0)
-            if old and bonus <= int(old.get('bonus', 0)):
-                # D56(09-12): 같거나 못한 장비는 바꿔도 아무 일도 안 일어난다 — 피처 그대로, 헌 장비 안 놓임, 새 번호 없음.
-                #   판 51828 t122~173: 유나가 단검을 걸치고 헌 단검을 내려놓으면 새 번호가 붙어 '새 단검'으로 보였고,
-                #   52틱 연속 되집기(52콜). 세계가 물건을 새로 찍어 낸 것이 뿌리 — 캐릭터를 막는 게 아니라 세계를 정직하게.
-                return {**base, 'result': 'no_effect', 'slot': slot, 'item': f.name, 'bonus': bonus,
-                        'why': 'same' if bonus == int(old.get('bonus', 0)) else 'worse'}
+            # D57(09-12): 같거나 못한 장비로 바꾸는 것도 세계는 허용한다 — 무효 규칙(D56) 철회. 파트너 "규칙으로 캐릭터의 행동을
+            #   강제하는 게 아니라 판단 가능한 목록을 넓혀주는 게 맞다": 개체 번호·비교 수치·new·'착용해 봄' 태그·장부가 정보이고,
+            #   그래도 바꾸는 건 캐릭터 몫. 판 51828 의 되집기는 세계가 개체를 새로 찍어 낸 게 뿌리였다(번호 유지로 해소).
             worn = set(getattr(f, 'worn', None) or ()) | {bot['char']}
             del self.features[f.id]
-            if old:                              # 스왑: 헌 장비는 그 자리에 놓는다(슬롯=소지의 전부).
-                did = self._add_feature(slot, old['name'], tx, ty)   # 동료가 보고 주울 수 있다
-                self.features[did].worn = set(old.get('worn') or ()) | {bot['char']}   # D56: 착용 이력 이어받음
-            bot[slot] = {'name': f.name, 'bonus': bonus, 'worn': sorted(worn)}
+            did = self._put_gear(slot, old, tx, ty, bot['char']) if old else None   # 스왑: 헌 장비는 **같은 번호**로 그 자리에(슬롯=소지의 전부)
+            bot[slot] = {'id': f.id, 'name': f.name, 'bonus': bonus, 'worn': sorted(worn)}
             self._witness(bots, tx, ty,          # 전달층(D22): 획득 문법 그대로 — 챙기는 걸 본 사람은 안다
                           {'kind': 'ally_loot', 'char': bot['char'], 'what': f.name},
                           exclude=(bot['char'],))
-            return {**base, 'result': 'equip', 'slot': slot, 'item': f.name,
-                    'bonus': bonus, **({'dropped': old['name']} if old else {})}
+            return {**base, 'result': 'equip', 'slot': slot, 'item': f.name, 'id': 'f%d' % f.id,
+                    'bonus': bonus, **({'dropped': old['name'], 'dropped_id': 'f%d' % did} if old else {})}
         if f and f.type == 'chest':              # 상자 도박 — 손재주(DEX)가 좋으면 안전하게 연다
             cid = 'f%d' % f.id                   # D30: 사용 목격의 id(삭제 전에 잡는다)
             del self.features[f.id]
@@ -4312,8 +4328,7 @@ class Dungeon:
                 if spot is None:
                     return {**base, 'result': 'no_room'}
                 bot[item] = None
-                pid = self._add_feature(item, g['name'], spot[0], spot[1])
-                self.features[pid].worn = set(g.get('worn') or ()) | {bot['char']}   # D56: 건넨 이가 입던 것
+                self._put_gear(item, g, spot[0], spot[1], bot['char'])   # D57: 같은 번호로 발밑에(건넨 이의 착용 이력 포함)
                 extra, got = {'placed': True}, {'placed': True}
             else:
                 bot[item] = None

@@ -88,7 +88,7 @@ check("② 밟아도 안 줍는다 — 피처 잔존·슬롯 빈손(착용은 �
 r = da.act(b1, {'type': 'interact', 'target': wid}, bots)
 check("② interact=equip — 슬롯 착용·보정 1·피처 소멸·dropped 없음",
       r['result'] == 'equip' and r['slot'] == 'weapon' and r['bonus'] == 1
-      and b1['weapon'] == {'name': '단검', 'bonus': 1, 'worn': ['1']}
+      and b1['weapon'] == {'id': int(wid[1:]), 'name': '단검', 'bonus': 1, 'worn': ['1']} and r.get('id') == wid
       and not any(f.type == 'weapon' for f in da.features.values())
       and 'dropped' not in r)
 aid = next('f%d' % f.id for f in da.features.values() if f.type == 'armor')
@@ -98,7 +98,7 @@ while b1.get('order'):
 r = da.act(b1, {'type': 'interact', 'target': aid}, bots)
 check("② 방어구 슬롯도 같은 문법 — equip·막기 +1",
       r['result'] == 'equip' and r['slot'] == 'armor'
-      and b1['armor'] == {'name': '가죽 갑옷', 'bonus': 1, 'worn': ['1']})
+      and b1['armor'] == {'id': int(aid[1:]), 'name': '가죽 갑옷', 'bonus': 1, 'worn': ['1']})
 
 # ───────────────────── ③ 스왑 ─────────────────────
 print("── ③ 스왑")
@@ -121,26 +121,36 @@ r = db.act(b2, {'type': 'interact', 'target': 'f%d' % lid}, [b2])
 dropped = [f for f in db.features.values() if f.type == 'weapon']
 check("③ 스왑 — 장검 착용·dropped=단검·헌것이 그 자리(4,1) 피처로",
       r['result'] == 'equip' and r.get('dropped') == '단검'
-      and b2['weapon'] == {'name': '장검', 'bonus': 2, 'worn': ['1']}
+      and b2['weapon'] == {'id': lid, 'name': '장검', 'bonus': 2, 'worn': ['1']}
       and len(dropped) == 1 and dropped[0].name == '단검'
       and (dropped[0].x, dropped[0].y) == (4, 1))
 check("③ 방어구 슬롯 독립 — 무기 스왑이 갑옷을 안 건드린다",
       b2['armor'] == {'name': '가죽 갑옷', 'bonus': 1})
-check("③ D56 내려놓은 단검 = 착용 이력(worn={'1'}) → 같은 봇 obs 엔 new 없음 / 다른 봇 obs 엔 new",
-      dropped[0].worn == {'1'}
-      and 'new' not in next(f for f in db.view(b2, [b2])['sights']['features'] if f['id'] == 'f%d' % dropped[0].id)
-      and next(f for f in db.view(mkbot('2', 3, 1), [b2])['sights']['features'] if f['id'] == 'f%d' % dropped[0].id).get('new') is True)
-r_same = db.act(b2, {'type': 'interact', 'target': 'f%d' % dropped[0].id}, [b2])
-check("③ D56 같거나 못한 장비(단검 vs 든 장검) = no_effect·why worse — 피처 그대로·슬롯 그대로·새 번호 없음",
-      r_same['result'] == 'no_effect' and r_same.get('why') == 'worse' and dropped[0].id in db.features
-      and b2['weapon']['name'] == '장검' and len([f for f in db.features.values() if f.type == 'weapon']) == 1)
-b2s = mkbot('1', 4, 1)
-b2s['weapon'] = {'name': '단검', 'bonus': 1}
-r_eq = db.act(b2s, {'type': 'interact', 'target': 'f%d' % dropped[0].id}, [b2s])
-lab_same = [o['label'] for o in db.view(b2s, [b2s])['options'] if o.get('target') == 'f%d' % dropped[0].id and o['type'] == 'interact']
-check("③ D56 같은 장비(단검 vs 단검) = no_effect·why same · 메뉴 라벨 '지금 든 단검과(와) 같다 … 바꿔도 달라지는 것 없음'",
-      r_eq['result'] == 'no_effect' and r_eq.get('why') == 'same' and b2s['weapon'] == {'name': '단검', 'bonus': 1}
-      and len(lab_same) == 1 and '같다' in lab_same[0] and '바꿔도 달라지는 것 없음' in lab_same[0])
+dk = dropped[0]
+check("③ D57 내려놓은 단검 = 개체(worn={'1'}, 번호 있음 — 옛 슬롯 dict 라 새 번호) · 누구의 obs 에도 new 없음(객체 사실)",
+      dk.worn == {'1'} and isinstance(dk.id, int)
+      and 'new' not in next(f for f in db.view(b2, [b2])['sights']['features'] if f['id'] == 'f%d' % dk.id)
+      and 'new' not in next(f for f in db.view(mkbot('2', 3, 1), [b2])['sights']['features'] if f['id'] == 'f%d' % dk.id))
+db.objtags = True                                     # D39 태그 켬(러너 스위치) — '착용해 봄'
+r_back = db.act(b2, {'type': 'interact', 'target': 'f%d' % dk.id}, [b2])   # 못한 장비로 되바꾸기 — 세계는 허용(무효 규칙 없음)
+floor_w = [f for f in db.features.values() if f.type == 'weapon']
+check("③ D57 못한 장비로 되바꾸기도 허용(D56 무효 규칙 철회) · 번호가 손↔바닥을 그대로 오간다(슬롯=단검 f%d, 바닥=장검 f%d, worn 이어받음)" % (dk.id, lid),
+      r_back['result'] == 'equip' and r_back.get('id') == 'f%d' % dk.id and r_back.get('dropped_id') == 'f%d' % lid
+      and b2['weapon']['id'] == dk.id and len(floor_w) == 1 and floor_w[0].id == lid and floor_w[0].name == '장검'
+      and floor_w[0].worn == {'1'} and (b2.get('obj_tags') or {}).get(dk.id, {}).get('n') == 1)
+r_fwd = db.act(b2, {'type': 'interact', 'target': 'f%d' % lid}, [b2])      # 다시 장검으로 — 단검 f<dk> 가 같은 번호로 바닥에
+ob3 = db.view(b2, [b2])
+f_d = next(f for f in ob3['sights']['features'] if f['id'] == 'f%d' % dk.id)
+check("③ D57 두 번째 되바꿈 뒤 바닥 단검 f%d 에 D39 태그 '착용해 봄 ×1' · 슬롯 장검 f%d 태그 n=1(obj_tags)" % (dk.id, lid),
+      r_fwd['result'] == 'equip' and (f_d.get('tag') or {}).get('verb') == '착용해 봄' and (f_d.get('tag') or {}).get('n') == 1
+      and (b2.get('obj_tags') or {}).get(lid, {}).get('n') == 1 and b2['weapon']['id'] == lid)
+lab3 = [o['label'] for o in ob3['options'] if o.get('target') == 'f%d' % dk.id and o['type'] == 'interact']
+check("③ D57 메뉴 라벨 = 사실만(수치·지금 착용·스왑 물리) — 결론 문장 없음",
+      len(lab3) == 1 and '피해 +1' in lab3[0] and '지금: 장검' in lab3[0] and '바꿔도' not in lab3[0])
+wire3 = brains._wire(ob3, {'1': '두란'}, compose=True)
+check("③ D57 조합형 사실 줄 = '- f%d 단검: 피해 +1 · 지금 든 장검 f%d (피해 +2)' · 착용 현황에 번호" % (dk.id, lid),
+      ("- f%d 단검: 피해 +1 · 지금 든 장검 f%d (피해 +2)" % (dk.id, lid)) in wire3 and ("- weapon: 장검 f%d (피해 +2)" % lid) in wire3
+      and '바꿔도' not in wire3)
 
 # ───────────────────── ④ 전투 보정 ─────────────────────
 print("── ④ 전투")
@@ -211,11 +221,11 @@ check("⑥ equip 목격 = ally_loot(챙기는 걸 본 사람은 안다)",
           for w in w6.get('witnessed', [])))
 obs6 = db3.view(b6, [b6, w6])
 check("⑥ obs.gear = 자기 몸의 사실(더미·BYO 데이터)",
-      obs6['gear']['weapon'] == {'name': '단검', 'bonus': 1, 'worn': ['1']}
+      obs6['gear']['weapon'] == {'id': int(wid3[1:]), 'name': '단검', 'bonus': 1, 'worn': ['1']}
       and obs6['gear']['armor'] is None)
 snap = G.bot_snapshot(b6)
 check("⑥ bot_snapshot.weapon/armor (additive)",
-      snap['weapon'] == {'name': '단검', 'bonus': 1, 'worn': ['1']} and snap['armor'] is None)
+      snap['weapon'] == {'id': int(wid3[1:]), 'name': '단검', 'bonus': 1, 'worn': ['1']} and snap['armor'] is None)
 wire = brains._wire(obs6)
 check("⑥ wire 무누출 — 착용 정보는 시트 소유(상시 가변부 미노출 계약)",
       '그 밖의 정보' not in wire or 'gear' not in wire)

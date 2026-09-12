@@ -190,6 +190,14 @@ CONTEXT_LINE = _load_context()
 #     (state/brain_block.log 채집)로 다시 재야 한다(1콜/건). 재회의 포옹·쓰다듬 같은 몸짓 서술은 파트너 결정으로 그대로 둔다.
 
 
+def _gear_word(g, slot):
+    """슬롯 장비 한 마디 — '단검 f13 (피해 +1)' (D57: 번호가 있으면 붙인다 — 바닥의 같은 번호와 이어 읽게)."""
+    if not g:
+        return "기본 무장"
+    word = "피해" if slot == "weapon" else "막기"
+    return "%s%s (%s +%d)" % (g.get("name", "?"), (" f%s" % g["id"]) if g.get("id") is not None else "", word, int(g.get("bonus", 0)))
+
+
 def _with_context(prompt):
     """판단 요청 맨 앞에 맥락 한 줄(켜져 있을 때만). 시트 머리글('# 시트 — …')은 그 뒤에 그대로."""
     return (CONTEXT_LINE + "\n\n" + prompt) if PROMPT_CONTEXT_ON else prompt
@@ -843,9 +851,9 @@ def _last_prose(last, names=None):
             return "%s은(는) 지금 든 것과 %s — 그대로 두었다" % (last.get("item", "?"), "같다" if last.get("why") == "same" else "못하다")
         if r == "equip":
             word = "피해" if last.get("slot") == "weapon" else "막기"
-            return "%s을(를) 걸쳤다 — %s +%d%s" % (
-                last.get("item", "?"), word, last.get("bonus", 0),
-                (". 헌 %s은(는) 그 자리에 놓았다" % last["dropped"])
+            return "%s%s을(를) 걸쳤다 — %s +%d%s" % (
+                last.get("item", "?"), (" " + last["id"]) if last.get("id") else "", word, last.get("bonus", 0),   # D57 번호
+                (". 헌 %s%s은(는) 그 자리에 놓았다" % (last["dropped"], (" " + last["dropped_id"]) if last.get("dropped_id") else ""))
                 if last.get("dropped") else "")
         fin = {"treasure": "보물을 주웠다", "nothing": "아무것도 없었다",
                "too_far": "너무 멀었다(붙어야 만진다)", "no_target": "대상이 그 자리에 없었다"}
@@ -1231,7 +1239,7 @@ def _wire(obs, names=None, compose=False):
         for f in s.get("features", []):
             L.append("- %s %s — %s%s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
                                            " (와 본 자리)" if f.get("visited") else "",
-                                           " (착용한 적 없음)" if f.get("new") else "") + G._tagsfx(f))   # D39 태그 접미 · D56 new
+                                           " (new)" if f.get("new") else "") + G._tagsfx(f))   # D39 태그 접미 · D57 new(아무도 안 걸쳐 본 것)
         for b in s.get("bots", []):
             L.append("- %s — HP %s/%s%s — %s%s%s"                                    # 09-08 D45: 숫자+태그(겉보기 4단 폐지)
                      % (who(b.get("char", "?")), b.get("hp", "?"), b.get("maxhp", "?"),
@@ -1436,18 +1444,14 @@ def _wire(obs, names=None, compose=False):
             out += ["- potion: 회복 물약 %d병" % obs.get("potions", 0)]
         for slot in ("weapon", "armor"):
             gear = (obs.get("gear") or {}).get(slot)
-            out.append("- %s: %s" % (slot, gear["name"] if gear else "없음"))
+            out.append("- %s: %s" % (slot, _gear_word(gear, slot) if gear else "없음"))   # D57: 번호·수치까지(비교는 캐릭터 몫)
         facts = []
         for f in s.get("features", []):
-            if f.get("type") in ("weapon", "armor"):
+            if f.get("type") in ("weapon", "armor"):                # D57: 사실만 나란히 — 결론 문장 없음(파트너 "알아서 유추")
                 effect = "피해" if f["type"] == "weapon" else "막기"
                 cur = (obs.get("gear") or {}).get(f["type"])
-                fb = G.GEAR_KINDS.get(f["name"], 0)
-                if cur and fb <= int(cur.get("bonus", 0)):          # D56: 같거나 못한 장비 — 바꿔도 아무 일 없음
-                    facts.append("- %s: 지금 든 %s과(와) %s(%s +%d) — 바꿔도 달라지는 것 없음"
-                                 % (f["id"], cur["name"], "같다" if fb == int(cur.get("bonus", 0)) else "못하다", effect, fb))
-                else:
-                    facts.append("- %s: 착용하면 %s +%d, 교체한 장비는 그 자리에 놓인다" % (f["id"], effect, fb))
+                facts.append("- %s %s: %s +%d · %s" % (f["id"], f["name"], effect, G.GEAR_KINDS.get(f["name"], 0),
+                                                       ("지금 든 " + _gear_word(cur, f["type"])) if cur else "지금: 기본 무장"))
         for m in s.get("monsters", []):
             facts.append("- %s: 현재 자리에서 %s" % (m["id"], "공격 사거리·사선 안" if m.get("in_range") else "공격 범위 밖"))
             if m.get('status'):

@@ -125,7 +125,8 @@ check("③ NPC 몸이 막는다 — walkable 불가(밟고 지나갈 수 없다)
 r = d._interact(b_adj, 'f%d' % nf.id, [b_adj])
 check("③ 장비 상인(D32 상점 v0): 빈손이면 첫 말 걸기에 단검 — npc_gift·item·정해진 대사·바로 걸침",
       r['result'] == 'npc_gift' and r['npc'] == '장비 상인' and r['item'] == '단검'
-      and b_adj.get('weapon') == {'name': '단검', 'bonus': 1} and '단검' in r['line'])
+      and {k: b_adj.get('weapon', {}).get(k) for k in ('name', 'bonus')} == {'name': '단검', 'bonus': 1}   # D57: 선물 장비도 개체(id·worn 추가)
+      and isinstance(b_adj['weapon'].get('id'), int) and b_adj['weapon'].get('worn') == [b_adj['char']] and '단검' in r['line'])
 r2 = d._interact(b_adj, 'f%d' % nf.id, [b_adj])
 check("③ 두 번째 말 걸기 = '아까 왔잖아' 고정 대사(line_again)·again 표식 — 무기 중복 지급 없음",
       r2['result'] == 'npc_talk' and '무장' in r2['line'] and '아까 왔잖아' in r2['line']

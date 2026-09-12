@@ -1187,6 +1187,7 @@ def main():
                 n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
                 n["weapon"] = b.get("weapon")             # 장비도 이월(07-30) — 걸치고 내려간다
                 n["armor"] = b.get("armor")
+                d.adopt_gear(n)                           # D57: 개체 번호는 층-로컬 — 새 층의 번호를 받는다
                 n["status"] = {t: dict(e) for t, e in (b.get("status") or {}).items()}   # 상태 태그(D34)
                 n["bleed_steps"] = b.get("bleed_steps", 0)   #   도 이월 — 몸은 층을 넘어도 그 몸이다
                 G.SK.inherit(d, b, n)

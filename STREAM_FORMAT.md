@@ -218,7 +218,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 ## 스냅샷 스키마
 
 - **봇**: `char job sex x y hp maxhp bag potions weapon armor alive won order aware_of[]`
-  (`potions`=소지 회복 물약 병 수 — 2026-07-17 additive. `weapon`/`armor`=착용 장비 `{name, bonus}` 또는 null — 2026-07-30 D28 additive.
+  (`potions`=소지 회복 물약 병 수 — 2026-07-17 additive. `weapon`/`armor`=착용 장비 `{name, bonus}` 또는 null — 2026-07-30 D28 additive. **2026-09-12 D57 additive**: `id`(장비 개체 번호 = 피처 id, 층-로컬 — 내려놓으면 같은 번호의 피처로 돌아온다, 층 전이 때 새 번호)·`worn[]`(착용해 본 캐릭터). events `equip` 에 `id`·`dropped_id` additive.
   `status[]`=붙은 상태 태그 이름 정렬 리스트, **있을 때만** — 2026-09-06 D34 additive. `relations{other:{kind:n}}`=관계 뼈 횟수(살은 안 나간다 — decisions.relation), **뼈가 있을 때만** — 2026-09-06 D36 additive)
   — `order` = 진행 중 핑(raw: `exit`/`f<n>`/`m<n>`/`b<char>`/`@x,y`(explore 목표칸), 없으면 null).
   스트림은 관전자 데이터라 obs 와 달리 생좌표를 가리지 않는다. `aware_of` = 인지한 몹 id 정렬 리스트.
