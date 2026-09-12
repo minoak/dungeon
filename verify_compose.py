@@ -122,11 +122,12 @@ obs = d.view(bots[0], bots)
 direction = obs["sights"]["ways"][0]["bearing"]
 dec, _ = decide(d, bots, {"type": "explore", "target": direction}, obs)
 check("관측에 나온 방향 탐색", dec.get("target") == direction and dec["src"] == "haiku")
-tgt = next((f["id"] for f in obs["sights"]["features"]), "exit")   # D48 개정(09-11): 곁에 멈춘 동료(b2)는 입력 무효라 사물 대상으로
+tgt = next((f["id"] for f in obs["sights"]["features"]), "exit")   # 작정 검사는 사물 대상으로(동료 대상은 D48 개정 2 검사가 따로)
 dec, _ = decide(d, bots, {"type": "goto", "target": tgt, "then": [{"type": "search"}]}, obs)
 check("기존 객체 작정 유지", dec["then"] == [{"type": "search"}])
 dec, _ = decide(d, bots, {"type": "goto", "target": "b2"}, obs)
-check("D48 개정: 곁에 멈춘 동료에게 goto 는 입력 무효(already_beside)", dec.get("input_error") == "already_beside")
+check("D48 개정 2: 곁에 멈춘 동료에게 goto 는 유효(입력 무효 아님 — 세계가 '곁에 선다'로 답한다)",
+      "input_error" not in dec and dec.get("type") == "goto" and dec.get("target") == "b2")
 dec, _ = decide(d, bots, {"type": "goto", "target": "b2", "then": [1]})
 check("번호 작정은 숨긴 메뉴를 참조하지 않음", "then" not in dec)
 with patch.dict(os.environ, {"DUNGEON_GIVE": "0"}):

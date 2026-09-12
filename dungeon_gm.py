@@ -128,6 +128,8 @@ DETOUR_SLACK = 2         #   FACTOR배+SLACK칸을 넘고, 그 최단길 위에 
                          #   대신 blocked 보고(누가 막는지 allies 로) — 라이브 22틱 두란 서쪽 행군 부검.
                          #   지형이 원래 먼 것(free 도 길다)은 정당한 지리 — 감지 대상 아님.
 FOLLOW_IDLE = 3          # 동행 고착 해약(D18): 곁 대기 중 대상이 이만큼 연속 틱 제자리면 동행 종료
+CHASE_IDLE = 1           # D48 개정 2(09-12 파트너 "goto도 1턴 정도만 아군에게 follow처럼"): goto<아군>이 곁+대상 정지에서 붙어 서는 틱 수.
+                         #   1 = 그 틱에 곁에 서고(0걸음) 다음 틱 재판단. 작정(then)이 딸려 있으면 횟수와 무관하게 닿는 즉시 잇는다.
                          #   (result=idle) → 재결정. 동행은 '따라 걷기'다 — 아무도 안 걸으면 성립하지
                          #   않는다. 상호 동행 삼각 고착(fellowsmoke 120틱 결정 5회 실측)=흡수 상태의
                          #   물리적 제거. 파트너 판정 2026-07-11: "셋이 서서 세 턴이면 어색해질 시간"
@@ -319,6 +321,8 @@ def event_tags(rec, names=None):
         elif r == 'equip':
             return [('use', '착용', '%s%s' % (rec.get('item', '?'),
                                              (' (헌것 %s 내려놓음)' % rec['dropped']) if rec.get('dropped') else ''))]
+        elif r == 'no_effect' and rec.get('slot'):        # D56: 같거나 못한 장비 — 그대로 둠
+            return [('misc', '그대로', '%s — 지금 것과 %s' % (rec.get('item', '?'), '같다' if rec.get('why') == 'same' else '못하다'))]
         elif r == 'npc_gift':
             return [('talk', '대화', '%s: %s 받음' % (rec.get('npc', '?'), rec.get('item', '?')))]
         elif r == 'npc_talk':
@@ -348,8 +352,10 @@ def event_tags(rec, names=None):
         who = nm(tgt[1:]) if (tgt[:1] == 'b' and tgt[1:].isdigit()) else place_word(tgt, 'decide')   # 사람 대상 goto(D48 개정)=이름
         if r == 'pathed':
             return [('start', '이동 시작', (who + ' 쪽') if tgt and tgt != 'auto' else '새 길')]
-        if r == 'already_beside':
+        if r == 'already_beside':                          # 옛 판(D48 개정 1) 스트림 호환
             return [('misc', '이미 곁', who + ' — 멈춰 있다, 갈 곳 없음')]
+        if r == 'beside':                                  # D48 개정 2: 곁에 붙어 선다(CHASE_IDLE 틱)
+            return [('start', '곁에 섬', who + ' — 붙어 있는다')]
         if r == 'following':
             return [('start', '동행 시작', nm(tgt[1:]) if tgt.startswith('b') else tgt)]
         if r == 'arrived':
@@ -585,13 +591,15 @@ class Feature:
     """던전의 '오브젝트/피처' — 출구·보물·문·가구·발판 등. 칸이 아니라 이름붙은 객체.
     봇은 칸이 아니라 *보이는 피처*를 핑한다(Stage 2). 칸격자 substrate 탈출의 핵심 표현.
     concealed=숨김(인지 판정으로만 드러남), perception_gate=드러내는 데 필요한 인지 난도(0=자동)."""
-    __slots__ = ('id', 'type', 'name', 'x', 'y', 'room_id', 'concealed', 'perception_gate')
+    __slots__ = ('id', 'type', 'name', 'x', 'y', 'room_id', 'concealed', 'perception_gate', 'worn')
 
     def __init__(self, fid, ftype, name, x, y, room_id=None,
                  concealed=False, perception_gate=0):
         self.id, self.type, self.name = fid, ftype, name
         self.x, self.y, self.room_id = x, y, room_id
         self.concealed, self.perception_gate = concealed, perception_gate
+        self.worn = set()      # D56(09-12): 이 장비를 착용해 본 캐릭터들 — 내려놓거나 건네져 바닥에 놓일 때 이어받는다.
+                               #   obs 에서 '착용한 적 없음'(new) 표시의 근거(파트너 "진짜 착용한 적이 없는 장비만 new").
 
     def as_dict(self):
         return {'id': self.id, 'type': self.type, 'name': self.name,
@@ -1695,7 +1703,9 @@ class Dungeon:
         feats = [_knowledge('feature:' + f.type,
                             {'id': 'f%d' % f.id, 'type': f.type, 'name': f.name,
                              'visited': (f.x, f.y) in self.visited, **bear(f.x, f.y),
-                             **self._obj_tag_obs(bot, f)})      # D39 오브젝트 태그(있을 때만)
+                             **self._obj_tag_obs(bot, f),       # D39 오브젝트 태그(있을 때만)
+                             **({'new': True} if (f.type in ('weapon', 'armor')            # D56: 내가 착용한 적 없는 장비만 표시
+                                                 and bot['char'] not in (getattr(f, 'worn', None) or ())) else {})})
                  for f in self.features.values()
                  if f.type != 'exit' and not f.concealed and (f.x, f.y) in seen]
         if self.events:                        # D22 개정(09-06 파트너 발제 "두란의 묘지를 발견한다면
@@ -1901,8 +1911,14 @@ class Dungeon:
                     cur = bot.get(f['type'])
                     now = ('%s %s +%d — 바꾸면 헌것은 그 자리에 놓는다'
                            % (cur['name'], word, cur['bonus'])) if cur else '기본 무장'
-                    _add('interact', f['id'], '장비: %s %s (발밑/인접) — 걸치면 %s +%d (지금: %s)'
-                         % (f['name'], f['id'], word, GEAR_KINDS.get(f['name'], 0), now))
+                    if cur and GEAR_KINDS.get(f['name'], 0) <= int(cur.get('bonus', 0)):   # D56: 같거나 못한 것
+                        _add('interact', f['id'], '장비: %s %s (발밑/인접) — 지금 든 %s과(와) %s(%s +%d), 바꿔도 달라지는 것 없음'
+                             % (f['name'], f['id'], cur['name'],
+                                '같다' if GEAR_KINDS.get(f['name'], 0) == int(cur.get('bonus', 0)) else '못하다',
+                                word, GEAR_KINDS.get(f['name'], 0)))
+                    else:
+                        _add('interact', f['id'], '장비: %s %s (발밑/인접) — 걸치면 %s +%d (지금: %s)'
+                             % (f['name'], f['id'], word, GEAR_KINDS.get(f['name'], 0), now))
                 else:
                     _add('interact', f['id'], '상호작용: %s %s (발밑/인접)%s' % (f['name'], f['id'], _tagsfx(f)))
         if bot.get('potions'):                 # 물약(07-17): 소지 중일 때만 어휘가 된다 — 즉시행동군.
@@ -2755,10 +2771,13 @@ class Dungeon:
         base = {'char': bot['char'], 'type': typ, 'target': tid}
         bot['follow_idle'] = None                        # 개시 = 제자리 카운터 리셋(FOLLOW_IDLE)
         if self._beside(bot, (tx, ty), 'bot'):
-            if chase:                                    # D48 개정: 곁 + 대상 정지 = 갈 곳 없음(결정 시점 선판정은 brains._already_beside)
+            if chase:                                    # D48 개정 2(09-12): 곁 + 대상 정지 = 곁에 선다(이 틱 0걸음, 오류 아님)
                 other = next((o for o in bots if o['char'] == tid[1:]), None)
                 if other is None or not is_moving(other):
-                    return {**base, 'result': 'already_beside'}
+                    if bot.get('plan') or CHASE_IDLE <= 1:   # 작정이 있으면 바로 잇고, 1턴이면 이 틱만 서고 다음 틱 재판단
+                        return {**base, 'result': 'arrived'}
+                    bot['order'], bot['path'], bot['follow_idle'] = prefix + tid, [], (tx, ty, 1)
+                    return {**base, 'result': 'beside'}
                 bot['order'], bot['path'] = prefix + tid, []   # 곁인데 움직이는 중 — 붙어서 따라 걷는다
                 return {**base, 'result': 'pathed', 'len': 0}
             bot['order'], bot['path'] = 'follow:' + tid, []
@@ -3196,11 +3215,17 @@ class Dungeon:
                 sres = self._sighted_stop(bot, base)     # "새 일이 생기면 멈추고 묻는다"(동행 라벨
                 if sres:                                 #   문구 그대로 — 몹 아닌 오브젝트도 새 일)
                     return sres
-                if chase:                                # D48 개정: 곁 + 대상 정지 = 도착(해제·재결정) / 움직이면 붙어 간다
+                if chase:                                # D48 개정 2: 곁 + 대상 정지 = CHASE_IDLE 틱 붙어 서다 도착(해제·재결정) / 움직이면 붙어 간다
                     other = next((o for o in bots if o['char'] == tid[1:]), None)
                     if other is None or not is_moving(other):
-                        bot['order'], bot['path'] = None, []
-                        return {**base, 'result': 'arrived'}
+                        prev = bot.get('follow_idle')
+                        n = (prev[2] + 1 if prev and (prev[0], prev[1]) == res0[1] else 1)
+                        if bot.get('plan') or n >= CHASE_IDLE:
+                            bot['order'], bot['path'], bot['follow_idle'] = None, [], None
+                            return {**base, 'result': 'arrived'}
+                        bot['follow_idle'] = (res0[1][0], res0[1][1], n)
+                    else:
+                        bot['follow_idle'] = None
                     self._wander_beat(bot)               # 곁 유지 틱도 맴돎 박자(동행과 같이)
                     return {**base, 'result': 'beside'}
                 prev = bot.get('follow_idle')            # 고착 해약(FOLLOW_IDLE): 대상이 연속
@@ -3215,8 +3240,8 @@ class Dungeon:
             bot['order'], bot['path'] = None, []
             self._perceive(bot)               # 교전/합류 거리 도달 — 눈뜨고 재결정(거짓 매복 방지)
             return {**base, 'result': 'arrived'}
-        if follow:
-            bot['follow_idle'] = None         # 곁 아님 = 걷는 틱 — 제자리 카운터 리셋(FOLLOW_IDLE)
+        if follow or chase:
+            bot['follow_idle'] = None         # 곁 아님 = 걷는 틱 — 제자리 카운터 리셋(FOLLOW_IDLE·CHASE_IDLE)
         # A-2(D18): 시야 내 실물 재경로 — 움직이는 목표(m/b)가 지금 눈에 보이는데 경로 종점이
         # 낡았으면(현 좌표 곁이 아님) 현재 좌표로 재계산. 매 틱이어도 결정론 BFS라 비용 미미.
         # 시야 밖=마지막 본 자리 스냅샷 유지(유령 추적 정당 — 07-05 판정). 경로 소진+시야 내도
@@ -3499,11 +3524,15 @@ class Dungeon:
             tid = s[6:] if chase else s[7:]
             res = self._resolve_target(tid, bots)
             if res and self._beside(bot, res[1], 'bot'):
-                if chase:                             #   추적: 곁 + 대상 정지 = 도착(해제·재결정), 움직이면 붙어 간다
+                if chase:                             #   추적(D48 개정 2): 곁 + 대상 정지 = CHASE_IDLE 틱 붙어 서다 도착, 움직이면 붙어 간다
                     other = next((o for o in bots if o['char'] == tid[1:]), None)
                     if other is None or not is_moving(other):
-                        bot['order'], bot['path'] = None, []
-                        return {**base, 'result': 'arrived'}
+                        prev = bot.get('follow_idle')
+                        n = (prev[2] + 1 if prev and (prev[0], prev[1]) == res[1] else 1)
+                        if bot.get('plan') or n >= CHASE_IDLE:
+                            bot['order'], bot['path'], bot['follow_idle'] = None, [], None
+                            return {**base, 'result': 'arrived'}
+                        bot['follow_idle'] = (res[1][0], res[1][1], n)
                 bot['path'] = []                      #   곁이면 지속(다음 틱 대기/재경로)
                 return {**base, 'result': 'beside' if chase else 'following'}
             bot['order'], bot['path'], bot['plan'] = None, [], []
@@ -3898,10 +3927,18 @@ class Dungeon:
             slot = f.type                        #   즉 캐릭터의 '결정'이다(밟고 지나가면 그대로 둔 것).
             old = bot.get(slot)
             bonus = GEAR_KINDS.get(f.name, 0)
+            if old and bonus <= int(old.get('bonus', 0)):
+                # D56(09-12): 같거나 못한 장비는 바꿔도 아무 일도 안 일어난다 — 피처 그대로, 헌 장비 안 놓임, 새 번호 없음.
+                #   판 51828 t122~173: 유나가 단검을 걸치고 헌 단검을 내려놓으면 새 번호가 붙어 '새 단검'으로 보였고,
+                #   52틱 연속 되집기(52콜). 세계가 물건을 새로 찍어 낸 것이 뿌리 — 캐릭터를 막는 게 아니라 세계를 정직하게.
+                return {**base, 'result': 'no_effect', 'slot': slot, 'item': f.name, 'bonus': bonus,
+                        'why': 'same' if bonus == int(old.get('bonus', 0)) else 'worse'}
+            worn = set(getattr(f, 'worn', None) or ()) | {bot['char']}
             del self.features[f.id]
             if old:                              # 스왑: 헌 장비는 그 자리에 놓는다(슬롯=소지의 전부).
-                self._add_feature(slot, old['name'], tx, ty)   # 동료가 보고 주울 수 있다
-            bot[slot] = {'name': f.name, 'bonus': bonus}
+                did = self._add_feature(slot, old['name'], tx, ty)   # 동료가 보고 주울 수 있다
+                self.features[did].worn = set(old.get('worn') or ()) | {bot['char']}   # D56: 착용 이력 이어받음
+            bot[slot] = {'name': f.name, 'bonus': bonus, 'worn': sorted(worn)}
             self._witness(bots, tx, ty,          # 전달층(D22): 획득 문법 그대로 — 챙기는 걸 본 사람은 안다
                           {'kind': 'ally_loot', 'char': bot['char'], 'what': f.name},
                           exclude=(bot['char'],))
@@ -4275,7 +4312,8 @@ class Dungeon:
                 if spot is None:
                     return {**base, 'result': 'no_room'}
                 bot[item] = None
-                self._add_feature(item, g['name'], spot[0], spot[1])
+                pid = self._add_feature(item, g['name'], spot[0], spot[1])
+                self.features[pid].worn = set(g.get('worn') or ()) | {bot['char']}   # D56: 건넨 이가 입던 것
                 extra, got = {'placed': True}, {'placed': True}
             else:
                 bot[item] = None

@@ -824,6 +824,8 @@ def _last_prose(last, names=None):
                 last.get("dmg", 0), (", [%s]이(가) 붙었다" % last["status"]) if last.get("status") else "")
         if r == "potion":
             return "회복 물약을 집어 챙겼다 (소지 %d병)" % last.get("potions", 1)
+        if r == "no_effect" and last.get("slot"):        # D56: 같거나 못한 장비
+            return "%s은(는) 지금 든 것과 %s — 그대로 두었다" % (last.get("item", "?"), "같다" if last.get("why") == "same" else "못하다")
         if r == "equip":
             word = "피해" if last.get("slot") == "weapon" else "막기"
             return "%s을(를) 걸쳤다 — %s +%d%s" % (
@@ -1212,8 +1214,9 @@ def _wire(obs, names=None, compose=False):
             if m.get("note"):                              # D55: 캐릭터 자신의 인식 — 사실과 다른 줄(섞지 않는다)
                 L.append("  · 네 생각(네가 적어 둔 것): %s" % m["note"])
         for f in s.get("features", []):
-            L.append("- %s %s — %s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
-                                         " (와 본 자리)" if f.get("visited") else "") + G._tagsfx(f))   # D39 태그 접미
+            L.append("- %s %s — %s%s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
+                                           " (와 본 자리)" if f.get("visited") else "",
+                                           " (착용한 적 없음)" if f.get("new") else "") + G._tagsfx(f))   # D39 태그 접미 · D56 new
         for b in s.get("bots", []):
             L.append("- %s — HP %s/%s%s — %s%s%s"                                    # 09-08 D45: 숫자+태그(겉보기 4단 폐지)
                      % (who(b.get("char", "?")), b.get("hp", "?"), b.get("maxhp", "?"),
@@ -1423,8 +1426,13 @@ def _wire(obs, names=None, compose=False):
         for f in s.get("features", []):
             if f.get("type") in ("weapon", "armor"):
                 effect = "피해" if f["type"] == "weapon" else "막기"
-                facts.append("- %s: 착용하면 %s +%d, 교체한 장비는 그 자리에 놓인다"
-                             % (f["id"], effect, G.GEAR_KINDS.get(f["name"], 0)))
+                cur = (obs.get("gear") or {}).get(f["type"])
+                fb = G.GEAR_KINDS.get(f["name"], 0)
+                if cur and fb <= int(cur.get("bonus", 0)):          # D56: 같거나 못한 장비 — 바꿔도 아무 일 없음
+                    facts.append("- %s: 지금 든 %s과(와) %s(%s +%d) — 바꿔도 달라지는 것 없음"
+                                 % (f["id"], cur["name"], "같다" if fb == int(cur.get("bonus", 0)) else "못하다", effect, fb))
+                else:
+                    facts.append("- %s: 착용하면 %s +%d, 교체한 장비는 그 자리에 놓인다" % (f["id"], effect, fb))
         for m in s.get("monsters", []):
             facts.append("- %s: 현재 자리에서 %s" % (m["id"], "공격 사거리·사선 안" if m.get("in_range") else "공격 범위 밖"))
             if m.get('status'):
@@ -1692,12 +1700,8 @@ def _parse_decision(raw, why, obs, char, roster):
                 fb['input_error_detail'] = G.CA.error_detail(obj, obs, input_error)
                 fb.update(reaction)
                 return fb
-            ab = _already_beside(composed, char, roster)   # D48 개정(메모 §2-4 [제안]): 곁에 멈춘 사람에게 goto = 입력 무효 → 같은 틱 재판단
-            if ab:
-                fb = {"src": "error", "reason": ab, "input_error": "already_beside",
-                      "input_error_detail": {**G.CA.error_detail(obj, obs, "already_beside"), "reason": ab}}
-                fb.update(reaction)
-                return fb
+            # D48 개정 2(09-12): 곁에 멈춘 사람에게 goto 는 입력 무효가 아니다 — 세계가 '곁에 선다'(arrived/beside)로 답한다.
+            #   판 363123 t67: attack(사라진 몹)→재판단 goto(이미 곁)=2회 무효 → 판단 정지 고리. 선판정 _already_beside 는 폐지.
             # 번호 작정은 이 모드의 문법이 아니다. 기존 객체 작정 검증은 그대로 재사용.
             raw_then = obj.get("then")
             if raw_then is not None and (not isinstance(raw_then, list) or any(not isinstance(s, dict) for s in raw_then)):

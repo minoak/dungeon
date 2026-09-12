@@ -206,14 +206,26 @@ events = finish(d, bots)
 check('이동 중 새 관측이 와도 요청한 장비의 정체를 보존', events[-1]['resolution']['status'] == 'failed'
       and bots[0]['weapon']['name'] == '다른 검')
 
-# ── D48 개정(09-11 메모 §2-4): goto <아군> = 추적. 곁 + 대상 정지 = 갈 곳 없음(already_beside) / 움직이면 매 틱 뒤쫓다 곁에서 멈추면 arrived ──
+# ── D48 개정 2(09-12 파트너 "goto도 1턴 정도만 아군에게 follow처럼"): goto <아군> = 추적. 곁 + 대상 정지 = 곁에 선다(CHASE_IDLE 틱) → 도착 / 움직이면 매 틱 뒤쫓는다 ──
 d, bots, o = scene(['########', '#12...>#', '#......#', '########'])   # 1·2 인접, 둘 다 정지
 r = d.act(bots[0], {'type': 'goto', 'target': 'b2'}, bots)
-check('D48 개정: 곁에 멈춘 동료에게 goto = already_beside(no_effect, order 없음)',
-      r['result'] == 'already_beside' and r['resolution']['status'] == 'no_effect' and not bots[0].get('order'))
+check('D48 개정 2: 곁에 멈춘 동료에게 goto = arrived(이 틱 0걸음, 오류 아님, order 없음 — CHASE_IDLE=1)',
+      G.CHASE_IDLE == 1 and r['result'] == 'arrived' and not bots[0].get('order'))
 dec = brains._parse_decision(json.dumps({'reason': 'x', 'type': 'goto', 'target': 'b2'}, ensure_ascii=False), None, o, '1', bots)
-check('D48 개정: 결정 시점 선판정 — 입력 무효 already_beside(같은 틱 재판단 경로), 사유 문장 동봉',
-      dec.get('src') == 'error' and dec.get('input_error') == 'already_beside' and '곁' in str(dec.get('reason')))
+check('D48 개정 2: 결정 시점 선판정 폐지 — 곁에 멈춘 동료에게 goto 는 유효한 결정(src haiku)',
+      dec.get('src') == 'haiku' and dec.get('type') == 'goto' and dec.get('target') == 'b2' and 'input_error' not in dec)
+_saved = G.CHASE_IDLE
+G.CHASE_IDLE = 2
+r2 = d.act(bots[0], {'type': 'goto', 'target': 'b2'}, bots)
+ev2 = d.step_order(bots[0], bots)
+check('D48 개정 2: CHASE_IDLE=2 면 beside(order chase:b2, 붙어 섬) → 다음 틱 step_order 에서 arrived(해제)',
+      r2['result'] == 'beside' and ev2['result'] == 'arrived' and not bots[0].get('order'))
+bots[0]['plan'] = [{'type': 'search'}]
+r3 = d.act(bots[0], {'type': 'goto', 'target': 'b2'}, bots)
+check('D48 개정 2: 작정(then)이 딸려 있으면 CHASE_IDLE 과 무관하게 닿는 즉시 arrived(작정을 잇는다)',
+      r3['result'] == 'arrived' and not bots[0].get('order'))
+bots[0]['plan'] = []
+G.CHASE_IDLE = _saved
 bots[1]['_xy_end'] = (bots[1]['x'] - 1, bots[1]['y'])   # 동료가 이번 틱 한 칸 옮긴 셈 — 움직이는 중
 r = d.act(bots[0], {'type': 'goto', 'target': 'b2'}, bots)
 check('D48 개정: 곁이라도 움직이는 동료면 추적 order(chase:b2)·pathed len 0',
