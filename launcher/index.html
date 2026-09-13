@@ -169,7 +169,12 @@
         <option value="claude_cli">Claude CLI (구독 · 느림)</option>
         <option value="dummy">규칙 두뇌 (LLM 0콜 — 배관 점검)</option>
       </select>
-      <div class="hint">API 키는 .env 에서 읽는다(launcher.py 가 띄운 러너에 그대로 전달).</div>
+      <div class="hint" id="brainHint">API 키는 .env 에서 읽는다(launcher.py 가 띄운 러너에 그대로 전달).</div>
+    </div>
+    <div class="card" id="keyCard" hidden>
+      <h3>Gemini API 키 (이 판에만)</h3>
+      <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="AIza… — Google AI Studio 에서 만든 키">
+      <div class="hint">키는 이 판을 도는 러너 프로세스에만 전달되고 서버의 디스크·로그에 남지 않는다(BYOK, D68). 판이 끝나면 사라진다. 비용은 키 주인에게.</div>
     </div>
     <div class="card">
       <h3>시드</h3>
@@ -314,6 +319,12 @@ async function loadPresets() {
     throw new Error('이전 런처가 실행 중이야. 진행 중인 원정이 끝난 뒤 런처 창을 닫고 wonderland.bat으로 다시 열어 줘.');
   }
   textLimits = presets.text_limits;
+  if (presets.byok) {                                                  // 공개(심사용) 서버 server.py — 키는 심사위원이 판마다 가져온다(D68)
+    $('keyCard').hidden = false;
+    $('brain').value = 'gemini_api'; $('brain').disabled = true;
+    $('brainHint').textContent = '공개 서버는 Gemini API 로만 돈다. 아래 칸의 키가 이 판에만 쓰인다.';
+    $('bestiary').checked = false; $('bestiary').disabled = true;    // D64 — 공개 서버는 원장 이월 없음
+  }
   await loadSprites();                                                 // D37 미리보기 합성기
   for (const s of slots) if (!s.look) {
     s.look = randomLook(s.sex);
@@ -579,6 +590,10 @@ $('bStart').onclick = async () => {
     seed: $('seed').value.trim() || null,
     party: partyMode,
   };
+  if (presets?.byok) {                                                 // 공개 서버(D68): 키 없이는 시작 요청을 보내지 않는다
+    body.key = $('apiKey').value.trim();
+    if (!body.key) { $('err2').style.color = '#ff8b7a'; $('err2').textContent = 'Gemini API 키를 넣어 줘 — 이 판에만 쓰이고 서버에 남지 않아.'; return; }
+  }
   $('bStart').disabled = true;
   try {
     await api('/api/start', body);

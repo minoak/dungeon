@@ -104,11 +104,14 @@ class Runner:
             shutil.copy2(src, dst)
         return dst
 
-    def start(self, opts, party_path, default_brain=None):
+    def start(self, opts, party_path, default_brain=None, extra_env=None):
+        """extra_env: 이 판의 러너에만 주는 환경변수(공개 서버 server.py 의 BYOK 키 — 부모 환경에 안 남고 프로세스에만)."""
         with self.lock:
             if self.running():
                 raise Conflict("이미 판이 진행 중이다 — 중지하거나 끝나길 기다려라")
             env = dict(os.environ)
+            if extra_env:
+                env.update({k: str(v) for k, v in extra_env.items()})
             env["PYTHONUTF8"] = "1"
             env["DUNGEON_GM"] = "0"
             env["DUNGEON_STATE_DIR"] = self.state_dir
@@ -300,6 +303,22 @@ def default_party_preview(root):
     return out
 
 
+def presets_payload(ctx):
+    """GET /api/presets 본문 — 론처 화면이 처음 읽는 것(키워드·직업·외형·기본 파티·모드·상한·상태). server.py 가 재사용."""
+    p = ctx.presets
+    return {"traits": p["traits"], "max_traits": p["max_traits"], "jobs": p["jobs"],
+            "looks": sheetkit.load_looks(),   # D37(09-06) 외형 사전 — 파츠·스와치·기본색
+            "default_party": default_party_preview(ctx.root),
+            "skill_alpha": {"presets": skill_schema.PRESETS,
+                            "default_sets": skill_schema.DEFAULT_SETS},
+            "default_mode": "standard", "ruleset": "skills-v1",
+            "brain_failure_policy": run_control.POLICY,
+            "text_limits": TEXT_LIMITS,
+            "custom_saved": os.path.exists(ctx.party_path),
+            "default_brain": ctx.default_brain or "gemini_api",
+            "status": ctx.runner.status()}
+
+
 def save_party(ctx, slots):
     """슬롯 → sheetkit 조립 → 파일 → 러너의 load_party 로 재검증(이중 검증). 실패는 BadRequest 한 줄."""
     try:
@@ -404,18 +423,7 @@ class Handler(SimpleHTTPRequestHandler):
             except (OSError, ValueError) as e:
                 return self._json(500, {"error": str(e)})
         if path == "/api/presets":
-            p = self.ctx.presets
-            return self._json(200, {"traits": p["traits"], "max_traits": p["max_traits"], "jobs": p["jobs"],
-                                    "looks": sheetkit.load_looks(),   # D37(09-06) 외형 사전 — 파츠·스와치·기본색
-                                    "default_party": default_party_preview(self.ctx.root),
-                                    "skill_alpha": {"presets": skill_schema.PRESETS,
-                                                    "default_sets": skill_schema.DEFAULT_SETS},
-                                    "default_mode": "standard", "ruleset": "skills-v1",
-                                    "brain_failure_policy": run_control.POLICY,
-                                    "text_limits": TEXT_LIMITS,
-                                    "custom_saved": os.path.exists(self.ctx.party_path),
-                                    "default_brain": self.ctx.default_brain or "gemini_api",
-                                    "status": self.ctx.runner.status()})
+            return self._json(200, presets_payload(self.ctx))
         if path == "/api/oracle":                        # D61 신탁 소켓 — 현재 요청
             return self._json(200, {"oracle": self.ctx.runner.oracle_get()})
         if path == "/api/status":

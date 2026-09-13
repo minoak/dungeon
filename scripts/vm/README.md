@@ -4,7 +4,7 @@
 제품의 접속 층(계정·결제·캐릭터 영속)이 아니다. 관전만 하려면 Pages(https://minoak.github.io/dungeon/)가 있다.
 
 ## 구성
-- VM 하나(Ubuntu 24.04) · `server.py`(공개용 서버, **아직 리포에 없음 — 다음 작업**)가 127.0.0.1:8000 · Caddy 가 443 에서 HTTPS 로 받아 넘긴다.
+- VM 하나(Ubuntu 24.04) · `server.py`(공개용 서버, D68 — 게이트 `verify_public`)가 127.0.0.1:8000 · Caddy 가 443 에서 HTTPS 로 받아 넘긴다.
 - 리포는 `/opt/botpikdun` 에 읽기 전용으로, 세션 데이터(심사위원별 `state/`·`runs/`·파티 파일)는 `/var/lib/botpikdun/sessions/<id>/` 에.
 - 키 파일(`.env`)은 서버에 두지 않는다. 키는 판 시작 요청에 실려 와 그 판의 러너 프로세스 환경변수에만 머문다.
 - Docker 는 쓰지 않는다. 파이썬 쪽 의존은 표준 라이브러리뿐이고(pip 설치 0), Node 22 는 관전 클라이언트 빌드에만 쓴다.
@@ -16,13 +16,15 @@
 | `botpikdun.service` | systemd 템플릿(`@APP_DIR@`·`@DATA_DIR@`·`@PORT@`·`@USER@` 를 setup.sh 가 채움) |
 | `Caddyfile` | Caddy 템플릿(`@DOMAIN@`·`@PORT@`) — 자동 인증서·압축·역프록시 |
 
-## `server.py` 가 `launcher.py` 와 달라야 하는 것(공개 전 필수)
-`launcher.py` 는 로컬 도구라 리포 루트 전체를 정적으로 서빙하고(`.env` 포함), 판 시작 API 에 인증이 없고, 판이 서버에 하나뿐이다. 공개용은:
-1. **정적 허용 목록**: `/game/`(빌드)·`/viewer/` 에셋·`/launcher/` 화면·자기 세션의 `/state/`·`/runs/` 만. 그 밖은 404, 디렉터리 목록 없음.
-2. **세션**: 쿠키 번호표(HttpOnly·Secure) 하나에 `Ctx` 하나 — `state_dir`·`runs_dir`·`party_path`·`character_presets.json` 전부 세션 폴더. 관전 클라이언트는 무변경(경로가 같다).
-3. **BYOK**: 판 시작 요청에 `key` 필수 → 러너 `Popen` env 의 `GEMINI_API_KEY` 로만. 로그·디스크·응답에 안 남긴다(`envload` 는 기존 env 를 보존하고, Gemini 키는 `x-goog-api-key` 헤더라 URL 로그에도 안 찍힌다 — 확인함).
-4. **상한**: 서버 전체 동시 3판 · 세션당 1판 · 판당 600틱(러너 기본) · 세션 24시간 뒤 정리 · `/api/start` IP 당 빈도 제한.
-5. `/`(루트) → 론처 화면. `--host 127.0.0.1` 고정(외부에서는 Caddy 를 거쳐서만).
+## `server.py` 가 `launcher.py` 와 다른 것(D68, 구현됨 — `verify_public` 게이트가 전부 검사)
+`launcher.py` 는 로컬 도구라 리포 루트 전체를 정적으로 서빙하고(`.env` 포함), 판 시작 API 에 인증이 없고, 판이 서버에 하나뿐이다. 공개용 `server.py` 는 그 위에:
+1. **정적 허용 목록**: `/game/`(빌드)·`/viewer/`·`/launcher/`·`/art/` 와 자기 세션의 `/state/`·`/runs/` 만. 그 밖(.env·소스·설계 문서·남의 세션)은 404, 디렉터리 목록은 자기 `/runs/` 만, 점 파일·`.py` 는 어디서도 안 준다.
+2. **세션**: 쿠키 번호표(`botpikdun_sid`, HttpOnly·SameSite=Lax·HTTPS 뒤에서 Secure) 하나에 `Ctx` 하나 — `state/`·`runs/`·`party_custom.json`·`character_presets.json` 전부 `<BOTPIKDUN_DATA>/sessions/<id>/`. 관전 클라이언트·론처 화면은 무변경(경로가 같다). 24시간 안 오면 메모리에서 내리고 판 기록 없는 폴더만 지운다.
+3. **BYOK**: 판 시작 요청에 `key` 필수(20~200자·공백 없음) → 러너 `Popen` env 의 `GEMINI_API_KEY` 로만(`launcher.Runner.start` 의 `extra_env`). 서버의 다른 키·대체 두뇌는 비워서 물려준다. 로그·디스크·응답에 안 남긴다(게이트가 세션 폴더 전체와 서버 로그를 grep). 두뇌는 `gemini_api` 하나, 도감 이월 없음.
+4. **상한**: 서버 전체 동시 `BOTPIKDUN_MAX_RUNS`(기본 3)판 → 429 · 세션당 1판 → 409 · IP 당 시간당 시작 `BOTPIKDUN_START_PER_HOUR`(기본 12) → 429 · 메모리 세션 500 · 판당 600틱(러너 기본).
+5. `/` → 론처 화면 · `/healthz` → `{running, max_runs}` · `--host 127.0.0.1` 고정(외부에서는 Caddy 를 거쳐서만) · `.jsonl` 은 `text/plain`(Caddy 압축 매치).
+
+로컬 확인: `BOTPIKDUN_BRAIN=dummy python server.py --port 8031` 로 띄우면 LLM 0콜로 화면·세션·키 칸을 볼 수 있다(키 칸엔 아무 20자 이상).
 
 ## 콘솔에서 할 일
 1. 프로젝트 만들기 → Compute Engine API 사용 설정.
@@ -52,6 +54,5 @@
 리포 워킹트리 약 260MB(art 85·runs 90) + `.git` 얕은 클론 수십 MB + `game/node_modules` 약 220MB + 빌드 + Ubuntu 약 2GB. 심사위원 판 하나 2~5MB. 10GB 도 되지만 20GB 가 편하다(월 ₩600 차이).
 
 ## 아직 안 된 것
-- `server.py`(위 5개) — 다음 작업. 그 전엔 `setup.sh` 가 서비스를 등록만 하고 시작하지 않는다.
 - 판 파일 폴링을 Range 요청(추가분만)으로 바꾸는 것 — 클라이언트 변경이라 뒤로. 지금은 Caddy 압축으로 버틴다.
 - 새 VM 에서 `setup.sh` 실전 검증(아직 로컬 문법 검사만). Ubuntu 24.04 의 python3 는 3.12 — 로컬(3.13)과 차이가 있는지도 그때 확인.

@@ -10,7 +10,7 @@
 ## 기준 넷
 
 1. **실행에 필요한가** → 남긴다. 엔진·러너·론처·데이터·프롬프트·엔티티 정의·클라이언트.
-2. **지금도 쓰는 검증·도구인가** → 남기되 폴더로 모은다. 게이트 61종(`verify_*.py`, 2단계에서 `verify/` 로), 부검·리플레이 도구(`tools/`).
+2. **지금도 쓰는 검증·도구인가** → 남기되 폴더로 모은다. 게이트 62종(`verify_*.py`, 2단계에서 `verify/` 로), 부검·리플레이 도구(`tools/`).
 3. **끝난 실험의 산출물인가** → 지운다(이력에 있음). 7월 메뉴·페르소나 A/B 산출과 보고서, 죽은 스크립트, 보류한 스파이크.
 4. **판 기록(runs/)과 그림 원본(art/)** → 이번엔 안 건드린다(3단계 — 파트너 결정).
 
@@ -20,6 +20,7 @@
 README.md · LICENSE(MIT) · .env.example · wonderland.bat · live.bat · _run_gates.sh · STREAM_FORMAT.md
 엔진·러너·론처(루트, import 이름 그대로):
   dungeon_gm.py brains.py show_runner.py launcher.py entities.py bestiary.py sheetkit.py scenario.py
+  server.py — 공개(심사용) 서버: launcher 를 심사위원(쿠키 세션)별로 감싼다(D68, 09-13)
   run_control.py run_summary.py movement_summary.py composed_actions.py skill_core.py skill_combat.py skill_schema.py
   social_reactions.py town_layout.py town_spaces.py stream.py tags.py gm.py envload.py character_presets.py
 데이터(루트, 참조 60곳이라 유지): party.json party_solo.json party_crossed.json traits.json looks.json town.json town-v0.json
@@ -28,9 +29,10 @@ prompts/     adventurer_prompt.md(조합형 지침) context_prompt.md(D54 앞머
 tools/       analyze_run.py analyze_skills.py analyze_social.py report.py make_replay_viewer.py replay_viewer.html
              maze_metrics.py check_town.py run_skill_alpha.py ab_menu.py(verify_plan 이 파서로 import) ab_persona.py run_notes.py
 scripts/     start.sh live.sh verify.sh watch_map.sh (Linux/WSL 시대 — 전부 `~/dungeon` 을 가정, VPS 서빙 때 손볼 것)
-verify_*.py  게이트 61종(루트 — 2단계에서 verify/ 로 이동 예정)
+             vm/ setup.sh deploy.sh botpikdun.service Caddyfile README.md (심사용 서버 GCP 서울 VM 배포, 09-13)
+verify_*.py  게이트 62종(루트 — 2단계에서 verify/ 로 이동 예정; verify_public 은 server.py 게이트)
 entities/    몬스터·함정·오브젝트·NPC·맵·건물·의뢰 정의(D50)
-design/      HARNESS_DESIGN.md(D1~D67) · drafts/
+design/      HARNESS_DESIGN.md(D1~D68) · drafts/
 docs/        문서·연대기·데브로그·스크린샷 · PIXEL_DUNGEON_REFERENCE.md(참고 게임 메모)
 game/        관전 클라이언트(Phaser+Vite) · verify/smoke.mjs
 viewer/      옛 HTML 뷰어 + 공용 에셋(타일·스프라이트)
@@ -69,6 +71,6 @@ git checkout <해시>^ -- risu/                            # 폴더 통째로 �
 
 ## 다음 단계(파트너 결정)
 
-- **2단계**: `verify_*.py` 61개 + `verify_character_presets_browser.mjs` → `verify/`, `_run_gates.sh` 도 함께. 각 게이트의 `HERE` 를 리포 루트로 재정의하고 sys.path 를 넣는 일괄 치환 — 게이트 61종 통과가 곧 검증.
+- **2단계**: `verify_*.py` 62개 + `verify_character_presets_browser.mjs` → `verify/`, `_run_gates.sh` 도 함께. 각 게이트의 `HERE` 를 리포 루트로 재정의하고 sys.path 를 넣는 일괄 치환 — 게이트 62종 통과가 곧 검증.
 - **3단계**: `art/` 82MB(그림 원본·습작 — 런타임은 `viewer/assets`·`game/src/assets` 만 읽는다) → Git LFS 또는 릴리스 첨부 · `runs/` 48MB(판 107개) → 대표 판 유지, 스모크·중단 판 정리 여부.
 - ~~README 첫 화면 재편(외부 이름 확정 뒤)~~ → 09-13 완료(봇픽던, 스크린샷 5장, 날짜별 문단은 `docs/CHANGELOG.md` 로).

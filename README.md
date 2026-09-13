@@ -84,6 +84,7 @@ launcher.py (웹 론처 :8000, 판마다 서브프로세스) ─→ show_runner.
 ## 실행 (Windows)
 
 서버 배포 없이 **내 PC에서 판을 돌리고 브라우저로 관전**한다. LLM 호출은 실행자 본인의 키로 나가고, 저장소는 키를 모른다.
+심사용 공개 서버(`server.py` — 심사위원별 세션, 자기 키로 판 시작)는 [`scripts/vm/`](scripts/vm/README.md) 로 GCP VM 에 올린다.
 
 **1. 준비물**
 - Windows 10/11 + **Python 3**(3.13에서 확인). 엔진은 표준 라이브러리만 쓴다. API 두뇌를 켤 때만 `pip install requests`.
@@ -154,8 +155,9 @@ python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer
 
 ## 상태 (2026-09-13)
 
-한 판의 고리(시트 → 마을 → 5층 → 보스 → 귀환)가 닫혔고 기능은 여기서 동결한다. 다음은 서빙 준비 — 실행자가 자기 키로 판을 여는
-BYOK 서버 골격. 캐릭터 영속(도감·수첩 이월)은 그 뒤의 기능이다.
+한 판의 고리(시트 → 마을 → 5층 → 보스 → 귀환)가 닫혔고 기능은 여기서 동결한다. 서빙 준비 중 — 실행자가 자기 키로 판을 여는
+공개 서버 `server.py`(D68: 세션·허용 목록·BYOK·상한)가 생겼고 배포 스크립트는 `scripts/vm/`(GCP 서울 VM + Caddy HTTPS). 새 VM 실전 검증은 아직.
+캐릭터 영속(도감·수첩 이월)은 그 뒤의 기능이다.
 
 ## 라이선스
 
