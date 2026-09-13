@@ -7,7 +7,7 @@
 - VM 하나(Ubuntu 24.04) · `server.py`(공개용 서버, D68 — 게이트 `verify_public`)가 127.0.0.1:8000 · Caddy 가 443 에서 HTTPS 로 받아 넘긴다.
 - 리포는 `/opt/botpikdun` 에 읽기 전용으로, 세션 데이터(심사위원별 `state/`·`runs/`·파티 파일)는 `/var/lib/botpikdun/sessions/<id>/` 에.
 - 키 파일(`.env`)은 서버에 두지 않는다. 키는 판 시작 요청에 실려 와 그 판의 러너 프로세스 환경변수에만 머문다.
-- Docker 는 쓰지 않는다. 파이썬 쪽 의존은 표준 라이브러리뿐이고(pip 설치 0), Node 22 는 관전 클라이언트 빌드에만 쓴다.
+- Docker 는 쓰지 않는다. Gemini HTTP 호출에 `requests`가 필요하며 Ubuntu의 `python3-requests` 패키지로 설치한다(pip 설치 0). Node 22 는 관전 클라이언트 빌드에만 쓴다.
 
 | 파일 | 역할 |
 |---|---|
@@ -38,7 +38,13 @@
    sudo BOTPIKDUN_DOMAIN=<서브도메인>.duckdns.org bash ~/src/scripts/vm/setup.sh
    ```
    스크립트를 먼저 읽고 싶으면 `less ~/src/scripts/vm/setup.sh`. 갱신은 `sudo bash /opt/botpikdun/scripts/vm/deploy.sh`.
-5. 확인: `curl -sI https://<도메인>/ | head -1` → server.py 가 있으면 `200`, 없으면 Caddy `502`. 인증서는 DNS 가 VM 을 가리키고 80·443 이 열린 뒤 Caddy 가 자동으로 받는다.
+5. 확인: `curl -fsS https://<도메인>/healthz` → `{"ok": true, ...}`. 화면은 `curl -fsSL -o /dev/null -w '%{http_code}\n' https://<도메인>/` → `200`.
+   `/`는 `/launcher/`로 302 이동한다. `-I`(HEAD)가 아니라 실제 GET 요청과 `-L`(이동 따라가기)로 확인한다.
+   인증서는 DNS 가 VM 을 가리키고 80·443 이 열린 뒤 Caddy 가 자동으로 받는다.
+6. 진행 중인 판이 없는 상태에서 [비용 가드](budget-guard/README.md)의 시험 메시지를 보내 VM의 `TERMINATED` 상태를 확인한다.
+   VM을 다시 켠 뒤 5번의 상태·화면 확인과 브라우저 접속을 반복한다. VM 이름은 가드 대상과 같은 `botpikdun`이어야 한다.
+7. 진짜 키를 사용하는 짧은 판은 브라우저 키 칸에 직접 입력해 시험한다. 보스방 앞 프리셋 자체에는 **50콜 상한이 없다**.
+   50콜 이내를 반드시 지키려면 별도의 실제 API 호출 상한을 먼저 구현·검증해야 한다(틱 수와 API 호출 수는 다름).
 
 ## 비용(서울, 대략 — 요금표 재확인 전)
 | 항목 | 월 |

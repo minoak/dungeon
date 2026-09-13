@@ -442,7 +442,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
-        if path.startswith(GAME_PREFIX) and not os.path.isfile(os.path.join(self.ctx.root, "game", "dist", "index.html")):
+        if path.startswith(GAME_PREFIX) and not os.path.isfile(os.path.join(self.directory, "game", "dist", "index.html")):
             return self._game_missing()
         return super().do_GET()
 

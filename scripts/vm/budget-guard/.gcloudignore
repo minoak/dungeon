@@ -1,0 +1,5 @@
+.gcloudignore
+__pycache__/
+test_guard.py
+install.sh
+README.md

@@ -6,6 +6,11 @@ set -euo pipefail
 APP_DIR="${BOTPIKDUN_DIR:-/opt/botpikdun}"
 REF="${BOTPIKDUN_REF:-main}"
 [ "$(id -u)" -eq 0 ] || { echo "sudo 로 실행해야 한다"; exit 1; }
+# 초기 초안으로 설치한 VM도 실제 Gemini 호출에 필요한 패키지를 갖추도록 한다.
+if ! python3 -c 'import requests' >/dev/null 2>&1; then
+  apt-get update -q
+  apt-get install -y -q python3-requests
+fi
 git -C "$APP_DIR" fetch --depth 1 origin "$REF"
 git -C "$APP_DIR" reset -q --hard FETCH_HEAD
 rm -f "$APP_DIR/.env"                                                  # 공개 서버엔 키 파일 없음(BYOK)

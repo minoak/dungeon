@@ -130,6 +130,12 @@ try:
     fresh = Judge(port, "asset")
     st, h, raw, _, sc = fresh.call("/viewer/tiles.json")
     check("① 자산 요청은 번호표를 안 만든다", st == 200 and not sc and fresh.cookie is None)
+    st, _, _, _, sc = fresh.call("/game/assets/__missing_public_probe__.js")
+    check("① 쿠키 없는 게임 자산 요청도 연결을 끊지 않음 · 번호표 없음",
+          st in (404, 503) and not sc and fresh.cookie is None, str(st))
+    st, _, _, obj, sc = fresh.call("/healthz")
+    check("① GET /healthz 200 · 상태 확인은 세션을 만들지 않음",
+          st == 200 and obj.get("ok") is True and not sc and fresh.cookie is None)
     n_dirs = len(os.listdir(os.path.join(TMP, "sessions")))
     check("① 세션 폴더 = 번호표 받은 수(2)", n_dirs == 2, str(n_dirs))
 

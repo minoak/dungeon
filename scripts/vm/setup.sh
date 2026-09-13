@@ -21,7 +21,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 echo "== 1/6 패키지"
 apt-get update -q
-apt-get install -y -q git curl ca-certificates gnupg debian-keyring debian-archive-keyring apt-transport-https python3
+apt-get install -y -q git curl ca-certificates gnupg debian-keyring debian-archive-keyring apt-transport-https python3 python3-requests
 if ! command -v node >/dev/null 2>&1 || [ "$(node -v | sed 's/^v//' | cut -d. -f1)" -lt 22 ]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -          # Node 22 (관전 클라이언트 빌드 전용)
   apt-get install -y -q nodejs
@@ -32,6 +32,7 @@ if ! command -v caddy >/dev/null 2>&1; then                            # Caddy �
   apt-get update -q && apt-get install -y -q caddy
 fi
 python3 --version; node --version; caddy version
+python3 -c 'import requests; print("requests", requests.__version__)'
 
 echo "== 2/6 사용자·데이터 폴더 $DATA_DIR"
 id -u "$SVC_USER" >/dev/null 2>&1 || useradd --system --home-dir "$DATA_DIR" --shell /usr/sbin/nologin "$SVC_USER"
@@ -72,4 +73,5 @@ echo
 echo "설치 끝."
 systemctl --no-pager --lines=0 status caddy botpikdun || true
 echo "주소: https://$DOMAIN/  — DNS 가 이 VM 의 외부 IP 를 가리키고 80·443 이 열려 있어야 인증서가 발급된다."
-echo "확인: curl -sI https://$DOMAIN/ | head -1   (server.py 가 있으면 200, 없으면 Caddy 502)"
+echo "상태 확인: curl -fsS https://$DOMAIN/healthz"
+echo "화면 확인: curl -fsSL -o /dev/null -w '%{http_code}\\n' https://$DOMAIN/   (정상: 200)"
