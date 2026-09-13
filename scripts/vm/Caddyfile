@@ -1,0 +1,14 @@
+# 봇픽던 심사용 서버 — HTTPS(자동 인증서) + 압축 + 역프록시. setup.sh 가 @DOMAIN@·@PORT@ 를 채워 /etc/caddy/Caddyfile 로 놓는다.
+# 압축: 관전 클라이언트는 1.5초마다 판 파일(JSONL, 최대 ~5MB) 전체를 다시 받으므로 압축이 트래픽을 5~8배 줄인다.
+@DOMAIN@ {
+	encode zstd gzip {
+		match {
+			header Content-Type text/*
+			header Content-Type application/json*
+			header Content-Type application/x-ndjson*
+			header Content-Type application/javascript*
+			header Content-Type application/octet-stream*
+		}
+	}
+	reverse_proxy 127.0.0.1:@PORT@
+}

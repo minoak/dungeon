@@ -1,0 +1,26 @@
+# 봇픽던 심사용 서버 — systemd 단위 템플릿. setup.sh 가 @…@ 를 채워 /etc/systemd/system/botpikdun.service 로 놓는다.
+[Unit]
+Description=botpikdun public server (server.py: per-session runners, BYOK)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+WorkingDirectory=@APP_DIR@
+Environment=PYTHONUTF8=1
+Environment=BOTPIKDUN_DATA=@DATA_DIR@
+ExecStart=/usr/bin/python3 @APP_DIR@/server.py --host 127.0.0.1 --port @PORT@
+Restart=always
+RestartSec=3
+# 리포(@APP_DIR@)는 읽기만, 쓰기는 @DATA_DIR@(세션별 state/·runs/·파티 파일)만.
+# 키는 판 시작 요청 본문으로만 들어와 그 판의 러너 프로세스 환경변수에 머문다 — 디스크에 쓰지 않는다.
+ProtectSystem=strict
+ReadWritePaths=@DATA_DIR@
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
