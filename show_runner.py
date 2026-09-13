@@ -110,6 +110,10 @@ BOSS_ON = os.environ.get("DUNGEON_BOSS", "0") == "1"     # 보스층·워프게�
                                                           # 죽으면 열리고 사용=마을(0층) 귀환=판 종료(outcome 'returned'). 러너 기본 0
                                                           # (기존 판·게이트 그대로) — 론처 옵션 '보스층·귀환'(화면 기본 켬)이 켠다
 DEPTHS = int(os.environ.get("DUNGEON_DEPTHS", "1" if TOWN_ON else "5" if SKILLS_ON else "2"))
+START_BOSS = os.environ.get("DUNGEON_START", "") == "boss"   # D67 프리셋(09-13 파트너 "보스전까지 가는 데 콜 수가 너무 많아서 보스방 앞에
+if START_BOSS:                                                #   있는 프리셋이 하나 필요"): 최심층에서 시작·보스 켬·마을 없음·파티는 보스룸 앞 칸
+    TOWN_ON, BOSS_ON = False, True                            #   (Dungeon.boss_front) 곁에 선다 — 관찰용. 론처 체크박스 '보스방 앞에서 시작'
+START_DEPTH = DEPTHS if START_BOSS else 1                     #   첫 층 번호(몬스터 수·보스 여부도 그 층 기준)
                                                           # 마을 판 기본 1층까지(2층=아직 안 만듦 —
                                                           # 1층의 하강 계단=관측 클리어 조건, 파트너 확정)
 GM_ON = os.environ.get("DUNGEON_GM", "1") != "0"
@@ -900,15 +904,15 @@ def main():
         d, tstarts = build_town()
         d.lore = lore
     else:
-        d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION,
-                      n_monsters=N_MON, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,
+        d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION, depth=START_DEPTH,   # D67: 프리셋이면 최심층
+                      n_monsters=N_MON + START_DEPTH - 1, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,   #   (층 전이와 같은 몹 수 규칙)
                       loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
                       dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON, ally_doing=ALLY_DOING_ON,
                       ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
                       status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON,
                       auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE,
                       skills=SKILLS_ON, trpg_combat=TRPG_COMBAT_ON, random_skill=RANDOM_SKILL_ON,
-                      boss=BOSS_ON and DEPTHS <= 1,   # D65: 1층이 곧 최심층이면 여기가 보스층
+                      boss=BOSS_ON and START_DEPTH >= DEPTHS,   # D65: 첫 층이 곧 최심층이면 여기가 보스층(D67 프리셋 포함)
                       plan_max=G.PLAN_MAX if PLAN_ON else 0)   # D66: 작정 스위치(러너 기본 0)
         d.lore = lore
     d.plan_max = G.PLAN_MAX if PLAN_ON else 0    # 마을(from_layout)도 같은 스위치
@@ -921,6 +925,13 @@ def main():
             d.visited.discard((b['x'], b['y']))
             b['x'], b['y'] = spot
             d.visited.add(spot)
+        elif START_BOSS:                   # D67 프리셋 — 보스룸 앞 칸 곁(도착 칸 BFS, 결정론). 앞 칸이 없으면 기본 스폰
+            front = d.boss_front()
+            spots = arrive_cells(d, *front, 9) if front else []
+            if len(bots) < len(spots):
+                d.visited.discard((b['x'], b['y']))
+                b['x'], b['y'] = spots[len(bots)]
+                d.visited.add((b['x'], b['y']))
         b['known'] = iss.known(names[c])   # 도감 주입 켬 — 발급기의 set 과 *같은 객체*(획득 즉시 다음 obs 반영)
         b['book'] = iss.record(names[c])   # D53 진행도(조우 수·심층 여부)도 같은 객체 — 해금 즉시 다음 obs 에 본문
         if LEDGER_ON:
@@ -964,6 +975,7 @@ def main():
             potions=N_POTION,          # 층당 회복 물약(07-17 additive) — 배치를 바꾸는 판 파라미터
             gear=N_GEAR,               # 층당 장비(07-30 additive) — 같은 급(배치 파라미터)
             town=TOWN_ON,              # 마을 판(D29 additive) — 판 모양 자체가 다름(0층·왕복·클리어)
+            start=("boss" if START_BOSS else ("town" if TOWN_ON else "dungeon")),   # D67(09-13 additive) 시작 지점 프리셋 — boss=최심층 보스룸 앞
             sight=G.SIGHT,             # 시야 반경(DUNGEON_SIGHT) — 굴림 수를 바꾸는 세계 물리
                                        #   (리플레이·판 비교의 전제, seed 와 같은 급)
             max_turns=MAX_TURNS, gm=GM_ON,
@@ -1045,6 +1057,8 @@ def main():
     roster = "·".join((b.get("name") or b["job"]) for b in bots)
     event("=== TRPG 던전 시작 (%s / Haiku 두뇌 / %s / 구독 과금 0)  %dx%d  지하%d층  몬스터%d 함정%d 매복%d  seed=%d ==="
           % (roster, gmtag, DUNGEON_W, DUNGEON_H, DEPTHS, N_MON, N_TRAP, N_LURK, DUNGEON_SEED))
+    if START_BOSS:                          # D67 프리셋 — 관전·로그에 시작 조건을 남긴다
+        event("=== 프리셋(D67): 최심층 지하 %d층 보스룸 앞에서 시작 — 보스와 봉인된 워프게이트가 문 너머에 있다 ===" % d.depth)
     inbox = {b["char"]: [] for b in bots}   # 봇별 받은편지함 (동료가 지난 턴 한 say).
                                             # 빈 dict 아닌 전 봇 키 — 스트림 tick.inbox 형태 고정(소비자 인덱싱)
     pending = {b["char"]: [] for b in bots}   # D47 배관 — 걷는 동안 들린 말의 보관함(결정 때 함께 읽힘)

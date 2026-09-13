@@ -160,6 +160,7 @@
       <label class="f"><input type="checkbox" id="town"> 마을에서 시작 (0층 → 던전 입구, D29)</label>
       <label class="f" title="캐릭터 영속은 서빙 단계의 기능 — 지금은 판마다 별개(2026-09-13). 켜면 이 판이 로컬 bestiary.json 을 읽고 쓴다"><input type="checkbox" id="bestiary"> 도감 이월 (캐릭터 영속 — 서빙 전까지 기본 끔, D64)</label>
       <label class="f" title="최심층(설정한 깊이의 마지막 층)에 보스가 서고 출구는 봉인된 워프게이트가 된다. 보스가 쓰러지면 열리고, 게이트를 쓰면 마을로 돌아와 판이 끝난다(2026-09-13 관찰용 첫 판)"><input type="checkbox" id="boss" checked> 보스층·귀환 (최심층 보스를 잡으면 워프게이트로 마을 귀환, D65)</label>
+      <label class="f" title="관찰용 프리셋: 판을 최심층에서 바로 시작하고 파티를 보스룸 문 앞에 세운다(마을 없음·보스 켬). 보스전까지 가는 콜을 아낀다"><input type="checkbox" id="startBoss"> 보스방 앞에서 시작 (프리셋 — 최심층·보스 켬·마을 없음, D67)</label>
     </div>
     <div class="card">
       <h3>두뇌</h3>
@@ -571,6 +572,7 @@ $('bStart').onclick = async () => {
     town: $('town').checked,
     bestiary: $('bestiary').checked,   // D64 도감 이월(기본 끔) — 켠 판만 로컬 원장에 읽고 쓴다
     boss: $('boss').checked,           // D65 보스층·귀환(기본 켬) — 최심층 보스·봉인 워프게이트·마을 귀환 종료
+    start: $('startBoss').checked ? 'boss' : '',   // D67 프리셋 — 보스방 앞에서 시작(마을 없음·보스 켬)
     brain: $('brain').value,
     action_mode: 'compose',
     mode: $('runMode').value,

@@ -1110,6 +1110,30 @@ class Dungeon:
             self._add_feature('chest', ENT.object_name('chest'), cx, cy)   # 보물상자 — 게이트 곁
         self.boss, self.sealed = boss, True
 
+    def boss_front(self):
+        """D67(09-13 파트너 "보스전까지 가는 데 콜 수가 너무 많아서 보스방 앞에 있는 프리셋이 하나 필요"): 보스룸(출구 방) **앞** 칸 —
+        방 테두리에 뚫린 관통 칸(통로 접점·문 타일) 바로 바깥의 바닥 칸. 러너가 프리셋 시작 자리(도착 칸 BFS 의 닻)로 쓴다.
+        후보가 여럿이면 (y, x) 순 첫 것(결정론). 방이 없거나 관통이 없으면 None(러너는 기본 스폰)."""
+        ex, ey = self.exit
+        rid = self._room_id_at(ex, ey)
+        if rid is None:
+            return None
+        room = self.rooms[rid]
+        cands = []
+        for y in range(room.y - 1, room.y + room.h + 1):
+            for x in range(room.x - 1, room.x + room.w + 1):
+                if room.contains(x, y) or not (0 <= x < self.w and 0 <= y < self.h):
+                    continue
+                if self.grid[y][x] not in (FLOOR, DOOR):       # 테두리의 관통 칸(문·통로 접점)만
+                    continue
+                dx = -1 if x < room.x else (1 if x >= room.x + room.w else 0)
+                dy = -1 if y < room.y else (1 if y >= room.y + room.h else 0)
+                ox, oy = x + dx, y + dy                         # 관통 칸의 바깥쪽 한 칸 = '방 앞'
+                if 0 <= ox < self.w and 0 <= oy < self.h and self.grid[oy][ox] == FLOOR and not room.contains(ox, oy):
+                    cands.append((ox, oy))
+        cands.sort(key=lambda c: (c[1], c[0]))
+        return cands[0] if cands else None
+
     def _assign_room_types(self):
         """출구 든 방 = exit, 출구에서 가장 먼 방 = entrance, 나머지 standard.
         (Stage 2: entrance=파티 출발, exit=기본 핑 목표 → 리더 없는 파티 응집.)"""

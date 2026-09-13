@@ -179,4 +179,45 @@ check("⑥ 클라이언트: 타입·로그 줄·씬·몬스터 키 · 옛 뷰어
       and "exitObj" in src(os.path.join("game", "src", "scene", "DungeonScene.ts")) and "'고블린 대장'" in src(os.path.join("game", "src", "assets", "world.ts"))
       and "'locked'" in src(os.path.join("viewer", "index.html")) and os.path.exists(os.path.join(HERE, "entities", "monster", "goblin_chief.json")))
 
+print("── ⑦ 프리셋(D67): 보스방 앞에서 시작")
+front = d.boss_front()
+ex7, ey7 = d.exit
+room7 = d.rooms[d._room_id_at(ex7, ey7)]
+check("⑦ boss_front = 보스룸 밖 바닥 칸이고 방 테두리 관통 칸에 인접(체비셰프 1)", front is not None and d.grid[front[1]][front[0]] == G.FLOOR and not room7.contains(*front)
+      and any(d.grid[y][x] in (G.FLOOR, G.DOOR) and not room7.contains(x, y) and (room7.x - 1 <= x <= room7.x + room7.w) and (room7.y - 1 <= y <= room7.y + room7.h)
+              for x in range(front[0] - 1, front[0] + 2) for y in range(front[1] - 1, front[1] + 2) if (x, y) != tuple(front)))
+STATE7 = os.path.join(tempfile.mkdtemp(prefix="wl_boss7_"), "state")
+os.makedirs(STATE7, exist_ok=True)
+import importlib, subprocess, sys
+env7 = dict(os.environ, DUNGEON_STATE_DIR=STATE7, DUNGEON_START="boss", DUNGEON_TOWN="1", DUNGEON_DEPTHS="2", DUNGEON_TURNS="3",
+            DUNGEON_MONSTERS="1", DUNGEON_BOSS="0")          # 마을 켬·보스 끔을 줘도 프리셋이 덮는다
+rc = subprocess.run([sys.executable, os.path.join(HERE, "show_runner.py")], env=env7, capture_output=True, text=True, timeout=300).returncode
+with open(os.path.join(STATE7, "stream.jsonl"), encoding="utf-8") as f:
+    rows7 = [json.loads(ln) for ln in f if ln.strip()]
+meta7 = rows7[0]
+lv7 = next(r for r in rows7 if r.get("kind") == "level")
+def front_from_level(lv):                              # boss_front 와 같은 규칙을 스냅샷(grid·rooms·exit)에서 — 러너 생성 인자에 무관
+    grid = lv["grid"]; w, h = lv["w"], lv["h"]
+    ex_, ey_ = lv["exit"]
+    rm = next(r for r in lv["rooms"] if r["x"] <= ex_ < r["x"] + r["w"] and r["y"] <= ey_ < r["y"] + r["h"])
+    inside = lambda x, y: rm["x"] <= x < rm["x"] + rm["w"] and rm["y"] <= y < rm["y"] + rm["h"]
+    cands = []
+    for y in range(rm["y"] - 1, rm["y"] + rm["h"] + 1):
+        for x in range(rm["x"] - 1, rm["x"] + rm["w"] + 1):
+            if inside(x, y) or not (0 <= x < w and 0 <= y < h) or grid[y][x] not in (G.FLOOR, G.DOOR):
+                continue
+            dx = -1 if x < rm["x"] else (1 if x >= rm["x"] + rm["w"] else 0)
+            dy = -1 if y < rm["y"] else (1 if y >= rm["y"] + rm["h"] else 0)
+            ox, oy = x + dx, y + dy
+            if 0 <= ox < w and 0 <= oy < h and grid[oy][ox] == G.FLOOR and not inside(ox, oy):
+                cands.append((ox, oy))
+    cands.sort(key=lambda c: (c[1], c[0]))
+    return cands[0] if cands else None
+fr7 = front_from_level(lv7)
+check("⑦ 러너: run_meta.start=boss·town False·boss True · 첫 level.depth == depths(2)·gate", meta7.get("start") == "boss" and meta7.get("town") is False and meta7.get("boss") is True
+      and lv7.get("depth") == 2 and lv7.get("gate", {}).get("sealed") is True)
+check("⑦ 파티가 보스룸 앞 칸 곁(체비셰프 ≤2)에서 시작·보스룸 밖", fr7 is not None and all(max(abs(b["x"] - fr7[0]), abs(b["y"] - fr7[1])) <= 2 for b in lv7["party"])
+      and not any(any(rm["type"] == "exit" and rm["x"] <= b["x"] < rm["x"] + rm["w"] and rm["y"] <= b["y"] < rm["y"] + rm["h"] for rm in lv7["rooms"]) for b in lv7["party"]))
+check("⑦ 러너 정상 종료(rc 0)", rc == 0)
+
 print("ALL PASS" if C.failed == 0 else "FAIL %d" % C.failed)

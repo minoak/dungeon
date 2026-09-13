@@ -133,6 +133,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | `potions` | 층당 회복 물약 배치 수(`DUNGEON_POTIONS`, 러너 기본 1 — 2026-07-17 additive. 엔진 직생성 기본 0) |
 | `gear` | 층당 장비 배치 수(`DUNGEON_GEAR`, 러너 기본 3 — 2026-07-30 additive. 엔진 직생성 기본 0. 순환: 단검·가죽 갑옷·장검·사슬 갑옷) |
 | `town` | 마을 판 여부(`DUNGEON_TOWN` — 2026-07-30 D29 additive). true 면 판 모양 자체가 다르다: depth 0=마을(손그림·전체 시야·NPC·몹 0), 왕복 전이(`ascend` 라인), DEPTHS 기본 1, 최심층 하강=관측 클리어(outcome 은 기존 escaped 유지) |
+| `start` | (2026-09-13 D67 additive) 시작 지점 `"town"|"dungeon"|"boss"` — `boss` = 관찰용 프리셋(`DUNGEON_START=boss`, 론처 체크박스 '보스방 앞에서 시작'): 판을 **최심층(depth == depths)**에서 바로 시작하고 마을 없음·보스 켬(D65)·파티는 보스룸(출구 방) 앞 칸(`Dungeon.boss_front`: 방 테두리 관통 칸 바깥 바닥) 곁에 선다(도착 칸 BFS, 결정론). 첫 `level.depth` 가 depths 이고 몹 수는 층 전이 규칙(N_MON + depth − 1) 그대로. 판 모양을 바꾸는 실행모드 메타(town 급) |
 | `max_turns` | 틱 한도 (0이면 퇴화: tick 0개·end.turn=0) |
 | `gm` | GM(LLM 내레이터) 사용 여부(bool) — 이 필드 자체를 제외하면 스트림 내용에 영향 없음(GM은 tick emit 뒤에 도는 소비자, 엔진·RNG 무접촉) |
 | `stream_obs` | decisions 에 obs 동봉 여부(bool, `DUNGEON_STREAM_OBS=1`) — tick 스키마 판별용 |

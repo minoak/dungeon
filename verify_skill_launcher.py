@@ -65,6 +65,16 @@ class AlphaLauncherTests(unittest.TestCase):
         self.assertEqual(env['DUNGEON_TOWN'], '1')
         self.assertEqual([env[k] for k in ('DUNGEON_SKILLS', 'DUNGEON_TRPG_COMBAT', 'DUNGEON_RANDOM_SKILL')], ['1'] * 3)
 
+    def test_boss_front_preset_overrides_town_and_turns_boss_on(self):
+        """D67(2026-09-13 파트너 "보스방 앞에 있는 프리셋이 하나 필요"): start=boss → DUNGEON_START=boss·마을 끔·보스 켬. 없으면 START 없음."""
+        _, env = self.launch_env({'town': True, 'boss': False, 'start': 'boss'})
+        self.assertEqual(env['DUNGEON_START'], 'boss')
+        self.assertNotIn('DUNGEON_TOWN', env)
+        self.assertEqual(env['DUNGEON_BOSS'], '1')
+        _, env = self.launch_env({'town': True})
+        self.assertNotIn('DUNGEON_START', env)
+        self.assertEqual(env['DUNGEON_TOWN'], '1')
+
     def test_status_reads_mode_from_record(self):
         file = Path(self.temp.name) / 'stream.jsonl'
         for alpha in (None, {'skills': True}):
