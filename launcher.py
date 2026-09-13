@@ -161,9 +161,9 @@ class Runner:
                 env["DUNGEON_TOWN"] = "1"
             else:
                 env.pop("DUNGEON_TOWN", None)
-            if brain == "dummy":                    # 규칙 두뇌는 도감 원장에 누적하지 않는다.
-                env["DUNGEON_BESTIARY_FILE"] = ""
-            elif not env.get("DUNGEON_BESTIARY_FILE"):
+            if brain == "dummy" or not opts.get("bestiary"):   # 규칙 두뇌는 도감 원장에 누적하지 않는다 · D64(09-13 파트너 "캐릭터 영속은
+                env["DUNGEON_BESTIARY_FILE"] = ""              #   서빙까지 했을 때 시작 — 지금은 완전히 별개의 판"): 기본 이월 안 함(판 안 학습만).
+            elif not env.get("DUNGEON_BESTIARY_FILE"):         #   옵션 '도감 이월'(bestiary=true)을 켠 판만 로컬 원장에 읽고 쓴다
                 env["DUNGEON_BESTIARY_FILE"] = os.path.join(self.root, "bestiary.json")
             os.makedirs(self.state_dir, exist_ok=True)
             self.preserve_previous()

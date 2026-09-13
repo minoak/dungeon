@@ -25,6 +25,7 @@ echo Stop: Ctrl-C or close this window. The previous run is already saved to run
 echo.
 
 rem Bestiary persistence is for live runs only (verify/experiments keep it off = isolation).
-if not defined DUNGEON_BESTIARY_FILE set "DUNGEON_BESTIARY_FILE=%~dp0bestiary.json"
+rem D64(2026-09-13): 캐릭터 영속은 서빙부터 - 기본은 이월 안 함(판 안 학습만). 이월하려면 DUNGEON_BESTIARY_FILE 을 미리 정한다
+if not defined DUNGEON_BESTIARY_FILE set "DUNGEON_BESTIARY_FILE="
 if not defined DUNGEON_GM set "DUNGEON_GM=0"
 python show_runner.py

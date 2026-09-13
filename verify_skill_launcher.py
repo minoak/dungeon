@@ -40,6 +40,18 @@ class AlphaLauncherTests(unittest.TestCase):
             _, env = self.launch_env({'mode': 'classic'})
         self.assertEqual([env[k] for k in ('DUNGEON_SKILLS', 'DUNGEON_TRPG_COMBAT', 'DUNGEON_RANDOM_SKILL')], ['0'] * 3)
 
+    def test_bestiary_carryover_default_off_and_opt_in(self):
+        """D64(2026-09-13 파트너 "캐릭터 영속은 서빙까지 했을 때 시작 — 지금은 완전히 별개의 판"): 실 두뇌도 옵션 없으면 원장 빈값(판 안 학습만),
+        셸에 남은 DUNGEON_BESTIARY_FILE 도 무시한다. 옵션 bestiary=true 를 켠 판만 bestiary.json 을 읽고 쓴다(규칙 두뇌는 켜도 안 쌓는다)."""
+        with patch.dict(os.environ, {'GEMINI_API_KEY': 'test-key'}):
+            with patch.dict(os.environ, {'DUNGEON_BESTIARY_FILE': '/tmp/leftover.json'}):
+                _, env = self.launch_env({'brain': 'gemini_api'})
+            self.assertEqual(env['DUNGEON_BESTIARY_FILE'], '')
+            _, env = self.launch_env({'brain': 'gemini_api', 'bestiary': True})
+            self.assertTrue(env['DUNGEON_BESTIARY_FILE'].endswith('bestiary.json'))
+            _, env = self.launch_env({'brain': 'dummy', 'bestiary': True})
+            self.assertEqual(env['DUNGEON_BESTIARY_FILE'], '')
+
     def test_invalid_mode_or_alpha_combination_does_not_start(self):
         for opts in ({'mode': 'wrong'}, {'action_mode': 'menu'}):
             with self.subTest(opts=opts), self.assertRaises(launcher.BadRequest):

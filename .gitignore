@@ -31,3 +31,5 @@ art/sprites-v1/assets/
 state/brain_block.log
 # 신탁 소켓 세션 입력(D61) — 판마다 다른 값(2026-09-13)
 state/oracle.json
+# 도감 원장 — 캐릭터 영속은 서빙부터(D64, 2026-09-13). 이월을 켠 판만 로컬에 쌓고 저장소엔 안 올린다
+bestiary.json

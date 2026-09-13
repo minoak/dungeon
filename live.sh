@@ -31,6 +31,7 @@ echo "중단: Ctrl-C  — 지난 판은 runs/ 에 이미 보존돼 있음"
 echo
 
 # 도감 영속은 라이브 판만 켠다 (start.sh 와 동일 — verify/실험은 기본 꺼짐=격리)
-export DUNGEON_BESTIARY_FILE="${DUNGEON_BESTIARY_FILE:-$HERE/bestiary.json}"
+# D64(2026-09-13): 캐릭터 영속은 서빙부터 — 기본은 이월 안 함(판 안 학습만). 이월하려면 DUNGEON_BESTIARY_FILE 을 미리 정한다
+export DUNGEON_BESTIARY_FILE="${DUNGEON_BESTIARY_FILE:-}"
 export DUNGEON_GM="${DUNGEON_GM:-0}"
 exec python3 "$HERE/show_runner.py"

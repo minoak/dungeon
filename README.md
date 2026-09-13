@@ -169,8 +169,9 @@ python analyze_social.py runs/stream-XXXX.jsonl
 한 곳에 있고 엔진이 거기서 읽는다(옛 `lore.json`·코드 상수·`town.json` 대사를 이관 — 같은 시드의 결과는 해시까지 그대로).
 새 정의를 넣는 법과 검증(`verify_entities.py`)은 [docs/entities.md](docs/entities.md).
 
-`runs/`(지난 판 스트림)·`bestiary.json`(판을 넘어 이월되는 캐릭터별 도감)은 실LLM으로 얻은
-원본 데이터라 저장소에 보존한다. 외부 배포 타일 등 에셋은 **CC0만** 사용(Kenney).
+`runs/`(지난 판 스트림)는 실LLM으로 얻은 원본 데이터라 저장소에 보존한다. `bestiary.json`(캐릭터별 도감 원장)은
+**캐릭터 영속이 서빙 단계의 기능**이라(D64, 2026-09-13 파트너 결정 — 지금은 판마다 별개) 기본으로 읽지도 쓰지도 않고
+저장소에서도 뺐다(론처 옵션 '도감 이월'을 켠 판만 로컬 파일에 쌓는다). 외부 배포 타일 등 에셋은 **CC0만** 사용(Kenney).
 캐릭터 파츠 스프라이트(D37, 2026-09-06)는 파트너 자작 — 원본 시안·변환 도구는 `art/sprites-v1/`, 뷰어·론처가 읽는 런타임본은
 `viewer/assets/sprites/sprites.json`(16×16 팔레트 인덱스 행렬, 캔버스에서 합성 — PNG 없음), 색 스와치는 `looks.json`.
 외형은 시트 `look` 필드 또는 러너의 시드 랜덤으로 정해져 판 기록(run_meta)에 남는다 — 엔진·프롬프트는 읽지 않는다.

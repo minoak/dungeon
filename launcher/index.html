@@ -158,6 +158,7 @@
         <label><input type="radio" name="map" value="big">큰 판 (80×30, 몹 7)</label>
       </div>
       <label class="f"><input type="checkbox" id="town"> 마을에서 시작 (0층 → 던전 입구, D29)</label>
+      <label class="f" title="캐릭터 영속은 서빙 단계의 기능 — 지금은 판마다 별개(2026-09-13). 켜면 이 판이 로컬 bestiary.json 을 읽고 쓴다"><input type="checkbox" id="bestiary"> 도감 이월 (캐릭터 영속 — 서빙 전까지 기본 끔, D64)</label>
     </div>
     <div class="card">
       <h3>두뇌</h3>
@@ -567,6 +568,7 @@ $('bStart').onclick = async () => {
   const body = {
     map: $('mapMode').querySelector('label.on input').value,
     town: $('town').checked,
+    bestiary: $('bestiary').checked,   // D64 도감 이월(기본 끔) — 켠 판만 로컬 원장에 읽고 쓴다
     brain: $('brain').value,
     action_mode: 'compose',
     mode: $('runMode').value,
