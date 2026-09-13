@@ -1,0 +1,14 @@
+{
+  "id": "town_wonderland",
+  "name": "원더랜드 마을",
+  "kind": "map",
+  "tags": [
+    "town",
+    "town"
+  ],
+  "comps": {
+    "space": {
+      "role": "town"
+    }
+  }
+}

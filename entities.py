@@ -23,11 +23,13 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, 'entities')
 SPRITE_DIR = os.path.join(HERE, 'game', 'src', 'assets', 'world')
-KINDS = ('monster', 'trap', 'object', 'npc')
+KINDS = ('monster', 'trap', 'object', 'npc', 'map', 'building', 'quest')   # quest(D61, 09-12): 길드 게시판의 의뢰 — 정보만
 COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
          'trap': {'trap', 'knowledge'},
          'object': {'equipment', 'consumable', 'loot', 'container', 'heal', 'exit', 'knowledge'},
-         'npc': {'npc', 'knowledge'}}
+         'npc': {'npc', 'knowledge'},
+         'map': {'space'}, 'building': {'building', 'board', 'oracle'},   # D61 건물 역할 부품(메모 §4-4 [제안]): 게시판·신탁
+         'quest': {'quest'}}
 UNLOCK_EVENTS = {'encounter', 'kill', 'search_first', 'trap_avoid', 'trap_disarm', 'visit', 'talk'}   # 메모 §2-5 어휘.
 #   코드가 세는 건 encounter 뿐(bestiary.Issuer, D53) — 나머지는 검증기만 아는 예약어(정의에 적어도 아직 안 센다).
 BASELINE_MONSTER = '고블린'   # 모르는 종(장면 저작의 임의 이름)은 기준선 몹의 몸 — 낯선 짐승도 몸은 있다
@@ -39,6 +41,7 @@ class EntityError(ValueError):
 
 def _problems(pairs, root):
     out, ids = [], {}
+    boards, kinds_by_id = [], {}                     # D61 2차 검사 재료
     for path, d in pairs:
         rel = os.path.relpath(path, root)
         stem = os.path.splitext(os.path.basename(path))[0]
@@ -106,6 +109,38 @@ def _problems(pairs, root):
                     out.append('%s: trap.%s 정수 필요' % (rel, k))
         if kind == 'npc' and not (comps.get('npc') or {}).get('line'):
             out.append('%s: npc.line 필요' % rel)
+        if kind == 'map':
+            space = comps.get('space') or {}
+            if space.get('role') not in ('town', 'district', 'street'):
+                out.append('%s: space.role 은 town|district|street' % rel)
+        if kind == 'building':
+            b = comps.get('building') or {}
+            size, entry = b.get('size'), b.get('entrance')
+            valid_size = isinstance(size, list) and len(size) == 2 and all(type(v) is int and v > 0 for v in size)
+            if not valid_size:
+                out.append('%s: building.size 는 양의 정수 [가로,세로]' % rel)
+            if not (valid_size and isinstance(entry, list) and len(entry) == 2 and
+                    all(type(v) is int for v in entry) and 0 <= entry[0] < size[0] and entry[1] == size[1]-1):
+                out.append('%s: building.entrance 는 남쪽 외벽의 칸' % rel)
+            if not isinstance(b.get('texture'), str) or not b.get('texture'):
+                out.append('%s: building.texture 필요' % rel)
+            elif not os.path.isfile(os.path.join(SPRITE_DIR, 'town-' + b['texture'] + '.png')):
+                out.append('%s: 건물 텍스처 파일이 없다: %s' % (rel, b['texture']))
+            board = comps.get('board')
+            if board is not None:                    # D61 게시판 부품 — 의뢰 id 목록(존재·kind 는 아래 2차 검사)
+                if not isinstance(board.get('quests'), list) or not board['quests']:
+                    out.append('%s: board.quests 는 비어 있지 않은 의뢰 id 목록' % rel)
+                else:
+                    boards.append((rel, list(board['quests'])))
+        if kind == 'quest':                          # D61 의뢰 — goal 문장은 있어야 한다(정보만)
+            q = comps.get('quest') or {}
+            if not isinstance(q.get('goal'), str) or not q['goal'].strip():
+                out.append('%s: quest.goal 필요' % rel)
+        kinds_by_id[eid] = kind
+    for rel, qids in boards:                         # 2차: 게시판이 가리키는 의뢰가 실제 quest 정의인가
+        for qid in qids:
+            if kinds_by_id.get(qid) != 'quest':
+                out.append('%s: board.quests 의 %r 는 quest 정의가 아니다' % (rel, qid))
     return out
 
 

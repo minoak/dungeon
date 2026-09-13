@@ -14,7 +14,12 @@ entities/
   object/exit.json  treasure.json  chest.json  fountain.json  potion.json  dagger.json  longsword.json  leather_armor.json  chain_mail.json
   npc/gear_merchant.json  item_merchant.json  innkeeper.json          (상점 v0 — town-v0.json)
   npc/temple_attendant.json  guild_receptionist.json  tavern_keeper.json   (마을 v1 — 대사는 임시 초안)
+  map/town_wonderland.json  town_temple.json  town_guild.json  town_tavern.json  town_dungeon.json  town_main_street.json  town_alley.json
+  building/temple.json  guild_hall.json  tavern.json  dungeon_gate.json
 ```
+
+2026-09-12: 마을 전체와 여섯 구역, 건물 네 동이 추가됐다. 건물 정의의 점유 크기와 문턱을
+`town_spaces`가 충돌 격자와 그림 배치로 함께 변환한다. 상세는 [마을 공간 계약](town-spaces.md).
 
 파일 하나 = 정의 하나. `id`는 파일명과 같고 폴더는 `kind`와 같다. 로더는 `entities.py`(`load()` — 엔진 import 때 한 번).
 

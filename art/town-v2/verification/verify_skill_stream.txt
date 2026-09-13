@@ -1,0 +1,19 @@
+  OK 실제 러너의 1~5층 전이 및 탈출
+  OK 3층에서만 인당 한 개 획득
+  OK 4·5층에 생성 스킬 이월
+  OK 획득 이후 관측에 생성 스킬 노출
+  OK 분석기는 접근 걸음을 추가 결정으로 세지 않음
+  OK 굴림·효과·최종 판정 모두 기존 결정 ID 참조
+  OK 스트림에 세 단계 기록
+  OK 미완료 접근을 스킬 실행으로 세지 않음
+  OK 시드+저장된 결정으로 스트림 전체 재현
+  OK 스위치 (False, False, False) 조합 완주
+  OK 스위치 (False, False, True) 조합 완주
+  OK 스위치 (False, True, False) 조합 완주
+  OK 스위치 (False, True, True) 조합 완주
+  OK 스위치 (True, False, False) 조합 완주
+  OK 스위치 (True, False, True) 조합 완주
+  OK 스위치 (True, True, False) 조합 완주
+  OK 스위치 (True, True, True) 조합 완주
+  OK 모든 플래그 조합의 실제 노출·획득·OFF 무필드 확인
+ALL PASS — verify_skill_stream (18 checks, 실 LLM 0콜)

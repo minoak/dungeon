@@ -1,0 +1,31 @@
+  OK 프리셋 네 개는 동일한 스키마·비용 계산 사용
+  OK 잘못된 id='attack' 거절
+  OK 잘못된 range=-1 거절
+  OK 잘못된 range=True 거절
+  OK 잘못된 roll={'type': 'unknown'} 거절
+  OK 잘못된 effects=[] 거절
+  OK 잘못된 effects=[{'type': 'damage', 'dice': '999d999'}] 거절
+  OK 잘못된 penalties=[{'type': 'hp_cost', 'value': -4}] 거절
+  OK 잘못된 cost=0 거절
+  OK 임의 JSON 입력도 예외 없이 오류 반환 None
+  OK 임의 JSON 입력도 예외 없이 오류 반환 []
+  OK 임의 JSON 입력도 예외 없이 오류 반환 4
+  OK 임의 JSON 입력도 예외 없이 오류 반환 {}
+  OK 임의 JSON 입력도 예외 없이 오류 반환 {'id': []}
+  OK 임의 JSON 입력도 예외 없이 오류 반환 {'id': 'x', 'name': []}
+  OK 회복+밀침 금지
+  OK 강한 효과와 긴 사거리는 비싸고 실제 패널티는 환급
+  OK 1000개 시드 유효성·예산·재현
+  OK 구성요소 풀 순서에 무관
+  OK 제한된 효과·패널티 풀 존중
+  OK 불가능한 생성은 유한 횟수 뒤 명확한 오류
+  OK 반환값을 고쳐도 프리셋이 오염되지 않음
+  OK 유리굴림은 큰 눈
+  OK 불리굴림은 작은 눈
+  OK 유리+불리 상쇄는 한 번만 굴림
+  OK 공격 자연1 실패·자연20 명중
+  OK 내성 동률 성공, 자연20 자동성공 없음
+  OK 치명타는 주사위 개수 두 배
+  OK TRPG OFF 스킬 수치는 고정 평균 반올림
+  OK 모든 결과 JSON 직렬화 가능
+ALL PASS — verify_skill_schema (30 checks)

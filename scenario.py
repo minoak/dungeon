@@ -163,10 +163,16 @@ def build(spec):
     if spec.get("town"):                       # 마을 장면(D29) — 전체 시야·마을 어휘
         d.town = True
     for fs in spec.get("features") or []:      # 추가 피처 — from_ascii 글리프 밖(장비 상위 티어·NPC 등)
-        d._add_feature(fs["type"], fs["name"], int(fs["x"]), int(fs["y"]),
-                       concealed=bool(fs.get("concealed")))
+        fid = d._add_feature(fs["type"], fs["name"], int(fs["x"]), int(fs["y"]),
+                             concealed=bool(fs.get("concealed")))
         if fs["type"] == "npc" and fs.get("line"):
             d.npc_lines[fs["name"]] = fs["line"]
+        if fs["type"] == "building" and fs.get("entity"):   # D61 건물 역할 부품 — 정의 id 를 매면 게시판·신탁이 문턱 근처에서 관측에
+            if not getattr(d, "building_defs", None):
+                d.building_defs = {}
+            d.building_defs[fid] = fs["entity"]
+    if spec.get("oracle"):                     # D61 신탁 소켓 — 장면에 걸린 신의 요청 {id, text}
+        d.oracle = dict(spec["oracle"])
     for m in d.monsters:                       # HUNTING/FLEEING 템플릿 목표 좌표 채움
         if m.target:
             t = next((b for b in bots if b["char"] == m.target), None)
@@ -346,7 +352,7 @@ def probe(spec, n, jobs):
         elif dec.get("reason"):
             line += "  | " + dec.get("reason", "")[:60]
         print(line)
-        for k in ("say", "say_kind", "to", "item", "form", "note", "floor_line", "book_line"):   # 말·종류(D47)·상대(D41)·건네기 물건·친목 몸짓(D47 ②)·남긴 한 줄·결산 한 줄(D40)·도감 인식(D55)도 프로브의 답이다(09-06)
+        for k in ("say", "say_kind", "to", "item", "form", "note", "floor_line", "book_line", "oracle_reply"):   # oracle_reply(D61 신탁 응답)   # 말·종류(D47)·상대(D41)·건네기 물건·친목 몸짓(D47 ②)·남긴 한 줄·결산 한 줄(D40)·도감 인식(D55)도 프로브의 답이다(09-06)
             if dec.get(k):
                 print("         %s: %s" % (k, dec[k]))
         for k in ("brain_retries", "attempt_errors"):   # 판단 재시도(06d4b30)·D48 개정 already_beside — 첫 응답이 무효였으면 무엇이었나

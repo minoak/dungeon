@@ -1,0 +1,34 @@
+  OK 현재 관측에 self·소지품·길을 분리하여 노출
+  OK 새 참조 목록에 좌표·실물 참조가 새지 않음
+  OK 동사 10개와 대상 ID를 제시하고 번호 메뉴는 숨김
+  OK 행동 × 관측 대상 63조합을 파싱·실행·표시
+  OK D48: follow 는 COMMON 밖(invalid_type) · 9종 · 프로필 v0.5 · 관측 스키마 v0.4 · 사람에게 goto 는 접수
+  OK door: 모든 COMMON 조합 접수·실행 및 접근 종료
+  OK trap: 모든 COMMON 조합 접수·실행 및 접근 종료
+  OK self: 물약이 해당 대상에게만 적용되고 한 병 소모
+  OK b2: 물약이 해당 대상에게만 적용되고 한 병 소모
+  OK m0: 물약이 해당 대상에게만 적용되고 한 병 소모
+  OK 물약을 상자에 쓰면 변화 없음·소유권 보존
+  OK 파괴 기능 없는 사물 공격은 입력 오류가 아님
+  OK use 자동 접근은 도착 뒤 한 번만 소비·실행
+  OK 접근의 각 틱과 결과가 같은 결정 및 정규 대상에 연결
+  OK 대상 조사도 접근 후 정보 없음으로 판정
+  OK 접근 중 사라진 소지품은 실행 때 다시 검사
+  OK 길 ID는 선택 당시의 종점을 그대로 사용
+  OK 새 관측에서 옛 길 ID는 입력 참조 오류
+  OK 이동 전 길을 then으로 실행하면 계획 파기·재판단
+  OK 제자리라도 새 관측에서 옛 길 계획은 만료
+  OK then도 COMMON 문법과 item·form을 보존
+  OK then의 건네기가 실제 소유권으로 이어짐
+  OK 동료 공격도 실제 피해와 피해자의 경험을 남김
+  OK 참조 오류 원문과 당시 ID를 생략 없이 보존
+  OK 실플레이 입력 오류는 행동을 만들지 않고 보류
+  OK JSON 자체가 불량인 경우도 실제 원문 보존
+  OK 이동 중 새 관측이 와도 요청한 장비의 정체를 보존
+  OK D48 개정 2: 곁에 멈춘 동료에게 goto = arrived(이 틱 0걸음, 오류 아님, order 없음 — CHASE_IDLE=1)
+  OK D48 개정 2: 결정 시점 선판정 폐지 — 곁에 멈춘 동료에게 goto 는 유효한 결정(src haiku)
+  OK D48 개정 2: CHASE_IDLE=2 면 beside(order chase:b2, 붙어 섬) → 다음 틱 step_order 에서 arrived(해제)
+  OK D48 개정 2: 작정(then)이 딸려 있으면 CHASE_IDLE 과 무관하게 닿는 즉시 arrived(작정을 잇는다)
+  OK D48 개정: 곁이라도 움직이는 동료면 추적 order(chase:b2)·pathed len 0
+  OK D48 개정: 움직이는 동료를 매 틱 뒤쫓고(chase:b2 걸음), 곁에서 그가 멈추면 arrived 로 해제
+ALL PASS — verify_action_system (33 checks, 실 LLM 0콜)

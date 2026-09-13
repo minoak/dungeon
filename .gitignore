@@ -27,3 +27,7 @@ state/brain_retry.json
 # 런타임 유일본은 viewer/assets/sprites/sprites.json(사본). 원본 시안·도구·README 만 art/ 에 둔다.
 art/sprites-v1/assets/
 *.zip
+# 차단 프롬프트 원문(시트 포함) — 진단용, 개인 파일(2026-09-13)
+state/brain_block.log
+# 신탁 소켓 세션 입력(D61) — 판마다 다른 값(2026-09-13)
+state/oracle.json

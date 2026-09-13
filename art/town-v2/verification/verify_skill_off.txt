@@ -1,0 +1,4 @@
+  OK seed=7: 기준선과 관측·결과·난수 상태 일치
+  OK seed=37: 기준선과 관측·결과·난수 상태 일치
+  OK seed=217: 기준선과 관측·결과·난수 상태 일치
+ALL PASS — verify_skill_off (3 seeds × 80 ticks, 기준선 = 78fbe84 + D51 갱신 2026-09-11)

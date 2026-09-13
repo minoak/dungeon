@@ -1,0 +1,24 @@
+test_api_and_party_save (__main__.PresetsTest.test_api_and_party_save) ... [launcher] "GET /api/characters HTTP/1.1" 200 -
+[launcher] "POST /api/characters HTTP/1.1" 200 -
+[launcher] "GET /api/characters HTTP/1.1" 200 -
+C:\Users\akals\Documents\GitHub\dungeon\gm.py:20: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\akals\\Documents\\GitHub\\dungeon\\gm_prompt.md' mode='r' encoding='utf-8'>
+  GM_PROMPT = open(_p, encoding="utf-8").read() if os.path.exists(_p) else ""
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+[launcher] "POST /api/party HTTP/1.1" 200 -
+[launcher] "POST /api/characters HTTP/1.1" 400 -
+[launcher] "POST /api/characters HTTP/1.1" 200 -
+[launcher] "GET /api/characters HTTP/1.1" 200 -
+[launcher] "POST /api/characters/delete HTTP/1.1" 200 -
+[launcher] "GET /api/characters HTTP/1.1" 200 -
+ok
+test_browser_roundtrip (__main__.PresetsTest.test_browser_roundtrip) ... skipped 'WL_BROWSER=1일 때 브라우저까지 검증'
+test_concurrent_new_saves_are_all_kept (__main__.PresetsTest.test_concurrent_new_saves_are_all_kept) ... ok
+test_invalid_and_failed_write_preserve_previous_file (__main__.PresetsTest.test_invalid_and_failed_write_preserve_previous_file) ... ok
+test_long_text_roundtrip_with_traits (__main__.PresetsTest.test_long_text_roundtrip_with_traits) ... ok
+test_roundtrip_and_independent_variants (__main__.PresetsTest.test_roundtrip_and_independent_variants) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.738s
+
+OK (skipped=1)
+ALL PASS — verify_character_presets (캐릭터 프리셋 저장·복원)

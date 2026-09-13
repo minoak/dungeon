@@ -1,0 +1,37 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>원더랜드 — 마을 전체 맵</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#101c21;color:#e3e8df;font:15px 'Malgun Gothic',sans-serif}header{padding:24px 4vw;border-bottom:1px solid #33464c}h1{font-size:27px;margin:6px 0 10px;color:#f3dfb0}p{color:#b6c5c5;margin:8px 0}small{color:#c5ac78;letter-spacing:3px}main{max-width:1500px;margin:auto;padding:22px}nav{display:flex;flex-wrap:wrap;gap:16px;align-items:center;padding:15px;background:#203138;border-radius:10px;margin-bottom:18px}label{cursor:pointer}select,button{background:#30474c;color:white;border:1px solid #668383;border-radius:5px;padding:8px}canvas{display:block;width:100%;height:auto;border:1px solid #435954;image-rendering:pixelated}#status{font-size:14px}details{padding:15px;background:#203138;margin-top:16px}pre{overflow:auto;font:13px monospace;line-height:1.2}#legend{display:flex;gap:16px;flex-wrap:wrap;padding:14px 0}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}</style>
+<header><small>WONDERLAND / TOWN V2</small><h1>하나의 마을, 여섯 개의 구역</h1><p>신전 · 모험가 길드 · 주점 · 던전 입구를 번화가와 샛길로 잇습니다.</p><p>지도 검토 화면입니다. 건물과 구역의 이름·점유 영역은 엔티티 정의를 사용합니다.</p></header>
+<main><nav><label><input type="checkbox" id="grid">격자</label><label><input type="checkbox" id="collision">통행 불가</label><label><input type="checkbox" id="regions">구역 경계</label><label><input type="checkbox" id="names" checked>이름</label><label>길 확인 <select id="route"><option value="">선택하세요</option></select></label><button id="save">현재 지도 PNG 저장</button></nav><p id="status">불러오는 중…</p><canvas id="map"></canvas><div id="legend"></div><details><summary>같은 데이터에서 만든 아스키 지도</summary><pre id="ascii"></pre></details></main>
+<script type="module">
+const C=await(await fetch('compiled.json')).json(),V=C.visual,T=48,P=C.pad;
+const canvas=document.querySelector('canvas'),ctx=canvas.getContext('2d');canvas.width=C.size[0]*T;canvas.height=C.size[1]*T;
+const urls={terrain:'../town-v1/runtime/terrain.png',guild:'../town-v1/runtime/guild.png',props:'../town-v1/runtime/props.png',npcs:'../town-v1/runtime/npcs.png',temple:'runtime/temple.png',tavern:'runtime/tavern.png',gate:'runtime/gate.png'};
+const images=Object.fromEntries(await Promise.all(Object.entries(urls).map(async([k,src])=>{const im=new Image();im.src=src;await im.decode();return[k,im]})));
+const colors=['#b8b5ff','#79cce0','#dec084','#efad84','#92bc9b','#dca65e'];
+document.querySelector('#legend').innerHTML=V.spaces.regions.map((r,i)=>`<span><i class="dot" style="background:${colors[i]}"></i>${r.name}</span>`).join('');
+document.querySelector('#ascii').textContent=C.map.join('\n');
+const route=document.querySelector('#route');
+for(const b of V.spaces.buildings){const o=new Option(b.name,b.id);route.add(o)}
+route.add(new Option('던전 진입 칸','entry'));
+const on=id=>document.getElementById(id).checked;
+function label(text,x,y,color='#f8e5b1'){ctx.font='bold 23px Malgun Gothic';ctx.textAlign='center';const width=ctx.measureText(text).width;ctx.fillStyle='#17272ddd';ctx.fillRect(x-width/2-14,y-29,width+28,40);ctx.fillStyle=color;ctx.fillText(text,x,y)}
+function pathTo(target){const s=C.starts['1'],q=[s],seen=new Map([[s.join(','),null]]);for(let i=0;i<q.length;i++){const p=q[i];if(p[0]===target[0]&&p[1]===target[1]){const out=[];let k=p.join(',');while(k){out.push(k.split(',').map(Number));k=seen.get(k)}return out.reverse()}
+for(const n of [[p[0]-1,p[1]],[p[0]+1,p[1]],[p[0],p[1]-1],[p[0],p[1]+1]]){const k=n.join(',');if(C.map[n[1]]?.[n[0]]&&C.map[n[1]][n[0]]!=='#'&&!seen.has(k)){seen.set(k,p.join(','));q.push(n)}}}return []}
+function draw(){ctx.imageSmoothingEnabled=false;const tiles=['plaza_a','plaza_b','alley','earth','grass','wood_floor','plaster_wall','teal_roof'];
+const ground=Array.from({length:C.size[1]},()=>Array(C.size[0]).fill(4));for(const g of V.ground){const[x,y,w,h]=g.rect;for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)ground[yy+P][xx+P]=tiles.indexOf(g.tile)}
+for(let y=0;y<C.size[1];y++)for(let x=0;x<C.size[0];x++){let f=ground[y][x];if(f===0&&(x*37+y*17)%11<3)f=1;ctx.drawImage(images.terrain,(f%4)*T,Math.floor(f/4)*T,T,T,x*T,y*T,T,T);if(x===0||y===0||x===C.size[0]-1||y===C.size[1]-1){ctx.fillStyle='#263c36bb';ctx.fillRect(x*T,y*T,T,T)}}
+const objects=[];for(const b of V.buildings)objects.push({y:b.footY,draw(){const im=images[b.texture],height=im.height/im.width*b.width;ctx.drawImage(im,b.x+P*T-b.width/2,b.footY+P*T-height,b.width,height)}});
+for(const p of V.props)objects.push({y:p.y,draw(){ctx.drawImage(images.props,p.frame%4*144,Math.floor(p.frame/4)*144,144,144,p.x+P*T-72,p.y+P*T-138,144,144)}});
+for(const n of V.npcs)objects.push({y:(n.cell[1]+.5)*T,draw(){ctx.drawImage(images.npcs,0,n.row*96,96,96,(n.cell[0]+P+.5)*T-48,(n.cell[1]+P+.5)*T-91,96,96)}});
+objects.sort((a,b)=>a.y-b.y).forEach(o=>o.draw());
+if(on('regions'))for(let i=0;i<V.spaces.regions.length;i++){ctx.fillStyle=colors[i]+'33';ctx.strokeStyle=colors[i];ctx.lineWidth=3;for(const[x,y,w,h]of V.spaces.regions[i].rects){ctx.fillRect((x+P)*T,(y+P)*T,w*T,h*T);ctx.strokeRect((x+P)*T,(y+P)*T,w*T,h*T)}}
+if(on('collision')){ctx.fillStyle='#cc444477';for(let y=0;y<C.size[1];y++)for(let x=0;x<C.size[0];x++)if(C.map[y][x]==='#')ctx.fillRect(x*T,y*T,T,T)}
+if(on('grid')){ctx.strokeStyle='#1b2a3266';ctx.lineWidth=1;ctx.beginPath();for(let x=0;x<=canvas.width;x+=T){ctx.moveTo(x,0);ctx.lineTo(x,canvas.height)}for(let y=0;y<=canvas.height;y+=T){ctx.moveTo(0,y);ctx.lineTo(canvas.width,y)}ctx.stroke()}
+if(on('names')){for(const b of V.buildings)label(b.name,b.x+P*T,b.footY+P*T+37);label('번화가',23*T,18*T);label('샛길',29*T,35*T,'#e4d9c8')}
+for(const[c,[x,y]]of Object.entries(C.starts)){ctx.fillStyle='#e5d6a7';ctx.beginPath();ctx.arc((x+.5)*T,(y+.5)*T,8,0,Math.PI*2);ctx.fill();ctx.font='20px Malgun Gothic';ctx.fillText(c,(x+.5)*T,(y+.5)*T-12)}
+let status=`${C.size[0]}×${C.size[1]}칸 · 구역 6개 · 건물 4동 · NPC 3명 · 통행 연결 검사 통과`;
+if(route.value){const b=V.spaces.buildings.find(b=>b.id===route.value),target=b?b.entrance.map(v=>v+P):C.dungeon_entry,points=pathTo(target);ctx.strokeStyle='#fff0a0';ctx.lineWidth=7;ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo((x+.5)*T,(y+.5)*T):ctx.moveTo((x+.5)*T,(y+.5)*T));ctx.stroke();status+=` · ${route.selectedOptions[0].textContent}까지 ${points.length-1}칸`}
+document.querySelector('#status').textContent=status;
+}
+document.querySelectorAll('input,select').forEach(el=>el.onchange=draw);document.querySelector('#save').onclick=()=>{const a=document.createElement('a');a.download='wonderland-town-v2.png';a.href=canvas.toDataURL();a.click()};draw();window.__townMap={ready:true,compiled:C};
+</script></html>

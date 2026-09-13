@@ -1,0 +1,356 @@
+[
+  {
+    "name": "verify_stage1",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS"
+  },
+  {
+    "name": "verify_stage2",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS"
+  },
+  {
+    "name": "verify_stage2b",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS"
+  },
+  {
+    "name": "verify_stage3",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS"
+  },
+  {
+    "name": "verify_stream",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — 스트림(JSONL) 계약 건전. STREAM_FORMAT.md 가 데이터 계약."
+  },
+  {
+    "name": "verify_party",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — 시트 외부화(party.json)·N인 파티 건전. 시트=사용자 저작물의 원형."
+  },
+  {
+    "name": "verify_intent",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — 판단 되먹임(자기 기억) 계약 건전"
+  },
+  {
+    "name": "verify_bestiary",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — 도감(D11③ obs 되먹임) 건전"
+  },
+  {
+    "name": "verify_ledger",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — 공간 장부·구역 어휘(D17-1·2) 계약 건전"
+  },
+  {
+    "name": "verify_menu",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — 리모컨 계약(전수성·시야-온리·번호=행동) 건전"
+  },
+  {
+    "name": "verify_plan",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — 작정 큐(D16) 계약 건전"
+  },
+  {
+    "name": "verify_fellow",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — 동료 물리층(D18) 계약 건전"
+  },
+  {
+    "name": "verify_tags",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — 태그 원장(D5) 건전"
+  },
+  {
+    "name": "verify_interrupt",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — D1 대개정(인터럽트 기반 도주) 건전"
+  },
+  {
+    "name": "verify_wire",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — wire 직렬화(문장형 obs·스위치) 계약 건전"
+  },
+  {
+    "name": "verify_scan",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — 스캐너·보고 이동(D19 정정판) 계약 건전"
+  },
+  {
+    "name": "verify_potion",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — 회복 물약(줍기·소지·확정 회복) 계약 건전"
+  },
+  {
+    "name": "verify_builder",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — 월드 빌더(고리+가지) 격자 계약 건전"
+  },
+  {
+    "name": "verify_selfstop",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_selfstop (D21 재회·맴돎)"
+  },
+  {
+    "name": "verify_events",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_events (D22 사건층 2겹+묘 · D30 오브젝트 사용 목격)"
+  },
+  {
+    "name": "verify_dry",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_dry (무발견 신호: K걸음 도달 1회·배달 1회·새 목격 파기)"
+  },
+  {
+    "name": "verify_hail",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_hail (D24 말 걸림 정지: 들리는 전원·쿨다운=구조·판단은 두뇌 몫)"
+  },
+  {
+    "name": "verify_wait",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_wait (D25 제자리 대기: 사건이 깨운다·숫자 없음·셔틀의 고정점 · ⑩ 대기중 태그)"
+  },
+  {
+    "name": "verify_notes",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_notes (D26 의미 기억: 남길 한 줄·FIFO 5·엔진 불가침)"
+  },
+  {
+    "name": "verify_motion",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_motion (D27 이동중 표시: 깃발 하나·방향 비노출·몸짓만 · ⑥ 고른 행동 D27 개정)"
+  },
+  {
+    "name": "verify_brain",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_brain (백엔드 어댑터: 모킹 표면 불변·유출 차단·라벨 계약·비밀값 위생)"
+  },
+  {
+    "name": "verify_ally",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_ally (동료 시야 면제: 동료 한정·반경 유지·재경로 동행)"
+  },
+  {
+    "name": "verify_archer",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_archer (사거리·사선·동료 통과·DEX 명중·단일 진실원천)"
+  },
+  {
+    "name": "verify_social",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_social (채널 분리: 작정 보존·행동 불가침·need 선행·유출 차단)"
+  },
+  {
+    "name": "verify_solo",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_solo (솔로 판: 흩어져 출발·서로 모름·혼자 하강)"
+  },
+  {
+    "name": "verify_gear",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — 장비 뼈대(슬롯 2·보정·스왑·비교 라벨·시트 캐싱) 계약 건전"
+  },
+  {
+    "name": "verify_town",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_town (D29 마을: 전체 시야·NPC·계단 대칭·층 보존·관측 클리어)"
+  },
+  {
+    "name": "verify_launcher",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_launcher (D31 시트 조립·배경 격리·시드 random·론처 API)"
+  },
+  {
+    "name": "verify_character_presets",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_character_presets (캐릭터 프리셋 저장·복원)"
+  },
+  {
+    "name": "verify_status",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — verify_status (D34 상태 태그: 원천·효과·목격·렌더·결정론)"
+  },
+  {
+    "name": "verify_rest",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — verify_rest (D35 휴식: 개시·회복·완료·깨어남·렌더·작정·결정론)"
+  },
+  {
+    "name": "verify_relations",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — verify_relations (D36 관계 장부: 뼈 5종·문턱·살·시트 씨앗·렌더·결정론)"
+  },
+  {
+    "name": "verify_trail",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_trail (D38 자기 행동 궤적 + D40 꼬리표·위급·문 사용: 기록자 하나·순서·노출 1회·상한·렌더·intent 유지·결정론)"
+  },
+  {
+    "name": "verify_objtags",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_objtags (D39 오브젝트 태그: 횟수·마지막 사실·시야/라벨 접미·소멸 오브젝트 제외·꺼진 판 불변·재스폰 초기화)"
+  },
+  {
+    "name": "verify_floor",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_floor (D40 ② 층 집계·결산: 사전 하나·자기/목격 집계·렌더·얼리기·초대 1회·floor_line 불가침·결정론)"
+  },
+  {
+    "name": "verify_sayto",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_sayto (D41 지목: to 파싱·지목 정지·지목 뼈·혼잣말·all·스위치·렌더·intent)"
+  },
+  {
+    "name": "verify_saykind",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_saykind (D47 말의 종류: 잡담/제안 파싱·정지는 제안만·회의=시야 안·반복 방지·반응 뼈·배관·렌더·스위치)"
+  },
+  {
+    "name": "verify_give",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_give (D47 ② 건네기: 메뉴·물약/장비 물리·무정지/깨움·목격·뼈·상세 기록·반응 집계·표현·배선)"
+  },
+  {
+    "name": "verify_bond",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_bond (D47 ② 친목: form 자유 문구·메뉴·물리 없음·무정지/깨움·목격·뼈·상세 기록+반응·렌더·배선)"
+  },
+  {
+    "name": "verify_compose",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_compose (32 checks, 실 LLM 0콜)"
+  },
+  {
+    "name": "verify_approach",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_approach (28 checks, 실 LLM 0콜)"
+  },
+  {
+    "name": "verify_action_system",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_action_system (33 checks, 실 LLM 0콜)"
+  },
+  {
+    "name": "verify_reactions",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_reactions (32 checks, 실 LLM 0콜)"
+  },
+  {
+    "name": "verify_skill_schema",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_skill_schema (30 checks)"
+  },
+  {
+    "name": "verify_skill_effects",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_skill_effects (38 checks)"
+  },
+  {
+    "name": "verify_skill_stream",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_skill_stream (18 checks, 실 LLM 0콜)"
+  },
+  {
+    "name": "verify_skill_off",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_skill_off (3 seeds × 80 ticks, 기준선 = 78fbe84 + D51 갱신 2026-09-11)"
+  },
+  {
+    "name": "verify_skill_launcher",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_skill_launcher (알파 설정·일반판 격리·조합 거부·상태 표시)"
+  },
+  {
+    "name": "verify_brain_pause",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_brain_pause (자동 대행 금지·재판단·정지·HTTP 재시도·재개)"
+  },
+  {
+    "name": "verify_entities",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — verify_entities (16 checks, 실 LLM 0콜)"
+  },
+  {
+    "name": "verify_summary",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — verify_summary (D58 판 결산: 합성 계수·라이브=소급·Tap 무접촉·events.log 표)"
+  },
+  {
+    "name": "verify_notebook",
+    "passed": true,
+    "exit": 0,
+    "last": "RESULT: ALL PASS — verify_notebook (D59 수첩: 재료·파싱·실패 무정지·갈래 자리·2층 판 pages·끔)"
+  },
+  {
+    "name": "verify_town_spaces",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — 공간 정의·경계·연결·건물 점유·전체 경로·v1 호환"
+  },
+  {
+    "name": "verify_movement_summary",
+    "passed": true,
+    "exit": 0,
+    "last": "ALL PASS — 대기 종료·미완료·재대기/추적·층 전이·중복 종료 방지"
+  }
+]

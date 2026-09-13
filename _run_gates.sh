@@ -16,7 +16,7 @@ for v in verify_stage1 verify_stage2 verify_stage2b verify_stage3 verify_stream 
          verify_wait verify_notes verify_motion verify_brain verify_ally verify_archer verify_social \
          verify_solo verify_gear verify_town verify_launcher verify_character_presets verify_status verify_rest verify_relations \
          verify_trail verify_objtags verify_floor verify_sayto verify_saykind verify_give verify_bond verify_compose verify_approach verify_action_system verify_reactions \
-         verify_skill_schema verify_skill_effects verify_skill_stream verify_skill_off verify_skill_launcher verify_brain_pause verify_entities verify_summary verify_notebook; do
+         verify_skill_schema verify_skill_effects verify_skill_stream verify_skill_off verify_skill_launcher verify_brain_pause verify_entities verify_summary verify_notebook verify_town_spaces verify_movement_summary; do
   r=$("$PY" "$v.py" 2>&1 | tail -1)
   echo "$v: $r"
   case "$r" in *"ALL PASS"*) ;; *) FAILED=1 ;; esac

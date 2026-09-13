@@ -1,0 +1,41 @@
+  OK   sights = {exit,features,monsters,ways,bots} (정확히)
+  OK   칸 운전 어휘 소멸(frontier/directions/room_info 없음)
+  OK   obs 에 order 필드(진행중 핑)
+  OK   출구 beacon 폐기: sights['exit']는 None 또는 보일때만 dict
+  OK   ways 항목 = {bearing,dist,visited} (셀좌표 비노출)
+  OK   ascii_view 에 ',' 가본바닥 오버레이 소멸
+  OK   피처/몹/동료 obj 가 id·bearing·adj 보유
+  OK   [100시드] 핑 한 번 → 계단 도착 + 하강/탈출 (전부)
+  OK   [100시드] 자동보행 = 정확히 BFS 길이 (dithering 0)
+  OK   [60시드] 결정 어휘 = goto/attack/interact/search/explore (dir 없음)
+  OK   [200시드] 새 몹 인지 스텝 = 항상 '정지+재결정'(encounter/at_exit)+order 비움
+  OK   [200시드] 인카운터 분기 실측됨(>0)
+        (인카운터 220회 실측)
+  OK   무효 핑 → explore 폴백(type=explore)
+  OK   무효 핑 후 order는 'exit' 강제가 아님(beacon 폐기)
+  OK   출구 안 보이면 sights['exit'] = None
+  OK   출구 보이면 sights['exit'] = dict(id='exit')
+  OK   [40시드] explore만으로 양봇 전원 탈출 (헤맴 치료)
+        (탈출 40/40)
+  OK   발자국 찍은 출입구는 explore 가 안 고른다
+  OK   fresh 출입구 소진 시 explore → 출구 폴백(to_exit) 또는 정지
+  OK   외길 봉쇄 시 일반 path_to = [] (도달불가)
+  OK   best_effort path_to = 막힘 직전까지 진행(비어있지 않음)
+  OK   best_effort 경로의 끝이 봉쇄몹 직전(x<10)
+  OK   봉쇄 외길서 explore 가 order 확보(deadlock 없음)
+  OK   (a) monster_turn: 탈출(won)봇은 공격 대상 아님
+  OK   (b) 비인접 몹 지목 attack → too_far
+  OK   (b) 인접몹(adj_m)은 몰래 안 맞음(HP 그대로)
+  OK   (c) goto 동료 b2 → order 가 'exit' 아님(동료 해석)
+  OK   (c) goto 동료 b2 → 정상 경로/도착(no_path 아님)
+  OK   (F1) 탈출(won) 동료는 sights['bots']에 안 보인다
+  OK   (F2) 도달불가 valid 핑 → explore 폴백(no_path 재핑 아님)
+  OK   (F6) best_effort: 먼 시작 → 봉쇄몹 직전(x=9)까지 진행
+  OK   (F6) best_effort: 시작이 이미 최적(봉쇄 직전)이면 빈 경로(제자리)
+  OK   (F6b) best_effort: 벽으로 단절된 목표는 빈 경로(헛접근 안 함)
+  OK   (F4) explore 'N' → 북쪽(성분) 출입구 선택(oy < 봇 y)
+  OK   [50시드] 몹·함정 포함 풀게임 500틱 내 항상 종료(livelock 0)
+        (종료 50/50)
+
+============================================
+RESULT: ALL PASS

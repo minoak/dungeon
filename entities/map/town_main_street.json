@@ -1,0 +1,14 @@
+{
+  "id": "town_main_street",
+  "name": "번화가",
+  "kind": "map",
+  "tags": [
+    "town",
+    "street"
+  ],
+  "comps": {
+    "space": {
+      "role": "street"
+    }
+  }
+}

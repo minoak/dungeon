@@ -1932,6 +1932,8 @@ class Dungeon:
                      '계단에서 하강 시도 (규칙: 살아있는 파티 전원이 계단 근처에 모이고 저마다 하던 일이 없어야 내려간다)')
         for f in feats:
             if f['adj']:
+                if f['type'] == 'building':    # D60(09-12) 마을 관측: 건물은 문턱까지(goto)만 — 안으로 드는 동사는 없다(실내는 후속)
+                    continue
                 if f['type'] == 'stairs_up':   # 마을 복귀(D29) — 라벨이 규칙을 말한다(하강 라벨 대칭)
                     _add('interact', f['id'],
                          '계단을 올라 마을로 돌아간다 (규칙: 너 혼자 올라간다)'
@@ -2179,6 +2181,9 @@ class Dungeon:
                 'potions': bot.get('potions', 0),   # 소지 회복 물약(07-17) — 자기 몸의 사실
                 'gear': {'weapon': bot.get('weapon'), 'armor': bot.get('armor')},
                 **({'town': True} if self.town else {}),   # 마을(D29) — 층의 사실(던전 obs 무변경)
+                **({'town_zone': tz} if (self.town and (tz := self._town_zone(bot['x'], bot['y'])))   # D60(09-12) 지금 있는 구역 이름
+                   else {}),
+                **({'notices': nts_} if (self.town and (nts_ := self._notices(bot))) else {}),   # D61 게시판·신의 요청(문턱 근처만)
                                       # 장비(07-30) — 자기 몸의 사실(더미·BYO 소비용 데이터).
                                       # ⚠️ 프롬프트 상시 노출은 금지 계약: 착용 정보는 시트(불변
                                       # 프리픽스=캐싱)에 살고, 비교는 입수 메뉴 라벨에만 나온다
@@ -2639,6 +2644,63 @@ class Dungeon:
         if tgt is not None:
             out['target'] = tgt
         return out
+
+    def _notices(self, bot):
+        """D61(2026-09-12) 건물 역할 부품(메모 §4-4 [제안] "건물에 역할 부품을 붙인다") — 문턱 근처(부품 range, 기본 2칸)에
+        서면 그 건물의 글이 관측에 들어간다. board(길드 게시판) = entities/quest 정의의 제목·목표·보상 문장(정보만 — 맡음·
+        완료·보상 판정 없음). oracle(신전 신탁) = 러너가 state/oracle.json 에서 읽어 둔 사용자 한 줄(self.oracle) — 요청이지
+        명령이 아니다, 이 캐릭터가 이미 답했으면 그 답(replied) 동봉. building_defs(피처 id → 건물 정의 id)는 build_town 이 둔다."""
+        out = []
+        defs = getattr(self, 'building_defs', None) or {}
+        if not defs:
+            return out
+        orc = getattr(self, 'oracle', None)
+        for fid, eid in defs.items():
+            f = self.features.get(fid)
+            if not f or not eid:
+                continue
+            try:
+                comps = ENT.get(eid).get('comps') or {}
+            except Exception:
+                continue
+            board, oracle = comps.get('board'), comps.get('oracle')
+            if not (board or oracle):
+                continue
+            dist = max(abs(bot['x'] - f.x), abs(bot['y'] - f.y))
+            if board and dist <= int(board.get('range', 2) or 2):
+                items = []
+                for qid in board.get('quests') or []:
+                    try:
+                        q = ENT.get(qid)
+                    except Exception:
+                        continue
+                    qc = (q.get('comps') or {}).get('quest') or {}
+                    items.append({'id': qid, 'title': q.get('name'), 'goal': qc.get('goal'),
+                                  **({'reward': qc['reward']} if qc.get('reward') else {}),
+                                  **({'client': qc['client']} if qc.get('client') else {})})
+                out.append({'kind': 'board', 'building': 'f%d' % fid, 'name': f.name, 'quests': items})
+            if oracle and orc and orc.get('text') and dist <= int(oracle.get('range', 2) or 2):
+                mine = (bot.get('oracle_replies') or {}).get(orc.get('id'))
+                out.append({'kind': 'oracle', 'building': 'f%d' % fid, 'name': f.name,
+                            'id': orc.get('id'), 'text': orc['text'], 'turn': orc.get('turn'),
+                            **({'replied': mine} if mine else {})})
+        return out
+
+    def _town_zone(self, x, y):
+        """마을 관측(D60, 2026-09-12 파트너 "마을에서는 시야나 관측 정보를 느슨하게 줘도 될 것 같다"):
+        이 칸이 속한 구역 이름(entities/map 정의의 name — 번화가·신전 지구·샛길…). layout 으로 지은 마을에만 있다
+        (layout_result.spaces, 좌표는 테두리 pad 만큼 되돌려 비교). 구역이 없으면 None(옛 손그림 마을·던전)."""
+        res = getattr(self, 'layout_result', None) or {}
+        sp = res.get('spaces')
+        if not sp:
+            return None
+        pad = int(res.get('pad', 0) or 0)
+        lx, ly = x - pad, y - pad
+        for r in sp.get('regions', []):
+            for rx, ry, rw_, rh in r.get('rects', []):
+                if rx <= lx < rx + rw_ and ry <= ly < ry + rh:
+                    return r.get('name')
+        return None
 
     def _ally_doing(self, b):
         """보이는 동료가 지금 고른 행동(D27 개정 2026-09-12, 파트너 "동료의 현재 어떤 행동을 선택했는지에 대한

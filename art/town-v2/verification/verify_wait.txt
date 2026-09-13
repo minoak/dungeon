@@ -1,0 +1,32 @@
+── ① 스위치
+  OK   ① 엔진 직생성 기본 wait_verb=0
+  OK   ① from_ascii 기본 wait_verb=0
+  OK   ① 꺼진 판 act wait = 탐색 폴백(환각 방어)
+  OK   ① 꺼진 판 메뉴에 '기다린다' 없음
+── ② 개시
+  OK   ② act wait → order='wait'+waiting
+  OK   ② then 은 wait 뒤에 못 잇는다(열린 결말 — 동행 선례)
+  OK   ② 메뉴에 '기다린다' 옵션
+── ③ 지루함 상한
+  OK   ③ WAIT_MAX-1 틱 waiting 지속(대기 중 재결정 없음=LLM 0콜 구조)
+  OK   ③ 상한 도달 = wait_bored + order 파기(재결정)
+── ④ 깨어남 — 동료 시야 진입
+  OK   ④ 동료 진입 = wait_met(allies)+order 파기
+── ⑤ 깨어남 — 새 몹
+  OK   ⑤ 새 몹 = encounter(인카운터 문법)+order 파기
+── ⑥ 깨어남 — 말 걸림(D24 합류)
+  OK   ⑥ hail_stop 이 wait 를 끊는다
+── ⑦ 창 배타
+  OK   ⑦ 대기 틱 = 맴돎·무발견 창 무증가(자연 배타)
+── ⑧ 문장
+  OK   ⑧ bored/met 렌더 + 물음표 0(관찰 사실만)
+── ⑨ 작정 수 유효
+  OK   ⑨ plan_step 의 wait 수 = 유효(열린 동사 — '계단 가서 기다려')
+
+── ⑩ 동료 관측 — 대기중 태그(D25 개정 2026-09-12)
+  OK   ⑩ 동료 항목 waiting=True(기다리는 몸이 보인다)
+  OK   ⑩ 동료 줄 '(대기중)'
+  OK   ⑩ 대기 틱에도 유지
+  OK   ⑩ 깨면(hail_stop) 태그 사라짐
+  OK   ⑩ 꺼진 판(wait_verb=0) 동료 항목에 waiting 없음
+ALL PASS — verify_wait (D25 제자리 대기: 사건이 깨운다·숫자 없음·셔틀의 고정점 · ⑩ 대기중 태그)

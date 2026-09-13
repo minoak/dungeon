@@ -1,0 +1,14 @@
+{
+  "id": "town_temple",
+  "name": "신전 지구",
+  "kind": "map",
+  "tags": [
+    "town",
+    "district"
+  ],
+  "comps": {
+    "space": {
+      "role": "district"
+    }
+  }
+}

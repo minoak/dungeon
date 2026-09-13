@@ -67,7 +67,8 @@ export interface Room { id: number; x: number; y: number; w: number; h: number; 
 export interface TownVisual {
   schema: string; tileSize: number; offset: [number, number];
   ground: { tile: string; rect: [number, number, number, number] }[];
-  buildings: { id: string; texture: string; x: number; footY: number; width: number }[];
+  buildings: { id: string; name?: string; texture: string; x: number; footY: number; width: number }[];
+  spaces?: { id: string; name: string; regions: { id: string; name: string; role: string; rects: [number, number, number, number][] }[] };
   props: { frame: number; x: number; y: number }[];
   npcs: { id: string; row: number; cell: [number, number] }[];
 }

@@ -1,0 +1,28 @@
+  OK   자는 인접 몹이 obs에 보임
+  OK   몹 obs에 state·aware 필드
+  OK   자는 몹(미추적) aware=False
+  OK   [5시드] LOS 대칭 — _sight_blocked(a,b)==_sight_blocked(b,a) (비대칭 0)
+        (검사 쌍 50830, 비대칭 0)
+  OK   [30시드] 같은 시드 → 동일 게임(결정론, 발각·유리·표류 모두 self.rng)
+  OK   벽 너머 봇(맨해튼4) → 몹 발각 불가(SLEEPING 유지, 벽뚫기 추격 없음)
+  OK   자는 인접 몹은 그 턴 공격 안 함(발각굴림만 = 봇 we-ambush 창)
+  OK   발각은 확률(굴림) — 인접 자는 몹이 한 턴에 늘 깨지도/안 깨지도 않음(0<n<40)
+        (인접 전사 1턴 발각 26/40)
+  OK   (we-ambush) 자는 몹 공격 → surprise 플래그
+  OK   (we-ambush) 기습 후 몹 HUNTING 각성 + skip_turns=1
+  OK   (we-ambush) 기습당한 몹 = 다음 몹턴 반격 스킵
+  OK   (we-ambush) 스킵 후 다음 턴 정상 반격(인접)
+  OK   (they-ambush) HUNTING 몹이 미인지 봇 인접공격 → surprise
+  OK   (they-ambush) 매복 후 봇이 그 몹 인지(연속 매복 차단)
+  OK   (face-to-face) 봇이 인지한 몹 공격 → surprise 없음
+  OK   concealed(투명) 몹은 봇 aware_of에 안 잡힌다
+  OK   (they-ambush 솔기) concealed 몹의 일격 = 매복(surprise) — Stage3서 발화
+  OK   HUNTING 몹 last_seen 도달+LOS상실 → WANDERING 강등
+  OK   HUNTING 몹 LOS 오래 상실 → 결국 WANDERING(grace 경로)
+  OK   [300시드] 몹·함정 풀게임 항상 종료 = 동결-봉쇄 livelock 0
+  OK   [300시드] we-ambush(봇이 자는 몹 급습) 실제 발생
+  OK   [300시드] monster_notice(발각) 실제 발생
+        (종료 300/300 · we-ambush 82 · 발각 686 · 비은닉 they-ambush 67[Stage3부턴 경보로 >0 정상])
+
+============================================
+RESULT: ALL PASS

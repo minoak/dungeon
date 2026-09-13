@@ -1,0 +1,51 @@
+① 스위치 격리
+  OK   엔진 기본 rest_verb=0
+  OK   from_ascii 기본 rest_verb=0
+  OK   꺼진 판: 메뉴에 rest 없음
+  OK   꺼진 판: act rest = 대기 폴백(환각 방어)
+  OK   꺼진 판(wait 도 꺼짐): act rest = 탐색 폴백
+② 개시·옵션 노출
+  OK   다친 몸: 메뉴에 '쉰다' 옵션
+  OK   라벨=사실만(회복량·완료·깨는 사건, 물음표 0)
+  OK   act rest → order='rest'·resting·then 못 잇는다(열린 결말)
+  OK   성한 몸·무태그: rest 옵션 없음('기다린다'가 서 있기를 담당)
+  OK   성한 몸이라도 상태 태그가 있으면 rest 옵션
+③ 회복·완료
+  OK   틱마다 HP +1 (10→14), 4틱은 아직 resting
+  OK   만피여도 REST_MIN 전엔 상태 유지
+  OK   5틱째 rested{ticks=5, healed=4, cleared=[중독,출혈]} → status 비움·order 파기
+  OK   만피+상태만: REST_MIN 틱에 완료(healed 0)·slow_beat 리셋
+  OK   hp 2 → 만피는 12틱(REST_HP=1) — 완료
+④ 깨어남
+  OK   멀리 있는(시야 밖) 몹은 안 깨운다
+  OK   새 몹 → encounter(woke=rest)·order 파기
+  OK   시야 밖 동료는 안 깨운다
+  OK   동료 진입 → rest_met{allies=[2]}·order 파기
+  OK   3틱 쉬어 HP 13
+  OK   말 걸림 → hail 이 휴식을 끊는다(재결정)
+  OK   대답한 뒤 다시 '쉰다' — 진행은 처음부터
+  OK   피격 → 기존 인터럽트가 휴식을 끊는다
+⑤ 창 배타 · ⑥ 출혈 중 휴식
+  OK   휴식 틱은 무발견 걸음·맴돎 박자에 안 쌓인다
+  OK   출혈 중 휴식: 피 안 나고 차기만 한다(bleed_steps 그대로)
+  OK   완료 시 출혈 소거·bleed_steps 0
+⑦ 렌더
+  OK   개시 문장
+  OK   틱 문장
+  OK   완료 문장(나은 상태 명기)
+  OK   동료 진입 문장
+  OK   새 몹 문장(쉬다 눈을 떴다)
+  OK   걷다 만난 문장은 불변
+  OK   동료 항목 resting=True
+  OK   동료 줄 '(휴식중)'
+  OK   _TYPES 에 rest
+⑧ 작정·모임
+  OK   plan_step 의 rest 수 유효(열린 동사)
+  OK   _gather_busy: 쉬는 동료는 '딴 작정'(끌려 하강 안 함)
+⑨ 결정론·러너
+  OK   같은 장면 2회 = 같은 열
+  OK   러너 스위치·메타·요약 코드 존재
+  OK   휴식 사실은 선택지 라벨이 말한다(D42: 지침은 조작법만 — 회복량·상태 회복은 그 순간 라벨에)
+  OK   지침에 휴식 규칙 없음(D42 — 세계 세부는 상황에서 준다)
+
+RESULT: ALL PASS — verify_rest (D35 휴식: 개시·회복·완료·깨어남·렌더·작정·결정론)

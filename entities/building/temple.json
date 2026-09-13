@@ -1,0 +1,26 @@
+{
+  "id": "temple",
+  "name": "신전",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        8,
+        7
+      ],
+      "entrance": [
+        4,
+        6
+      ],
+      "texture": "temple"
+    },
+    "oracle": {
+      "range": 2,
+      "note": "D61(2026-09-12) 신탁 소켓 — 론처 /api/oracle 의 사용자 한 줄(state/oracle.json)이 문턱 2칸 안 캐릭터 관측에 '신의 요청'으로. 요청이지 명령이 아니다."
+    }
+  }
+}

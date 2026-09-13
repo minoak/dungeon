@@ -1,0 +1,16 @@
+  OK   ① 유나: 실결정 5 + 작정 1 · 최장 연속 use f8 ×6 (t1~t6, 작정 포함) · 재선택 4
+  OK   ① 미나: 아군 goto 2 · 입력 무효 재판단 already_beside 2 · 최장 연속 bond b1 ×4
+  OK   ① 판단: 실결정 11 (1.10/틱) · 출처 haiku 11 · 도감 생각 한 줄 4
+  OK   ① 정지 2회(already_beside 1·invalid_response 1) · 안전 차단 1 · 사람 재시도 1
+  OK   ① 파티: 전원 3칸 안 60% (6/10) · 최장 이산 4 · lost 1
+  OK   ① 사회: 잡담 5 제안 4 · 정지 1 · 친목 1 · 건네기 1 · 반응 like 1
+  OK   ① 장비: 착용 유나 6 · 되집기 f8 ×6 · 연속 착용 6 (t1~t6)
+  OK   ① flags: 같은 대상 연속(유나 6·미나 없음<5? 미나 4) · 판단 정지 · 함께 60%>30% 아님 · 되집기 · 연속 착용 — 이름으로
+  OK   ③ render: 머리 '=== 판 결산' · 행동 줄에 이름·최장 반복 · 눈길 줄
+  OK   ③ 빈 판 결산도 죽지 않는다(0/틱·눈길 없음 문장)
+  OK   ② 마지막 라인 end 에 summary(v1) · ticks = tick 라인 수 · outcome 일치
+  OK   ② 오프라인 소급 = 라이브 end.summary (dict 완전 일치 — 투영 순수성)
+  OK   ② Tap 이 스트림 계약을 안 바꾼다: run_meta 첫 줄·level·tick·end 마지막 줄
+  OK   ② events.log 끝에 '=== 판 결산' 표(판·판단·정지·행동·파티·사회·장비·도감 줄)
+============================================
+RESULT: ALL PASS — verify_summary (D58 판 결산: 합성 계수·라이브=소급·Tap 무접촉·events.log 표)

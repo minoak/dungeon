@@ -162,6 +162,14 @@ EVENTS_ON = os.environ.get("DUNGEON_EVENTS", "1") != "0"     # 사건층(D22) �
 STATUS_ON = os.environ.get("DUNGEON_STATUS", "1") != "0"     # 상태 태그(D34, 09-06) — 러너 기본 1,
                                                              #   엔진 기본 0. 몹·함정의 특수=태그(출혈·
                                                              #   둔화·중독), 효과는 몸에만, 지우기=휴식
+NOTICES_ON = os.environ.get("DUNGEON_NOTICES", "1") != "0"     # 건물 역할 부품(D61, 09-12 파트너 "신탁 소켓을 만들어 두자,
+                                                             #   퀘스트 게시판 같은 것도") — 게시판(의뢰)·신탁(state/oracle.json)이
+                                                             #   문턱 근처 캐릭터 관측에. 러너 기본 1(build_town 만), 정보만
+ORACLE_FILE = "oracle.json"                                  # D61 신탁 소켓 — 론처 /api/oracle 이 쓰고 러너가 틱마다 읽는다
+ORACLE_MAX = 200
+TOWN_BUILDINGS_ON = os.environ.get("DUNGEON_TOWN_BUILDINGS", "1") != "0"   # 마을 관측(D60, 09-12 파트너 "마을에서는 관측 정보를
+                                                             #   느슨하게") — 건물 = 문턱 칸의 피처(이름·방위·거리·goto)
+                                                             #   + obs.town_zone(구역 이름). 러너 기본 1(build_town 만)
 REST_ON = os.environ.get("DUNGEON_REST", "1") != "0"         # 휴식(D35, 09-06) — 러너 기본 1, 엔진
                                                              #   기본 0. 회복이 붙은 wait: 틱마다 HP,
                                                              #   완료 시 상태 태그 소거. 사건이 깨운다
@@ -358,6 +366,20 @@ def append(name, line):
 def event(line):
     print(line, flush=True)
     append("events.log", line)
+
+
+def read_oracle():
+    """D61 신탁 소켓 — 론처가 STATE/oracle.json 에 둔 사용자 한 줄 {id, text, at}. 없거나 깨지면 None.
+    텍스트는 시트 배경과 같은 격리(sheetkit.sanitize_freetext: 개행·마크다운 표식 제거, ORACLE_MAX 자) — 사용자 글이 프롬프트로 들어간다."""
+    try:
+        with open(os.path.join(STATE, ORACLE_FILE), encoding="utf-8") as f:
+            o = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(o, dict) or not o.get("id"):
+        return None
+    text = sheetkit.sanitize_freetext(o.get("text"), ORACLE_MAX)
+    return {"id": str(o["id"]), "text": text, "turn": o.get("turn")} if text else None
 
 
 def act_summary(res):
@@ -635,6 +657,20 @@ def build_town(path=None):
             d.npc_gifts[spec_n["name"]] = dict(spec_n["gift"])
         if spec_n.get("line_again"):           #   두 번째 대사(정해진 문장만)
             d.npc_lines_again[spec_n["name"]] = spec_n["line_again"]
+    res = getattr(d, "layout_result", None) or {}
+    if TOWN_BUILDINGS_ON and res.get("spaces"):   # D60(09-12) 마을 관측: 건물 = 문턱 칸의 피처 — 관측(이름·방위·거리)·goto·목격이
+        names = {b["id"]: b["name"] for b in res["spaces"]["buildings"]}   #   기존 오브젝트 체계로 그대로 된다(엔진 무접촉)
+        ents = {b["id"]: b.get("entity") for b in res["spaces"]["buildings"]}   # D61: 피처 → 건물 정의 id(역할 부품 조회)
+        d.building_defs = {}
+        for e in res.get("entrances", []):
+            x, y = int(e["cell"][0]), int(e["cell"][1])
+            if max(abs(x - d.exit[0]), abs(y - d.exit[1])) <= 1:   # 던전 입구 건물: 문턱이 '>' 바로 곁 — 입구 피처가 이미 그 자리(이름도 '던전 입구')
+                continue
+            if d.grid[y][x] != G.FLOOR:
+                raise ValueError("건물 %r 문턱 (%d,%d)가 바닥이 아니다" % (e.get("building"), x, y))
+            fid = d._add_feature("building", names.get(e.get("building"), "건물"), x, y)
+            if NOTICES_ON:                         # D61 건물 역할 부품 — 정의의 board/oracle 을 _notices 가 읽는다
+                d.building_defs[fid] = ents.get(e.get("building"))
     d.features[d._exit_fid].name = "던전 입구"   # 같은 '>'라도 마을에선 탈출구가 아니라 입구다
     return d, starts
 
@@ -948,6 +984,8 @@ def main():
             pending=PENDING_ON,        # 들은 말 보관(D47 배관) 여부 — inbox 에 보관된 옛 말(turn 스탬프)이 섞이는 표현층 메타
             give=GIVE_ON,              # 건네기(D47 ②, 09-09) 여부 — 메뉴(options give)·소지품 이동 물리 메타(rest 와 같은 급)
             bond=BOND_ON,              # 친목(D47 ②) 여부 — 메뉴(options bond)·관계 뼈·tick.replies 를 바꾸는 사회층 메타
+            town_buildings=TOWN_BUILDINGS_ON,   # 마을 관측(D60, 09-12) 여부 — 마을 level.features 에 building 피처·obs.town_zone 표현층 메타
+            notices=NOTICES_ON,        # 건물 역할 부품(D61, 09-12) 여부 — obs.notices(게시판·신의 요청)·decisions.oracle_reply 표현층 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
@@ -1001,8 +1039,16 @@ def main():
         inbox_in = inbox    # 이번 틱 사고에 주입된 받은편지함 — 루프 끝에서 이름이 새 dict 로
                             # 재바인딩되므로(덮어씀) think_all 직전 참조를 잡아 스트림에 남긴다
         # order 없는 봇만 사고(자동보행 중인 봇은 LLM 0콜)
+        d.oracle = read_oracle() if (NOTICES_ON and getattr(d, "town", False)) else None   # D61 신탁 — 마을 층에서만 틱마다 읽는다
         decisions = brains.think_all(d, bots, inbox, on_error=lambda errors: brain_pause.wait(turn, errors))
         brain_pause.resolved(turn)
+        for c_, dec_ in (decisions or {}).items():   # D61 신탁 응답 — 캐릭터 장부(요청 id 별 한 번)·events.log. 판정 없음
+            orp = dec_.get("oracle_reply") if isinstance(dec_, dict) else None
+            if orp and orp.get("id"):
+                b_ = next((x for x in bots if x["char"] == c_), None)
+                if b_ is not None:
+                    b_.setdefault("oracle_replies", {})[orp["id"]] = orp["text"]
+                    event("🔮 %s: 신의 요청에 답했다 — 「%s」" % (b_.get("name") or ("봇%s" % c_), orp["text"]))
         # 사교 콜(채널 분리) — 걷는 중에 말을 들은 봇만. 행동은 못 바꾸고 say 만 낸다.
         social = brains.social_all(d, bots, inbox)
         replies = []                          # D47 ② 반응(형태) 계측 — 제안·친목·건네기에 대한 첫 결정의 답(행동|말|없음)

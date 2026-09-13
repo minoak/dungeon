@@ -1125,6 +1125,7 @@ _WIRE_KEYS = frozenset((
     "book_invite",   # 도감 인식 초대(D55): 해금·갱신 문턱에서 한 줄을 청한다 — 아래 "## 도감" 절
     "exhausted",   # 탐색 소진(D19 개정 09-06): '탐색' 어휘 대신 사실 한 줄
     "town",    # 마을(D29): 안전한 층의 사실 한 줄 — 아래 _wire 가 그린다
+    "notices",   # D61 건물 역할 부품: 게시판(의뢰)·신의 요청 — 마을 줄 아래, 문턱 근처에 섰을 때만
     "gear"))   # 장비(07-30): 아는 키지만 wire 는 일부러 안 그린다 — 착용 정보의 표현은
                #   시트(_sheet 차림 줄, 불변 프리픽스=캐싱)가 소유하고, 비교는 입수 메뉴
                #   라벨에만 나온다(파트너 설계: 상시 가변부 미노출). 여기 등재를 빼면
@@ -1174,7 +1175,21 @@ def _wire(obs, names=None, compose=False):
                 obs.get("depth", 1)))
     if obs.get("town"):
         # 마을(D29) — 사실만: 안전·전체 가시. 여기서 뭘 할지는 캐릭터 몫(추천 안 싣는다).
-        L.append("- 여기는 마을이다 — 위험한 것이 없고, 마을 전체가 한눈에 보인다")
+        L.append("- 여기는 마을이다 — 위험한 것이 없고, 마을 전체가 한눈에 보인다"
+                 + ((" · 지금 있는 곳: %s" % obs["town_zone"]) if obs.get("town_zone") else ""))   # D60(09-12) 구역 이름
+        for n in obs.get("notices") or []:      # D61 건물 역할 부품 — 문턱 근처에서만. 사실만, 맡으라·따르라는 말은 없다
+            if n.get("kind") == "board":
+                L.append("- %s 앞 게시판(의뢰 — 맡을지는 네가 정한다, 맡았다면 말이나 기억으로 남긴다):" % n.get("name", "건물"))
+                for q in n.get("quests") or []:
+                    L.append("  · %s — %s%s%s" % (q.get("title", "?"), q.get("goal", "?"),
+                                                 (" (보상: %s)" % q["reward"]) if q.get("reward") else "",
+                                                 (" — 의뢰인 %s" % q["client"]) if q.get("client") else ""))
+            elif n.get("kind") == "oracle":
+                if n.get("replied"):
+                    L.append("- %s 앞 — 신의 요청이 걸려 있다: 「%s」 · 너는 이미 답했다: 「%s」" % (n.get("name", "신전"), n.get("text", ""), n["replied"]))
+                else:
+                    L.append("- %s 앞 — 신의 요청이 들려온다: 「%s」 (요청이지 명령이 아니다 — 따를지는 네가 정한다."
+                             " 답하려면 응답 JSON 의 `oracle_reply` 필드, 선택, 120자)" % (n.get("name", "신전"), n.get("text", "")))
     z = obs.get("zone")
     scan = isinstance((z or {}).get("doors"), list)   # D19 구조 조회가 실려 있으면 트리 직렬화
     if z and not scan:
@@ -1302,7 +1317,7 @@ def _wire(obs, names=None, compose=False):
             if opened:
                 L.append("- %s: %s" % (KR[b], opened))
             else:
-                L.append("- %s: 벽" % KR[b])
+                L.append("- %s: 벽" % KR[b])      # (09-12 벽 한 줄 접기는 verify_scan ⑩ 8방위 전수성과 충돌해 되돌림)
         for m in s.get("monsters", []):
             if m.get("lore") or m.get("deep_progress"):   # D53: 심층 전엔 한 줄 + 진행도 접미
                 L.append("  · %s 습성(네가 아는 것): %s%s" % (m.get("kind", "?"), m.get("lore") or "아직 잘 모른다", G._deep_sfx(m)))
@@ -1352,7 +1367,8 @@ def _wire(obs, names=None, compose=False):
                 st = "시야 밖 — 말은 안 닿는다. 어디 있는지 모른다(마지막 본 자리만 안다)"   # D18 개정(09-06)
             M.append("- %s, %s — %s" % (nm(p.get("char", "?")), p.get("job", "?"), st))
 
-    rels = obs.get("relations") or []
+    rels = [r for r in (obs.get("relations") or [])   # 09-12 관측 정리: 셀 것이 있는 동료만('아직 없음' 줄은 정보 0)
+            if r.get("bones") or r.get("acts") or r.get("invite") or r.get("line")]
     if rels:                                # 관계 장부(D36) — 뼈 횟수(사실). 살은 시트에 산다
         M += ["", "## 동료와 겪은 일 (횟수 — 세계가 센 사실)"]
         for r in rels:
@@ -1534,9 +1550,13 @@ def _wire(obs, names=None, compose=False):
         out += ["", "## 소지품 — 착용 현황"]
         if not obs.get('action_schema'):
             out += ["- potion: 회복 물약 %d병" % obs.get("potions", 0)]
-        for slot in ("weapon", "armor"):
-            gear = (obs.get("gear") or {}).get(slot)
-            out.append("- %s: %s" % (slot, _gear_word(gear, slot) if gear else "없음"))   # D57: 번호·수치까지(비교는 캐릭터 몫)
+        gear_all = obs.get("gear") or {}
+        if not gear_all.get("weapon") and not gear_all.get("armor"):
+            out.append("- weapon/armor: 없음 (기본 무장)")                                  # 09-12 관측 정리: 빈 칸 둘은 한 줄
+        else:
+            for slot in ("weapon", "armor"):
+                gear = gear_all.get(slot)
+                out.append("- %s: %s" % (slot, _gear_word(gear, slot) if gear else "없음"))   # D57: 번호·수치까지(비교는 캐릭터 몫)
         facts = []
         for f in s.get("features", []):
             if f.get("type") in ("weapon", "armor"):                # D57: 사실만 나란히 — 결론 문장 없음(파트너 "알아서 유추")
@@ -1556,11 +1576,14 @@ def _wire(obs, names=None, compose=False):
                 "- %s: %d칸, %s" % (w["bearing"], w["dist"], "가 본 길" if w.get("visited") else "안 가본 길")
                 for w in ways]
         if obs.get('action_schema') == G.CA.SCHEMA:
-            out += ["", "## 대상 — 지금 참조할 수 있는 ID"]
+            place_txt = "\n".join(L)                                            # 09-12 관측 정리: 장소 절에 자리가 적힌 id 는
+            placed = set(re.findall(r"\b((?:f|d|m)\d+|exit)\b", place_txt))     #   방위·거리를 되풀이하지 않는다(문·피처·몹·계단·동료)
+            placed |= {"b" + c for c in re.findall(r"\(봇(\d)\)", place_txt)}
+            out += ["", "## 대상 — 지금 참조할 수 있는 ID (자리는 장소 절에)"]
             for target in obs.get('targets', []):
                 out.append('- [%s] %s (%s)%s%s' % (
                     target['id'], target.get('name', target['id']), ', '.join(target['tags']),
-                    (' — ' + at(target)) if 'dist' in target else '',
+                    (' — ' + at(target)) if ('dist' in target and target['id'] not in placed) else '',
                     (' · %d개' % target['count']) if 'count' in target else ''))
         out += ["", "## 행동과 의사소통", "COMMON: " + " / ".join(G.CA.COMMON if obs.get('action_schema') else _compose_types()),
                 "의사소통: 잡담 / 제안"]
@@ -1832,6 +1855,11 @@ def _parse_decision(raw, why, obs, char, roster):
         bline = (str(obj.get("book_line", "") or "").strip()[:NOTE_LEN] if bi else "")
         if bline:
             rel = {**rel, "book_line": {"key": bi["key"], "text": bline}}   # 발급기(bestiary)가 원장 note 로 남긴다(엔진 불가침)
+        orc = next((n for n in (obs.get("notices") or [])                   # D61 신탁 응답 — 아직 안 답한 요청이 관측에 있을 때만 받는다
+                    if n.get("kind") == "oracle" and n.get("id") and not n.get("replied")), None)
+        oline = (str(obj.get("oracle_reply", "") or "").strip()[:120] if orc else "")
+        if oline:
+            rel = {**rel, "oracle_reply": {"id": orc["id"], "text": oline}}   # 러너가 캐릭터 장부(oracle_replies)·events.log 에 남긴다
         to_ = _parse_to(obj.get("to"), char, roster, obs)   # D41 지목 — 말의 상대(없으면 혼잣말)
         said = bool(str(obj.get("say", "") or "").strip())
         if to_ and said:

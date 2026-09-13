@@ -1,0 +1,18 @@
+test_explicit_dummy_still_runs_without_retry (__main__.BrainPauseTests.test_explicit_dummy_still_runs_without_retry) ... ok
+test_failed_response_is_not_an_action_in_any_real_backend (__main__.BrainPauseTests.test_failed_response_is_not_an_action_in_any_real_backend) ... ok
+test_invalid_intents_retry_with_same_observation_without_rule_brain (__main__.BrainPauseTests.test_invalid_intents_retry_with_same_observation_without_rule_brain) ... ok
+test_no_handler_raises_before_decision_memory_is_written (__main__.BrainPauseTests.test_no_handler_raises_before_decision_memory_is_written) ... ok
+test_retry_keeps_observation_and_planned_action_without_duplicate_memory (__main__.BrainPauseTests.test_retry_keeps_observation_and_planned_action_without_duplicate_memory) ... ok
+test_safety_block_retries_once_with_fallback_brain (__main__.BrainPauseTests.test_safety_block_retries_once_with_fallback_brain)
+안전 차단(rc=200 | PROHIBITED_CONTENT 등)은 같은 프롬프트를 다른 두뇌에게 — 오류 덧말 없이, 결정에 brain_fallback. ... ok
+test_world_freezes_and_http_retry_resumes_same_run (__main__.BrainPauseTests.test_world_freezes_and_http_retry_resumes_same_run) ... [launcher] "POST /api/retry HTTP/1.1" 409 -
+[launcher] "POST /api/retry HTTP/1.1" 200 -
+[launcher] "POST /api/retry HTTP/1.1" 409 -
+[launcher] "POST /api/retry HTTP/1.1" 200 -
+ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 2.875s
+
+OK
+ALL PASS — verify_brain_pause (자동 대행 금지·재판단·정지·HTTP 재시도·재개)

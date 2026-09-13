@@ -1,0 +1,54 @@
+── ① _parse_kind
+  OK   ① 제안·요청·부탁·propose·request·ASK → '제안'
+  OK   ① 빈 값·None·잡담·chat·모르는 값 → '잡담'
+── ② 스위치·상수·엔진 뼈
+  OK   ② 러너 기본: SAYKIND_ON·PENDING_ON 켬 · PENDING_MAX=6
+  OK   ② 엔진 BONES 에 proposed/asked/answered/replied 라벨(기존 5종 유지)
+  OK   ② 관계 장부 꺼진 판: note_proposal/note_answer 무동작
+── ③ 잡담 지목 = 들리기만
+  OK   ③ 배달 O(1·3, turn 스탬프, kind 없음) · 정지 0 · 전원 걷던 길 유지 · open 장부 없음
+  OK   ③ talk 뼈는 지목 쌍(1↔2)만 · 제안 뼈 0
+  OK   ③ 방송 잡담(all): 정지 0 · talk 뼈는 1·3 다(D41 방송=지목)
+  OK   ③ 혼잣말 잡담: 배달 O · 정지 0 · 뼈 0
+── ④ 제안 지목 = 그 사람만 선다
+  OK   ④ 들리긴 전원(kind=제안 표식) · 멈춤은 지목된 1만 · 3은 걷던 길 유지
+  OK   ④ 뼈: 카야 proposed→1 ×1 · 두란 asked←2 ×1 · talk 0 · 피른 무관
+  OK   ④ open 장부: {'1': {'2': 5}}
+  OK   ④ 궤적/last: 두란의 정지 사유는 말 걸림(hail) — 엔진 문법 그대로
+── ⑤ 회의 = 대상 없는 제안 → 시야 안 전원
+  OK   ⑤ 대상 없음: 1·3 모두 정지 · 각각 asked ×1 · 카야 proposed→1·→3 각 1 · open 둘
+  OK   ⑤ to=all 제안도 회의: 1·3 정지
+  OK   ⑤ 시야 밖(피른 7칸): 배달 없음 · 정지 없음 · 뼈 없음 · open 에도 없음 — 회의는 시야 안 인원만
+── ⑥ 반복 방지 — 답하기 전 재제안은 안 세운다
+  OK   ⑥ 응답 전 재제안(t6): 배달 O · 정지 0 · proposed/asked 그대로 ×1 · open 유지(t5)
+  OK   ⑥ 두란이 답함(t6 결정, to=2): answered/replied 뼈 · open 닫힘 · 반환 {'1': {'2': True}}
+  OK   ⑥ 답한 뒤 새 제안(t7): 새 시도라 proposed ×2·open 다시 열림 — 정지는 D24 쿨다운(HAIL_CD=3, t5+3=8)에 막혀 0
+  OK   ⑥ 쿨다운 지난 뒤(t8) 새 제안: 다시 선다
+── ⑦ settle_proposals — 받은 봇의 첫 결정에서 닫힌다
+  OK   ⑦ 한 사람(3)에게만 답함: 3=True·2=False 둘 다 닫힘 · answered 는 3↔1 만
+  OK   ⑦ 모두에게 답함(all) = 답함
+  OK   ⑦ 말 없이 결정(폴백 포함) = 답 없이 닫힘
+  OK   ⑦ 작정 집행(plan)은 안 읽음 → 열어 둠 · 제안 안 받은 봇(3)은 무관
+── ⑧ 배관 — 걷는 동안 들린 말은 다음 결정까지
+  OK   ⑧ 병합: 보관된 말 + 이번 말(오래된 것부터), 없는 봇은 그대로
+  OK   ⑧ 소비: 결정한 봇은 비움 · 작정 집행 봇(안 읽음)·걷던 봇은 보관
+  OK   ⑧ 상한: 오래된 것부터 바랜다(cap 2)
+── ⑨ wire 렌더
+  OK   ⑨ 동료가 한 말: (너에게 제안) / (모두에게 제안 — 회의) / (피른에게 제안) / 잡담 (너에게) / 옛 말 ' — 4턴 전'
+  OK   ⑨ 머리글: 너를 세운 건 제안뿐 · 대화 장부 '(t5, 제안)' · 내 말은 표식 없음 · 직전 판단의 말 '(제안)'
+── ⑩ 응답 파싱·intent·대화 장부
+  OK   ⑩ say_kind=제안 → dec.say_kind='제안' · to=2 · intent 에 say_kind · 내 말 장부에 kind
+  OK   ⑩ 필드 없음 → '잡담' · 들은 제안은 장부에 kind·제 turn(3)
+  OK   ⑩ 말이 없으면 say_kind 도 없다(제안이라 적어도)
+  OK   ⑩ 지침: say_kind 필드·잡담·제안·회의 문장이 리모컨 지침에 있다
+── ⑪ 스냅샷·관측
+  OK   ⑪ bot_snapshot relations: {'2': {'asked': 1}}
+  OK   ⑪ view 관계 obs: 뼈 라벨 '제안받음' ×1
+  OK   ⑪ wire 관계 절: '카야(봇2): 제안받음 ×1'
+── ⑫ 러너 배선(소스)
+  OK   ⑫ 스위치·settle·run_meta·병합·보관·리셋·answers 계측 배선
+── ⑬ 스위치 off = D41 판
+  OK   ⑬ off: 지목 잡담도 세운다(D41) · talk 뼈 · kind 미기록 · open 없음
+  OK   ⑬ off: 대상 없는 제안은 혼잣말(회의 없음)
+
+ALL PASS — verify_saykind (D47 말의 종류: 잡담/제안 파싱·정지는 제안만·회의=시야 안·반복 방지·반응 뼈·배관·렌더·스위치)

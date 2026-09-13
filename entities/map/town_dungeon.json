@@ -1,0 +1,14 @@
+{
+  "id": "town_dungeon",
+  "name": "던전 입구 지구",
+  "kind": "map",
+  "tags": [
+    "town",
+    "district"
+  ],
+  "comps": {
+    "space": {
+      "role": "district"
+    }
+  }
+}

@@ -1,0 +1,122 @@
+── ① 스위치 격리 (엔진 기본 0 · 기존 비트 보존)
+  OK   ① 엔진 직생성 기본: graves=False, events=False
+  OK   ① from_ascii 기본: graves=False, events=False
+  OK   ① events=0: 처치 목격(ally_kill) 무주입
+  OK   ① events=0: 함정 전사에 witnessed·memories 무주입
+  OK   ① graves=0: 묘 미생성
+  OK   ① 몹 공격 전사 성립(장면 전제)
+  OK   ① events=0: 기존 A-3 ally_down 정확히 1회(비트 보존)
+── ② 묘 — 쓰러진 자리의 표지판
+  OK   ② 함정 전사 → 그 칸에 묘 1기
+  OK   ② 이름 '전사의 묘'(시트 이름 없으면 직업)
+  OK   ② sights 노출: 시야 내 동료 눈에 묘가 보인다
+  OK   ② ascii_view 글리프 T
+  OK   ② legend 등재
+  OK   ② goto 앵커: '이동: 전사의 묘' 옵션
+  OK   ② 장부 등재: 묘가 statics(돌아가기 앵커)에 남는다
+  OK   ② 몹 사망 경로도 묘 + 이벤트에 grave 병기(스트림 additive)
+── ③ 전달층 — "카야가 공격했다!" "고블린이 쓰러졌다!"
+  OK   ③ 처치 성립(장면 전제)
+  OK   ③ 시야 내 동료: ally_kill {char, mon}
+  OK   ③ 시야 밖(벽 너머) 동료: 무주입
+  OK   ③ 당사자 제외(자기 경험은 last 소관)
+── ④ 전달층 — 함정 장면·회복 장면
+  OK   ④ 함정 장면: ally_trap {trap, safe, dmg}
+  OK   ④ 생존 함정엔 ally_down 없음(전사만 전사다)
+  OK   ④ 회복 장면: ally_heal {how=물약}
+── ⑤ 휘발 — 전달층=다음 결정 1회, 기억층=휘발 0
+  OK   ⑤ witnessed: 첫 view 에 실리고
+  OK   ⑤ witnessed: 다음 view 엔 소거(휘발=다음 결정 1회)
+  OK   ⑤ memories: 두 view 모두 재제시(휘발 0)
+── ⑥ 기억층 — 목격한 전사는 잊지 않는다
+  OK   ⑥ fallen {char, by, zone, turn}
+  OK   ⑥ 장소는 사람말 구역 이름 — 좌표·번호 없음(scan 판)
+  OK   ⑥ 시야 밖 동료는 기억도 없다(전지 주입 금지)
+  OK   ⑥ 비몬스터 사인 by_kind 병기
+  OK   ⑥ 몹 사망 경로: fallen 등재 + ally_down 중복 없음(A-3 1회 그대로)
+── ⑦ 도감 게이트 — 모르는 종은 낯선 짐승, 함정 사인은 면제
+  OK   ⑦ 모르는 종 처치 목격 = 낯선 짐승
+  OK   ⑦ 함정 사인(by_kind)은 도감 게이트 면제 — 함정 이름 그대로
+── ⑧ 렌더 — 두뇌가 읽는 문장
+  OK   ⑧ 처치 목격 문장("쓰러뜨리는 것을")
+  OK   ⑧ 전사 목격 문장("쓰러져 죽는 것을")
+  OK   ⑧ 기억 섹션 '잊지 못할 일' + '[…의 죽음을 목격]'
+  OK   ⑧ 다음 결정: 목격은 사라지고 기억은 남는다
+  OK   ⑧ obs JSON 직렬화 가능(스트림 계약)
+── ⑨ 결정론
+  OK   ⑨ 같은 장면 2회 = 같은 목격·기억·피처 열
+── ⑩ 전달층 확장 — 획득(ally_loot)·비대칭 해소(ally_mishap)
+  OK   ⑩ 밟아 줍기: 시야 내 동료 ally_loot {char, what=보물}
+  OK   ⑩ 시야 밖(벽 너머) 동료: 무주입
+  OK   ⑩ 당사자 제외(자기 경험은 last 소관)
+  OK   ⑩ interact 줍기: 물약 → ally_loot {what=물약}
+  OK   ⑩ 상자 성공: chest_loot → ally_use {what=상자, id=f<n>, result=보물을 꺼냈다} (D30 확장 — 구 ally_loot 이관)
+  OK   ⑩ 상자 실패: chest_trap → ally_use {what=상자, result=독침에 당했다, dmg} (구 ally_mishap 이관)
+  OK   ⑩ 샘 오염: fountain_harm → ally_mishap {what=오염된 샘} (축복만 보이던 비대칭 해소)
+  OK   ⑩ 독침 전사: ally_use·ally_mishap 없음 — ally_down 이 담당(중복 금지, 함정 패턴)
+── ⑪ 전달층 확장 — 발견(ally_spot): 판정 칸=드러난 물건의 자리
+  OK   ⑪ 전제: b2 눈에 함정 칸이 보인다
+  OK   ⑪ 능동 수색 발견 성립(장면 전제)
+  OK   ⑪ 시야 내 동료: ally_spot {char, what=함정 이름}
+  OK   ⑪ 당사자 제외
+  OK   ⑪ 전제: b2 눈에 발견자(b1)는 보이고
+  OK   ⑪ 전제: 함정 칸은 안 보인다
+  OK   ⑪ 발견자만 보이고 물건이 시야 밖이면 무주입(판정 칸=물건 칸)
+  OK   ⑪ 매복 발견: ally_spot {mon} — 빈 도감 목격자에겐 낯선 짐승(도감 게이트)
+  OK   ⑪ 아는 종이면 이름 그대로
+── ⑫ 렌더 — 새 어휘 문장 · events=0 무발화
+  OK   ⑫ 획득 문장("챙기는 것을")
+  OK   ⑫ 발견 문장("찾아내는 것을")
+  OK   ⑫ 상자 실패 문장("상자 f<n>을(를) 사용하는 것을 (독침에 당했다)") — D30 확장: 결과는 괄호
+  OK   ⑫ events=0: 획득·피해 전부 무주입
+  OK   ⑫ events=0: 발견 무주입
+── ⑬ 오브젝트 사용 목격(ally_use) — 문 타일 밟기 = 문 칸을 본 동료에게 한 줄
+  OK   ⑬ 전제: 문 칸(5,2)이 두란(2,2) 시야 안 · 골방 봇3 시야 밖
+  OK   ⑬ 전제: 문 d0 = 문 타일(cell 있음)
+  OK   ⑬ 문 밟기: 문 칸을 본 동료 witnessed 에 ally_use {char='2', what='문', id='d0'} 정확히 1건
+  OK   ⑬ 문 칸 시야 밖(벽 너머 골방) 동료: 무주입
+  OK   ⑬ 당사자 제외(자기 경험은 last 소관)
+  OK   ⑬ 1회: 문턱→너머 두 걸음에 ally_use 는 1건
+  OK   ⑬ 걷는 관찰자: 다음 view 에 ally_use 배달 · 카야는 sights 에 없다(문 너머)
+  OK   ⑬ 휘발: view 1회 노출 후 소거(D22 문법)
+  OK   ⑬ events=0: 무주입
+  OK   ⑬ scan=0: 무주입(문 명사 없음 — doors 미참조)
+  OK   ⑬ 전제: 트임 맵의 문은 전부 cell 없음
+  OK   ⑬ 트임 통과: 무주입 · 카야는 계속 보인다
+  OK   ⑬ 렌더: '네 눈으로 봤다: … 문 d0을(를) 사용하는 것을' (json 폴백 아님)
+── ⑬ 확장 1차 — 계단(하강·상행·마을 입구)·상자(결과 괄호)
+  OK   ⑬ 전제: b2 는 계단 칸이 보이고 b1(왼쪽 방)은 안 보인다
+  OK   ⑬ 솔로 하강: 남은 b2 에 ally_use {what='계단(exit)', id='exit', char='3'} 1건
+  OK   ⑬ 계단 칸 시야 밖(b1)·내려간 당사자(b3): 무주입
+  OK   ⑬ 렌더: '계단(exit)을(를) 사용하는 것을' — id 가 라벨에 있으면 두 번 안 붙는다
+  OK   ⑬ 마을(town): what='던전 입구(exit)' — obs 가 부르는 이름 그대로
+  OK   ⑬ 파티 전원 하강: 목격자 0(전원 won) — 사건 무발화
+  OK   ⑬ 상행: ally_use {what='위로 오르는 계단', id='f<n>'}
+  OK   ⑬ 렌더: '위로 오르는 계단 f<n>을(를) 사용하는 것을'
+  OK   ⑬ 결정론: 같은 장면 2회 = 같은 목격 열
+── ⑭ 묘 발견 — [두란의 죽음을 발견]
+  OK   ⑭ 묘→캐릭터 매핑 grave_of
+  OK   ⑭ 골방의 카야: 죽음도 묘도 못 봤다 — 기억 없음
+  OK   ⑭ 시야 밖에서는 view 를 받아도 무등재
+  OK   ⑭ 묘가 시야에 든 순간 grave_found{char,grave,zone,turn} 1회
+  OK   ⑭ 재진입·재관측 무중복
+  OK   ⑭ 렌더 '[두란(봇1)의 죽음을 발견] 두란의 묘 — …에서'(파트너 문장)
+  OK   ⑭ 파티 명단 '죽었다 — 이번 원정에는 돌아오지 않는다'(기억 갈래 — 09-08 D44 정정으로 존치)
+  OK   ⑭ 목격자(피른)는 fallen 만 — 묘를 봐도 grave_found 무등재(한 죽음은 한 줄)
+  OK   ⑭ 목격 렌더 '[두란(봇1)의 죽음을 목격] 가시 함정에 죽었다'
+  OK   ⑭ events=0: 묘를 봐도 기억 무등재(스위치 격리)
+  OK   ⑭ 결정론
+── ⑮ 몹의 문 사용 — '고블린(m0)가 문 d0을(를) 사용하는 것을'
+  OK   ⑮ 전제: 추격 한 걸음이 문 타일 d0(5,2)
+  OK   ⑮ 문 칸을 본 두란: mon_use {mon=고블린, id=m0, what=문, door=d0} 정확히 1건
+  OK   ⑮ 문 너머 쪽 카야도 본다(문턱=양쪽에서 보이는 순간)
+  OK   ⑮ 벽 너머 골방 피른: 무주입
+  OK   ⑮ 스트림 monster_move 에 door='d0' 병기(additive)
+  OK   ⑮ 렌더 '고블린(m0)가 문 d0을(를) 사용하는 것을'
+  OK   ⑮ 도감 게이트: 모르는 종 = 낯선 짐승(m0)
+  OK   ⑮ events=0: 무주입(스위치 격리)
+  OK   ⑮ scan=0(문 타일 없음): 무주입·door 무병기
+  OK   ⑮ 매복(concealed) 몹: 존재 비누설
+  OK   ⑮ 결정론
+
+ALL PASS — verify_events (D22 사건층 2겹+묘 · D30 오브젝트 사용 목격)

@@ -1,0 +1,56 @@
+── ① 스위치
+  OK   ① 엔진 기본 trail_on=False · from_ascii 기본 False
+  OK   ① 꺼진 판: trail 안 쌓임 · obs 에 trail 키 없음 · last 는 구동작
+── ②③ 기록자·순서
+  OK   ③ 순서: goto pathed → 걸음… → 보물 → 작정 goto exit(plan 표식) → 걸음 2
+  OK   ③ turn 스탬프 단조 증가 · 시작 5
+  OK   ② last = 궤적 마지막 항목(turn/plan 제외)
+  OK   ② _note_last(plan=True): last 엔 plan 없음 · trail 엔 plan·turn
+  OK   ② 말 걸림(hail) 도 궤적에
+  OK   ② plan_broken 도 궤적에
+  OK   ② 피격(hurt) 도 궤적에 — status(둔화) 병기까지 실린 한 항목
+── ④ 노출·소거
+  OK   ④ view: obs.trail 노출(다건) · 봇 trail 비움 · gap 0
+  OK   ④ 두 번째 view 엔 trail 키 없음(1회 노출) · last 는 남는다
+── ⑤ 상한
+  OK   ⑤ TRAIL_MAX 초과 → 앞 3건 버리고 gap=3
+  OK   ⑤ view: gap 표식이 첫 칸 · 나머지 TRAIL_MAX
+── ⑥ 렌더
+  OK   ⑥ 궤적 없는 obs(끈 판) = 구판 문장 그대로 / 궤적 1건 = 꼬리표 1개(D40 파트너 확정 '꼬리표식으로')
+  OK   ⑥ 다건 꼬리표 체인: 직전 판단(t25) · gap · [대화] · 작정대로 [이동 시작] · '3걸음 · [획득] 보물' · [도착] · [출혈] 접미 · 문장 없음
+  OK   ⑥ 실전 궤적(②③의 것) 항목 전부 꼬리표 — JSON 폴백(misc) 0
+  OK   ⑥ 사건 사전 전수: 대표 형태 32종 전부 꼬리표(misc 폴백 0) · 조우 1건=발견(적)·함정·상태·발견(물건)·획득 5꼬리표
+  OK   ⑥ 꼬리표 문자열 표본: 피격 기습+둔화 / 문 사용(걸음, 압축 뒤 접미) / 문 사용(도착) / 위급 / 함정(HP 없으면 생략)
+── ⑨ 위급(HP ≤ 1/4) 전이 사건
+  OK   ⑨ 3/14 → [위급] 1회 · 머무는 동안 반복 없음 · 8/14 → [위급 해제] 1회(원인 사건 뒤에 선다)
+  OK   ⑨ 문턱 = hp*4 <= maxhp: 14→3 위급, 4 는 아님(사건 없음) / 10→2 / 11→2
+  OK   ⑨ 궤적 끈 판엔 위급 사건 없음(critical 플래그도 없음)
+── ⑩ 자기 문 사용
+  OK   ⑩ 문 타일을 밟은 걸음에 door 병기(스트림 additive) · 꼬리표 '[문 사용] d9' 1회
+── ⑦ think_all intent
+  OK   ⑦ 궤적 판: 작정 수(src=plan) 집행돼도 intent 는 마지막 실 결정 그대로
+  OK   ⑦ 궤적 끈 판: 작정 수가 intent 를 덮는다(구동작 보존)
+  OK   ⑦ 궤적 판의 실 결정엔 intent.turn 스탬프
+── ⑧ 결정론
+  OK   ⑧ 같은 시드·같은 수순 = 같은 궤적
+── ⑪ 최근 판단 장부 — 최근 선택들이 한 줄로 돌아온다(작정·폴백 표식, 엔진 결과 없음)
+  OK   ⑪ 스위치: brains.HISTORY_ON 기본 켬(표현층·notes 선례) · HISTORY_MAX=10(임시 가정)
+  OK   ⑪ 결정 k 의 obs.history 길이 = min(k−1, 10) · 첫 결정엔 키 없음 (19결정)
+  OK   ⑪ 항목 = 그 결정의 turn·type·target + src(스텁 판=폴백) — 엔진 결과 키 없음
+  OK   ⑪ 오래된 것부터(turn 단조) · 상한 10(한 봇은 10 도달)
+  OK   ⑪ 작정 수(src=plan)도 항목으로 — {turn 7, goto exit, src plan}
+  OK   ⑪ 끈 판: obs 에 history 없음 · 봇 장부 안 쌓임
+  OK   ⑪ 결정론: 같은 시드 두 번 = 같은 장부
+  OK   ⑪ 렌더: 직전 절 안 한 줄 '최근 판단(오래된 것부터, 직전까지): 이동 f0 (t81) · 탐색 (t83) · 탐색 W (t85) · 이동 exit (t87, 작정) · 동행 b2 (t88, 폴백) · 이동 f0 (t89)'
+  OK   ⑪ 렌더: history 없으면 줄 없음
+── ⑫ 대화 기억 — 지난 결정까지 들은 말과 내가 한 말 여섯 마디
+  OK   ⑫ 스위치: brains.DIALOGUE_ON 기본 켬 · DIALOGUE_MAX=6(임시 가정)
+  OK   ⑫ 결정 k 의 obs.dialogue = 앞선 결정들의 [읽은 말(turn−1·to_me)·내 말(mine)] 마지막 6 · 첫 결정엔 키 없음 (24결정)
+  OK   ⑫ 이번 틱 인박스는 obs.dialogue 에 없고(중복 없음) messages 절에만
+  OK   ⑫ 봇2(인박스 없음)는 내 말만 · 상한 6
+  OK   ⑫ 끈 판: obs 에 dialogue 없음 · 봇 장부 안 쌓임
+  OK   ⑫ 결정론: 같은 시드 두 번 = 같은 장부
+  OK   ⑫ 렌더: '## 최근 대화' 절 + 카야(봇2)→나 / 나→카야(봇2) / 미나(봇3)→모두 / 카야(봇2)→미나(봇3) / 카야(봇2)(혼잣말)
+  OK   ⑫ 렌더: dialogue 없으면 절 없음
+
+ALL PASS — verify_trail (D38 자기 행동 궤적 + D40 꼬리표·위급·문 사용: 기록자 하나·순서·노출 1회·상한·렌더·intent 유지·결정론)

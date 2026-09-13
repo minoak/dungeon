@@ -32,9 +32,10 @@ NPC_SHA = 'b6c1e5f26edb42b1e7ad09a6f0db05b8f62d30df43dd846cf67d649f9e8fd1b7'
 
 # ① 로드
 defs = ENT.load()
-check('① 정의 로드 — kind 4종·정의 20개(몬스터 2·함정 3·오브젝트 9·NPC 6 = 상점 v0 3 + 마을 v1 3)',
-      {d['kind'] for d in defs.values()} == set(ENT.KINDS) and len(defs) == 20
-      and len(ENT.by_kind('monster')) == 2 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('object')) == 9 and len(ENT.by_kind('npc')) == 6)
+check('① 정의 로드 — 기존 20개와 마을 공간 정의(맵 7·건물 4) + 의뢰 3(D61)',
+      {d['kind'] for d in defs.values()} == set(ENT.KINDS) and len(defs) == 34
+      and len(ENT.by_kind('monster')) == 2 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('object')) == 9 and len(ENT.by_kind('npc')) == 6
+      and len(ENT.by_kind('map')) == 7 and len(ENT.by_kind('building')) == 4 and len(ENT.by_kind('quest')) == 3)
 
 # ② 엔진 유도값 == 이관 전 리터럴(동작 그대로)
 check('② TRAP_KINDS 가 정의에서 유도되어 옛 리터럴과 같다',

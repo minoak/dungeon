@@ -12,6 +12,9 @@ import townTerrainUrl from './world/town-terrain.png';
 import townGuildUrl from './world/town-guild.png';
 import townPropsUrl from './world/town-props.png';
 import townNpcsUrl from './world/town-npcs.png';
+import townTempleUrl from './world/town-temple.png';
+import townTavernUrl from './world/town-tavern.png';
+import townGateUrl from './world/town-gate.png';
 
 export const WORLD_CELL = 96;
 export const WORLD_FOOT = 92;
@@ -45,6 +48,9 @@ export function queueWorld(load: Phaser.Loader.LoaderPlugin): void {
   load.spritesheet('wl-town-props', townPropsUrl, { frameWidth: TOWN_PROP_CELL, frameHeight: TOWN_PROP_CELL });
   load.spritesheet('wl-town-npcs', townNpcsUrl, { frameWidth: TOWN_NPC_CELL, frameHeight: TOWN_NPC_CELL });
   load.image('wl-town-guild', townGuildUrl);
+  load.image('wl-town-temple', townTempleUrl);
+  load.image('wl-town-tavern', townTavernUrl);
+  load.image('wl-town-gate', townGateUrl);
 }
 
 export function monsterFrame(dir: Dir): number { return DIRECTIONS.indexOf(dir) * 3; }

@@ -1,0 +1,33 @@
+  OK   exit feature 정확히 1개
+  OK   exit 좌표 = d.exit 프로퍼티 일치
+  OK   treasure features = d.treasures 집합 일치
+  OK   exit feature 가 방 안(room_id 보유)
+  OK   feature.as_dict 가 perception_gate 포함
+  OK   모든 feature 가 정수 id·맵내 좌표 보유
+  OK   room id = 0..n-1 연속
+  OK   room 타입 ⊆ {entrance,exit,standard}
+  OK   exit 타입 방 정확히 1개(출구가 방 안)
+  OK   entrance 타입 방 ≤ 1개
+  OK   방 그래프 연결성(방0→전 방 도달)
+  OK   neighbours 대칭(a∈nb면 nb∈a)
+  OK   path 비어있지 않음(출구까지 경로 존재)
+  OK   path 모든 스텝 8-인접 & walkable
+  OK   path 대각선 코너컷 없음
+  OK   path 마지막 칸 = 출구(walkable 목표는 그 칸)
+  OK   이미 도착이면 빈 경로
+  OK   같은 (시드,깊이) → 완전 동일(맵+타입+출구+보물+d20×30)
+  OK   다른 시드 → 다른 판
+  OK   같은 시드 다른 깊이 → 다른 판(파생 시드)
+  OK   전역 random 상태와 무관(독립 RNG 스트림)
+  OK   위치 인자 Dungeon(7,2) = 키워드 seed=7,depth=2 (계획 솔기①)
+  OK   _derive_seed 32비트 초과·음수 구분(앨리어싱 없음)
+  OK   [200시드] 방끼리 안 겹침(AABB)
+  OK   [200시드] 방 그래프 연결성
+  OK   [200시드] 지형 연결성(몹 제거 시 전 방 도달)
+  OK   [200시드] exit feature 항상 방 안
+  OK   [200시드] 몹 핑 끝칸 = 직교 인접·walkable (대각/거리2 아님)
+  OK   [200시드] 몹 핑 [] = 진짜 도달불가만 (거짓 도달불가 0)
+        (non-walkable 분기 600회 실측)
+
+============================================
+RESULT: ALL PASS

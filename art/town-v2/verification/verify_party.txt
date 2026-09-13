@@ -1,0 +1,37 @@
+  OK   load_party: 기본 party.json = 3인('1','2','3')
+  OK   load_party: 필수 9필드 전원 보유
+  OK   load_party: 3번 = 궁수 피른(hp11·str1·dex3·은신2·수색1·사거리2 — 2026-07-26 전환)
+  OK   load_party: atk_range 는 선택 수치 필드 — 없는 시트는 기본 1(하위호환)
+  OK   load_party: 관계 3인 교차(각자 나머지 둘을 서술)
+  OK   load_party: 메타 키('_readme')는 시트가 아니다
+  OK   폴백: 파일 없음 → 내장 2인(전사·도적) + 경고 1줄
+  OK   폴백: 필수 필드 누락 → 내장 2인
+  OK   폴백: char 키 위반('10') → 내장 2인
+  OK   폴백: 수치형 위반(hp='14' 문자열) → 내장 2인
+  OK   성격은 2500자까지, 목표는 기존 300자까지 로드
+  OK   5인 초과: 경고만 내고 6인 그대로 통과
+  OK   spawn 하위호환: sheet=None → HEROES(전사 hp14, name 없음)
+  OK   spawn+sheet: 시트 값 복사(피른 hp11·이름·목표·관계 '1','2')
+  OK   3인 군집 스폰(첫 봇 기준 맨해튼 ≤ 4, 서로 딴 칸)
+  OK   하강 gather: 2명이 멀다 → wait_allies missing=['2','3'](정렬)
+  OK   하강 gather: 아직 1명 밖 → missing=['3']
+  OK   하강 gather: 전원 반경 내 → 동반 하강 party=['1','2','3'] + 전원 won
+  OK   _sheet: 이름·직업·말투·목표·관계(동료 이름 표기) 포함
+  OK   _sheet: roster 밖 관계 대상은 침묵(무해 처리)
+  OK   _sheet: 하위호환(bot=None 경로) — HEROES 로 시트 구성
+  OK   gm._CAST: 등장인물 3인 이름 전부 + 창작금지 문구
+  OK   obs.party: 나 제외 동료 2명
+  OK   render: 3 글리프 표시
+  OK   render: won 봇 글리프 소멸
+  OK   러너: run_meta.party = 3인(궁수 포함)
+  OK   러너: 게임 종결(end·outcome 유효)
+  OK   러너: 스트림 무수정 — 봇 스냅샷에 name 없음(Part B 계약)
+  OK   러너: interact exit.party ↔ 같은 틱 won 전이 정합
+  OK   러너: botlog 동적(bot3.log 생성)
+  OK   러너: 배너에 이름 로스터(두란·카야·피른)
+  OK   러너: 맵 상태줄에 이름 표기
+  OK   러너 폴백: 파티 파일 없음 → 2인 게임 + 종결
+  OK   결정론: 3인 러너 2회 = 동일 스트림(started 제외)
+        (3인 판: 216틱, outcome=escaped, 생존 ['1'] / 쓰러짐 ['2', '3'])
+
+ALL PASS — 시트 외부화(party.json)·N인 파티 건전. 시트=사용자 저작물의 원형.

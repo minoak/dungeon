@@ -1,0 +1,62 @@
+① 스위치 격리
+  OK   엔진 기본 status=0
+  OK   from_ascii 기본 status=0
+  OK   꺼진 판 _apply_status=None·무태그
+③ 출혈 — 걸음이 피를 낸다
+  OK   탐색 핑 개시
+  OK   걸음 3: bleed 병기 hp=13
+  OK   걸음 6: bleed 병기 hp=12
+  OK   걸음 9: bleed 병기 hp=11
+  OK   9걸음 = HP −3 (BLEED_STEPS=3)
+  OK   bleed 이벤트 3회
+  OK   걸음 없는 상태 유지엔 피 안 남(bleed_steps 그대로)
+  OK   꺼진 판: 출혈 태그가 있어도 피 안 남(9걸음)
+  OK   출혈사: 3걸음째 HP 0 → 사망·encounter·bleed.down·묘
+④ 둔화 — 두 틱에 한 칸
+  OK   제자리 틱=walking+slowed, to 없음
+  OK   제자리 틱=walking+slowed, to 없음
+  OK   제자리 틱=walking+slowed, to 없음
+  OK   6틱 = 3걸음 (SLOW_EVERY=2)
+  OK   꺼진 판: 둔화 태그가 있어도 6틱=6걸음
+  OK   쉬는 틱에도 눈은 뜨고 — 새 몹이면 encounter
+⑤ 중독 — 명중·회피 감산
+  OK   맨몸: mod=STR 3 → 13≥12 명중
+  OK   중독: mod=1 → 11<12 빗나감 (스트림 mod 에 그대로)
+  OK   중독: ac 10→8, 9≥8 명중 (스트림 ac 에 그대로)
+  OK   맨몸: ac 10, 9<10 빗나감
+② 원천 5경로 + ⑥ 목격
+  OK   가시 함정 → 출혈(이벤트 trap.status·봇 status)
+  OK   목격: 시야 안 동료 ally_status 1회 · 벽 너머 동료 0 · 당사자 0
+  OK   ×N: 같은 태그 재발 = n 만 는다
+  OK   독침 함정 → 중독
+  OK   꺼진 판: 함정 실패해도 무태그·이벤트 무부기
+  OK   그림자거미 명중 → 둔화(이벤트 status·봇 status·last.status)
+  OK   고블린 명중 → 무태그(기준선 몹)
+  OK   상자 독침 → 중독(result chest_trap·status)
+  OK   오염된 샘 → 중독
+⑦ 렌더
+  OK   자기 obs status=[{tag,n,by,since}]
+  OK   wire '## 네 몸 상태' + 효과 문장 + 원천 + 경과
+  OK   wire 물음표 0(관찰 사실만)
+  OK   ×2 표시
+  OK   동료 항목 status=['출혈'] (겉으로 드러난다)
+  OK   동료 줄 'HP x/y · 출혈'(09-08 D45 — 겉보기 4단 폐지)
+  OK   목격 문장
+  OK   목격 문장(몹 원천 — 조사 '로')
+  OK   출혈사 목격 문장
+  OK   몹 사인 목격 문장 불변
+  OK   자기 관측: 피격+태그
+  OK   자기 관측: 함정+태그
+  OK   리모컨 라벨은 무변경(태그는 '네 몸 상태' 절이 말한다)
+⑧ 결정론
+  OK   같은 장면 2회 = 같은 status·witnessed·hp
+⑨ 스냅샷·이월·헤들리스
+  OK   스냅샷: 태그 없으면 키 없음(꺼진 판 바이트 동일)
+  OK   스냅샷: 태그 있으면 status=['출혈'] (additive)
+  OK   러너 이월 코드 존재(status·bleed_steps)
+  OK   러너 run_meta status 키
+  OK   헤들리스 2층 판(더미 두뇌·status 켬) 결정론 — started 제외 라인 동일
+  OK   run_meta.status=true
+  OK   스냅샷 status 는 리스트(있을 때만) — 발화 0회
+
+RESULT: ALL PASS — verify_status (D34 상태 태그: 원천·효과·목격·렌더·결정론)

@@ -1,0 +1,14 @@
+{
+  "id": "town_tavern",
+  "name": "주점 지구",
+  "kind": "map",
+  "tags": [
+    "town",
+    "district"
+  ],
+  "comps": {
+    "space": {
+      "role": "district"
+    }
+  }
+}

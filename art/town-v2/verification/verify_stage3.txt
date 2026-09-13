@@ -1,0 +1,69 @@
+[경고] 파티 파일(/nonexistent) 로드 실패: [Errno 2] No such file or directory: '/nonexistent' — 내장 2인(전사·도적)으로 폴백
+  OK   능동 search: 전사(반경1)는 dist2 함정을 못 본다
+  OK   능동 search: 도적(반경2)은 dist2 함정 확정 발견
+  OK   능동 search: 전사도 반경 내(dist1)는 확정 발견(굴림 없음)
+  OK   수동 search-on-move: 굴림(전사도 가끔, 확정 아님) — 0 < 전사 < 100
+  OK   수동 search-on-move: 도적 > 전사 (DEX 보정 우위)
+  OK   수동: dist2 는 전사 구조적 0 (반경 밖)
+  OK   수동: dist2 도적은 발견 가능 (반경 우위)
+        (dist1 전사 32/100 · 도적 54/100, dist2 전사 0 · 도적 55)
+  OK   기본 던전 함정 = 가시·경보·독침 순환(경보 포함)
+  OK   경보 함정: 발동 시 alarm=깨운 몹 수(비은닉만)
+  OK   경보: 비은닉 몹 전부 HUNTING(justAlerted, 발원지로)
+  OK   경보: 매복몹(concealed)은 안 깬다(도사린 채)
+  OK   경보: 피해 0(dmg 필드 없음)
+  OK   드러난 함정: 우회로 있으면 경로가 함정 칸을 피한다
+  OK   드러난 함정: 외길이면 경유 허용(봉쇄 방지)
+  OK   알고 밟는 함정 = 조심 보너스(mod=DEX+3)
+  OK   concealed 몹: sights.monsters 에 안 나감
+  OK   concealed 몹: 봇 ascii_view 에 'M' 없음
+  OK   concealed 몹: 관전자 렌더에는 'm'(극적 아이러니)
+  OK   concealed 몹: 인접이어도 자동보행 안 멈춤(pre_adj 제외)
+  OK   매복 일격 = they-ambush 발화(surprise+from_hiding)
+  OK   일격 후 정체 드러남(concealed 해제 + HUNTING + 봇 인지)
+  OK   도적 능동 search 로 매복몹 사전 발각(kind=monster)
+  OK   발각된 매복몹 급습 = we-ambush(surprise)
+  OK   저HP HUNTING → FLEEING 전환(monster_flee 이벤트)
+  OK   협공 사이 FLEEING = 궁지 판정(제자리, 좌우 진동 없음)
+  OK   도주 탈진(8턴) → 필사 반전(monster_desperate → HUNTING)
+  OK   필사 반전 후엔 다시 도주하지 않는다
+  OK   D51 저HP 고블린 = 도주 전환 + 첫 걸음이 봇 반대가 아니라 동료 쪽(동쪽)
+  OK   D51 동료 곁에 닿으면 합류(monster_join) — 동료가 자고 있으면 곁에서 진정(WANDERING), 은닉 동료도 합류 대상
+  OK   D51 동료가 곁이면 저HP 라도 도주하지 않고 같이 싸운다(monster_attack, flee 없음)
+  OK   D51 동료가 join_range 밖이면 기존 도주(봇에게서 멀어지는 칸)
+  OK   D51 합류 뒤엔 동료를 따른다 — 동료가 쫓는 중이면 같은 표적을 함께 문다(HUNTING)
+  OK   막 깬 몹(waking=1) 공격 = 아직 기습(취약창)
+  OK   완전히 깬 HUNTING 몹 = 기습 아님
+  OK   상자: 열면 chest_loot(보물2) 또는 chest_trap(독침2)
+  OK   상자: 1회용(피처 소멸)
+  OK   샘: fountain_heal(+3) 또는 fountain_harm(-1)
+  OK   숨은 보물: obs sights 에 안 나감
+  OK   숨은 보물: 밟아도 못 줍는다(모르니까)
+  OK   드러난 보물: 밟으면 줍는다
+  OK   동료가 멀면 wait_allies(missing 명단) — 혼자 안 내려간다
+  OK   모이면 파티 동반 하강(전원 won)
+  OK   죽은 동료는 기다리지 않는다(생존자만 모이면 하강)
+  OK   러너: 지하 2층 강하 전이 발생
+  OK   러너: 게임 종료 도달
+  OK   러너: 맵 헤더에 층 표기
+  OK   [300시드] 전 콘텐츠(매복·경보·상자·샘·FLEEING) 풀게임 항상 종료
+  OK   [300시드] they-ambush 발화(from_hiding > 0) — 2b의 예언 실현
+  OK   [300시드] 경보 함정 실발동
+  OK   [300시드] 도주(flee)·수동인지(found)·발각(notice)·we-ambush 실발화
+  OK   [300시드] 상자·샘 상호작용 실발생
+  OK   [300시드] 하강 조율(wait_allies) 실발생
+        (종료 300/300 · 매복일격 67 · 경보 35 · 도주 336 · 필사 119 · 발각 686
+         · we-ambush 82 · 수동발견 659 · 상자 101 · 샘 47 · 대기 5927)
+  OK   [20시드] 결정론 — 같은 시드 = 같은 판(신규 굴림 전부 시드 스트림)
+  OK   (a) 발각 직후 1타=기습, 2타=기습 아님(waking 소비 — 무한 스턴락 차단)
+  OK   (b) 도주몹 공격 = 기습 아님 + 피격 후에도 FLEEING 유지(flee 시계 보존)
+  OK   (c) 경보=자던 놈만 각성(woken=1), 도주몹 상태·시계 불변
+  OK   (d) 계단 도착(at_exit) 스텝에도 _perceive 수행(시야 내 몹 인지)
+  OK   (e) 함정 즉사 스텝 = encounter(trap)로 즉시 종료, 옆 숨은 함정은 그대로 숨음
+  OK   (f) 계단 위(dist 0) exit.adj=true (발밑 상호작용 계약)
+  OK   (f) 솔로봇이 계단 위에서 dummy=interact exit (2틱 댄스 소멸)
+  OK   (g) [40시드] 지하 2층 관통(강하 전이 포함) 항상 종결
+  OK   (g) [8시드] 강하 포함 결정론(층별 파생시드·이월 재스폰 순서)
+
+============================================
+RESULT: ALL PASS

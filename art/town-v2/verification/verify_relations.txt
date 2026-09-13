@@ -1,0 +1,50 @@
+① 스위치 격리
+  OK   엔진 기본 relations=0
+  OK   from_ascii 기본 relations=0
+  OK   꺼진 판: note_talk·_bone 무동작
+  OK   꺼진 판: obs 에 relations 없음
+  OK   꺼진 판: 스폰 미씨앗(relations 빈 dict)
+  OK   켠 판: 시트 관계 칸 = 살의 초기값(line, sheet, turn 0)
+② 뼈 5종
+  OK   talk: 같은 틱 양방향 = 쌍당 1(대칭)
+  OK   talk: 다음 틱 +1·last 갱신
+  OK   talk: 제3자 무관
+  OK   fought: 5틱 안 같은 몹 → 둘 다 ×1
+  OK   fought: 같은 몹은 쌍당 1회(한 전투는 한 번)
+  OK   fought: 제3자(안 친 피른) 무관
+  OK   rescued: 카야를 물던 몹을 두란이 처치 → 카야 장부에 '나를 구함'·즉시 초대
+  OK   rescued: 시야 밖 피구조자는 무등재(전지 주입 금지)
+  OK   waited(wait_met): 기다린 두란 곁에 온 카야의 장부에 '나를 기다려 줌'
+  OK   waited(rest_met): 쉬는 동료 곁에 온 쪽의 장부에도
+  OK   at_death: 곁에서 죽음을 본 카야 장부에 '죽을 때 곁에 있었음'·즉시 초대 / 벽 너머 피른 무등재
+③ 문턱
+  OK   약한 뼈 합계 10·20 → milestone 두 번(즉시 아님)
+  OK   view: 결정당 초대 1개(번호순 첫 큐부터) — 카야 milestone
+  OK   다음 결정: 카야의 둘째 milestone
+  OK   그다음: 피른 rescued
+  OK   큐 소진 뒤: 초대 없음(관계 칸 자체가 없다)
+④ 살 — think_all 이 철한다
+  OK   초대 있는 결정: 응답 relation{to=2, line}·장부 겹쳐쓰기(self·turn 40)
+  OK   초대 없던 카야·피른의 relation_line 은 무시
+  OK   초대 없는 다음 결정: 필드 무시·줄 불변
+  OK   80자 절단(NOTE_LEN 과 같은 자)
+  OK   엔진 불가침: dungeon_gm 은 line 의 내용을 읽지 않는다(비교·검색·길이 0 — 있음/없음만)
+⑤ 시트 씨앗 렌더
+  OK   시트: 살(시트 초기값) 렌더 '(시트)'
+  OK   시트: 살이 없는 상대는 시트 문장 그대로
+  OK   시트: 덮어쓴 살 '(네가 40턴에 남긴 말)'
+  OK   relations 꺼진 봇(빈 dict)은 시트 문장 그대로
+⑥ 렌더
+  OK   wire '## 동료와 겪은 일' + '이야기를 나눔 ×2' + '나를 구함 ×1 (1턴 전에)'
+  OK   wire 초대 절 '카야(봇2)에 대해 남길 한 줄' + relation_line 안내 + 이유
+  OK   wire 물음표 0(관찰 사실만)
+  OK   초대 없는 결정: 초대 절 없음·횟수 줄은 남는다
+  OK   솔로 판: obs 무노출
+⑦ 러너 배선 · ⑧ 결정론 · ⑨ 스냅샷
+  OK   러너: 스위치·메타·note_talk 배선·이월
+  OK   프롬프트: relation_line 필드 안내(절이 있을 때만)
+  OK   같은 장면 2회 = 같은 장부
+  OK   스냅샷: 뼈 없으면 키 없음
+  OK   스냅샷: 뼈 횟수만(살은 안 나간다) additive
+
+RESULT: ALL PASS — verify_relations (D36 관계 장부: 뼈 5종·문턱·살·시트 씨앗·렌더·결정론)

@@ -1,0 +1,22 @@
+{
+  "id": "dungeon_gate",
+  "name": "던전 입구",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        8,
+        5
+      ],
+      "entrance": [
+        4,
+        4
+      ],
+      "texture": "gate"
+    }
+  }
+}

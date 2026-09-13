@@ -1,0 +1,53 @@
+── ① 상수·스위치
+  OK   ① BONES gave/received 라벨 · 강한 뼈 아님
+  OK   ① EVENT_KINDS give/received 집계 · WITNESS_LABELS ally_give · ITEM_KR
+  OK   ① 엔진 기본 꺼짐(__init__·from_ascii) · 러너 기본 켬
+── ② 메뉴
+  OK   ② 곁의 카야(봇2)에게 물약·단검 두 줄(item 동봉) · 2칸 밖 피른 없음 · 방어구 없음
+  OK   ② 상대 슬롯이 차 있으면 라벨이 '발밑에 놓인다'를 말한다
+  OK   ② 즉시행동군 자리: 이동(goto) 줄보다 앞
+  OK   ② 피른(봇3)의 메뉴엔 건네기 없음(곁에 아무도 없다)
+  OK   ② 꺼진 판: 건네기 줄 없음
+  OK   ② 솔로 판: 건네기 줄 없음(남남)
+  OK   ② _pick 이 item 을 복사한다
+── ③ 물약 물리
+  OK   ③ 결과: given · to 2 · what 물약 · 남은 1 / 카야 소지 1 / 두란 last=give
+  OK   ③ 받은 쪽: last=received(from 1, 물약, 소지 1) · 궤적에도
+  OK   ③ 목격: 피른만 ally_give{char 1, to 2, what 물약} · 둘은 아님
+  OK   ③ 뼈: 두란 gave→2 ×1 · 카야 received←1 ×1 · talk 0
+  OK   ③ 상세 기록 양쪽: {t5, 건네기, 물약, mine, reply None}
+  OK   ③ 층 집계: 두란 [건넴] ×1 · 카야 [받음] ×1 · 피른 목격 [동료 건넴] ×1
+── ④ 장비 물리
+  OK   ④ 빈 슬롯: 카야가 바로 걸친다(equipped) · 두란 빈손 · 받은 쪽 last equipped
+  OK   ④ 찬 슬롯: 발밑에 피처로 놓인다(placed) · 카야 갑옷 그대로 · 두란은 벗었다
+  OK   ④ 상대 발밑이 찼으면 내 발밑에
+  OK   ④ 둘 다 찼으면 no_room(소지 유지)
+── ⑤ 실패
+  OK   ⑤ too_far(피른 2칸) · no_target(b9) · nothing(빈손) — 아무것도 안 옮긴다
+  OK   ⑤ 꺼진 판: nothing · 이동 없음
+── ⑥ 정지 물리
+  OK   ⑥ 걷는 상대는 안 선다(order 유지) — 다음 결정에서 읽는다
+  OK   ⑥ 대기 중인 상대는 깬다(order·wait 비움)
+── ⑦ 표현
+  OK   ⑦ _last_prose 한 쪽/받은 쪽/실패
+  OK   ⑦ event_tags [건넴] 물약 → 카야 / [받음] 물약 (두란)
+  OK   ⑦ 목격 문장(view 가 to_name 을 풀어 준다)
+  OK   ⑦ act_summary · _hist_item · _VERB_KR
+  OK   ⑦ wire 직전 판단에 물건
+── ⑧ 러너 반응 집계
+  OK   ⑧ classify_reply: 건네기·친목·동행·합류로 그를 향하면 행동 / 말 to 그·all = 말 / 그 외 없음
+  OK   ⑧ settle_acts: 카야의 첫 결정(되건네기)=행동 · 양쪽 기록에 reply · 장부 닫힘 · replies
+  OK   ⑧ 작정 집행은 안 닫는다
+  OK   ⑧ 제안의 승낙=행동: answered True · answered/replied 뼈 · replies {제안, 행동} · 장부 닫힘
+  OK   ⑧ 답 없음: False · replies {제안, 없음}
+  OK   ⑧ 하위호환: replies 인자 없이도 된다
+── ⑨ think_all·스냅샷
+  OK   ⑨ 메뉴 번호 → dec {give, b2, item potion} · intent/history 에 item
+  OK   ⑨ bot_snapshot relations: 두란 {'2': {'gave': 1}} · 카야 {'1': {'received': 1}}
+── ⑩ 배선(소스)·지침
+  OK   ⑩ 러너: 스위치·Dungeon 인자 2곳·run_meta·장부·settle·replies·리셋·이월
+  OK   ⑩ scenario.py: 스위치 미러링 · potions 프리셋 · 프로브 출력 item/form
+  OK   ⑩ 지침: 건네기 절 · 내 문장('답이 필요할 때만') 제거 · 파트너 문장 유지
+  OK   ⑩ analyze_social 반응 형태 · 뷰어 건네기 줄
+
+ALL PASS — verify_give (D47 ② 건네기: 메뉴·물약/장비 물리·무정지/깨움·목격·뼈·상세 기록·반응 집계·표현·배선)

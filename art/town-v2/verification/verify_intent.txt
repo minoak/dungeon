@@ -1,0 +1,14 @@
+== 판단 되먹임(intent) 검증 ==
+  [OK] ① 첫 결정 obs 에 intent 없음 (2봇)
+  [OK] ① 결정 후 bot['intent'] == 파생값
+  [OK] ② 두 번째 결정 obs.intent == 직전 결정 (2/2)
+  [OK] ③ order 봇 스킵 + intent 보존
+  [OK] ④ 폴백 결정도 intent 에 남고 src=fallback
+  [OK] ⑤ bot_snapshot 에 intent 없음(계약 불변)
+  [OK] ⑦ 강하 재스폰 봇에 intent 없음(층 리셋)
+  [OK] ⑥ 러너 판 결정 표본 충분(21결정, 되먹임 19)
+  [OK] ⑥ obs.intent == 직전 decision 파생(불일치 0)
+  [OK] ⑥ 층/판 첫 결정에 intent 없음(위반 0)
+  [OK] ⑥ 결정론(2회 라인 동일, started 제외)
+============================================
+RESULT: ALL PASS — 판단 되먹임(자기 기억) 계약 건전

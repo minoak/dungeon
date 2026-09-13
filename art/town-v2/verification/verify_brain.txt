@@ -1,0 +1,30 @@
+== 두뇌 백엔드 어댑터 검증 ==
+  OK   ① env 없으면 기본 백엔드 = claude_cli (오늘까지의 판과 동일 경로)
+  OK   ② _call_claude 시그니처 = (prompt, model='haiku') — 15개 파일의 모킹 표면
+  OK   ③ claude_brain 은 위치인자 2개·키워드 0 으로 부른다 (verify_notes 의 `lambda p, m:` 모킹이 살아야 한다)
+  OK   ③ `lambda p, m:` 형 모킹이 그대로 통한다(행동 없는 오류로 보류)
+  OK   ④ import 이후 env 변경이 즉시 반영(모듈 로드 시점 바인딩 아님) — 게이트의 '스텁 먼저, 러너 나중 import' 관용구 보존
+  OK   ④ 소독 후 기본값 복귀
+  OK   ⑤ 표준 스텁이 백엔드보다 우선 — 백엔드 호출 0회 (초록불 유출 차단)
+  OK   ⑥ 키 없는 프로세스는 소켓 열기 전에 끊는다 — 모킹 누락의 최후 방어선(anthropic)
+  OK   ⑥ 같은 방어선(gemini)
+  OK   ⑦ `import brains` 만으로 requests 가 안 올라온다(지연 import) — 최상단 import 면 미설치 환경에서 게이트 20종이 한꺼번에 무너진다
+  OK   ⑧ HTTP 에러코드가 전부 'rc=' 문법으로 번역된다 (report.decision_board 버킷이 401/429/500/529 를 따로 센다)
+  OK   ⑧ _test_fallback_labels 의 3대 부분문자열이 API 백엔드에서도 산다
+  OK   ⑧ 타임아웃 라벨 = '타임아웃 <초>s'
+  OK   ⑨ 'haiku' 별칭이 백엔드별로 갈린다(CLI 어휘 ≠ API 모델 id)
+  OK   ⑨ 요청 바디의 model = claude-haiku-4-5 (별칭이 그대로 새어나가지 않는다)
+  OK   ⑨ 프롬프트는 user 메시지 하나로 통째 전송(claude.exe stdin 과 같은 바이트)
+  OK   ⑨ DUNGEON_ANTHROPIC_MODEL 이 별칭 표를 우회한다(gm.py DUNGEON_GM_MODEL 선례)
+  OK   ⑨ Gemini 3.x 요청엔 thinkingLevel=minimal (3 Flash 기본이 high — 안 낮추면 JSON 한 줄 받자고 최대 깊이로 사고한다)
+  OK   ⑨ 세대별 사고 파라미터 분기 — 2.5 는 thinkingBudget 정수(0=끔), 3.x 는 thinkingLevel 문자열(budget 은 폐기)
+  OK   ⑨ Gemini 인증은 x-goog-api-key 헤더(쿼리스트링 아님 — URL 에 키가 실리면 라벨·로그로 샐 표면이 생긴다)
+  OK   ⑩ 라벨에 키 지문이 없다
+  OK   ⑩ 라벨에 URL·호스트가 없다
+  OK   ⑩ '호출 실패' 라벨은 예외 타입명만(원문 아님) — state/·runs/ 가 커밋되는 레포
+  OK   ⑩ _errtag 는 화이트리스트 모양만 통과시킨다(자유문 차단)
+  OK   ⑪ 유효한 백엔드 이름에선 stderr 한 글자도 안 나온다 (_run_gates.sh 가 `2>&1 | tail -1` 로 판정 — 경고 한 줄이 통과를 FAIL 로 뒤집는다)
+  OK   ⑪ 잘못된 값은 claude_cli 로 퇴화(판을 죽이지 않는다)
+  OK   ⑪ 그 경고는 정확히 1회(콜마다 찍으면 판정줄이 오염된다)
+
+ALL PASS — verify_brain (백엔드 어댑터: 모킹 표면 불변·유출 차단·라벨 계약·비밀값 위생)

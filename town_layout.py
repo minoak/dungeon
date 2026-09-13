@@ -7,6 +7,8 @@ from collections import deque
 
 
 def compile_layout(layout):
+    from town_spaces import resolve
+    layout = resolve(layout)
     if layout.get('schema') != 'town-layout-v1':
         raise ValueError('지원하지 않는 layout schema')
 
@@ -107,12 +109,17 @@ def compile_layout(layout):
     for label, pos in targets:
         if tuple(pos) not in seen:
             raise ValueError('출발점 1에서 도달할 수 없다: ' + label)
+    spaces = layout.get('resolved_spaces')
+    if spaces:
+        for connection in spaces['connections']:
+            if any(tuple(p) not in seen for p in connection['cells']):
+                raise ValueError('구역 연결이 막혔다: %s → %s' % (connection['from'], connection['to']))
     fullw = w + 2 * pad
     rows = ['#' * fullw] * pad + ['#' * pad + ''.join(r) + '#' * pad for r in cells] + ['#' * fullw] * pad
     return {'map': rows, 'size': [fullw, h + 2 * pad], 'pad': pad,
             'starts': shifted_starts, 'npcs': npcs, 'dungeon_entry': entry,
             'entrances': [{**e, 'cell': [e['cell'][0]+pad, e['cell'][1]+pad]} for e in entrances],
-            'reachable_cells': len(seen)}
+            'reachable_cells': len(seen), **({'spaces': spaces} if spaces else {})}
 
 
 def visual_layer(layout, compiled):
@@ -126,5 +133,9 @@ def visual_layer(layout, compiled):
     if layout.get('guild'):
         g = layout['guild']
         out['buildings'].append({'id': 'guild', 'texture': 'guild', 'x': g['x'], 'footY': g['footY'], 'width': g['width']})
+    if compiled.get('spaces'):
+        spaces = compiled['spaces']
+        out['spaces'] = spaces
+        out['buildings'].extend({k:b[k] for k in ('id','name','texture','x','footY','width')} for b in spaces['buildings'])
     return out
 

@@ -106,6 +106,9 @@
       <button id="bWatch" title="게임 클라이언트(초점 캐릭터 카메라 뷰어, game/) — 빌드가 없으면 안내 페이지가 뜬다">관전으로</button>
       <button id="bGame" title="기존 HTML 지도 뷰어(viewer/)">옛 뷰어로</button>
       <button class="danger" id="bStop">진행 중인 판 중지</button>
+      <span class="muted" style="margin-left:10px">신탁(D61):</span>
+      <input id="oracleIn" maxlength="200" placeholder="신의 요청 한 줄 — 신전 앞에 선 캐릭터의 관측에 들어간다(요청이지 명령이 아니다)" style="width:34ch">
+      <button id="bOracle">보내기</button> <button id="bOracleClear" title="걸어 둔 요청을 거둔다">거둠</button>
     </div>
   </div>
 </section>
@@ -293,6 +296,11 @@ $('bReplays').onclick = () => { location.href = '/game/'; };                    
 $('bWatch').onclick = () => { location.href = '/game/?run=state/stream.jsonl'; };    // 기본 = 게임 클라이언트(2026-09-09 파트너 결정 "계속 새 뷰어로 보려면 불편")
 $('bGame').onclick = () => { location.href = '/viewer/?run=state/stream.jsonl'; };   // 옛 HTML 뷰어 — 은퇴 전까지 보조 진입
 $('bStop').onclick = async () => { await api('/api/stop', {}); refreshStatus(); };
+$('bOracle').onclick = async () => {                       // D61 신탁 소켓 — 서버가 state/oracle.json 에 두고 러너가 틱마다 읽는다
+  const r = await api('/api/oracle', { text: $('oracleIn').value });
+  $('err').textContent = r.oracle ? ('신탁 걸어 둠: ' + r.oracle.text) : '신탁 거둠';
+};
+$('bOracleClear').onclick = async () => { await api('/api/oracle', { text: '' }); $('oracleIn').value = ''; $('err').textContent = '신탁 거둠'; };
 
 /* ═══ 파티 ═══ */
 async function loadPresets() {

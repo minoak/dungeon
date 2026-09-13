@@ -227,7 +227,11 @@ export class DungeonScene extends Phaser.Scene {
     const depthAt = (footPx: number) => DEPTH.stand + (footPx / TILE - 0.92) * 0.01;   // 배우의 발((y+1)*TILE-4)과 같은 자
     for (const b of V.buildings) {
       const x = (b.x + ox) * s, y = (b.footY + oy) * s;
-      this.levelObjs.push(this.add.image(x, y, 'wl-town-' + b.texture).setOrigin(0.5, 1).setScale(s).setDepth(depthAt(y)));
+      const building = this.add.image(x, y, 'wl-town-' + b.texture).setOrigin(0.5, 1);
+      building.setScale(b.width * s / building.width).setDepth(depthAt(y));
+      this.levelObjs.push(building);
+      if (b.name) this.levelObjs.push(this.add.text(x, y + 6, b.name, {fontFamily:'sans-serif',fontSize:'12px',color:'#f4e4bd',backgroundColor:'#17232bcc',padding:{x:6,y:3}})
+        .setOrigin(0.5,0).setDepth(DEPTH.stand + 5));
     }
     for (const p of V.props) {
       const x = (p.x + ox) * s, y = (p.y + oy) * s;
@@ -283,7 +287,7 @@ export class DungeonScene extends Phaser.Scene {
     // 피처(출구는 층 고정물) — 시야 안이거나 본 적 있는 자리, concealed 는 숨김
     const seenFeats = new Set<string>();
     for (const ft of cur.features) {
-      if (ft.type === 'exit' || ft.concealed) continue;
+      if (ft.type === 'exit' || ft.type === 'building' || ft.concealed) continue;   // building(D60): 시각 레이어가 건물을 그린다 — 문턱 피처는 안 그림
       if (!known(ft.x, ft.y)) continue;
       const k = ft.type + '#' + ft.id;
       seenFeats.add(k);

@@ -1,0 +1,19 @@
+test_alpha_overrides_map_and_inherited_options (__main__.AlphaLauncherTests.test_alpha_overrides_map_and_inherited_options) ... ok
+test_classic_switches_off_inherited_skills (__main__.AlphaLauncherTests.test_classic_switches_off_inherited_skills) ... ok
+test_invalid_mode_or_alpha_combination_does_not_start (__main__.AlphaLauncherTests.test_invalid_mode_or_alpha_combination_does_not_start) ... ok
+test_launcher_default_enables_skills (__main__.AlphaLauncherTests.test_launcher_default_enables_skills) ... ok
+test_menu_reuses_existing_launcher_before_binding (__main__.AlphaLauncherTests.test_menu_reuses_existing_launcher_before_binding) ... ok
+test_old_launcher_without_pause_support_is_not_reused (__main__.AlphaLauncherTests.test_old_launcher_without_pause_support_is_not_reused) ... [launcher] 127.0.0.1:8000 를 열 수 없다(이미 사용 중) — 이전 런처/뷰어 서버가 떠 있다면 진행 중인 원정이 끝난 뒤 그 창을 닫고 다시 실행해 주세요.
+ok
+test_runner_defaults_and_explicit_classic (__main__.AlphaLauncherTests.test_runner_defaults_and_explicit_classic) ... ok
+test_server_rejects_duplicate_port (__main__.AlphaLauncherTests.test_server_rejects_duplicate_port) ... ok
+test_standard_can_start_in_town (__main__.AlphaLauncherTests.test_standard_can_start_in_town)
+마을 v1(09-11): 스킬 원정도 마을 0층에서 시작할 수 있다(파트너 요청) — 스킬 켜짐 + DUNGEON_TOWN=1. ... ok
+test_status_reads_mode_from_record (__main__.AlphaLauncherTests.test_status_reads_mode_from_record) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.473s
+
+OK
+[launcher] 기존 서버에서 연다: http://127.0.0.1:8000/launcher/?mode=alpha
+ALL PASS — verify_skill_launcher (알파 설정·일반판 격리·조합 거부·상태 표시)

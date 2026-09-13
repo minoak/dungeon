@@ -17,6 +17,7 @@
 import collections
 import json
 import sys
+from movement_summary import MovementSummary, render as render_movement
 
 TOGETHER = 3          # 전원 '함께' = 살아 있는 전원이 서로 체비셰프 이 칸 안(⚠️임시 — 09-12 부검에서 쓴 자)
 FLAGS = {             # ⚠️임시 가정 — 눈길 표식 문턱
@@ -38,6 +39,7 @@ class Collector:
     """스트림 레코드를 순서대로 consume() → result() 가 결산 dict. 상태는 전부 카운터(투영 순수성)."""
 
     def __init__(self):
+        self.movement = MovementSummary()
         self.meta = {}
         self.names = {}
         self.ticks = 0
@@ -77,6 +79,7 @@ class Collector:
 
     # ── 소비 ──
     def consume(self, kind, rec):
+        self.movement.consume(kind, rec)
         if kind == 'run_meta':
             self.meta = rec
             for p in rec.get('party') or []:
@@ -209,6 +212,7 @@ class Collector:
                      'streak': {c: {'n': v[0], 't0': v[1], 't1': v[2]} for c, v in self.equip_streak.items()}},
             'bestiary': {'book_lines': self.book_lines},
             'events': dict(self.events.most_common(12)),
+            'movement': self.movement.result(),
         }
         s['flags'] = self.flags(s)
         return s
@@ -271,6 +275,8 @@ def render(s, names=None):
                     a['goto_ally'], a['repeat'],
                     ('%s %s ×%d (t%d~t%d)' % (lg['type'], lg['target'] or '', lg['n'], lg['t0'], lg['t1'])) if lg else '-'))
     pt = s['party']
+    if s.get('movement'):
+        L.extend(render_movement(s['movement'], names))
     L.append('  파티: 전원 %d칸 안 %s · 최장 이산 %d틱 · lost %d'
              % (TOGETHER, ('%d%%' % pt['together_pct']) if pt['together_pct'] is not None else '(2인 미만)',
                 pt['split_max'], pt['lost']))
@@ -337,7 +343,8 @@ def main(argv):
             print(ln)
         live = (end or {}).get('summary')
         if live is not None:
-            same = {k: v for k, v in live.items()} == s
+            # 옛 결산에 없던 추가 갈래는 비교 대상에서 제외한다.
+            same = all(k in s and s[k] == v for k, v in live.items())
             print('  라이브 결산(end.summary)과 %s' % ('일치' if same else '불일치 ⚠️'))
         print()
     return 0

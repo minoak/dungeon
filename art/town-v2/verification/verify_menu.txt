@@ -1,0 +1,22 @@
+== 리모컨(options) 검증 ==
+  OK   ① n 연속 1..K (894뷰)
+  OK   ① search 정확 1개
+  OK   ① explore ≥1
+  OK   ② 전수성(sights↔options 1:1)
+  OK   ③ 시야-온리(concealed 미노출)
+  OK   ④ 순수성(rng 무변화·재호출 동일)
+  OK   ⑤ _pick 왕복+관용+기각
+  OK   ⑥ explore 방위 존중 2078/2078
+  OK   ⑧ 방향 탐색 열거(scan+explore_dirs) 집합=오라클·칸 수=라벨 (920뷰, 열거 357뷰)
+  OK   ⑧ 열거 방위 집행=라벨(방위·칸) 570/570
+  OK   ⑧ (type,target) 중복 0
+  OK   ⑧ 열거 방위의 문장 줄='트여 있다' 570/570
+  OK   ⑧ 열거 시 '엔진에 맡긴다' 0
+  OK   ⑧ 스위치 끄면 구판 메뉴(탐색 줄 외 동일·'트여 있다' 0)
+  OK   ⑦ run_meta.menu=true
+  OK   ⑦ 스텁 결정 전부 choice:int·src=haiku (51결정)
+  OK   ⑦ outcome 유효
+  OK   ⑦ 결정론(2회 라인 동일, started 제외)
+
+============================================
+RESULT: ALL PASS — 리모컨 계약(전수성·시야-온리·번호=행동) 건전

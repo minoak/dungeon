@@ -1,4 +1,4 @@
 {
-  "_": "마을 v1(2026-09-11 채택, 파트너 \"바로 시작하자\") — 저작 원본은 art/town-v1/layout.json(schema town-layout-v1: 막힌 사각형·출입구·출발·던전 입구·NPC id/칸). 엔진은 Dungeon.from_layout 으로 격자를 만들고(show_runner.build_town), NPC 이름·대사·선물은 entities/npc/<id>.json. 옛 손그림 마을(31×12, 상점 v0)은 town-v0.json 에 보존 — verify_town ②③·verify_entities ④가 그것을 읽는다. 던전 입구는 샛길 남쪽 임시 자리(layout.dungeon_entry.placeholder).",
-  "layout": "art/town-v1/layout.json"
+  "_": "마을 전체 맵 v2 — 여섯 구역과 네 건물의 정의는 entities/map·building, 배치는 art/town-v2/layout.json. 정의와 배치가 충돌 격자·문턱·그림을 함께 만든다. NPC 대사와 선물은 entities/npc. 실내·신탁·의뢰는 후속 작업. 옛 마을과 길드 앞 시안은 town-v0.json·art/town-v1에 보존.",
+  "layout": "art/town-v2/layout.json"
 }

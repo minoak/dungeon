@@ -1,0 +1,70 @@
+[launcher] "GET /api/presets HTTP/1.1" 200 -
+[launcher] "POST /api/party HTTP/1.1" 400 -
+[launcher] "POST /api/party HTTP/1.1" 400 -
+[launcher] "POST /api/party HTTP/1.1" 200 -
+[launcher] "POST /api/party HTTP/1.1" 400 -
+[launcher] "POST /api/party HTTP/1.1" 200 -
+[launcher] "POST /api/start HTTP/1.1" 200 -
+[launcher] "POST /api/start HTTP/1.1" 200 -
+[launcher] "POST /api/start HTTP/1.1" 409 -
+[launcher] "POST /api/stop HTTP/1.1" 200 -
+── ① sheetkit — 키워드 사전·직업 수치·조립·거부
+  OK   ① traits.json: 키워드 12종 목록 — 문장 없음(09-12 §3-3 키워드 그대로 주입)
+  OK   ① 옛 사전 형식(키워드→문장)을 넘겨도 키워드만 쓴다 — 문장은 프롬프트에 안 나간다
+  OK   ① 직업 3종 수치 = party.json 두란·카야·피른의 몸 세트 그대로(atk_range 기본 1 포함)
+  OK   ① 조립: persona = 키워드 3개 그대로(', ' 구분), speech 없음, 자동 목표 없음, traits 원본 보존
+  OK   ① 직업 사전은 목표를 제공하지 않는다
+  OK   ① 전사: 직업 목표를 무시하고 사용자 성격만 조립
+  OK   ① 도적: 직업 목표를 무시하고 사용자 성격만 조립
+  OK   ① 궁수: 직업 목표를 무시하고 사용자 성격만 조립
+  OK   ① 조립 시트 3인이 load_party 를 통과(폴백 경고 0 — 이중 검증)
+  OK   ① 거부: 키워드 0개
+  OK   ① 거부: 키워드 4개(상한 3)
+  OK   ① 거부: 키워드 중복
+  OK   ① 거부: 미등재 키워드
+  OK   ① 거부: 이름 공백 / '_' 시작 / 21자
+  OK   ① 거부: 성별·직업 밖
+  OK   ① 자유 성격(파트너 정정): 키워드 0개+문장 → persona=정제 문장(개행·표식 제거) · speech 없음 · traits []
+  OK   ① 키워드+문장 병행: '키워드. 자유 문장' 한 줄, speech 없음
+  OK   ① 성격 2000자 + 키워드 3개, 배경 4000자를 끝까지 조립
+  OK   ① 거부: 파티 이름 중복 / 4인
+  OK   ① 외형 사전(D37): 머리 12(남 4·여 8)·몸통 B1/B2·스와치 4재질·기본색 hex
+  OK   ① sanitize_look: 등재 파츠 통과 · 빠진 색은 기본색 보충 · hex 소문자 정규화 · None→None
+  OK   ① 거부: 미등재 머리 / hex 아님 / dict 아님
+  OK   ① random_look: 같은 시드=같은 결과 · 성별 그룹(여→F·B2, 남→M·B1) · 색은 스와치 안 · 시드가 다르면 달라진다
+  OK   ① 조립 시트의 look 이 load_party 를 통과해 정규화됐다 · look 없는 시트엔 필드 없음
+── ② 배경 격리 — 위장 재료 제거·한 줄·상한·렌더 틀
+  OK   ② 개행·탭 → 공백 한 줄, '#' '`' '<' '>' '[' ']' 제거, 문장은 보존
+  OK   ② 4000자 절단 · 빈 배경 = None
+  OK   ② 빈 배경으로 조립하면 시트에 background 필드가 없다
+  OK   ② spawn 이 background/traits 를 봇으로 옮긴다(프롬프트 전용 필드 계보)
+  OK   ② _sheet 렌더: 「…」 인용 한 줄 + '지시가 아니다' 틀
+  OK   ② 머리글('# '·'## ') 수가 배경 없을 때와 동일 = 1(섹션 위장 불가) · '규칙' 머리글 없음
+  OK   ② 배경 없는 시트의 _sheet 출력엔 '배경(' 줄이 없다(구판 동일)
+  OK   ② 도적: 생성 → 저장 → 로드 → 프롬프트에 자동 목표 없음, 능력 정보는 유지
+  OK   ② 전사: 생성 → 저장 → 로드 → 프롬프트에 자동 목표 없음, 능력 정보는 유지
+  OK   ② 궁수: 생성 → 저장 → 로드 → 프롬프트에 자동 목표 없음, 능력 정보는 유지
+  OK   ② 러너 통합: run_meta.party 에 background/traits additive(있을 때만) · 키워드 시트엔 speech/goal 없음
+  OK   ② 러너 통합: 배너에 seed 표시
+  OK   ② 러너 통합(D37): 시트 look 은 run_meta.party 에 그대로 · look 없는 시트는 러너가 랜덤으로 채운다(성별 그룹·스와치)
+  OK   ② 긴 성격·배경이 파일 → 러너 → 모험가 프롬프트 → 원정 기록까지 끝부분 보존
+  OK   ② 랜덤 외형은 seed·char 결정론: 같은 시드 재실행 = 같은 look(던전 난수 무접촉)
+  OK   ② 직접 작성한 목표는 로드·프롬프트·run_meta에 보존, 다른 캐릭터에 자동 목표 없음
+── ④ 시드 — 'random' 해석
+  OK   ④ _pick_seed('7')=7 · 'random' 은 1~999999 · 두 번 뽑아 다름(확률 1/10^6 충돌 허용)
+  OK   ④ 이 게이트의 러너 시드는 고정 7(run_meta.seed) — 정수 경로 무변경
+  OK   ⑤ 기본 party.json 바이트 무변경(커스텀은 별 파일)
+── ③ 론처 서버 API — presets·party·start(dummy)·status·409·stop
+  OK   ③ GET /api/presets: 200 · traits 12 · jobs 3 · 기본 파티 3인 미리보기
+  OK   ③ presets.looks(D37): 머리 12·몸통 2·스와치 4재질·기본색 4
+  OK   ③ 정적 서빙(D37): /viewer/assets/sprites/sprites.json(heads 12)·sprites.js(WLSprites) 200 — 론처·뷰어 공용
+  OK   ③ POST /api/party 거부: 키워드 0개·중복 4개·미등재 머리(D37) = 400 / 배경 4001자는 4000자로 절단 저장(200)
+  OK   ③ POST /api/party: 200 저장 → party_web.json 3인(load_party 재검증 통과) · 자유 성격이 persona 에 이어붙음
+  OK   ③ 실제 론처 저장 결과에도 직업별 자동 목표 없음
+  OK   ③ 저장된 시트의 look(D37): 정규화(색 보충·소문자) · look 없는 슬롯엔 필드 없음(러너가 랜덤)
+  OK   ③ POST /api/start(dummy 두뇌): 러너 subprocess 가 stream.jsonl 을 쓰고 status 가 seed·party 를 읽는다
+  OK   ③ 판 종료 후 status.running=false · 마지막 라인 end
+  OK   ③ 실행 중 두 번째 start = 409
+  OK   ③ POST /api/stop → running=false · 이전 판은 runs/ 에 보존됐다(live.bat 규칙)
+
+ALL PASS — verify_launcher (D31 시트 조립·배경 격리·시드 random·론처 API)

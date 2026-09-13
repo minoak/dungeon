@@ -1,0 +1,53 @@
+── ① 상수·스위치
+  OK   ① BONES bond='친목행위'(쌍이 같이) · EVENT_KINDS bond/bonded · WITNESS_LABELS ally_bond · 상한들
+  OK   ① 엔진 기본 꺼짐(__init__·from_ascii) · 러너 기본 켬
+── ② _clean_form
+  OK   ② 공백 접기·따옴표 제거·상한 120·빈 값
+  OK   ② 30자가 넘는 행동 장면과 정확히 120자인 서술을 끝까지 보존
+── ③ 메뉴
+  OK   ③ 곁의 카야(봇2)에게 한 줄(target b2, `form` 안내) · 피른(2칸) 없음
+  OK   ③ 카야(봇2)에겐 두란(곁)만 · 피른(2칸) 없음
+  OK   ③ 꺼진 판: 친목 줄 없음
+  OK   ③ 건네기를 꺼도 친목은 산다
+── ④ 물리
+  OK   ④ 결과: done · to 2 · form 정제 · 두란 last=bond
+  OK   ④ 받은 쪽: last=bonded(from 1, form) · 궤적에도
+  OK   ④ 목격: 피른만 ally_bond{char 1, to 2, form}
+  OK   ④ 뼈: 양쪽 bond ×1(친목행위) · gave/received 0 · talk 0
+  OK   ④ 상세 기록 양쪽: {t5, 친목, 머리 쓰다듬기, mine, reply None}
+  OK   ④ 층 집계: 두란 [친목] ×1 · 카야 [친목 받음] ×1 · 피른 목격 [동료 친목] ×1
+  OK   ④ form 없음=몸짓 · 긴 문구는 120자
+── ⑤ 실패·정지
+  OK   ⑤ too_far(피른 2칸) · no_target · 뼈·기록 없음
+  OK   ⑤ 꺼진 판: nothing · 뼈 없음
+  OK   ⑤ 걷는 상대는 안 선다
+  OK   ⑤ 쉬는 상대는 깬다(order·rest 비움)
+── ⑥ note_reply·상한
+  OK   ⑥ 안 적힌 기록 전부에 답이 적힌다(양쪽)
+  OK   ⑥ 이미 적힌 것은 안 건드린다
+  OK   ⑥ ACTS_MAX 상한(오래된 것부터 바랜다)
+  OK   ⑥ 관계 장부 꺼진 판: 뼈·기록 없음(결과·받은 쪽 사건은 그대로)
+── ⑦ 러너 반응 집계
+  OK   ⑦ 친목 뒤 첫 결정(말 to 1)=말 · 기록에 · replies
+  OK   ⑦ 같은 결정에 제안·친목 반응이 나란히(둘 다 없음)
+  OK   ⑦ 폴백·건너뜀 결정은 형태 '없음'으로 닫힌다
+── ⑧ 관측·렌더
+  OK   ⑧ view 관계 obs: 뼈 '친목행위 ×1' + acts
+  OK   ⑧ wire 양쪽 시점: '내가 … → 답: 말로' / '두란(봇1)가 … → 내 답: 말로'
+  OK   ⑧ obs 의 acts 는 최근 ACTS_SHOW 건
+  OK   ⑧ _last_prose 한 쪽/받은 쪽/실패
+  OK   ⑧ event_tags [친목] / [친목 받음]
+  OK   ⑧ 목격 문장 · act_summary · _hist_item · 직전 판단
+  OK   ⑧ wire 직전 판단에 몸짓
+── ⑨ think_all
+  OK   ⑨ 메뉴 번호+form → dec {bond, b2, form 정제} · intent/history 에 form
+  OK   ⑨ 집행: done · 카야 bonded
+  OK   ⑨ 긴 친목 서술: 응답·판단 기록·집행·상대 사건·양쪽 관계 기록·다음 프롬프트까지 보존
+  OK   ⑨ form 없는 응답: dec 에 form '' → 엔진 '몸짓' · 말은 그대로 실린다
+  OK   ⑨ 친목이 아닌 선택엔 form 이 안 실린다
+── ⑩ 지침·배선(소스)
+  OK   ⑩ 지침: 친목 자유 서술·120자 안내 · 고정 몸짓 예시 없음 · 반응은 상대 몫
+  OK   ⑩ 러너: DUNGEON_BOND · bond=BOND_ON · build_town 미러링 · act_summary bond
+  OK   ⑩ scenario 미러링 · 뷰어 친목 줄
+
+ALL PASS — verify_bond (D47 ② 친목: form 자유 문구·메뉴·물리 없음·무정지/깨움·목격·뼈·상세 기록+반응·렌더·배선)

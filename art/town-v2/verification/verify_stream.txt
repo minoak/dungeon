@@ -1,0 +1,40 @@
+  OK   전 라인 valid JSON
+  OK   kind 5종만
+  OK   첫 라인 = run_meta / 끝 라인 = end
+  OK   파일이 개행으로 끝난다(유효 prefix 계약)
+  OK   run_meta 정확히 1개
+  OK   level 수 = 1 + descend 수
+  OK   이 시드(7)는 2층 강하 포함(descend 1회 = 회귀 그물)
+  OK   descend 직전 = 같은 turn 의 tick(옛 층 스냅샷) / 직후 = level(같은 turn·to_depth)
+  OK   tick turn = 1부터 연속(빈 틱 포함 불변식)
+  OK   end.turn = 마지막 tick turn
+  OK   첫 level 은 turn 0·depth 1
+  OK   end.bots = 마지막 스냅샷(tick/level)과 동일
+  OK   run_meta: v=1 + 실행 파라미터 + stream_obs=false
+  OK   run_meta: party 시트 필드 전수(스폰 봇에서 파생)
+  OK   level: grid = h개의 w폭 raw 지형('#'/'.'/'+' — 문 타일=D19)
+  OK   level: 시드 필드(master/level 파생) + exit 좌표
+  OK   level: rooms 필드 전수 + feature.room_id 해소 가능(dangling 없음)
+  OK   level: 매복몹(concealed) 포함 전수 노출(관전자 등급 진실)
+  OK   봇 스냅샷 필드 전수(level.party + tick.bots + end.bots)
+  OK   몹/함정/피처 스냅샷 필드 전수(level·tick 양쪽)
+  OK   tick: decisions 는 결정 봇만·type 보유 / 기본 실행엔 obs 없음
+  OK   tick: inbox 형태 고정 — 키 = 그 틱 파티 전원(첫 틱·강하 직후 포함)
+  OK   tick: 재결정 봇 이벤트에 reason·job 부착(속내 보존)
+  OK   몹 이벤트에 id 존재+바인딩(m<n>) — 기본값 우회 없는 존재 검사
+  OK   end: outcome 3종 + 명단 필드
+  OK   원장 감사(base): hp/bag/몹hp/전이/고아결정 위반 0
+  OK   교차: 강하 수 = events.log '계단을 내려선다' 수
+  OK   교차: end.outcome ↔ events.log 종료 문구 1:1
+  OK   결정론: 재실행 스트림 = 원본(started 제외, 라인 단위)
+  OK   크기 sanity(1KB < 스트림 < 5MB)
+        (스트림 68 라인, 181.0 KB, tick 63개, outcome=escaped)
+  OK   obs opt-in: 모든 결정에 obs 동봉(pos·sights 보유) + run_meta.stream_obs=true
+  OK   timeout 분기: 한도 도달 → outcome=timeout·turn=한도·remaining 잔류
+  OK   원장 스윕(시드 1..14·몹6·함정6): 위반 0
+  OK   커버리지: 원장 델타 규칙 전부 ≥1회 실발화(죽은 규칙 없음)
+  OK   스윕이 wiped(전멸) 결말도 커버
+        (커버리지: trap_dmg=5, chest_trap=2, chest_loot=6, fountain_heal=4, fountain_harm=3, mon_dmg=157, walk_treasure=43, interact_treasure=20, potion_get=28, drink=14, down=17, killed=93, exit_party=20 / skipped=3)
+        (스윕 outcomes: ['escaped', 'timeout', 'wiped'])
+
+ALL PASS — 스트림(JSONL) 계약 건전. STREAM_FORMAT.md 가 데이터 계약.

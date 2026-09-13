@@ -75,8 +75,9 @@ check("① D29 개정(09-06): build_town 이 러너 스위치를 미러링(hail�
       and d.hail and d.wait_verb and d.events and d.trail_on and d.objtags
       and d.selfstop is False and d.dry_signal is False)
 npcs = sorted(f.name for f in d.features.values() if f.type == 'npc')
-check("① 마을 v1(09-11 채택) — town.json 이 layout 을 참조: 27×20 격자·출발 3·던전 입구(임시 자리)",
-      d.town and d.w == 27 and d.h == 20 and len(starts) == 3 and d.exit == (23, 18))
+check("① 마을 전체 맵 — 공간 엔티티에서 만든 53×39 격자·출발 3·정식 던전 입구",
+      d.town and d.w == 53 and d.h == 39 and len(starts) == 3 and d.exit == (41, 30)
+      and len(d.layout_result['spaces']['regions']) == 6)
 check("① NPC 3 — 성직자·길드 접수원·주점 주인(entities/npc, 대사는 임시 초안), 전원 인사 보유",
       npcs == ['길드 접수원', '성직자', '주점 주인']
       and all(d.npc_lines.get(n) for n in npcs))
@@ -274,7 +275,7 @@ check("⑤ 재입장 = 같은 1층 — 층 시드·격자 동일 + '<' 보존(�
 check("⑤ 마을 level — NPC 3 실림(관전자 등급 진실)",
       sum(1 for f in levels[0]['features'] if f['type'] == 'npc') == 3)
 check("⑤ 마을 v1 level 에 시각 레이어(visual: town-visual-v1 — 바닥 사각형·건물·소품·NPC 행) 실림, 던전 층엔 없음",
-      levels[0].get('visual', {}).get('schema') == 'town-visual-v1' and levels[0]['visual']['buildings'][0]['texture'] == 'guild'
+      levels[0].get('visual', {}).get('schema') == 'town-visual-v1' and {b['texture'] for b in levels[0]['visual']['buildings']} == {'guild','temple','tavern','gate'}
       and len(levels[0]['visual']['npcs']) == 3 and 'visual' not in levels[1])
 check("⑤ 클리어 — 아래 계단으로 전원 하강(outcome=escaped, depth 1)",
       end['kind'] == 'end' and end['outcome'] == 'escaped' and end['depth'] == 1)
@@ -326,8 +327,91 @@ check("⑧ town.json {layout: 상대경로} → build_town: layout 격자·NPC �
       d8b.town and d8b.npc_lines.get("여관주인") and len(st8b) == 3 and d8b.features[d8b._exit_fid].name == "던전 입구"
       and any(f.type == "npc" and f.name == "여관주인" and (f.x, f.y) == (6, 3) for f in d8b.features.values()))
 
+# ───────────────────── ⑨ 마을 관측(D60) ─────────────────────
+print("── ⑨ 마을 관측(D60, 09-12 파트너 '마을에서는 관측 정보를 느슨하게') — 건물 피처·구역 이름")
+import brains as _brains
+import dungeon_gm as _G
+d8, starts8 = show_runner.build_town()
+blds = {f.name: f for f in d8.features.values() if f.type == 'building'}
+ent_cells = {tuple(e['cell']) for e in d8.layout_result['entrances']}
+check("⑨ 건물 피처 3 = 신전·모험가 길드·주점(던전 입구 건물은 문턱이 '>' 곁이라 제외) · 자리 = 문턱 칸(바닥)",
+      set(blds) == {'신전', '모험가 길드', '주점'}
+      and all((f.x, f.y) in ent_cells and d8.grid[f.y][f.x] == _G.FLOOR for f in blds.values())
+      and d8.exit not in {(f.x, f.y) for f in blds.values()})
+sx, sy = starts8['1']
+b8 = mkbot('1', sx, sy)
+o8 = d8.view(b8, [b8])
+bf = [f for f in o8['sights']['features'] if f['type'] == 'building']
+check("⑨ 출발 자리 관측: 건물 셋이 방위·거리와 함께 보이고 town_zone='번화가'",
+      {f['name'] for f in bf} == {'신전', '모험가 길드', '주점'} and o8.get('town_zone') == '번화가'
+      and all(f.get('bearing') and isinstance(f.get('dist'), int) and f['dist'] > 0 for f in bf))
+w8 = _brains._wire(o8, {'1': '두란'})
+check("⑨ 렌더: '지금 있는 곳: 번화가' + '신전 f<n>' 줄",
+      '지금 있는 곳: 번화가' in w8 and any('신전 f' in ln for ln in w8.splitlines()))
+tid = 'f%d' % blds['신전'].id
+r8 = d8.act(b8, {'type': 'goto', 'target': tid}, [b8])
+check("⑨ goto 건물 = 문턱까지 경로(pathed) · 동료 관측 doing 이름 '신전'",
+      r8.get('result') == 'pathed' and d8._ally_doing(b8) == {'act': 'goto', 'target': tid, 'name': '신전'})
+t8 = blds['신전']
+b8b = mkbot('2', t8.x, t8.y)
+o8b = d8.view(b8b, [b8b])
+opts8 = [(o.get('type'), o.get('target')) for o in (o8b.get('options') or o8b.get('menu') or [])]
+check("⑨ 문턱에 서면 town_zone='신전 지구' · 건물엔 상호작용 옵션 없음(goto 뿐) · use 는 nothing",
+      o8b.get('town_zone') == '신전 지구' and ('interact', tid) not in opts8
+      and d8._interact(b8b, tid, [b8b]).get('result') == 'nothing')
+show_runner.TOWN_BUILDINGS_ON = False
+d8x, _ = show_runner.build_town()
+show_runner.TOWN_BUILDINGS_ON = True
+check("⑨ 스위치 끄면 건물 피처 없음(NPC 3·입구 그대로) · town_zone 은 그대로(구역은 layout 의 사실)",
+      not any(f.type == 'building' for f in d8x.features.values())
+      and sum(1 for f in d8x.features.values() if f.type == 'npc') == 3
+      and d8x.view(mkbot('1', sx, sy), [mkbot('1', sx, sy)]).get('town_zone') == '번화가')
+
+# ───────────────────── ⑩ 건물 역할 부품(D61) ─────────────────────
+print("── ⑩ 건물 역할 부품(D61, 09-12 파트너 '신탁 소켓·퀘스트 게시판') — 정보만")
+d10, s10 = show_runner.build_town()
+gd = next(f for f in d10.features.values() if f.type == 'building' and f.name == '모험가 길드')
+tp = next(f for f in d10.features.values() if f.type == 'building' and f.name == '신전')
+far = mkbot('1', *s10['1'])
+check("⑩ 출발 자리(문턱에서 멀다)엔 notices 없음", not d10.view(far, [far]).get('notices'))
+nb = mkbot('1', gd.x, gd.y + 1)                                  # 길드 문턱 앞 1칸
+o_nb = d10.view(nb, [nb])
+bd = [n for n in (o_nb.get('notices') or []) if n['kind'] == 'board']
+check("⑩ 길드 문턱 곁: 게시판 notice 하나 — 의뢰 3(제목·목표·보상), 신탁 없음",
+      len(bd) == 1 and [q['id'] for q in bd[0]['quests']] == ['goblin_cull', 'reach_floor_2', 'lost_trinket']
+      and all(q.get('title') and q.get('goal') and q.get('reward') for q in bd[0]['quests'])
+      and not any(n['kind'] == 'oracle' for n in o_nb['notices']))
+w10 = _brains._wire(o_nb, {'1': '두란'})
+check("⑩ 렌더: 게시판 줄에 의뢰 제목·목표(맡으라는 말 없음)", '게시판' in w10 and '고블린 소탕' in w10 and '셋 처치' in w10 and '맡아라' not in w10)
+d10.oracle = None
+ot = mkbot('2', tp.x, tp.y + 1)
+check("⑩ 신전 문턱 곁, 신탁 없음 → oracle notice 없음", not any(n['kind'] == 'oracle' for n in (d10.view(ot, [ot]).get('notices') or [])))
+d10.oracle = {'id': 'o1', 'text': '오늘은 2층까지만 가거라', 'turn': 3}
+o_t1 = d10.view(ot, [ot])
+orn = [n for n in o_t1['notices'] if n['kind'] == 'oracle']
+w_t1 = _brains._wire(o_t1, {'2': '카야'})
+check("⑩ 신탁 있음 → oracle notice{id,text} · 렌더 '신의 요청' + oracle_reply 안내 + '명령이 아니다'",
+      len(orn) == 1 and orn[0]['id'] == 'o1' and orn[0]['text'] == '오늘은 2층까지만 가거라'
+      and '신의 요청' in w_t1 and 'oracle_reply' in w_t1 and '명령이 아니다' in w_t1)
+roster10 = [{'char': '2', 'name': '카야'}]
+dec10 = _brains._parse_decision('{"reason":"r","type":"wait","oracle_reply":"알겠습니다, 신이시여"}', '', o_t1, '2', roster10)   # 반환 = 결정 dict(오류면 type 없음)
+check("⑩ 응답 oracle_reply → decision.oracle_reply{id,text}",
+      isinstance(dec10, dict) and dec10.get('oracle_reply') == {'id': 'o1', 'text': '알겠습니다, 신이시여'})
+ot['oracle_replies'] = {'o1': '알겠습니다, 신이시여'}
+o_t2 = d10.view(ot, [ot])
+dec10b = _brains._parse_decision('{"reason":"r","type":"wait","oracle_reply":"또 답"}', '', o_t2, '2', roster10)
+check("⑩ 답한 뒤: notice 에 replied 동봉·렌더 '이미 답했다' · 같은 신탁에 두 번째 답은 안 받는다",
+      [n for n in o_t2['notices'] if n['kind'] == 'oracle'][0].get('replied') == '알겠습니다, 신이시여'
+      and '이미 답했다' in _brains._wire(o_t2, {'2': '카야'}) and not (dec10b or {}).get('oracle_reply'))
+show_runner.NOTICES_ON = False
+d10x, _ = show_runner.build_town()
+show_runner.NOTICES_ON = True
+d10x.oracle = {'id': 'o2', 'text': 'x'}
+check("⑩ 스위치 끄면(NOTICES_ON=0) 게시판·신탁 없음(건물 피처는 그대로)",
+      not d10x.view(mkbot('1', gd.x, gd.y + 1), []).get('notices') and any(f.type == 'building' for f in d10x.features.values()))
+
 print("=" * 44)
 if C.failed:
     print("RESULT: %d FAIL" % C.failed)
     raise SystemExit(1)
-print("ALL PASS — verify_town (D29 마을: 전체 시야·NPC·계단 대칭·층 보존·관측 클리어)")
+print("ALL PASS — verify_town (D29 마을: 전체 시야·NPC·계단 대칭·층 보존·관측 클리어 · ⑨ D60 마을 관측 · ⑩ D61 게시판·신탁)")

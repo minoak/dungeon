@@ -19,6 +19,7 @@ export function installControls(app: App): void {
     `<button id="bPlay" title="재생/정지 (Space)" aria-label="재생">${icon('play')}</button>` +
     `<button id="bFwd" title="한 턴 다음" aria-label="한 턴 다음">${icon('forward')}</button><button id="bEnd" title="끝" aria-label="끝으로">${icon('end')}</button></div>` +
     `<div id="speeds" aria-label="재생 속도"></div><span class="badge live" id="liveBadge">LIVE</span>` +
+    `<span id="oracleBox" hidden><input id="oracleIn" maxlength="200" placeholder="신의 요청 한 줄 — 신전 앞 캐릭터에게" aria-label="신탁"><button id="oracleSend" title="론처 /api/oracle — 신전 문턱 근처에 선 캐릭터의 관측에 들어간다(요청이지 명령이 아니다)">신탁</button></span>` +
     `<div class="view-tools"><button id="bZoom" title="화면 확대">확대 ${app.scene?.zoom ?? 1.5}×</button>` +
     `<button id="bLog" title="기록 접기/펼치기" aria-expanded="true" aria-controls="log journalHead">기록 접기</button></div></div>`;
   const stageInfo = document.createElement('div');
@@ -115,6 +116,19 @@ export function installControls(app: App): void {
       void app.loadRun(sel.value);
     };
   }
+  // D61 신탁 소켓 — 라이브 판(론처 상대)에서만 보인다. 서버가 state/oracle.json 에 두고 러너가 틱마다 읽는다. 정적 배포엔 없다.
+  const oracleBox = $('oracleBox'), oracleIn = $('oracleIn') as HTMLInputElement, oracleSend = $('oracleSend') as HTMLButtonElement;
+  const showOracle = (): void => { oracleBox.hidden = !app.live; };
+  app.bus.on('live', showOracle); showOracle();
+  oracleSend.onclick = async () => {
+    const text = oracleIn.value.trim();
+    try {
+      const r = await fetch('/api/oracle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      const j = await r.json().catch(() => ({}));
+      oracleSend.textContent = r.ok ? (j.oracle ? '보냄 ✓' : '거둠') : '실패';
+    } catch { oracleSend.textContent = '실패'; }
+    window.setTimeout(() => { oracleSend.textContent = '신탁'; }, 1500);
+  };
   void buildRunList().then(() => {
     if (app.path) {
       if (![...sel.options].some(o => o.value === app.path)) sel.insertAdjacentHTML('beforeend', `<option value="${esc(app.path)}">${esc(app.path)}</option>`);

@@ -1,0 +1,32 @@
+== 작정 큐(D16) 검증 ==
+  [OK] ① 유효 then 통과 + 상한 2수 절단
+  [OK] ① 환각 id → 그 항목부터 뒤 전부 드랍
+  [OK] ① 앞수 유효·뒷수 불량 → 앞수만 생존
+  [OK] ① 메뉴 번호 관용(엔진 열거 행동으로 해석)
+  [OK] ① explore 방위 정규화(ne→NE)
+  [OK] ① 비리스트/부재 then 무시
+  [OK] ② act(then) → bot['plan'] 보관(2수)
+  [OK] ② 엔진측 상한 방어(PLAN_MAX 절단)
+  [OK] ② plan 봇 = src'plan' 결정·search 집행
+  [OK] ② plan 봇 LLM 콜 0 (사고 봇만 콜: 1)
+  [OK] ② 작정 수도 intent 갱신(판단의 연속)
+  [OK] ② 집행 후 큐 소진
+  [OK] ③ attack 대상 소멸 → 파기+plan_broken(대상 소멸)
+  [OK] ③ attack 비인접 → 파기+plan_broken(인접 아님)
+  [OK] ③ goto 대상 소멸 → 파기(작정은 explore 폴백 안 탐)
+  [OK] ③ 알 수 없는 동사 → 파기
+  [OK] ③ 파기 봇 같은 틱 LLM 재결정(src≠plan) + obs 에 plan_broken 노출
+  [OK] ④ 피격 인터럽트 → order·plan 동시 파기
+  [OK] ④ 경로 경합(blocked) → plan 파기
+  [OK] ⑤ lost(허탕) → plan 파기
+  [OK] ⑥ explore 작정 착수 통과(열린 동사)
+  [OK] ⑥ 발동 시점 해석(현재 위치 기준 pathed/no_path)
+  [OK] ⑦ bot_snapshot 에 plan 없음(화이트리스트 밖)
+  [OK] ⑦ 재스폰 봇 plan 빈 채(층 전이 리셋)
+  [OK] ⑧ then 없는 act 는 plan 미접촉
+  [OK] ⑨ 표본 충분(then 32·plan 집행 22)
+  [OK] ⑨ 작정 연속성 전수 감사(이행 22·정직 파기 19·위반 0)
+  [OK] ⑨ 계측 분리(llm_calls 32 + plan_steps 22 == decisions 54)
+  [OK] ⑨ 결정론(2회 라인 동일, started 제외)
+============================================
+RESULT: ALL PASS — 작정 큐(D16) 계약 건전

@@ -1,0 +1,14 @@
+{
+  "id": "town_guild",
+  "name": "모험가 길드 지구",
+  "kind": "map",
+  "tags": [
+    "town",
+    "district"
+  ],
+  "comps": {
+    "space": {
+      "role": "district"
+    }
+  }
+}

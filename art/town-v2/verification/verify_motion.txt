@@ -1,0 +1,24 @@
+── ① 스위치
+  OK   ① 엔진 직생성 기본 motion=0
+  OK   ① from_ascii 기본 motion=0
+  OK   ① 꺼진 판 = moving 키 자체가 없음
+── ② 걷는 동료 / 서 있는 동료
+  OK   ② 걷는 동료(order+path) = moving:true
+  OK   ② 서 있는 동료 = 키 없음(상태 어휘 추가 없음)
+── ③ wait 동료
+  OK   ③ wait 동료 = 키 없음(겉보기 '서 있음' — 마음 비노출)
+── ④ 경로 비노출
+  OK   ④ 동료 항목에 heading/path/목적지 없음(깃발 하나뿐)
+── ⑤ wire 렌더
+  OK   ⑤ 걷는 동료만 '(이동중)' 접미(스캔 트리 경로 — 봇2 2m만, 봇3 5m엔 없음)
+  OK   ⑤ 플랫 렌더 경로에도 '(이동중)'
+── ⑥ 고른 행동(D27 개정 2026-09-12)
+  OK   ⑥ 엔진 직생성 기본 ally_doing=0 / from_ascii 기본 0
+  OK   ⑥ 탐색 중인 동료 = doing{act:explore}(좌표 비노출) · 서 있는 동료 = 키 없음
+  OK   ⑥ 계단 goto = doing{act:goto, target:exit, name:출구}
+  OK   ⑥ 렌더: '(탐색 중)' · '(이동 중 → 출구)' 가 몸짓 깃발 대신(이동중 표기 없음)
+  OK   ⑥ 동료 goto = doing{act:chase, target:'1'} → '(두란에게 가는 중)'
+  OK   ⑥ wait = doing{act:wait} + waiting 깃발 공존 → 렌더는 '(기다리는 중)' 하나
+  OK   ⑥ 꺼진 판 = doing 키 없음(몸짓 깃발 문안 불변)
+
+ALL PASS — verify_motion (D27 이동중 표시: 깃발 하나·방향 비노출·몸짓만 · ⑥ 고른 행동 D27 개정)

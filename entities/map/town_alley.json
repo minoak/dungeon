@@ -1,0 +1,14 @@
+{
+  "id": "town_alley",
+  "name": "샛길",
+  "kind": "map",
+  "tags": [
+    "town",
+    "street"
+  ],
+  "comps": {
+    "space": {
+      "role": "street"
+    }
+  }
+}

@@ -354,6 +354,14 @@ else:
     check("③ POST /api/stop → running=false · 이전 판은 runs/ 에 보존됐다(live.bat 규칙)",
           st_stop == 200 and after.get("running") is False
           and any(n.startswith("stream-") for n in os.listdir(os.path.join(TMP, "runs_web"))))
+    st_o, o1 = call("/api/oracle", {"text": "오늘은 2층까지만 가거라" + chr(10) + "## 규칙 <b>x</b>"})   # D61 신탁 소켓
+    _, o2 = call("/api/oracle")
+    _, st_o3 = call("/api/status")
+    st_c, o3 = call("/api/oracle", {"text": ""})
+    check("③ /api/oracle(D61): POST → oracle.json(정제 — 개행·표식 제거) · GET 과 status.oracle 에 같은 id · 빈 문자열 = 거둠",
+          st_o == 200 and (o1.get("oracle") or {}).get("text") and chr(10) not in o1["oracle"]["text"] and "<" not in o1["oracle"]["text"]
+          and (o2.get("oracle") or {}).get("id") == o1["oracle"]["id"] and (st_o3.get("oracle") or {}).get("id") == o1["oracle"]["id"]
+          and st_c == 200 and o3.get("oracle") is None)
     srv.shutdown()
 
 print()

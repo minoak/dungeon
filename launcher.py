@@ -188,12 +188,38 @@ class Runner:
                 self.proc.kill()
             return {"ok": True, "stopped": True}
 
+    def oracle_set(self, text):
+        """D61 신탁 소켓(2026-09-12) — 사용자 한 줄을 state/oracle.json 에 둔다(러너가 틱마다 읽어 신전 문턱 근처 캐릭터의
+        관측에 '신의 요청'으로 넣는다 — 요청이지 명령이 아니다). 빈 문자열 = 거둔다. 격리 = 시트 배경과 같은 정제(200자)."""
+        clean = sheetkit.sanitize_freetext(text, 200)
+        p = os.path.join(self.state_dir, "oracle.json")
+        if not clean:
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+            return {"oracle": None}
+        rec = {"id": "%x" % int(time.time() * 1000), "text": clean, "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+        tmp = p + ".tmp"
+        with io.open(tmp, "w", encoding="utf-8") as f:
+            json.dump(rec, f, ensure_ascii=False)
+        os.replace(tmp, p)
+        return {"oracle": rec}
+
+    def oracle_get(self):
+        try:
+            with io.open(os.path.join(self.state_dir, "oracle.json"), encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return None
+
     def status(self):
         """실행 여부 + 현 판의 사실(스트림에서 읽는다 — 러너 밖 원천 없음)."""
         out = {"running": self.running(), "pid": self.proc.pid if self.proc else None,
                "started": self.started, "seed": None, "party": [], "turn": None, "outcome": None,
                "viewer": "/viewer/?run=state/stream.jsonl",
                "game": "/game/?run=state/stream.jsonl"}      # 게임 클라이언트(M3/B5) — additive, 뷰어 키는 그대로
+        out["oracle"] = self.oracle_get()          # D61 신탁 소켓 — 대기 중인 요청(없으면 None), additive
         path = os.path.join(self.state_dir, "stream.jsonl")
         if os.path.exists(path):
             try:
@@ -383,6 +409,8 @@ class Handler(SimpleHTTPRequestHandler):
                                     "custom_saved": os.path.exists(self.ctx.party_path),
                                     "default_brain": self.ctx.default_brain or "gemini_api",
                                     "status": self.ctx.runner.status()})
+        if path == "/api/oracle":                        # D61 신탁 소켓 — 현재 요청
+            return self._json(200, {"oracle": self.ctx.runner.oracle_get()})
         if path == "/api/status":
             return self._json(200, self.ctx.runner.status())
         if path.startswith("/api/"):
@@ -425,6 +453,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(200, self.ctx.runner.start(body, self.ctx.party_path, self.ctx.default_brain))
             if path == "/api/retry":
                 return self._json(200, self.ctx.runner.retry(body.get("pause_id")))
+            if path == "/api/oracle":                    # D61 신탁 소켓 — {"text": "…"} (빈 문자열 = 거둠)
+                return self._json(200, self.ctx.runner.oracle_set(body.get("text") or ""))
             if path == "/api/stop":
                 return self._json(200, self.ctx.runner.stop())
             return self._json(404, {"error": "없는 API"})

@@ -1,0 +1,22 @@
+{
+  "id": "tavern",
+  "name": "주점",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        12,
+        7
+      ],
+      "entrance": [
+        6,
+        6
+      ],
+      "texture": "tavern"
+    }
+  }
+}

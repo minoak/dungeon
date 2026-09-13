@@ -1,0 +1,31 @@
+  OK   ① 인접몹 곁 이동핑 접수(pathed)
+  OK   ① 첫 걸음 실제 실행(구 pre_adj 취소 없음) — walking + 좌표 이동
+  OK   ② 알던 몹 재인접·지속 = 무정지(3연속 걸음 전진)
+  OK   ③ 처음 보는 몹 = encounter 정지 + order 클리어
+  OK   ④ hit 시 order/path 클리어(피격 인터럽트)
+  OK   ④ bot['last'] = hurt 기록(by/dmg/hp)
+  OK   ④ 치명 피격 = down + alive False
+  OK   ⑤ 매복 일격 발화 + 피격 인터럽트(order 클리어)
+  OK   ⑤ 직후 재결정 = 드러난 인접몹 공격(교전 성립)
+  OK   ⑥ 피격 후 view: obs.last = hurt
+  OK   ⑥ 행동 후 view: obs.last = 그 행동 결과(char 제외 동일)
+  OK   ⑦ goto 몹: 직교 인접 도달 시 arrived + order 클리어(무한 추격 궤도 차단)
+  OK   ⑦ goto 동료: 직교 인접 도달 시 arrived(합류 완료)
+  OK   ⑦-b 결정 때 보이던 계단을 딴 목표(동료)로 지나면 at_exit 로 안 선다 → 곁 도착
+  OK   ⑦-b 못 본 계단을 밟으면 선다(at_exit 유지)
+  OK   ⑦-b goto exit 는 도착이라 선다(at_exit) — 계단 위
+  OK   ⑧ 보이는 몹의 길목 점거 = blocked + monsters 보고(재경로 술래잡기 차단)
+  OK   ⑧ concealed 점거 = 조용한 재경로/무보고(존재 비누설 — monsters 필드 없음)
+  OK   ⑨ [50시드] 몹·함정 풀게임 500틱 항상 종료(livelock 0)
+        (종료 50/50)
+  OK   ⑨ 결정론: 같은 시드 2회 = 동일 궤적
+  OK   ⑩ 몹 유령 추격: 경로 소진+부재 = lost(거짓 arrived 아님)
+  OK   ⑩ lost 가 obs.last 로 배선(봇이 허탕을 관측할 수 있다)
+  OK   ⑩ 몹이 그대로면 여전히 arrived(회귀)
+  OK   ⑩ 동료 유령 합류: 마지막 본 자리에 없음 = lost
+  OK   ⑩ 죽은 목표: 잡을 상대가 없다 = lost
+  OK   ⑩ 자기 소비: 목표 보물 줍기 = treasure 한 방 보고 + order 완결
+  OK   ⑩ 동료가 먼저 소비한 피처: 빈 자리 = lost(f-타깃도 정직화)
+  OK   ⑩ 탐색 셀(@) 목표는 arrived 유지(자리 자체가 목표)
+============================================
+RESULT: ALL PASS — D1 대개정(인터럽트 기반 도주) 건전

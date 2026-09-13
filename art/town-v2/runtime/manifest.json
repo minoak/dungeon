@@ -1,0 +1,23 @@
+{
+  "temple": {
+    "width": 480,
+    "height": 682,
+    "source": "source/temple.png",
+    "runtime": "runtime/temple.png",
+    "alpha": true
+  },
+  "tavern": {
+    "width": 576,
+    "height": 539,
+    "source": "source/tavern.png",
+    "runtime": "runtime/tavern.png",
+    "alpha": true
+  },
+  "gate": {
+    "width": 384,
+    "height": 316,
+    "source": "source/gate.png",
+    "runtime": "runtime/gate.png",
+    "alpha": true
+  }
+}
