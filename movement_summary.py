@@ -67,7 +67,7 @@ class MovementSummary:
             c, result = str(e.get('char')), e.get('result')
             if e.get('type') == 'wait' and result == 'waiting' and c not in self.waits:
                 self.waits[c] = self.turn
-            if result in ('wait_met', 'wait_bored'):
+            if result in ('wait_met', 'wait_bored', 'wait_left'):   # D25 개정 3(09-13): 시야 이탈 깨움
                 self._end_wait(c, result)
             res = e.get('resolution') or {}
             req = self.gotos.get(c)

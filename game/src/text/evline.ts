@@ -259,6 +259,7 @@ function walkLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
   if (r === 'waiting') return { cls: 'dim', html: '기다린다' };
   if (r === 'wait_met') { const n = listNames(e.allies, run) || '동료'; return { cls: 'notable', html: `기다리다 ${n}${iga(n)} 보였다` }; }
   if (r === 'wait_bored') return { cls: 'notable', html: `${num(e.ticks)}틱을 기다렸지만 — 아무도 안 온다` };
+  if (r === 'wait_left') { const n = listNames(e.allies, run) || '동료'; return { cls: 'notable', html: `기다리는 사이 ${n}${iga(n)} 시야에서 사라졌다` }; }   // D25 개정 3
   // ── D35 휴식 ──
   if (r === 'resting') return { cls: 'dim', html: `휴식 중 (HP ${num(e.hp)})` };
   if (r === 'rested') {

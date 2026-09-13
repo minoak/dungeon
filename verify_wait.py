@@ -19,6 +19,7 @@
 (기존 verify 22종은 별도 실행.)
 """
 import brains
+import show_runner   # ⑫ act_summary
 import dungeon_gm as G
 from dungeon_gm import Dungeon
 
@@ -177,7 +178,55 @@ o10x = d10x.view(c10x, bots10x)
 check("⑩ 꺼진 판(wait_verb=0) 동료 항목에 waiting 없음",
       'waiting' not in next(a for a in o10x['sights']['bots'] if a['char'] == '1'))
 
+print("── ⑪ 깨어남 — 보이던 동료가 곁에 닿음(D25 개정 3, 2026-09-13)")
+d11, b11, c11, bots11 = stage(ally_far=False)
+c11['x'], c11['y'] = 5, 1                               # 시야 안(거리 4)·곁은 아님 — '보이던 동료'
+d11.view(b11, bots11)
+d11.relations = True                                    # 관계 장부(D36) — '나를 기다려 줌' 뼈를 잰다
+d11.act(b11, {'type': 'wait'}, bots11)
+r11a = d11.step_order(b11, bots11)
+check("⑪ 보이는 동료가 그대로면 waiting(첫 틱 곁=도착 아님)", r11a.get('result') == 'waiting' and b11.get('order') == 'wait')
+c11['x'], c11['y'] = 2, 1                               # 곁(체비셰프 1)으로
+r11b = d11.step_order(b11, bots11)
+check("⑪ 곁 도착 → wait_met{beside} + order 파기 + 상대 장부 '나를 기다려 줌'",
+      r11b.get('result') == 'wait_met' and r11b.get('beside') is True and r11b.get('allies') == ['2'] and not b11.get('order')
+      and (((c11.get('relations') or {}).get('1') or {}).get('bones') or {}).get('waited', {}).get('n', 0) >= 1)
+
+print("── ⑫ 깨어남 — 기다리던 동료가 시야를 떠남")
+d12, b12, c12, bots12 = stage(ally_far=False)
+c12['x'], c12['y'] = 5, 1                               # 시야 안 — 기다리던(보이던) 동료
+d12.view(b12, bots12)
+d12.act(b12, {'type': 'wait'}, bots12)
+d12.step_order(b12, bots12)
+c12['x'], c12['y'] = 12, 2                              # 시야 밖으로
+r12 = d12.step_order(b12, bots12)
+check("⑫ 시야 이탈 → wait_left{allies} + order 파기", r12.get('result') == 'wait_left' and r12.get('allies') == ['2'] and not b12.get('order'))
+check("⑫ 문장·꼬리표·러너 요약", "시야에서 사라졌다" in brains._last_prose(dict(r12), {'2': '카야'})
+      and any(k == 'lost' for k, _, _ in G.event_tags(dict(r12, char='1')))
+      and "시야 이탈" in show_runner.act_summary(dict(r12, type='walk')))
+check("⑫ 상한 5틱(15→5, 파트너 '계획하고 나서 한참 서 있는다')", G.WAIT_MAX == 5)
+
+print("── ⑬ 모임 규칙을 관측에 미리(D66) · 계단 대기 문장은 규칙을 말한다")
+d13, b13, c13, bots13 = stage(ally_far=True)           # 동료 시야 밖·계단 먼 곳
+d13.trail_on = True                                     # 궤적 판(D40) — ⑬ 마지막 검사가 꼬리표 경로를 탄다
+o13 = d13.view(b13, bots13)
+ex13 = o13['sights'].get('exit')
+check("⑬ 계단이 보이고 exit.gather{missing[{char, seen}]}", bool(ex13) and (ex13.get('gather') or {}).get('missing') == [{'char': '2', 'seen': False}])
+w13 = brains._wire(o13, {'1': '두란', '2': '카야'}, compose=False)
+check("⑬ 프롬프트 계단 줄: '함께 내려가려면 카야도 곁에 와야 한다(카야 시야 밖)' + '일행 전원'", "함께 내려가려면 카야도 곁에 와야 한다(카야 시야 밖)" in w13 and "일행 전원이 곁(3칸 안)에 모여야 한다" in w13)
+c13['x'], c13['y'] = 4, 2                               # 계단 곁(3칸 안)·시야 안 → gather 없음
+o13b = d13.view(b13, bots13)
+check("⑬ 다 모이면 gather 없음", 'gather' not in (o13b['sights'].get('exit') or {}))
+r13 = {'type': 'interact', 'target': 'exit', 'result': 'wait_allies', 'dir': 'down', 'missing': ['2'], 'busy': []}
+p13 = brains._last_prose(r13, {'1': '두란', '2': '카야'})
+check("⑬ wait_allies 문장 = 규칙 + 이름", "살아 있는 일행 전원이 곁(3칸 안)에 모이고 하던 일을 마쳐야 함께 쓴다" in p13 and "빠진 동료: 카야" in p13 and "봇2" not in p13)
+b13['trail'] = [{'kind': 'wait_allies', 'turn': 3}]
+b13['last'] = r13
+o13c = d13.view(b13, bots13)
+w13c = brains._wire(o13c, {'1': '두란', '2': '카야'}, compose=False)
+check("⑬ 궤적 판에서도 '왜 안 됐나' 줄이 닿는다(D40 사각지대 수선)", "왜 안 됐나" in w13c and "일행 전원" in w13c)
+
 if C.failed:                                                   # 09-12: 검사 실패가 있으면 ALL PASS 를 찍지 않는다(게이트 러너는 그 문자열로 판정)
     print("FAILED — verify_wait: %d 검사 실패" % C.failed)
     raise SystemExit(1)
-print("ALL PASS — verify_wait (D25 제자리 대기: 사건이 깨운다·숫자 없음·셔틀의 고정점 · ⑩ 대기중 태그)")
+print("ALL PASS — verify_wait (D25 제자리 대기: 사건이 깨운다·숫자 없음·셔틀의 고정점 · ⑩ 대기중 태그 · ⑪⑫ 곁 도착·이탈 깨움·상한 5 · ⑬ 모임 규칙 관측·문장 D66)")

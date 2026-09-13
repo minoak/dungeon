@@ -26,7 +26,7 @@ import re
 import json
 import contextlib
 
-os.environ.update(DUNGEON_GM="0", DUNGEON_TURNS="120", DUNGEON_W="40", DUNGEON_H="16",
+os.environ.update(DUNGEON_GM="0", DUNGEON_TURNS="120", DUNGEON_PLAN="1",   # D66(09-13): 러너 기본 0 — 이 게이트는 작정을 켜고 잰다 DUNGEON_W="40", DUNGEON_H="16",
                   # 09-06 D19 개정 3(탐색 종점=보이는 가장 먼 가장자리) 뒤 ⑨ 표본(plan 집행 ≥5)이 15→4 로 떨어짐:
                   # 스텁은 늘 마지막 선택지(탐색)를 고르고 안 싸우므로 긴 다리가 몹 방에 일찍 닿아 t65 전멸.
                   # 몹 3→1 = 표본 크기 손잡이(연속성 감사는 전투와 무관 — 위반 0 은 그대로). 시드·맵은 유지.
@@ -292,6 +292,15 @@ def main():
     check("⑨ 결정론(2회 라인 동일, started 제외)", normalized(raw1) == normalized(raw2))
 
     print("=" * 44)
+    # ⑩ D66(2026-09-13 파트너 "계획이 이제 굳이 필요할까"): 작정 스위치 — 엔진 기본 PLAN_MAX 그대로(이 게이트의 계약 불변),
+    #    plan_max=0 이면 then 을 받아도 작정 없음(러너 DUNGEON_PLAN 기본 0 → 매 결정이 실 판단)
+    d10 = G.Dungeon(seed=7, plan_max=0)
+    b10 = G.spawn(d10, '1', [], sheet=G.HEROES['1'])
+    d10.act(b10, {'type': 'search', 'then': [{'type': 'search'}]}, [b10])
+    d10b = G.Dungeon(seed=7)
+    check("⑩ plan_max=0: then 접수해도 plan 비어 있음 · 기본 Dungeon() plan_max == PLAN_MAX · from_ascii 도 기본값",
+          b10.get('plan') == [] and d10b.plan_max == G.PLAN_MAX
+          and G.Dungeon.from_ascii(["#####", "#1.>#", "#####"], seed=7)[0].plan_max == G.PLAN_MAX)
     if C.failed:
         print("RESULT: %d FAIL" % C.failed)
         raise SystemExit(1)

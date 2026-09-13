@@ -833,6 +833,9 @@ def _last_prose(last, names=None):
             return "기다림 끝 — %s가 시야에 들어왔다" % (who or "동료")
         if r == "wait_bored":                 # 지루함 상한(D25) — 관찰 사실만(질문·조향 금지)
             return "한참을 기다렸다 — 아무도 오지 않는다"
+        if r == "wait_left":                  # D25 개정 3(09-13): 기다리던 동료가 시야를 떠났다 — 사실만
+            who = ", ".join((names or {}).get(c, "동료") for c in last.get("allies", []))
+            return "기다리는 사이 %s가 시야에서 사라졌다 — 기다림 끝" % (who or "동료")
         if r == "resting":                    # 휴식 틱(D35 — 스트림용)
             return "쉬는 중이다 (HP %d)" % last.get("hp", 0)
         if r == "rested":                     # 휴식 완료 — 관찰 사실만
@@ -896,15 +899,17 @@ def _last_prose(last, names=None):
         if r == "npc_talk":
             return '%s에게 말을 걸었다 — "%s"' % (last.get("npc", "?"), last.get("line", "…"))
         if r == "wait_allies":
-            verb = "올라가려" if last.get("dir") == "up" else "내려가려"
+            # D66(09-13 파트너 "팀원이 전부 모여야 계단을 내려갈 수 있다고 가르쳐줘야 하는 건 우리가 해야 할 일"): 규칙을 그 자리에서 말한다
+            what = "워프게이트" if last.get("gate") else "계단"
+            verb = ("돌아가려" if last.get("gate") else "올라가려") if last.get("dir") == "up" else "내려가려"
+            nm = lambda c: (names or {}).get(c, "봇%s" % c)
             parts = []                     # 멀다/딴 작정은 다른 사실 — 섞어 말하면 곁의 동료를
             if last.get("missing"):        # "데리러 가라"는 거짓 지시가 된다(08-09 정직화)
-                parts.append("아직 안 모였다(빠진 동료: 봇%s) — 기다리거나, 마지막으로 본 자리로 가 보라"
-                             % "·".join(last["missing"]))
+                parts.append("빠진 동료: %s — 기다리거나, 마지막으로 본 자리로 가 보라" % "·".join(nm(c) for c in last["missing"]))
             if last.get("busy"):
-                parts.append("곁의 봇%s는 하던 일(탐색·다른 목표)이 있다 —"
-                             " 기다리거나 말을 걸어라" % "·".join(last["busy"]))
-            return "계단에서 %s 했지만 — %s" % (verb, " / ".join(parts))
+                parts.append("곁의 %s는 하던 일(탐색·다른 목표)이 있다 — 기다리거나 말을 걸어라" % "·".join(nm(c) for c in last["busy"]))
+            return ("%s에서 %s 했지만 — 아직 안 모였다. %s은(는) 살아 있는 일행 전원이 곁(3칸 안)에 모이고 하던 일을 마쳐야 함께 쓴다"
+                    "(혼자나 일부만은 안 된다). %s" % (what, verb, what, " / ".join(parts)))
         if r == "chest_loot":
             return "상자를 열었다 — 보물 %d개!" % last.get("loot", 0)
         if r == "chest_trap":
@@ -1287,7 +1292,7 @@ def _wire(obs, names=None, compose=False):
         ex = s.get("exit")
         if ex:
             put(ex.get("bearing"), ex.get("dist", 0),
-                "%s %dm — 눈에 보인다%s" % (_exit_label(ex), ex.get("dist", 0), _exit_state(ex)))   # D65 워프게이트·봉인
+                "%s %dm — 눈에 보인다%s%s" % (_exit_label(ex), ex.get("dist", 0), _exit_state(ex), _exit_gather(ex, names)))   # D65 워프게이트·봉인 · D66 모임
         for m in s.get("monsters", []):
             put(m.get("bearing"), m.get("dist", 0),
                 "%s, %dm%s" % (G._mfact(m), m.get("dist", 0),
@@ -1341,7 +1346,7 @@ def _wire(obs, names=None, compose=False):
         n0 = len(L)
         ex = s.get("exit")
         if ex:
-            L.append("- %s — %s%s" % (_exit_label(ex), at(ex), _exit_state(ex)))   # D65 워프게이트·봉인 상태(사실만)
+            L.append("- %s — %s%s%s" % (_exit_label(ex), at(ex), _exit_state(ex), _exit_gather(ex, names)))   # D65 봉인 · D66 모임(사실만)
         for m in s.get("monsters", []):
             L.append("- %s — %s" % (G._mfact(m), at(m)))
             if m.get("lore") or m.get("deep_progress"):   # D53: 심층 전엔 한 줄 + 진행도 접미
@@ -1444,6 +1449,9 @@ def _wire(obs, names=None, compose=False):
             M.append("- 그 결과: %s" % _last_prose(la, names))
             if la.get("bleed"):                   # 출혈(D34) — 걷는 동안 흘린 피(사실만)
                 M.append("- 걷는 동안 출혈로 피를 흘렸다 — 남은 HP %d" % la["bleed"].get("hp", 0))
+        if trail and la and la.get("result") in ("wait_allies", "locked"):
+            # D66(09-13): 꼬리표 판의 사각지대 수선 — '왜 안 됐나'는 꼬리표가 못 싣는다(09-11 wait_allies 진단, 파트너 "가르쳐줘야")
+            M.append("- 왜 안 됐나: %s" % _last_prose(la, names))
         for w in (wit or []):
             M.append("- 네 눈으로 봤다: " + _witness_prose(w))
         if dry:                       # 무발견 신호(07-24) — 관찰 사실만(질문·조향 금지), 도달 1회
@@ -1710,6 +1718,24 @@ def _exit_state(ex):
     if not ex.get("gate"):
         return ""
     return " — 봉인돼 있다(굳게 닫혀 있다)" if ex.get("sealed") else " — 열려 있다(마을로 통한다)"
+
+
+def _exit_gather(ex, names=None):
+    """모임 규칙을 미리(D66, 09-13 파트너 "팀원이 전부 모여야 계단을 내려갈 수 있다고 가르쳐줘야"): obs exit.gather 가 있으면
+    누가 아직 멀고(시야 밖/보임) 누가 하던 일이 있는지 — 시도하기 전에 안다. 사실만(무엇을 하라는 말은 없다)."""
+    g = ex.get("gather")
+    if not g:
+        return ""
+    nm = lambda c: (names or {}).get(c, "봇%s" % c)
+    verb = "함께 돌아가려면" if ex.get("gate") else "함께 내려가려면"
+    bits = []
+    if g.get("missing"):
+        bits.append("%s도 곁에 와야 한다(%s)" % ("·".join(nm(m["char"]) for m in g["missing"]),
+                                                "·".join("%s %s" % (nm(m["char"]), "보임, 아직 멀다" if m.get("seen") else "시야 밖")
+                                                         for m in g["missing"])))
+    if g.get("busy"):
+        bits.append("%s는 하던 일이 있다" % "·".join(nm(c) for c in g["busy"]))
+    return " · %s %s — 일행 전원이 곁(3칸 안)에 모여야 한다" % (verb, ", ".join(bits))
 
 
 def _safety_blocked(why):

@@ -152,6 +152,9 @@ SOLO_ON = os.environ.get("DUNGEON_SOLO", "0") != "0"          # 솔로 판(07-29
                                                              #   하강. 마주친 뒤는 자유(엔진 무규정).
                                                              #   ⚠️ 별개의 실험 판이지 기본 게임의
                                                              #   개선이 아니다 — 승격 대상 아님.
+PLAN_ON = os.environ.get("DUNGEON_PLAN", "0") == "1"         # 작정(D16 then) — D66(09-13 파트너 "계획이 이제 굳이 필요할까"): 러너 기본 0.
+                                                              # 조합형 자동 접근이 '가서 한다'를 품어 작정의 주 용도가 사라졌고(오늘 판 집행 7~8%),
+                                                              # 작정 집행 틱은 관측·들은 말을 안 읽는다. 켜려면 DUNGEON_PLAN=1(엔진 PLAN_MAX 그대로)
 WAIT_ON = os.environ.get("DUNGEON_WAIT", "1") != "0"         # wait 동사(07-24 D25) — 러너 기본 1,
                                                              #   엔진 기본 0. 제자리 대기(사건 기반) —
                                                              #   셔틀의 고정점, 대기 중 LLM 0콜
@@ -457,6 +460,8 @@ def act_summary(res):
             return "대기 끝 — 동료(%s) 시야 진입" % ", ".join(res.get("allies", []))
         if r == "wait_bored":
             return "대기 끝 — 한참을 기다려도 아무도 오지 않음"
+        if r == "wait_left":                        # D25 개정 3(09-13)
+            return "대기 끝 — 기다리던 동료(%s) 시야 이탈" % ", ".join(res.get("allies", []))
         if r == "encounter":
             bits = []
             if res.get("monsters"):
@@ -903,8 +908,10 @@ def main():
                       status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON,
                       auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE,
                       skills=SKILLS_ON, trpg_combat=TRPG_COMBAT_ON, random_skill=RANDOM_SKILL_ON,
-                      boss=BOSS_ON and DEPTHS <= 1)   # D65: 1층이 곧 최심층이면 여기가 보스층
+                      boss=BOSS_ON and DEPTHS <= 1,   # D65: 1층이 곧 최심층이면 여기가 보스층
+                      plan_max=G.PLAN_MAX if PLAN_ON else 0)   # D66: 작정 스위치(러너 기본 0)
         d.lore = lore
+    d.plan_max = G.PLAN_MAX if PLAN_ON else 0    # 마을(from_layout)도 같은 스위치
     bots = []
     for c in chars:
         b = G.spawn(d, c, bots, sheet=sheets[c], apart=SOLO_ON)
@@ -970,6 +977,7 @@ def main():
             dry_signal=DRY_ON,         # 무발견 신호(07-24) 여부 — obs 한 줄이 늘어나는 실행모드 메타
             hail=HAIL_ON,              # 말 걸림 정지(D24) 여부 — 정지 물리 메타(selfstop 과 같은 급)
             wait=WAIT_ON,              # wait 동사(D25) 여부 — 메뉴·정지 물리 메타
+            plan=PLAN_ON,              # 작정(D16 then) 여부 — D66(09-13 additive) 러너 기본 0: false 면 then 을 받아도 작정 없음(콜 수·관측 접점 메타)
             motion=MOTION_ON,          # 이동중 표시(D27) 여부 — obs 동료 항목 메타
             ally_doing=ALLY_DOING_ON,  # 동료 행동 표시(D27 개정 09-12) 여부 — obs 동료 항목(doing) 표현층 메타
             social=SOCIAL_ON,          # 채널 분리(07-26) 여부 — 말 걸림이 작정을 부수는지
@@ -1256,9 +1264,11 @@ def main():
                               relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON,
                               auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE,
                               skills=SKILLS_ON, trpg_combat=TRPG_COMBAT_ON, random_skill=RANDOM_SKILL_ON,
-                              boss=BOSS_ON and nd >= DEPTHS)   # D65: 최심층 = 보스층(보스·봉인 워프게이트·상자)
+                              boss=BOSS_ON and nd >= DEPTHS,   # D65: 최심층 = 보스층(보스·봉인 워프게이트·상자)
+                              plan_max=G.PLAN_MAX if PLAN_ON else 0)   # D66: 작정 스위치
                 d.lore = lore
                 fresh = True
+            d.plan_max = G.PLAN_MAX if PLAN_ON else 0    # 복원한 층·새로 지은 마을도 같은 스위치
             # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,
             # 재입장='위로 오르는 계단' 곁. 첫 하강만 기존 스폰(깊은 곳에서 눈뜸)+곁에 '<' 신설.
             anchor = None

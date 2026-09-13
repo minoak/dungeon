@@ -149,7 +149,8 @@ DRY_K = 25               # 무발견 신호(층 1, 07-24 합의 — 파트너 �
                          #   자 — 제자리 틱은 탐색이 아니다). 셔틀(결정 0 구간)엔 안 닿는 보완층
                          #   (그쪽 그물=D21). 합의 초기값 25~30 중 하한 채택(1회성이라 소음 상한
                          #   이미 낮음). 튜닝은 큰 판 실측 후(튜닝마라).
-WAIT_MAX = 15            # wait(D25) 지루함 상한: 이만큼 틱을 기다려도 아무 일 없으면 "한참을
+WAIT_MAX = 5             # wait(D25) 지루함 상한 — 09-13 D25 개정 3: 15→5(파트너 "계획하고 나서 한참 서 있는다" — 동료가 다 보이는
+                         #   대기는 아무것도 못 깨워 15틱을 꽉 채웠다; 이제 잠깐 기다렸다 다시 판단). 이만큼 틱을 기다려도 아무 일 없으면 "한참을
                          #   기다렸다 — 아무도 오지 않는다" 관찰과 함께 재결정. 없으면 '기다려'
                          #   말한 이가 죽거나 길을 잃었을 때 영원히 서 있는 봇이 남는다. 숫자
                          #   인자는 안 둔다(사람은 틱을 세며 기다리지 않는다 — 파트너 확정안).
@@ -428,6 +429,8 @@ def event_tags(rec, names=None):
             return [('arrive', '동료 도착', ', '.join(nm(c) for c in rec.get('allies', [])) or '동료')] + extras
         if r == 'wait_bored':
             return [('arrive', '기다림 끝', '아무도 안 옴')] + extras
+        if r == 'wait_left':                                      # D25 개정 3(09-13): 기다리던 동료가 시야를 떠남
+            return [('lost', '기다림 끝', (', '.join(nm(c) for c in rec.get('allies', [])) or '동료') + ' 시야 밖으로')] + extras
         if r == 'rested':
             cl = rec.get('cleared') or []
             return [('rest_done', '휴식 완료', 'HP +%d%s' % (rec.get('healed', 0), (', 나음: ' + '·'.join(cl)) if cl else ''))] + extras
@@ -682,7 +685,7 @@ class Dungeon:
                  town=False, status=False, rest_verb=False, relations=False, trail=False,
                  objtags=False, floor=False, explore_dirs=False, give_verb=False, bond_verb=False,
                  auto_approach=False, composed_actions=False, skills=False, trpg_combat=False, random_skill=False,
-                 ally_doing=False, boss=False):
+                 ally_doing=False, boss=False, plan_max=None):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -806,6 +809,8 @@ class Dungeon:
         self.boss_on = bool(boss)  # D65(09-13): 최심층 보스·워프게이트 — 러너가 depth == DEPTHS 일 때 켠다. 엔진 기본 0(기존 판 비트 동일)
         self.boss = None           #   보스 개체(Monster) — 출구 방(보스룸)에 선다
         self.sealed = False        #   출구(=워프게이트)의 봉인 — 보스가 살아 있는 동안 True(사용하면 result 'locked')
+        self.plan_max = PLAN_MAX if plan_max is None else int(plan_max)   # D66(09-13): 작정 수 상한 — 0 이면 then 을 받아도 작정 없음.
+                                   #   엔진 기본 PLAN_MAX(기존 게이트 비트 동일), 러너는 DUNGEON_PLAN(기본 0)으로 0 을 준다
         if self.boss_on:
             self._place_boss()
         self._classify_tiles()     # 각 바닥 칸에 'room'/'corridor' 속성 부여
@@ -886,6 +891,7 @@ class Dungeon:
         d.explore_dirs = False     # 방향 탐색 열거(D19 개정 4) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.give_verb = d.bond_verb = False   # 건네기·친목(D47 ②, 09-09) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.boss_on, d.boss, d.sealed = False, None, False   # 보스층·워프게이트(D65, 09-13) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.plan_max = PLAN_MAX      # 작정 수 상한(D66, 09-13) — 손그림 장면은 엔진 기본(호출측이 0 으로 끈다)
         d.auto_approach = False
         d.composed_actions = False
         d.skills = d.trpg_combat = d.random_skill = False
@@ -1793,6 +1799,15 @@ class Dungeon:
                      **({'gate': True, 'sealed': bool(getattr(self, 'sealed', False))} if gate_on else {}),
                      **bear(ex, ey)}
                     if (ex, ey) in seen else None)
+        if exit_obj is not None and bots and not getattr(self, 'solo', False):
+            # D66(09-13 파트너 "팀원이 전부 모여야 계단을 내려갈 수 있다고 가르쳐줘야"): 모임 규칙(EXIT_GATHER·_gather_busy)을
+            # 시도하기 전에 관측에 미리 — 09-13 판에서 떨어진 동료를 둔 채 use exit 헛시도 45회/100틱. 사실만(누가 멀고 누가 바쁜가)
+            others = [o for o in bots if o is not bot and o['alive'] and not o['won']]
+            far = [o for o in others if self._cheb(o['x'], o['y'], ex, ey) > EXIT_GATHER]
+            busy = self._gather_busy(bot, [o for o in others if o not in far], 'exit')
+            if far or busy:
+                exit_obj['gather'] = {'missing': [{'char': o['char'], 'seen': (o['x'], o['y']) in seen} for o in far],
+                                      'busy': [o['char'] for o in busy]}
         led = bot.get('ledger')            # D17 스위치: 장부 켠 판만 구역 어휘·known 노출
                                            # (끈 판 obs 는 구판과 자구까지 동일 — 게이트 무수정 통과)
         way_keys = (('bearing', 'dist', 'visited', 'zone') if led is not None
@@ -2332,7 +2347,8 @@ class Dungeon:
         if 'then' in (action or {}):              # 작정 접수 — 저작 검증(시야-온리)은 brains 소관,
             bot['plan'] = ([] if typ in ('follow', 'wait', 'rest')   # 동행·대기·휴식=열린 결말 — 뒤수 부적합
                            else [dict(s) for s in (action.get('then') or [])
-                                 if isinstance(s, dict) and s.get('type')][:PLAN_MAX])
+                                 if isinstance(s, dict) and s.get('type')][:getattr(self, 'plan_max', PLAN_MAX)])   # D66: 러너 기본 0
+
         aid = None
         if self.composed_actions or (self.auto_approach and typ in ('attack', 'interact', 'give', 'bond')):
             self._action_serial += 1
@@ -3059,15 +3075,27 @@ class Dungeon:
         w = bot.setdefault('wait', {'n': 0, 'allies': set()})
         here = {o['char'] for o in bots if o is not bot and o['alive'] and not o['won']
                 and (o['x'], o['y']) in self.visible_cells(bot['x'], bot['y'])}
+        adj_now = {o['char'] for o in bots if o is not bot and o['alive'] and not o['won']
+                   and self._cheb(o['x'], o['y'], bot['x'], bot['y']) <= 1}
+        if 'adj' not in w:                            # 첫 틱 — 지금 곁에 있는 동료는 '도착'이 아니다
+            w['adj'] = adj_now
         came = here - set(w.get('allies') or ())
-        if came:                                      # 기다리던 보람 — 동료가 시야에 들어왔다
+        beside = adj_now - set(w.get('adj') or ()) - came    # D25 개정 3(09-13): 보이던 동료가 곁까지 왔다 — 기다리던 보람
+        left = set(w.get('allies') or ()) - here             #   기다리던(보이던) 동료가 시야를 떠났다 — 더 기다릴 이유가 바뀜
+        if came or beside:                            # 기다리던 보람 — 동료가 시야에 들어왔다 / 곁에 닿았다
+            met = came or beside
             bot['order'], bot['path'], bot['plan'] = None, [], []
             bot['wait'] = None
             for o in bots:                        # 나를 기다려 줌(D36) — 도착한 쪽의 장부에
-                if o['char'] in came:
+                if o['char'] in met:
                     self._bone(o, bot['char'], 'waited')
-            return {**base, 'result': 'wait_met', 'allies': sorted(came)}
+            return {**base, 'result': 'wait_met', 'allies': sorted(met), **({'beside': True} if not came else {})}
+        if left:                                      # 09-13 파트너 "계획하고 나서 한참 서 있는다" — 15틱 잠금의 뿌리 중 하나
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            bot['wait'] = None
+            return {**base, 'result': 'wait_left', 'allies': sorted(left)}
         w['allies'] = here                            # 떠난 동료는 장부에서 내림 — 재진입도 새 존재
+        w['adj'] = adj_now
         w['n'] += 1
         if w['n'] >= WAIT_MAX:                        # 지루함 상한 — 아무도 오지 않는다
             bot['order'], bot['path'], bot['plan'] = None, [], []
@@ -4026,7 +4054,8 @@ class Dungeon:
             if far or busy:                      # 아직 안 모임(멀거나·딴 작정) — 혼자 안 내려간다
                 return {**base, 'result': 'wait_allies', 'dir': went,
                         'missing': sorted(o['char'] for o in far),
-                        'busy': sorted(o['char'] for o in busy)}
+                        'busy': sorted(o['char'] for o in busy),
+                        **({'gate': True} if gate else {})}   # D65 워프게이트도 같은 모임 규칙
             group = [bot] + others
             for o in group:                      # 모인 전원이 함께 하강/탈출(보스층: 함께 귀환) — 이 층의 작정도 끝
                 o['won'] = True
