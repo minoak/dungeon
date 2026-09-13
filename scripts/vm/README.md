@@ -11,7 +11,8 @@
 - 첫 설치 성공: Caddy 설정 검증, HTTPS 200, gzip, Secure/HttpOnly 쿠키, `.env` 404 확인.
 - VM의 Python 3.12.3에서도 `verify_public.py`와 `verify_api_call_limit.py` 통과(실 API 0콜).
 - 시험용 예산 통지로 실제 VM `TERMINATED` 확인 후 재시작. 앱/Caddy 자동 시작과 로컬 상태·화면 200 확인.
-- 현재 첫 실판용 `DUNGEON_API_CALL_LIMIT=50` 적용 중. 진짜 키를 사용하는 실판은 아직 미검증.
+- 첫 실판: 진짜 Gemini 키로 27턴에 `outcome=returned`, API 전송 시도 정확히 50회. 인증 오류·서버 예외 없음(2026-09-13 14:36 UTC 확인).
+- 현재 첫 실판용 `DUNGEON_API_CALL_LIMIT=50`은 유지 중. 심사용 긴 판을 열기 전 운영 한도를 정해야 한다.
   설정 파일: `/etc/systemd/system/botpikdun.service.d/smoke-test.conf`.
 - Cloud Shell 로그: `~/botpikdun-first-install.log`, `~/botpikdun-smoke-setup.log`, `~/botpikdun-recovery.log`.
 
@@ -84,4 +85,4 @@
 
 ## 아직 안 된 것
 - 판 파일 폴링을 Range 요청(추가분만)으로 바꾸는 것 — 클라이언트 변경이라 뒤로. 지금은 Caddy 압축으로 버틴다.
-- 진짜 Gemini 키로 보스방 앞 짧은 판을 확인한 뒤 첫 실판용 50회 제한을 해제하고 심사용 긴 판을 검증하는 것.
+- 첫 실판용 50회 제한을 유지할지 다른 운영 상한을 둘지 정하고, 심사용 긴 판을 검증하는 것(짧은 첫 실판은 성공).
