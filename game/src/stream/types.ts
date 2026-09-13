@@ -150,6 +150,7 @@ export interface TickLine {
   hails?: Record<Char, Char[]>;
   answers?: Record<Char, Record<Char, boolean>>;
   replies?: Reply[];
+  oracle?: { id: string; text: string };         // D61 개정(09-13) 이 틱에 새로 들린 신의 요청
   events: StreamEvent[];
   bots: Bot[]; monsters: Monster[]; features: Feature[]; traps: Trap[];
   [k: string]: unknown;
@@ -195,6 +196,7 @@ export interface Frame {
   hails?: Record<Char, Char[]>;
   answers?: Record<Char, Record<Char, boolean>>;
   replies?: Reply[];
+  oracle?: { id: string; text: string };         // D61 개정(09-13) 이 틱에 새로 들린 신의 요청(어디서나) — 로그 줄
   descend?: DescendLine;                         // 이 틱 뒤에 층 전이(다음 프레임이 level)
   facing: Record<Char, Dir>;                     // 직전 프레임과의 좌표 차(안 움직이면 유지, 처음은 front)
   moved: Record<Char, boolean>;                  // 이 프레임에서 걸었나(트윈·걷기 애니의 방아쇠)

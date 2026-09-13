@@ -2266,7 +2266,7 @@ class Dungeon:
                 **({'town': True} if self.town else {}),   # 마을(D29) — 층의 사실(던전 obs 무변경)
                 **({'town_zone': tz} if (self.town and (tz := self._town_zone(bot['x'], bot['y'])))   # D60(09-12) 지금 있는 구역 이름
                    else {}),
-                **({'notices': nts_} if (self.town and (nts_ := self._notices(bot))) else {}),   # D61 게시판·신의 요청(문턱 근처만)
+                **({'notices': nts_} if (nts_ := self._notices(bot)) else {}),   # D61 게시판(문턱 근처)·신의 요청(09-13 개정: 어느 층에서나)
                                       # 장비(07-30) — 자기 몸의 사실(더미·BYO 소비용 데이터).
                                       # ⚠️ 프롬프트 상시 노출은 금지 계약: 착용 정보는 시트(불변
                                       # 프리픽스=캐싱)에 살고, 비교는 입수 메뉴 라벨에만 나온다
@@ -2736,8 +2736,6 @@ class Dungeon:
         명령이 아니다, 이 캐릭터가 이미 답했으면 그 답(replied) 동봉. building_defs(피처 id → 건물 정의 id)는 build_town 이 둔다."""
         out = []
         defs = getattr(self, 'building_defs', None) or {}
-        if not defs:
-            return out
         orc = getattr(self, 'oracle', None)
         for fid, eid in defs.items():
             f = self.features.get(fid)
@@ -2768,6 +2766,12 @@ class Dungeon:
                 out.append({'kind': 'oracle', 'building': 'f%d' % fid, 'name': f.name,
                             'id': orc.get('id'), 'text': orc['text'], 'turn': orc.get('turn'),
                             **({'replied': mine} if mine else {})})
+        if orc and orc.get('text') and not any(n.get('kind') == 'oracle' for n in out):
+            # D61 개정(2026-09-13 파트너 "플레이 중에 신탁을 내릴 수 있게 하자, 그래야 행동을 어느 정도는 사용자가 조작 가능"):
+            # 신의 요청은 어느 층에서나 모든 캐릭터에게 들린다(where 'sky' — 건물 없음). 요청이지 명령이 아니다(§4-0 신은 절대자가 아니다).
+            mine = (bot.get('oracle_replies') or {}).get(orc.get('id'))
+            out.append({'kind': 'oracle', 'where': 'sky', 'id': orc.get('id'), 'text': orc['text'], 'turn': orc.get('turn'),
+                        **({'replied': mine} if mine else {})})
         return out
 
     def _town_zone(self, x, y):

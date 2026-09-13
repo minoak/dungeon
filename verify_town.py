@@ -406,9 +406,31 @@ check("⑩ 답한 뒤: notice 에 replied 동봉·렌더 '이미 답했다' · �
 show_runner.NOTICES_ON = False
 d10x, _ = show_runner.build_town()
 show_runner.NOTICES_ON = True
-d10x.oracle = {'id': 'o2', 'text': 'x'}
-check("⑩ 스위치 끄면(NOTICES_ON=0) 게시판·신탁 없음(건물 피처는 그대로)",
+d10x.oracle = None                     # 스위치 끄면 러너가 신탁을 읽지 않는다(d.oracle=None, ⑪ 소스 검사) — 09-13 개정: 신탁은 건물과 무관하게 들린다
+check("⑩ 스위치 끄면(NOTICES_ON=0) 게시판 없음(건물 정의 안 실림)·신탁은 러너가 안 읽음(건물 피처는 그대로)",
       not d10x.view(mkbot('1', gd.x, gd.y + 1), []).get('notices') and any(f.type == 'building' for f in d10x.features.values()))
+
+print("── ⑪ 신탁은 어디서나(D61 개정, 09-13 파트너 '플레이 중에 신탁을 내릴 수 있게')")
+d11, st11 = show_runner.G.Dungeon.from_ascii(["############", "#1........>#", "############"], seed=7)
+b11 = mkbot('1', *st11['1'])
+d11.oracle = None
+check("⑪ 던전 층, 신탁 없음 → notices 없음", not d11.view(b11, [b11]).get('notices'))
+d11.oracle = {'id': 'o9', 'text': '보물보다 목숨을 아껴라', 'turn': 5}
+o11 = d11.view(b11, [b11])
+n11 = [n for n in (o11.get('notices') or []) if n['kind'] == 'oracle']
+w11 = _brains._wire(o11, {'1': '두란'})
+check("⑪ 던전 층에서도 oracle notice{where sky, id, text} · 건물 없음", len(n11) == 1 and n11[0].get('where') == 'sky' and 'building' not in n11[0]
+      and n11[0]['id'] == 'o9' and n11[0]['text'] == '보물보다 목숨을 아껴라')
+check("⑪ 렌더: '신의 요청이 들려온다' + '명령이 아니다' + oracle_reply 안내, 자리 말('앞') 없음",
+      '신의 요청이 들려온다: 「보물보다 목숨을 아껴라」' in w11 and '명령이 아니다' in w11 and 'oracle_reply' in w11 and '신전 앞' not in w11)
+dec11 = _brains._parse_decision('{"reason":"r","type":"search","target":"self","oracle_reply":"목숨이 먼저지"}', '', o11, '1', [{'char': '1', 'name': '두란'}])
+check("⑪ 던전 층에서 답 → decision.oracle_reply{id,text}", isinstance(dec11, dict) and dec11.get('oracle_reply') == {'id': 'o9', 'text': '목숨이 먼저지'})
+b11['oracle_replies'] = {'o9': '목숨이 먼저지'}
+w11b = _brains._wire(d11.view(b11, [b11]), {'1': '두란'})
+check("⑪ 답한 뒤 '이미 답했다'", '이미 답했다: 「목숨이 먼저지」' in w11b)
+src_r = open(os.path.join(HERE, 'show_runner.py'), encoding='utf-8').read()
+check("⑪ 러너: 어느 층에서나 읽는다 · tick.oracle(새 요청) · 🔮 줄", 'd.oracle = read_oracle() if NOTICES_ON else None' in src_r
+      and '"oracle": oracle_new' in src_r and '신의 요청이 들려온다(전원에게)' in src_r)
 
 print("=" * 44)
 if C.failed:

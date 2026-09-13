@@ -899,6 +899,7 @@ def main():
     sw = run_summary.Tap(stream.StreamWriter(os.path.join(STATE, "stream.jsonl")), rs)   # 실행당 truncate · 모든 emit 이 결산에도
     brain_pause = run_control.BrainPause(STATE, sw, names, event)
     returned, returned_party = False, []   # D65 워프게이트 귀환으로 끝난 판의 표식(outcome 'returned')·귀환한 사람들
+    last_oracle_id = None                  # D61 개정: 마지막으로 스트림에 남긴 신의 요청 id(새 요청·거둠을 한 번만 적는다)
 
     if TOWN_ON:                            # 마을 판(D29): 원정은 고향에서 시작한다
         d, tstarts = build_town()
@@ -1076,7 +1077,16 @@ def main():
         inbox_in = inbox    # 이번 틱 사고에 주입된 받은편지함 — 루프 끝에서 이름이 새 dict 로
                             # 재바인딩되므로(덮어씀) think_all 직전 참조를 잡아 스트림에 남긴다
         # order 없는 봇만 사고(자동보행 중인 봇은 LLM 0콜)
-        d.oracle = read_oracle() if (NOTICES_ON and getattr(d, "town", False)) else None   # D61 신탁 — 마을 층에서만 틱마다 읽는다
+        d.oracle = read_oracle() if NOTICES_ON else None   # D61 개정(09-13 파트너 "플레이 중에 신탁을 내릴 수 있게"): 어느 층에서나 틱마다 읽는다
+        oracle_now = (d.oracle or {}).get("id") if d.oracle and d.oracle.get("text") else None
+        oracle_new = None
+        if oracle_now != last_oracle_id:                # 새 요청(또는 거둠) — 관전·스트림에 남긴다(요청 본문은 판 밖 원천이라 여기서만 보인다)
+            if oracle_now:
+                oracle_new = {"id": oracle_now, "text": d.oracle["text"]}
+                event("🔮 신의 요청이 들려온다(전원에게): 「%s」" % d.oracle["text"])
+            elif last_oracle_id:
+                event("🔮 신의 요청이 거두어졌다")
+            last_oracle_id = oracle_now
         decisions = brains.think_all(d, bots, inbox, on_error=lambda errors: brain_pause.wait(turn, errors))
         brain_pause.resolved(turn)
         for c_, dec_ in (decisions or {}).items():   # D61 신탁 응답 — 캐릭터 장부(요청 id 별 한 번)·events.log. 판정 없음
@@ -1183,6 +1193,7 @@ def main():
                     **({"hails": hails} if hails else {}),   # 말 걸림 정지 성사(D24) — additive 계측
                     **({"answers": answers} if answers else {}),   # 제안 반응(D47) {받은 봇: {한 봇: 답함 여부}} — additive 계측
                     **({"replies": replies} if replies else {}),   # 반응 형태(D47 ②) [{from,to,kind,how}] — additive 계측
+                    **({"oracle": oracle_new} if oracle_new else {}),   # D61 개정(09-13 additive) 이 틱에 새로 들린 신의 요청 {id,text}
                     "events": turn_events,
                     "bots": [G.bot_snapshot(b) for b in bots],
                     "monsters": [m.as_dict() for m in d.monsters],

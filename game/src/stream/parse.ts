@@ -140,7 +140,7 @@ export class StreamParser {
       kind, idx: r.frames.length, turn, levelIdx: ls.idx, level: ls.line,
       bots, monsters, features, traps,
       events: t.events || [], decisions: t.decisions || {}, inbox: t.inbox || {},
-      hails: t.hails, answers: t.answers, replies: t.replies,
+      hails: t.hails, answers: t.answers, replies: t.replies, oracle: t.oracle,   // D61 개정(09-13) 이 틱에 새로 들린 신의 요청
       social_events: t.social_events, reactions: t.reactions, reaction_stats: t.reaction_stats,
       facing, moved, vis, seen, visited: ls.visitedList.length,
     };

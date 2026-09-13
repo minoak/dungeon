@@ -1195,19 +1195,20 @@ def _wire(obs, names=None, compose=False):
         # 마을(D29) — 사실만: 안전·전체 가시. 여기서 뭘 할지는 캐릭터 몫(추천 안 싣는다).
         L.append("- 여기는 마을이다 — 위험한 것이 없고, 마을 전체가 한눈에 보인다"
                  + ((" · 지금 있는 곳: %s" % obs["town_zone"]) if obs.get("town_zone") else ""))   # D60(09-12) 구역 이름
-        for n in obs.get("notices") or []:      # D61 건물 역할 부품 — 문턱 근처에서만. 사실만, 맡으라·따르라는 말은 없다
-            if n.get("kind") == "board":
-                L.append("- %s 앞 게시판(의뢰 — 맡을지는 네가 정한다, 맡았다면 말이나 기억으로 남긴다):" % n.get("name", "건물"))
-                for q in n.get("quests") or []:
-                    L.append("  · %s — %s%s%s" % (q.get("title", "?"), q.get("goal", "?"),
-                                                 (" (보상: %s)" % q["reward"]) if q.get("reward") else "",
-                                                 (" — 의뢰인 %s" % q["client"]) if q.get("client") else ""))
-            elif n.get("kind") == "oracle":
-                if n.get("replied"):
-                    L.append("- %s 앞 — 신의 요청이 걸려 있다: 「%s」 · 너는 이미 답했다: 「%s」" % (n.get("name", "신전"), n.get("text", ""), n["replied"]))
-                else:
-                    L.append("- %s 앞 — 신의 요청이 들려온다: 「%s」 (요청이지 명령이 아니다 — 따를지는 네가 정한다."
-                             " 답하려면 응답 JSON 의 `oracle_reply` 필드, 선택, 120자)" % (n.get("name", "신전"), n.get("text", "")))
+    for n in obs.get("notices") or []:          # D61 건물 역할 부품(문턱 근처) · 신의 요청(09-13 개정: 어느 층에서나). 사실만, 맡으라·따르라는 말은 없다
+        if n.get("kind") == "board":
+            L.append("- %s 앞 게시판(의뢰 — 맡을지는 네가 정한다, 맡았다면 말이나 기억으로 남긴다):" % n.get("name", "건물"))
+            for q in n.get("quests") or []:
+                L.append("  · %s — %s%s%s" % (q.get("title", "?"), q.get("goal", "?"),
+                                             (" (보상: %s)" % q["reward"]) if q.get("reward") else "",
+                                             (" — 의뢰인 %s" % q["client"]) if q.get("client") else ""))
+        elif n.get("kind") == "oracle":
+            where = ("%s 앞 — " % n.get("name", "신전")) if n.get("building") else ""   # 어디서나 들리는 목소리엔 자리 말이 없다
+            if n.get("replied"):
+                L.append("- %s신의 요청이 걸려 있다: 「%s」 · 너는 이미 답했다: 「%s」" % (where, n.get("text", ""), n["replied"]))
+            else:
+                L.append("- %s신의 요청이 들려온다: 「%s」 (요청이지 명령이 아니다 — 따를지는 네가 정한다."
+                         " 답하려면 응답 JSON 의 `oracle_reply` 필드, 선택, 120자)" % (where, n.get("text", "")))
     z = obs.get("zone")
     scan = isinstance((z or {}).get("doors"), list)   # D19 구조 조회가 실려 있으면 트리 직렬화
     if z and not scan:

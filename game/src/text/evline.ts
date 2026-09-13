@@ -323,6 +323,7 @@ export function groupHtml(f: Frame, run: Run, focus: Char | null): string {
   if (f.kind === 'level') return `<div class="grp lvl" data-turn="${f.turn}">${levelHead(f, run)}` +
     acquisitionHtml(f.level.skill_acquisitions, run.names) + '</div>';
   const parts: string[] = [];
+  if (f.oracle) parts.push(lineHtml('ev gold', `🔮 신의 요청 — 「${esc(f.oracle.text)}」 (요청이지 명령이 아니다)`, [], focus));   // D61 개정(09-13) 어디서나
   for (const c of Object.keys(f.decisions)) parts.push(decisionLines(c, f.decisions[c], run, focus));
   for (const reaction of f.reactions || []) {
     parts.push(lineHtml('ev notable reaction', reactionHtml(reaction, run), [reaction.actor, reaction.to], focus));
