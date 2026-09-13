@@ -157,6 +157,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | `bestiary` | **판 시작 시점**의 캐릭터별 도감 `{이름: [종키…]}`(2026-07-05 additive — D9 도감). 도감은 obs(`monsters[].kind` 가 미등재면 `낯선 짐승`, 등재면 원명+`lore`)를 바꿔 LLM 결정에 영향을 주므로, **같은 시드라도 시작 도감이 다르면 다른 판**이다 — 리플레이·A/B 비교는 이 필드까지 맞춰야 한다. 획득 규칙=bestiary.py(스트림 소비자). 오프라인 소급(bestiary.replay/CLI)은 **이 필드를 시작 지식으로 시드**한 뒤 증분을 재생한다 — 그래야 이월 판에서도 '같은 스트림→같은 원장'(순수 투영)이 성립 |
 | `bestiary_progress` | (2026-09-12 D53 additive) **판 시작 시점**의 캐릭터별 도감 진행도 `{이름: {종키: {n, deep?}}}` — `n` = 조우 수(그 종의 개체 하나를 새로 인지한 횟수 = `aware_of` 증분, 층이 바뀌면 새 개체), `deep: true` = 심층 해금됨. 정의(`entities/*/*.json knowledge.unlock`, 지금은 몬스터 2종 `{event:"encounter", count:5}`)의 조건을 채운 종만 obs 에 본문(`lore`) 전체가 실리고, 그 전엔 `brief` 한 줄 + `deep_progress{event, n, need}` 가 실린다(프롬프트 접미 "(심층: 조우 3/5)"). 해금 시점이 obs 를 바꾸므로 `bestiary` 와 같은 급의 리플레이·비교 전제이고, 오프라인 소급(bestiary.replay)은 이 필드로 조우 수·해금 여부를 시드한다(없는 옛 판 = 등재 종은 조우 1). 해금 조건 자체는 스트림에 없다 — 정의 파일이 바뀌면 옛 판의 소급 결과(해금 시점)도 바뀐다. **2026-09-12 D55 additive**: 항목에 `deep_n`(해금 시점 조우 수)·`asked_n`(마지막 인식 초대 시점 조우 수)·`due`(대기 중 초대 `deep`|`review`)·`note{text, n}`(캐릭터가 남긴 인식 한 줄과 그때 조우 수)도 실린다 — 갱신 초대 문턱(asked_n + review count)이 obs `book_invite` 를 바꾸므로 같은 급의 전제. 갱신 조건도 정의(`knowledge.review`, 없으면 unlock 과 같음)에 있고 스트림엔 없다 |
 | `bestiary_defs` | (2026-09-13 D63 additive) **판 시작 시점**의 지식 본문 정의 `{종키: {name, lore, brief?, unlock?{event,count}, review?{event,count}}}` = `entities.lore()`(knowledge.deep 이 있는 정의만 — 몬스터 2종·함정·상자·샘·NPC). 도감·수첩 창(관전 클라이언트)이 캐릭터의 상태(모름·등재·심층)만큼 본문을 보여 주는 데 쓴다 — 정적 배포·리플레이가 정의 파일 없이도, 정의가 뒤에 바뀌어도 **그 판이 알던 본문**을 그대로 쓴다. 판정·obs 무접촉(표현층 메타). 없는 옛 판은 창이 상태·도감평만 보여 준다 |
+| `boss` | (2026-09-13 D65 additive) 보스층·워프게이트 여부(bool, `DUNGEON_BOSS` 러너 기본 0, 론처 옵션 '보스층·귀환' 화면 기본 켬). true 면 최심층(depth == depths)의 출구 방에 보스(종 '고블린 대장', `monsters[].boss: true`, 정의 entities/monster/goblin_chief.json)가 출구 곁에 서고 상자 하나가 곁에 놓이며 출구는 **봉인된 워프게이트**(`level.gate{sealed, boss}`, obs `exit.name` '워프게이트'·`gate`·`sealed`)가 된다 — `interact exit` 결과 `locked`(봉인) / 보스 처치 `attack` 결과 `unsealed: true` / 열린 뒤 사용 = `ascend`(`to_depth: 0, gate: true`, 모임 규칙 그대로) → 마을 `level`(마을 시작이 아닌 판은 새로 짓는다) → `end.outcome: 'returned'`(마을 도착 = 판 종료). 판 모양을 바꾸는 실행모드 메타(town 급) |
 | `bestiary_file` | 도감 원장 영속 여부(bool, `DUNGEON_BESTIARY_FILE`) — **2026-09-13 D64 기본 false**(캐릭터 영속은 서빙부터, 론처 '도감 이월' 옵션을 켠 판만 true) — gm/menu 와 같은 실행모드 메타(스트림 내용엔 위 `bestiary` 초기값을 통해서만 영향) |
 | `ledger` | 공간 장부(D17-1) 여부(bool, `DUNGEON_LEDGER`, 기본 true — 2026-07-11 additive). true 면 obs 에 `known`(장부 투영: statics/last_seen/zones — **좌표 없음**, 구역·목격 turn 만)과 '돌아가기' 옵션이 실려 LLM 결정에 영향 — bestiary 처럼 **리플레이·A/B 는 이 필드까지 맞춰야 한다**. 장부 자체는 봇 스냅샷 화이트리스트 밖(직전 틱들의 스냅샷·시야에서 파생 가능 = 새 원천 없음). 층 전이 때 새 원장(층의 기억) |
 | `sight` | 시야 반경(`DUNGEON_SIGHT`, 엔진·게이트 기본 5 — 2026-07-11 additive, 구판 스트림은 3. **데모 경로(live.bat·launcher.py)는 6** — D33 2026-09-05). 봇 관측·봇 인지·몹 시야·목격이 전부 이 한 자(대칭) — **굴림 수를 바꾸는 세계 물리라 리플레이·판 비교는 seed 처럼 이 값까지 맞춰야 한다** |
@@ -186,6 +187,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | `visual?` | (2026-09-11 마을 v1 additive) 마을 층의 시각 레이어 `{schema:'town-visual-v1', tileSize, offset:[x,y], ground[{tile,rect}], buildings[{id,texture,x,footY,width}], props[{frame,x,y}], npcs[{id,row,cell}]}` — `art/town-v1/layout.json` 유래(`town_layout.visual_layer`). 좌표는 오프셋 전(클라이언트가 더한다). 엔진·판정 무관, 던전 층엔 없다 |
 | `grid[]` | h개의 w폭 문자열, **raw 지형만**: `#`(벽) `.`(바닥) `+`(문 타일 — D19 정정 2, 2026-07-15 SCAN 기본 1 승격부터 생성 층에 등장. 벽처럼 빛을 막고 바닥처럼 지나감). tile() 관전 글리프 아님 — 몹·피처·함정은 아래 배열로 별도(겹쳐 그리기는 소비자 몫). 웹이 엔진 없이 렌더 가능 |
 | `exit` | `[x,y]` 계단 좌표 |
+| `gate` | (2026-09-13 D65 additive, 보스층만) `{sealed, boss}` — 이 층의 출구는 워프게이트다: 층 시작 때 봉인 여부·보스 몹 id(`monsters[].boss: true`). 봉인은 틱 중 풀린다(보스 처치 `attack` 결과 `unsealed: true`) |
 | `rooms[]` | 방 전수: `id x y w h type neighbours[]` (type ∈ entrance/exit/standard) — `feature.room_id` 의 해소처 |
 | `features[]` | Feature 전수: `id type name x y room_id concealed perception_gate` (type ∈ exit/treasure/chest/fountain) |
 | `traps[]` | Trap 전수: `x y kind name dc dmg hidden sprung` (kind ∈ spike/dart/alarm) |
@@ -207,7 +209,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 ### `descend` — 층 전이(전원 won) 때. 직후 라인은 반드시 `level`
 (2026-09-12 D59 additive) `pages{char: 수첩 한 장}` — 층을 떠나는 순간 캐릭터가 쓴 장기기억(≤300자, 캐릭터당 1콜, 실패한 캐릭터는 키 없음). 다음 층부터 obs `floors[].page` 로 실려 프롬프트 "# 수첩" 갈래에 선다(엔진 불가침 — 내용은 기계가 안 읽는다). `run_meta.notebook`(bool) 이 스위치. 수첩이 켜진 판은 D26 `notes` 가 층에서 닫힌다(이월 없음). `ascend` 도 같다.
 ### `ascend` — 마을 판(D29) 상행 전이(전원 won·went=up) 때. 직후 라인은 반드시 `level`
-필드는 `descend` 와 동일(`to_depth`=올라가는 층 — 마을이면 0). 마을 판의 `level` 은 같은 depth 가
+필드는 `descend` 와 동일(`to_depth`=올라가는 층 — 마을이면 0; **2026-09-13 D65** 워프게이트 귀환이면 `gate: true` 이고 최심층에서 바로 0). 마을 판의 `level` 은 같은 depth 가
 여러 번 나올 수 있다(재입장 — **같은 층 보존**: level_seed·격자 동일, 세계 상태는 떠날 때 그대로).
 
 | 필드 | 내용 |
@@ -221,7 +223,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | 필드 | 내용 |
 |---|---|
 | `turn` | 종료 틱 |
-| `outcome` | `escaped`(최심층 돌파·탈출) / `wiped`(전멸) / `timeout`(틱 한도) — 러너 종료 3분기와 1:1 |
+| `outcome` | `escaped`(최심층 돌파·탈출) / `wiped`(전멸) / `timeout`(틱 한도) / `returned`(2026-09-13 D65 — 보스를 잡고 워프게이트로 마을 귀환, 원정 완료) — 러너 종료 3분기와 1:1 |
 | `depth` | 종료 시 층 |
 | `survivors[]` `fallen[]` `remaining[]` | 탈출/사망/(timeout 시)던전 잔류 char 목록 — 셋이 전체 파티의 분할 |
 | `bots[]` | **최종 층 파티만**의 스냅샷 — 이전 층 전사자의 마지막 모습은 그 층 마지막 `tick` 에서 찾을 것(fallen 명단에는 있음) |

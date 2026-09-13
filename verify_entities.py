@@ -27,14 +27,14 @@ def canon(o):
 
 
 # 이관 전(커밋 d38669f) lore.json 7건·town.json NPC 3인의 정본 해시 — 본문·대사·선물·배치가 한 글자라도 바뀌면 여기서 선다.
-LORE_SHA = 'f332d3e7968a963733024834d85b7bad01feac27819a19b446ea86b09247e069'
+LORE_SHA = '63b1d9c0a9f0a81258bc0c211ccecc583d1d649e73e7bf8a942cc12dc8461dac'   # 2026-09-13 D65: 보스 정의(goblin_chief) 추가로 갱신 — 그 전 f332d3e7…(d38669f 이관 정본)
 NPC_SHA = 'b6c1e5f26edb42b1e7ad09a6f0db05b8f62d30df43dd846cf67d649f9e8fd1b7'
 
 # ① 로드
 defs = ENT.load()
-check('① 정의 로드 — 기존 20개와 마을 공간 정의(맵 7·건물 4) + 의뢰 3(D61)',
-      {d['kind'] for d in defs.values()} == set(ENT.KINDS) and len(defs) == 34
-      and len(ENT.by_kind('monster')) == 2 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('object')) == 9 and len(ENT.by_kind('npc')) == 6
+check('① 정의 로드 — 기존 20개와 마을 공간 정의(맵 7·건물 4) + 의뢰 3(D61) + 보스 1(D65)',
+      {d['kind'] for d in defs.values()} == set(ENT.KINDS) and len(defs) == 35
+      and len(ENT.by_kind('monster')) == 3 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('object')) == 9 and len(ENT.by_kind('npc')) == 6
       and len(ENT.by_kind('map')) == 7 and len(ENT.by_kind('building')) == 4 and len(ENT.by_kind('quest')) == 3)
 
 # ② 엔진 유도값 == 이관 전 리터럴(동작 그대로)
@@ -60,16 +60,17 @@ check('② 명시 수치가 정의보다 우선(장면 저작·게이트 호환)
 
 # ③ 지식 본문 이관 — 옛 lore.json 과 키·본문이 같다(D53 뒤 lore() 항목에 brief·unlock 이 얹히므로 name·lore 투영으로 잰다)
 lo = ENT.lore()
-check('③ 지식 본문(옛 lore.json 7건) — 키·이름·본문(deep) 해시 일치',
+check('③ 지식 본문(옛 lore.json 7건 + D65 보스 1건 = 8건) — 키·이름·본문(deep) 해시 일치',
       canon({k: {'name': v['name'], 'lore': v['lore']} for k, v in lo.items()}) == LORE_SHA
-      and set(lo) == {'monster:고블린', 'monster:그림자거미', 'trap:spike', 'trap:dart', 'trap:alarm',
+      and set(lo) == {'monster:고블린', 'monster:그림자거미', 'monster:고블린 대장', 'trap:spike', 'trap:dart', 'trap:alarm',
                       'feature:chest', 'feature:fountain'})
 
 # ⑧ D53 지식 3층 프리셋(파트너 09-12 "5번 조우하면 심층 — 공통 프리셋, 일단 몬스터만")
-check('⑧ 몬스터 2종 = brief 한 줄 + unlock{encounter, 5} · 함정·오브젝트는 해금 조건 없음(옛 2층 그대로)',
+check('⑧ 몬스터 2종 = brief 한 줄 + unlock{encounter, 5} · 보스(D65) = unlock 1 · 함정·오브젝트는 해금 조건 없음(옛 2층 그대로)',
       all(lo[k].get('brief') and lo[k].get('unlock') == {'event': 'encounter', 'count': 5} for k in ('monster:고블린', 'monster:그림자거미'))
       and not any(lo[k].get('unlock') or lo[k].get('brief') for k in lo if not k.startswith('monster:'))
-      and ENT.unlock_rules() == {'monster:고블린': {'event': 'encounter', 'count': 5}, 'monster:그림자거미': {'event': 'encounter', 'count': 5}}
+      and ENT.unlock_rules() == {'monster:고블린': {'event': 'encounter', 'count': 5}, 'monster:그림자거미': {'event': 'encounter', 'count': 5},
+                                  'monster:고블린 대장': {'event': 'encounter', 'count': 1}}   # D65 보스 = 심층 즉시(개체가 하나라 5번 조우가 없다)
       and 'encounter' in ENT.UNLOCK_EVENTS
       and lo['monster:고블린']['brief'] == '겁 많은 소형 마물')   # 메모 §2-2 [제안]의 예시 문구 그대로
 

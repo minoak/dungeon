@@ -55,6 +55,7 @@ export interface Monster {
   id: number; kind: string; x: number; y: number; hp: number; maxhp: number;
   alive: boolean; state: 'SLEEPING' | 'HUNTING' | 'FLEEING' | string;
   concealed: boolean; target?: Char | null; desperate?: boolean;
+  boss?: boolean;                                // D65(09-13) 보스층의 보스 — 죽으면 워프게이트 봉인이 풀린다
   [k: string]: unknown;
 }
 
@@ -93,6 +94,7 @@ export interface LevelLine {
   rooms: Room[]; features: Feature[]; traps: Trap[]; monsters: Monster[];
   party: Bot[];                                  // 이 층 개시 스냅샷(스폰 칸)
   visual?: TownVisual;                           // 마을 v1 시각 레이어(마을 층만)
+  gate?: { sealed: boolean; boss?: number | null };   // D65(09-13) 보스층: 출구=워프게이트(층 시작 때 봉인 여부·보스 id)
 }
 
 export interface Then { type: string; target?: string }

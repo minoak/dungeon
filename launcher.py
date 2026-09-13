@@ -161,6 +161,7 @@ class Runner:
                 env["DUNGEON_TOWN"] = "1"
             else:
                 env.pop("DUNGEON_TOWN", None)
+            env["DUNGEON_BOSS"] = "1" if opts.get("boss") else "0"   # D65 보스층·귀환 — 화면 기본 켬, 러너 기본 0(옵션 없으면 끔)
             if brain == "dummy" or not opts.get("bestiary"):   # 규칙 두뇌는 도감 원장에 누적하지 않는다 · D64(09-13 파트너 "캐릭터 영속은
                 env["DUNGEON_BESTIARY_FILE"] = ""              #   서빙까지 했을 때 시작 — 지금은 완전히 별개의 판"): 기본 이월 안 함(판 안 학습만).
             elif not env.get("DUNGEON_BESTIARY_FILE"):         #   옵션 '도감 이월'(bestiary=true)을 켠 판만 로컬 원장에 읽고 쓴다

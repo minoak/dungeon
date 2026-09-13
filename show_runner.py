@@ -105,6 +105,10 @@ N_GEAR = int(os.environ.get("DUNGEON_GEAR", "3"))        # 층당 장비(07-30) 
                                                           # 무기 비교가 성립). 엔진 직생성 기본 0
 TOWN_ON = os.environ.get("DUNGEON_TOWN", "0") == "1"     # 마을 판(D29) — 마을(0층)↔던전 왕복.
                                                           # 기본 0(기존 판 그대로) — 퀵스타터가 켠다
+BOSS_ON = os.environ.get("DUNGEON_BOSS", "0") == "1"     # 보스층·워프게이트(D65, 09-13 파트너 "보스를 잡고 워프게이트를 타고 돌아가는
+                                                          # 것까지 관찰"): 최심층(depth == DEPTHS)에 보스, 출구=봉인된 워프게이트, 보스가
+                                                          # 죽으면 열리고 사용=마을(0층) 귀환=판 종료(outcome 'returned'). 러너 기본 0
+                                                          # (기존 판·게이트 그대로) — 론처 옵션 '보스층·귀환'(화면 기본 켬)이 켠다
 DEPTHS = int(os.environ.get("DUNGEON_DEPTHS", "1" if TOWN_ON else "5" if SKILLS_ON else "2"))
                                                           # 마을 판 기본 1층까지(2층=아직 안 만듦 —
                                                           # 1층의 하강 계단=관측 클리어 조건, 파트너 확정)
@@ -517,8 +521,13 @@ def act_summary(res):
             if len(group) == 1:                    # 솔로 판 — 혼자 계단을 내려간다. '다 모였다'는
                 return "홀로 계단을 내려간다 — 탈출!!"   #   거짓이다(결과 보고 오역은 이 판의 오랜 병).
             return "다 모였다 — 함께 하강!! (%s)" % "·".join(group)
+        if r == "locked":                          # D65 봉인된 워프게이트
+            return "워프게이트 — 봉인돼 있다(열리지 않는다)"
         if r == "ascend":
             group = res.get("party", [])
+            if res.get("gate"):                    # D65 워프게이트 귀환
+                return ("홀로 워프게이트를 지나 마을로" if len(group) == 1
+                        else "다 모였다 — 봉인 풀린 워프게이트로 마을 귀환!! (%s)" % "·".join(group))
             if len(group) == 1:
                 return "홀로 계단을 올라 마을로"
             return "다 모였다 — 함께 마을로!! (%s)" % "·".join(group)
@@ -880,6 +889,7 @@ def main():
     rs = run_summary.Collector()                                    # D58 판 결산(기계가 센 숫자 — 판정은 사람이)
     sw = run_summary.Tap(stream.StreamWriter(os.path.join(STATE, "stream.jsonl")), rs)   # 실행당 truncate · 모든 emit 이 결산에도
     brain_pause = run_control.BrainPause(STATE, sw, names, event)
+    returned, returned_party = False, []   # D65 워프게이트 귀환으로 끝난 판의 표식(outcome 'returned')·귀환한 사람들
 
     if TOWN_ON:                            # 마을 판(D29): 원정은 고향에서 시작한다
         d, tstarts = build_town()
@@ -892,7 +902,8 @@ def main():
                       ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
                       status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON,
                       auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE,
-                      skills=SKILLS_ON, trpg_combat=TRPG_COMBAT_ON, random_skill=RANDOM_SKILL_ON)
+                      skills=SKILLS_ON, trpg_combat=TRPG_COMBAT_ON, random_skill=RANDOM_SKILL_ON,
+                      boss=BOSS_ON and DEPTHS <= 1)   # D65: 1층이 곧 최심층이면 여기가 보스층
         d.lore = lore
     bots = []
     for c in chars:
@@ -1003,6 +1014,7 @@ def main():
             bestiary=iss.snapshot(),   # 판 시작 시점 지식(additive) — 도감이 obs 를 바꾸므로 리플레이·비교의 전제
             bestiary_progress=iss.progress(),   # D53(09-12 additive): 시작 진행도 {이름:{종키:{n, deep?}}} — 심층 해금
                                        #   시점이 obs 를 바꾸므로 이것도 전제. 오프라인 소급(bestiary.replay)의 시드
+            boss=BOSS_ON,              # D65(09-13 additive): 보스층·워프게이트 여부 — 최심층 판 모양(보스·봉인 출구·귀환 종료)을 바꾸는 실행모드 메타(town 급)
             bestiary_defs=lore,        # D63(09-13 additive): 지식 본문 정의 {종키:{name, lore, brief?, unlock?, review?}} — 도감·수첩 창이
                                        #   캐릭터 상태(모름·등재·심층)만큼 본문을 보여 주는 데 쓴다. 판정 무접촉·정의가 뒤에 바뀌어도 그 판이 알던 본문
             brain_failure_policy=run_control.POLICY,
@@ -1188,7 +1200,8 @@ def main():
         if all(b["won"] or not b["alive"] for b in bots):
             survivors = [b for b in bots if b["won"]]
             fallen += [b["char"] for b in bots if not b["alive"]]
-            up = TOWN_ON and bool(survivors) and all(b.get("went") == "up" for b in survivors)
+            warp = bool(survivors) and all(b.get("warp") for b in survivors)   # D65 워프게이트 — 최심층에서 바로 마을(0층)로
+            up = bool(survivors) and all(b.get("went") == "up" for b in survivors) and (TOWN_ON or warp)
             # 행선 혼합(위/아래)은 여기 못 온다 — 파티는 모임 규칙이 한 계단을 강제하고,
             # 솔로+마을은 main() 초입에서 거부(v0 — 서랍: 다중 층 동시 진행).
             if not survivors or (not up and d.depth >= DEPTHS):
@@ -1214,8 +1227,9 @@ def main():
                         event('   \U0001f4d3 %s — 수첩 한 장: "%s"' % (names[b["char"]], page))
                     else:
                         event('   \U0001f4d3 %s — 수첩 없음(두뇌 응답 없음) — 뼈만 남긴다' % names[b["char"]])
-            nd = d.depth - 1 if up else d.depth + 1
+            nd = 0 if warp else (d.depth - 1 if up else d.depth + 1)   # D65: 워프게이트는 층을 건너뛰어 마을로
             sw.emit("ascend" if up else "descend", turn=turn, to_depth=nd,
+                    **({'gate': True} if warp else {}),       # D65 additive — 워프게이트로 귀환한 상행
                     **({'pages': pages} if pages else {}),    # D59 additive — 캐릭터별 수첩 한 장(플레이 데이터)
                     **({'reaction_summary': reaction_book.close_floor(turn)} if reaction_book is not None else {}),
                     party=[{"char": b["char"], "hp": b["hp"], "bag": b["bag"],
@@ -1223,9 +1237,13 @@ def main():
                            for b in sorted(survivors, key=lambda b: b["char"])],
                     fallen=list(fallen))
             mem = {}
-            if TOWN_ON and nd in saved:   # 가 본 층 = 세계 상태 그대로(몹·주운 것·묘·헌 장비)
+            if nd in saved:               # 가 본 층(마을 판) = 세계 상태 그대로(몹·주운 것·묘·헌 장비)
                 d = saved[nd]["d"]
                 mem = saved[nd]["mem"]
+                fresh = False
+            elif nd == 0:                 # D65: 마을 시작이 아닌 판의 워프 귀환 — 마을(D52 v1)을 새로 짓는다
+                d, _tstarts = build_town()
+                d.lore = lore
                 fresh = False
             else:
                 d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
@@ -1237,13 +1255,14 @@ def main():
                               n_gear=N_GEAR, status=STATUS_ON, rest_verb=REST_ON,
                               relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON,
                               auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE,
-                              skills=SKILLS_ON, trpg_combat=TRPG_COMBAT_ON, random_skill=RANDOM_SKILL_ON)
+                              skills=SKILLS_ON, trpg_combat=TRPG_COMBAT_ON, random_skill=RANDOM_SKILL_ON,
+                              boss=BOSS_ON and nd >= DEPTHS)   # D65: 최심층 = 보스층(보스·봉인 워프게이트·상자)
                 d.lore = lore
                 fresh = True
             # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,
             # 재입장='위로 오르는 계단' 곁. 첫 하강만 기존 스폰(깊은 곳에서 눈뜸)+곁에 '<' 신설.
             anchor = None
-            if TOWN_ON and not fresh:
+            if (TOWN_ON or warp) and not fresh:   # D65: 워프 귀환도 던전 입구 곁에 선다
                 anchor = (d.exit if up else
                           next(((f.x, f.y) for f in d.features.values()
                                 if f.type == "stairs_up"), d.exit))
@@ -1305,7 +1324,9 @@ def main():
                    "party": [G.bot_snapshot(b) for b in bots]}
             sw.emit("level", **lvl)
             iss.consume("level", lvl)               # 새 층 몹 id→종 지도 갱신
-            if up:
+            if warp:
+                event("=== 워프게이트의 빛이 걷힌다 — 마을이다. 원정에서 돌아왔다 ===")   # D65
+            elif up:
                 event("=== 일행은 계단을 올라선다 — 마을이다. 낯익은 지붕들 ===")
             elif TOWN_ON and d.depth == 1:
                 event("=== 일행은 던전 입구로 내려선다 — 지하 1층 (몬스터 %d) ===" % (N_MON,))
@@ -1314,11 +1335,19 @@ def main():
                       % (nd, N_MON + nd - 1))
             write_map(d, bots, turn)
             time.sleep(1.0)
+            if warp:                          # D65: 마을 도착 = 원정 완료 — 판을 여기서 닫는다(⚠️임시 가정: 마을에서 이어 놀지 않는다)
+                returned, returned_party = True, [b["char"] for b in survivors]
+                break
 
     won = [b["char"] for b in bots if b["won"]]
     dead = fallen + [b["char"] for b in bots if not b["alive"] and b["char"] not in fallen]
     left = [b["char"] for b in bots if b["alive"] and not b["won"]]
-    if won and d.depth >= DEPTHS:
+    if returned:                                     # D65: 보스를 잡고 워프게이트로 마을 귀환 = 원정 완료
+        outcome = "returned"
+        won = list(returned_party)
+        event("=== 종료 (turn %d) — 보스를 쓰러뜨리고 워프게이트로 마을 귀환!! (원정 완료) %s / 쓰러짐 %s ==="
+              % (turn, won, dead or "없음"))
+    elif won and d.depth >= DEPTHS:
         outcome = "escaped"                          # 최심층 돌파 = 진짜 탈출(승리)
         if TOWN_ON:                                  # 마을 판(D29): 아래 계단 = 관측 클리어 조건
             event("=== 종료 (turn %d) — 지하 %d층의 아래 계단으로, 더 깊은 어둠 속으로!! "

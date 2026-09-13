@@ -149,7 +149,9 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
   if (t === 'interact') {
     const r = str(e.result);
     if (r === 'exit') return L('gold', `▼ 다 모였다 — 함께 하강!! (${listNames(e.party, run)})`);
-    if (r === 'ascend') return L('gold', `▲ 마을로 돌아간다 (${listNames(e.party, run)})`);
+    if (r === 'locked') return L('notable', '◈ 워프게이트 — 봉인돼 있다(보스가 서 있는 동안 열리지 않는다)');   // D65
+    if (r === 'ascend') return L('gold', e.gate ? `◈ 봉인 풀린 워프게이트로 — 마을 귀환!! (${listNames(e.party, run)})`   // D65
+                                          : `▲ 마을로 돌아간다 (${listNames(e.party, run)})`);
     if (r === 'wait_allies') {
       const missing = listNames(e.missing, run), busy = listNames(e.busy, run);
       const bits = [missing ? `아직: ${missing}` : '', busy ? `바쁨: ${busy}` : ''].filter(Boolean).join(' · ');
@@ -187,7 +189,8 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
     const target = esc(str(e.target, '적'));
     if (!e.hit) return L('combat', `⚔ ${sneak}${target} 공격 — 빗나감${roll}`);
     const head = sneak + (e.crit ? '대성공! ' : '');
-    const tail = e.killed ? ' — 처치!' : ` (${e.target_kind === 'bot' ? '대상' : '적'} HP ${Math.max(0, num(e.monster_hp))})`;
+    const tail = (e.killed ? ' — 처치!' : ` (${e.target_kind === 'bot' ? '대상' : '적'} HP ${Math.max(0, num(e.monster_hp))})`)
+      + (e.unsealed ? ' ◈ 워프게이트의 봉인이 풀렸다' : '');   // D65 보스 처치
     return L('combat', `⚔ ${target} 공격 — ${head}${num(e.dmg)}피해${tail}${roll}`);
   }
   if (t === 'search') {

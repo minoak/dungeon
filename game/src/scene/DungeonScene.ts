@@ -44,6 +44,7 @@ export class DungeonScene extends Phaser.Scene {
   private feats = new Map<string, Phaser.GameObjects.Sprite>();
   private traps = new Map<string, Phaser.GameObjects.Sprite>();
   private levelObjs: Phaser.GameObjects.GameObject[] = [];   // 문·출구 표식 등 층 고정물
+  private exitObj: Phaser.GameObjects.Sprite | null = null;  // D65 보스층 워프게이트 표식(봉인 상태 색 — 보스가 죽으면 초록)
   private footprints!: Phaser.GameObjects.Graphics;
   private ring!: Phaser.GameObjects.Graphics;
   frame: Frame | null = null;
@@ -214,7 +215,9 @@ export class DungeonScene extends Phaser.Scene {
       this.levelObjs.push(this.placeObject('door', x, y, DEPTH.feature));
     }
     const [ex, ey] = L.exit;
-    this.levelObjs.push(this.placeObject('exit', ex, ey, DEPTH.feature));
+    const exitObj = this.placeObject('exit', ex, ey, DEPTH.feature);
+    this.levelObjs.push(exitObj);
+    this.exitObj = L.gate ? exitObj.setTint(L.gate.sealed ? 0x8fa3ff : 0x9cffc8) : null;   // D65 워프게이트: 봉인=파랑, 열림=초록(⚠️전용 그림은 다음)
     if (V) this.placeTownVisual(V);
 
     const m = TILE * 2;
@@ -283,6 +286,10 @@ export class DungeonScene extends Phaser.Scene {
       this.updateMob(mob, prev, snap);
     }
     for (const [id, s] of this.mobs) if (!seenMobs.has(id)) { s.destroy(); this.mobs.delete(id); }
+    if (this.exitObj && cur.level.gate) {                      // D65: 보스가 쓰러지면 워프게이트 봉인 해제 — 관전자용 색(시체가 시야 밖이어도 층의 사실)
+      const b = cur.monsters.find(m => m.boss);
+      this.exitObj.setTint(b && !b.alive ? 0x9cffc8 : 0x8fa3ff);
+    }
 
     // 피처(출구는 층 고정물) — 시야 안이거나 본 적 있는 자리, concealed 는 숨김
     const seenFeats = new Set<string>();
@@ -403,6 +410,7 @@ export class DungeonScene extends Phaser.Scene {
     let s = this.mobs.get(mob.id);
     if (!s) {
       s = this.placeObject('mob:' + mob.kind, mob.x, mob.y, DEPTH.stand).setName('mob-' + mob.id);
+      if (mob.boss) s.setScale(s.scaleX * 1.3, s.scaleY * 1.3);   // D65 보스 — 같은 도트를 조금 크게(⚠️전용 도트는 다음)
       this.mobs.set(mob.id, s);
       snap = true;
     }

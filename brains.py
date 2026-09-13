@@ -870,6 +870,8 @@ def _last_prose(last, names=None):
             s = "%s을(를) 쳤다 — 명중, %d 피해" % (tgt or "?", last.get("dmg", 0))
             if last.get("killed"):
                 s += ", 쓰러뜨렸다!"
+            if last.get("unsealed"):          # D65: 보스가 쓰러지는 순간 워프게이트의 봉인이 풀린다(세계가 보여 주는 사실)
+                s += " 그 순간 워프게이트의 봉인이 풀렸다"
             return ("기습! " if last.get("surprise") else "") + s
     if t == "interact":
         if r == "exit":
@@ -877,8 +879,13 @@ def _last_prose(last, names=None):
             if len(group) == 1:              # 솔로 판 — 혼자 내려갔다. 캐릭터가 읽는 문장이라
                 return "혼자 계단을 내려갔다"    #   더 중요하다: 없던 일행을 지어내면 안 된다.
             return "다 모여서 — 함께 내려갔다(%s)" % "·".join(group)
+        if r == "locked":                    # D65 봉인된 워프게이트 — 사실만(보스룸의 보스가 곧 봉인)
+            return "워프게이트에 손을 댔지만 — 봉인돼 있어 열리지 않았다(이 층의 무언가가 봉인을 쥐고 있다)"
         if r == "ascend":
             group = last.get("party", [])
+            if last.get("gate"):             # D65 워프게이트 — 봉인이 풀린 게이트로 마을 귀환
+                return ("혼자 워프게이트를 지나 마을로 돌아갔다" if len(group) == 1
+                        else "다 모여서 — 봉인이 풀린 워프게이트를 지나 마을로 돌아갔다(%s)" % "·".join(group))
             if len(group) == 1:              # 마을 복귀(D29) — 대칭 문법·같은 정직성
                 return "혼자 계단을 올라 마을로 돌아갔다"
             return "다 모여서 — 함께 마을로 올라갔다(%s)" % "·".join(group)
@@ -1280,7 +1287,7 @@ def _wire(obs, names=None, compose=False):
         ex = s.get("exit")
         if ex:
             put(ex.get("bearing"), ex.get("dist", 0),
-                "계단(exit) %dm — 눈에 보인다" % ex.get("dist", 0))
+                "%s %dm — 눈에 보인다%s" % (_exit_label(ex), ex.get("dist", 0), _exit_state(ex)))   # D65 워프게이트·봉인
         for m in s.get("monsters", []):
             put(m.get("bearing"), m.get("dist", 0),
                 "%s, %dm%s" % (G._mfact(m), m.get("dist", 0),
@@ -1334,7 +1341,7 @@ def _wire(obs, names=None, compose=False):
         n0 = len(L)
         ex = s.get("exit")
         if ex:
-            L.append("- 계단(exit) — %s" % at(ex))
+            L.append("- %s — %s%s" % (_exit_label(ex), at(ex), _exit_state(ex)))   # D65 워프게이트·봉인 상태(사실만)
         for m in s.get("monsters", []):
             L.append("- %s — %s" % (G._mfact(m), at(m)))
             if m.get("lore") or m.get("deep_progress"):   # D53: 심층 전엔 한 줄 + 진행도 접미
@@ -1691,6 +1698,18 @@ def _then(obj, obs):
 
 
 _BLOCK_TAGS = ("PROHIBITED_CONTENT", "SAFETY", "BLOCKLIST", "IMAGE_SAFETY", "RECITATION", "OTHER")   # Gemini blockReason/finishReason 어휘
+
+
+def _exit_label(ex):
+    """출구 라벨 — 보통 '계단(exit)', 보스층(D65, 09-13)은 '워프게이트(exit)'(obs exit.gate)."""
+    return "워프게이트(exit)" if ex.get("gate") else "계단(exit)"
+
+
+def _exit_state(ex):
+    """보스층 워프게이트의 봉인 상태 — 사실만(여는 법은 말하지 않는다: 보스룸에 선 보스가 곧 봉인이다). 계단은 빈 문자열."""
+    if not ex.get("gate"):
+        return ""
+    return " — 봉인돼 있다(굳게 닫혀 있다)" if ex.get("sealed") else " — 열려 있다(마을로 통한다)"
 
 
 def _safety_blocked(why):

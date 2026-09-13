@@ -359,6 +359,8 @@ function evLine(e, f) {
     const r = e.result;
     if (r === 'exit')
       return cls('gold', `▼ 다 모였다 — 함께 하강!! (${(e.party || []).map(c => esc(names[c] || c)).join('·')})`);
+    if (r === 'locked') return cls('notable', '◈ 워프게이트 — 봉인돼 있다');   // D65
+    if (r === 'ascend') return cls('gold', `${e.gate ? '◈ 봉인 풀린 워프게이트로 — 마을 귀환!!' : '▲ 마을로 돌아간다'} (${(e.party || []).map(c => esc(names[c] || c)).join('·')})`);
     if (r === 'wait_allies')
       return cls('notable', `계단에서 동료를 기다린다 (아직: ${(e.missing || []).map(c => esc(names[c] || c)).join('·')})`);
     if (r === 'treasure') return cls('gold', '◆ 보물 획득');
@@ -486,7 +488,7 @@ const GLYPHS = {   // 글리프 폴백 = tmux 관전의 계승 (visited ',' 까�
   'floor': ['.', '#3a3f4b'], 'visited': [',', '#584f38'], 'wall': ['#', '#555c6e'],
   'exit': ['>', '#e8c268'],
   'bot:*': ['@', '#ffd166'],
-  'mob:고블린': ['g', '#7ec850'], 'mob:그림자거미': ['s', '#b07ee3'], 'mob:*': ['m', '#e08080'],
+  'mob:고블린': ['g', '#7ec850'], 'mob:그림자거미': ['s', '#b07ee3'], 'mob:고블린 대장': ['G', '#ffb347'], 'mob:*': ['m', '#e08080'],
   'feat:treasure': ['$', '#e8c268'], 'feat:chest': ['□', '#c8a165'],
   'feat:fountain': ['~', '#6fc3df'], 'feat:potion': ['!', '#e86ea4'],
   'feat:grave': ['T', '#9a9fae'],   // 묘(D22) — 쓰러진 자리의 표지판(스프라이트는 feat:* 폴백)

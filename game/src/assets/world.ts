@@ -22,7 +22,7 @@ export const TERRAIN_CELL = 48;
 export const TOWN_PROP_CELL = 144, TOWN_PROP_FOOT = 138, TOWN_NPC_CELL = 96, TOWN_NPC_FOOT = 91;   // art/town-v1/runtime/manifest.json
 export const TOWN_TERRAIN = ['plaza_a', 'plaza_b', 'alley', 'earth', 'grass', 'wood_floor', 'plaster_wall', 'teal_roof'];
 const DIRECTIONS: Dir[] = ['front', 'right', 'back', 'left'];
-const MONSTERS: Record<string, string> = { '고블린': 'wl-goblin', '그림자거미': 'wl-spider' };
+const MONSTERS: Record<string, string> = { '고블린': 'wl-goblin', '그림자거미': 'wl-spider', '고블린 대장': 'wl-goblin' };   // D65 보스=같은 시트(크기만 키움)
 const PROPS: Record<string, number> = {
   door: 0, exit: 1, 'feat:exit': 1, 'feat:stairs_up': 1,
   'feat:chest': 2, 'feat:fountain': 3, 'feat:treasure': 4,

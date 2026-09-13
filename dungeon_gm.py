@@ -182,6 +182,7 @@ def _tagsfx(f):
 # 픽셀 던전의 GLog 처럼 사건마다 짧은 꼬리표 하나 — "[발견] 고블린 m3", "[피격] 고블린(m3) −2 (HP 8)", "[출혈] 걸림".
 # 궤적(D38)·층 집계·결산이 **같은 사전**을 센다(STATUS_KINDS·BONES 선례 — 사전 하나). 값=(집계 여부).
 # 문장형 서술(_last_prose·act_summary·_witness_prose)은 관전·스트림·목격 줄에 남는다 — 캐릭터 자기 궤적만 꼬리표다.
+BOSS_KIND = '고블린 대장'   # D65(09-13) 보스층의 보스 — 정의 entities/monster/goblin_chief.json(수치·습성·지식). 랜덤 몹 풀엔 안 든다
 EVENT_KINDS = {
     'spot': True, 'hit': True, 'kill': True, 'miss': True, 'hurt': True, 'status': True,
     'critical': True, 'recovered': True, 'trap': True, 'trap_safe': True, 'loot': True, 'use': True,
@@ -299,7 +300,9 @@ def event_tags(rec, names=None):
         if r == 'exit':
             return [('descend', '하강', '함께' if len(rec.get('party') or []) > 1 else '혼자')]
         if r == 'ascend':
-            return [('ascend', '상행', '마을로')]
+            return [('ascend', '상행', '워프게이트로 마을로' if rec.get('gate') else '마을로')]
+        if r == 'locked':                                     # D65 봉인된 워프게이트 — 사실만
+            return [('blocked', '봉인', '워프게이트 — 닫혀 있다')]
         if r == 'wait_allies':
             bits = []
             if rec.get('missing'):
@@ -552,6 +555,7 @@ class Monster:
         self.desperate = False       # 필사 반전됨 — 다시는 도주하지 않는다(죽을 때까지 문다)
         self.last_hits = {}          # 관계 장부(D36): char → 마지막으로 이 몹을 친 틱('함께 싸움' 재료)
         self.fought = set()          # 이 몹을 두고 이미 '함께 싸움'이 적힌 쌍(frozenset) — 몹당 1회
+        self.boss = False            # D65(09-13): 보스층의 보스 개체 — 죽으면 워프게이트 봉인이 풀린다(스트림 'boss': true)
 
     def as_dict(self):
         """스트림(JSONL) 직렬화 — 관전자/웹 데이터 계약(STREAM_FORMAT.md).
@@ -562,6 +566,7 @@ class Monster:
                 'atk': self.atk, 'dmg': self.dmg, 'alive': self.alive,
                 'state': self.state, 'concealed': self.concealed,
                 'target': self.target, 'desperate': self.desperate,
+                **({'boss': True} if getattr(self, 'boss', False) else {}),   # D65 additive — 보스층의 보스
                 **({'status': sorted(self.skill_status)} if getattr(self, 'skill_status', None) else {})}
 
 
@@ -677,7 +682,7 @@ class Dungeon:
                  town=False, status=False, rest_verb=False, relations=False, trail=False,
                  objtags=False, floor=False, explore_dirs=False, give_verb=False, bond_verb=False,
                  auto_approach=False, composed_actions=False, skills=False, trpg_combat=False, random_skill=False,
-                 ally_doing=False):
+                 ally_doing=False, boss=False):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
         # 마스터 시드 → 깊이별 파생 시드(단층=depth1, 다층 솔기). 같은 시드 → 같은 판.
         # 시그니처 = 계획서 솔기① `Dungeon(master_seed, depth=1)` 와 위치 일치(seed=master_seed).
@@ -798,6 +803,11 @@ class Dungeon:
                             n_gear)      # 장비(07-30)도 같은 규율 — 개수 파라미터·엔진 기본 0
                                          #   (스위치 아님 = from_ascii 명시 초기화 함정 자체가 없다)
         self._assign_room_types()  # entrance/exit/standard 타입 부여 (출구 배치 후)
+        self.boss_on = bool(boss)  # D65(09-13): 최심층 보스·워프게이트 — 러너가 depth == DEPTHS 일 때 켠다. 엔진 기본 0(기존 판 비트 동일)
+        self.boss = None           #   보스 개체(Monster) — 출구 방(보스룸)에 선다
+        self.sealed = False        #   출구(=워프게이트)의 봉인 — 보스가 살아 있는 동안 True(사용하면 result 'locked')
+        if self.boss_on:
+            self._place_boss()
         self._classify_tiles()     # 각 바닥 칸에 'room'/'corridor' 속성 부여
         self.zones = None
         self.zone_at = {}
@@ -875,6 +885,7 @@ class Dungeon:
         d.floor_on = False         # 층 집계·결산(D40) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.explore_dirs = False     # 방향 탐색 열거(D19 개정 4) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.give_verb = d.bond_verb = False   # 건네기·친목(D47 ②, 09-09) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
+        d.boss_on, d.boss, d.sealed = False, None, False   # 보스층·워프게이트(D65, 09-13) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.auto_approach = False
         d.composed_actions = False
         d.skills = d.trpg_combat = d.random_skill = False
@@ -1061,6 +1072,37 @@ class Dungeon:
                 x, y = pool.pop()             #   장검이 깔려 한 층 안에서 '더 좋은 것' 비교가 생긴다
                 slot, name = GEAR_CYCLE[i % len(GEAR_CYCLE)]
                 self._add_feature(slot, name, x, y)
+
+    def _place_boss(self):
+        """D65(2026-09-13 파트너 "5층에 보스몹을 두고 클리어 시 보스룸 뒤로 보물상자와 워프게이트를 설치해서 마을로 이동" →
+        "보스를 잡고 워프게이트를 타고 돌아가는 것까지 관찰"): 관찰용 첫 판.
+        출구 방 = 보스룸 — 보스(BOSS_KIND)가 출구 바로 곁에 서고, 출구는 **워프게이트**(봉인)가 된다. 보스가 죽으면 봉인이 풀리고
+        (_attack → sealed=False, res.unsealed), 게이트 사용 = 마을로 상행(result 'ascend', to_depth 0 — 러너가 0층을 만든다).
+        보물상자 하나를 게이트 곁에 둔다(기존 상자 판정: 보물 2 / 독침). ⚠️임시 가정: '보스룸 뒤 별도 방' 규칙은 다음(방 그래프 규칙 필요) ·
+        보스는 잠든 채 시작(기습 가능) · 상자는 기존 상자 규칙 그대로."""
+        ex, ey = self.exit
+        rid = self._room_id_at(ex, ey)
+        room = self.rooms[rid] if rid is not None else None
+        taken = ({(f.x, f.y) for f in self.features.values()} | {(m.x, m.y) for m in self.monsters}
+                 | {(t.x, t.y) for t in self.traps} | {(ex, ey)})
+        if room is not None:
+            cells = [(x, y) for y in range(room.y, room.y + room.h) for x in range(room.x, room.x + room.w)
+                     if self.grid[y][x] == FLOOR and (x, y) not in taken]
+        else:
+            cells = [(x, y) for y in range(self.h) for x in range(self.w)
+                     if self.grid[y][x] == FLOOR and (x, y) not in taken]
+        cells.sort(key=lambda c: (max(abs(c[0] - ex), abs(c[1] - ey)), c[1], c[0]))   # 게이트에 가까운 순(결정론)
+        if not cells:
+            return
+        bx, by = cells[0]                                   # 게이트 바로 곁 — 게이트로 가려면 마주친다
+        boss = Monster(bx, by, kind=BOSS_KIND, mid=len(self.monsters))
+        boss.boss = True
+        self.monsters.append(boss)
+        rest = [c for c in cells[1:]]
+        if rest:
+            cx, cy = rest[0]
+            self._add_feature('chest', ENT.object_name('chest'), cx, cy)   # 보물상자 — 게이트 곁
+        self.boss, self.sealed = boss, True
 
     def _assign_room_types(self):
         """출구 든 방 = exit, 출구에서 가장 먼 방 = entrance, 나머지 standard.
@@ -1745,8 +1787,10 @@ class Dungeon:
                         and f.id in self.grave_of):            #   (시야-온리 그대로: 묘가 눈에 들 때만)
                     self._remember_grave(bot, f)
         ex, ey = self.exit                                       # v3: 출구 = beacon 아님 → 보일 때만
+        gate_on = bool(getattr(self, 'boss_on', False))          # D65: 보스층의 출구 = 워프게이트(봉인 상태도 사실로)
         exit_obj = ({'id': 'exit', 'type': 'exit',
-                     'name': '던전 입구' if self.town else '출구',   # 마을(D29): 같은 '>'라도 입구다
+                     'name': '던전 입구' if self.town else ('워프게이트' if gate_on else '출구'),   # 마을(D29): 같은 '>'라도 입구다
+                     **({'gate': True, 'sealed': bool(getattr(self, 'sealed', False))} if gate_on else {}),
                      **bear(ex, ey)}
                     if (ex, ey) in seen else None)
         led = bot.get('ledger')            # D17 스위치: 장부 켠 판만 구역 어휘·known 노출
@@ -3958,31 +4002,41 @@ class Dungeon:
         if abs(bot['x'] - tx) + abs(bot['y'] - ty) > 1:
             return {**base, 'result': 'too_far'}
         if kind == 'exit':
+            gate = bool(getattr(self, 'boss_on', False))   # D65(09-13): 최심층의 출구 = 워프게이트(마을로 상행)
+            if gate and getattr(self, 'sealed', False):    #   봉인 — 보스가 살아 있는 동안 열리지 않는다(사실만 돌려준다)
+                return {**base, 'result': 'locked', 'what': '워프게이트'}
+            what = ('던전 입구' if self.town else ('워프게이트' if gate else '계단')) + '(exit)'
+            went, result = ('up', 'ascend') if gate else ('down', 'exit')
+            extra = {'to_depth': 0, 'gate': True} if gate else {}
             others = [o for o in (bots or []) if o['alive'] and not o['won']
                       and o['char'] != bot['char']]
             if self.solo:                        # 솔로 판: 각자 계단에 닿으면 혼자 내려간다.
                 bot['won'] = True                #   기다릴 일행이 없다 — 모임 조건을 그대로 두면
-                bot['went'] = 'down'             #   (D29: 방향 기록 — 왕복 러너가 행선지를 읽는다)
+                bot['went'] = went               #   (D29: 방향 기록 — 왕복 러너가 행선지를 읽는다)
+                if gate:
+                    bot['warp'] = True           #   D65: 러너가 0층(마을)으로 데려간다
                 bot['order'], bot['path'], bot['plan'] = None, [], []   # 남남끼리 서로를 찾아
                 self._witness_use(bots, tx, ty, [bot],   # D30(09-05): 남는 사람이 본다 — "낯선 사람이 계단을 사용"
-                                  ('던전 입구' if self.town else '계단') + '(exit)', 'exit')
-                return {**base, 'result': 'exit', 'party': [bot['char']]}  # 다녀야 해서 없애려던
+                                  what, 'exit')
+                return {**base, 'result': result, 'party': [bot['char']], **extra}  # 다녀야 해서 없애려던
                                                  #   그 뭉침이 규칙으로 강제된다. 판은 안 끝난다 —
                                                  #   러너가 전원 won/사망까지 돈다(전부 관찰).
             far = [o for o in others if self._cheb(o['x'], o['y'], tx, ty) > EXIT_GATHER]
             busy = self._gather_busy(bot, [o for o in others if o not in far], target_id)
             if far or busy:                      # 아직 안 모임(멀거나·딴 작정) — 혼자 안 내려간다
-                return {**base, 'result': 'wait_allies', 'dir': 'down',
+                return {**base, 'result': 'wait_allies', 'dir': went,
                         'missing': sorted(o['char'] for o in far),
                         'busy': sorted(o['char'] for o in busy)}
             group = [bot] + others
-            for o in group:                      # 모인 전원이 함께 하강/탈출 — 이 층의 작정도 끝
+            for o in group:                      # 모인 전원이 함께 하강/탈출(보스층: 함께 귀환) — 이 층의 작정도 끝
                 o['won'] = True
-                o['went'] = 'down'               # D29: 방향 기록(왕복 러너용 — 기존 판은 안 읽음)
+                o['went'] = went                 # D29: 방향 기록(왕복 러너용 — 기존 판은 안 읽음)
+                if gate:
+                    o['warp'] = True
                 o['order'], o['path'], o['plan'] = None, [], []
             self._witness_use(bots, tx, ty, group,    # D30: 전원 하강이라 남는 목격자 없음(부분 하강 규칙이
-                              ('던전 입구' if self.town else '계단') + '(exit)', 'exit')   # 생기면 그대로 발화)
-            return {**base, 'result': 'exit', 'party': sorted(o['char'] for o in group)}
+                              what, 'exit')          # 생기면 그대로 발화)
+            return {**base, 'result': result, 'party': sorted(o['char'] for o in group), **extra}
         f = self.feature_at(tx, ty)
         if f and f.concealed:                    # 숨은 건 아직 '없는' 것 — 드러나야 만질 수 있다
             return {**base, 'result': 'nothing'}
@@ -4196,6 +4250,9 @@ class Dungeon:
             mon.last_hits[bot['char']] = self.turn
         if mon.hp <= 0:
             mon.alive = False; res['killed'] = True
+            if getattr(self, 'boss', None) is mon and getattr(self, 'sealed', False):   # D65: 보스가 쓰러지면 워프게이트 봉인 해제
+                self.sealed = False                       #   (다음 관측부터 게이트가 '열려 있다' — 결과 unsealed 는 로그·관전용)
+                res['unsealed'] = True
             if self.relations and mon.state == 'HUNTING' and mon.target \
                     and mon.target != bot['char']:    # 나를 구함(D36): 나를 물던 몹을 동료가 처치 —
                 victim = next((o for o in (bots or []) if o['char'] == mon.target   # 그 처치를 본 사람만
@@ -4906,6 +4963,8 @@ class Dungeon:
                 'features': [f.as_dict() for f in self.features.values()],
                 'traps': [t.as_dict() for t in self.traps],
                 'monsters': [m.as_dict() for m in self.monsters],
+                **({'gate': {'sealed': bool(self.sealed), 'boss': (self.boss.id if self.boss else None)}}
+                   if getattr(self, 'boss_on', False) else {}),   # D65 additive — 보스층: 출구=워프게이트(층 시작 때 봉인 상태·보스 id)
                 **({'visual': self.visual} if getattr(self, 'visual', None) else {})}   # 마을 v1(09-11) 시각 레이어 — 던전 층엔 없다
 
 

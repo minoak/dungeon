@@ -1,0 +1,32 @@
+{
+  "id": "goblin_chief",
+  "name": "고블린 대장",
+  "kind": "monster",
+  "tags": [
+    "monster",
+    "boss",
+    "small"
+  ],
+  "sprite": "wl-goblin",
+  "comps": {
+    "health": {
+      "max": 18
+    },
+    "combat": {
+      "atk": 4,
+      "dmg": 3,
+      "ac": 13
+    },
+    "ai": {
+      "start": "sleeping"
+    },
+    "knowledge": {
+      "brief": "고블린 무리의 우두머리 — 덩치가 크고 물러서지 않는다",
+      "deep": "고블린 무리의 우두머리. 부하들과 달리 달아나지 않고 끝까지 문다. 잠들어 있을 때 먼저 치면 기습이 된다. 이 녀석이 서 있는 동안 이 층의 워프게이트는 봉인돼 있다.",
+      "unlock": {
+        "event": "encounter",
+        "count": 1
+      }
+    }
+  }
+}
