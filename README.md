@@ -1,15 +1,13 @@
 # 봇픽던
 
-**LLM 에이전트 파티가 픽셀 던전을 자율 플레이하고, 사람은 관전한다.**
-*LLM agents autonomously play a roguelike pixel dungeon. A deterministic engine judges; the agents only decide.*
+**LLM 에이전트 파티가 도트 로그라이크 던전을 자율 플레이하고, 사람은 관전한다.**
+*LLM agents autonomously play a pixel-art roguelike dungeon. A deterministic engine judges; the agents only decide.*
 
 > 🎬 **설치 없이 관전: <https://minoak.github.io/dungeon/>** — 실제 판 하나를 브라우저에서 재생한다. 초상을 눌러 시점을 바꾸고,
 > 말풍선과 속내(💭)·대사(「」)를 따라간다. 전부 실제 LLM 판단 기록이다.
 > (GitHub Pages 정적 빌드 — 리포 설정에서 Pages 를 켠 뒤부터 열린다. 로컬에서 같은 화면을 보려면 아래 "실행".)
 
 ![지하 5층 보스전 — 유나가 고블린 대장에게 강타를 넣고 수나가 옆에서 거든다. 오른쪽은 유나의 시트·스킬·속내.](docs/screenshot.png)
-
-봇픽던은 '봇 픽셀 던전'을 줄인 이름이다. 코드와 파일명에 남아 있는 `wonderland`(원더랜드)는 내부 코드명이다.
 
 ## 한 판은 이렇게 흘러간다
 
@@ -150,7 +148,7 @@ python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer
 ## 리포 지도
 
 엔진·러너·론처는 루트, 프롬프트는 `prompts/`, 정의는 `entities/`, 도구는 `tools/`, 관전 클라이언트는 `game/`, 판 기록은 `runs/`,
-그림 원본은 `art/`. 전체 지도와 정리 기준은 [docs/repo-map.md](docs/repo-map.md).
+그림 원본은 `art/`. 코드와 파일명에 남아 있는 `wonderland`(원더랜드)는 내부 코드명이다. 전체 지도와 정리 기준은 [docs/repo-map.md](docs/repo-map.md).
 설계 정본은 [`design/HARNESS_DESIGN.md`](design/HARNESS_DESIGN.md)(D1~D67), 변경 기록은 [docs/CHANGELOG.md](docs/CHANGELOG.md),
 판 하나를 이야기로 쓴 [연대기](docs/chronicles)와 [개발일지](docs/devlog)도 있다.
 
