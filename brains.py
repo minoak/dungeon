@@ -103,6 +103,14 @@ _MODEL_ID = {
 API_URL_ANTHROPIC = "https://api.anthropic.com/v1/messages"
 API_URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent"
 
+# 첫 실판 등의 유료 API 시험용. 0은 기존처럼 무제한, 양수는 러너 프로세스 전체의 전송 시도 상한.
+# 캐릭터·재시도·부가 사고가 모두 _http_post를 지나므로 한 잠금으로 함께 센다.
+API_CALL_LIMIT = int(os.environ.get("DUNGEON_API_CALL_LIMIT", "0"))
+if API_CALL_LIMIT < 0:
+    raise ValueError("DUNGEON_API_CALL_LIMIT는 0 이상의 정수여야 한다")
+_api_call_lock = threading.Lock()
+_api_call_count = 0
+
 _warned = set()          # 경고 1회만 — _run_gates.sh 가 `2>&1 | tail -1` 로 판정한다.
                          #   stderr 가 stdout 에 머지되므로 경고 한 줄이 통과를 FAIL 로 뒤집는다.
 
@@ -417,11 +425,19 @@ def _http_post(url, headers, body):
         import requests        # 지연 import — 최상단에 두면 미설치 환경에서 `import brains`
     except Exception as e:     #   가 죽어 게이트 20종이 한꺼번에 무너진다
         return None, None, "호출 실패 %s" % type(e).__name__
+    global _api_call_count
+    if API_CALL_LIMIT:
+        with _api_call_lock:
+            if _api_call_count >= API_CALL_LIMIT:
+                return None, None, "호출 실패 ApiCallLimit"
+            _api_call_count += 1
+            import sys
+            print("[api-budget] request %d/%d" % (_api_call_count, API_CALL_LIMIT), file=sys.stderr, flush=True)
     t = int(os.environ.get("DUNGEON_BRAIN_TIMEOUT", str(TIMEOUT)))
     try:
         r = requests.post(url, headers=headers,
                           data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-                          timeout=(5, t))
+                          timeout=(5, t), allow_redirects=False)
         # ⚠️ think_all 의 f.result() 엔 타임아웃이 없다 — 여기가 틱 정지를 막는 유일한 장치다.
     except requests.exceptions.Timeout:
         return None, None, "타임아웃 %ds" % t          # Connect/Read 공통 조상
