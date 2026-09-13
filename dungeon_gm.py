@@ -184,6 +184,9 @@ def _tagsfx(f):
 # 궤적(D38)·층 집계·결산이 **같은 사전**을 센다(STATUS_KINDS·BONES 선례 — 사전 하나). 값=(집계 여부).
 # 문장형 서술(_last_prose·act_summary·_witness_prose)은 관전·스트림·목격 줄에 남는다 — 캐릭터 자기 궤적만 꼬리표다.
 BOSS_KIND = '고블린 대장'   # D65(09-13) 보스층의 보스 — 정의 entities/monster/goblin_chief.json(수치·습성·지식). 랜덤 몹 풀엔 안 든다
+BOSS_FLOOR_NOTICE = ("여기는 최심층이다 — 이 층 어딘가에 보스룸이 있다. 보스가 쓰러져야 이 층 출구(워프게이트)의 봉인이 풀려 마을로 돌아갈 수 있다.")
+#   D65 개정(09-13 파트너 "5층 진입시 보스룸이 있다는걸 알려주면 될 것 같아. 최초 진입시 이 한마디만"): 보스층에 들어선 캐릭터의
+#   첫 결정 관측에 한 번만 실리는 세계의 사실(행동 지시 아님 — §4-0). ⚠️문구는 임시(파트너 문장 대기)
 EVENT_KINDS = {
     'spot': True, 'hit': True, 'kill': True, 'miss': True, 'hurt': True, 'status': True,
     'critical': True, 'recovered': True, 'trap': True, 'trap_safe': True, 'loot': True, 'use': True,
@@ -2280,6 +2283,7 @@ class Dungeon:
                 **({'known': known_obs} if known_obs is not None else {}),   # 공간 장부(D17-1)
                 **({'witnessed': wit} if wit else {}),   # 목격(A-3) — 있을 때만 실림(intent 선례)
                 **({'dry': dry_out} if dry_out else {}),   # 무발견 신호(07-24) — 도달 시점 1회
+                **({'floor_notice': fn_} if (fn_ := bot.pop('floor_notice', None)) else {}),   # D65 개정: 층에 들어서며 한 번(스폰이 심는다)
                 **({'memories': mem} if mem else {}),    # 기억(D22 fallen) — 휘발 0, 있을 때만 실림
                 **({'status': [{'tag': t, **e} for t, e in sorted(bot['status'].items())]}
                    if ((self.status or self.skills) and bot.get('status')) else {}),   # 상태 태그(D34) — 자기 몸의 사실
@@ -5092,6 +5096,7 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'look': sheet.get('look'),      # D37(09-06) 외형 — run_meta 기록용·뷰어 전용. 엔진·프롬프트 무접촉
             'relationships': dict(sheet.get('relationships') or {}),
             'bag': 0, 'alive': True, 'won': False,
+            'floor_notice': (BOSS_FLOOR_NOTICE if getattr(dungeon, 'boss_on', False) else None),   # D65 개정: 보스층 진입 한마디(첫 관측 1회, view 가 지운다)
             'potions': 0,                   # 소지 회복 물약(07-17) — 첫 소비 아이템. 층 이월은
                                             # 러너 재스폰이 담당(bag 이월 선례)
             'status': {},                   # 상태 태그(D34, 09-06): 태그→{n, by, since}. 몹·함정의 특수가

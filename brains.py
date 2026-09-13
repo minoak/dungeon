@@ -1244,6 +1244,8 @@ def _wire(obs, names=None, compose=False):
         # ── D19 트리 직렬화: 던전 N층 > 공간 > 8방위 슬롯 — 빈 방향도 발화("서쪽: 벽" =
         # 침묵을 정보로), 1칸=1m, 출처 딱지(본 적 있음/온 적 있음/발각됨 — 기억≠시야 구분 필수).
         # 정정(07-15): "짜임은 확실히"는 과독이었다 — 네 눈이 본 만큼이 네가 아는 만큼이다.
+        if obs.get("floor_notice"):            # D65 개정(09-13): 보스층에 들어서며 한 번 — 세계의 사실(지시 아님)
+            L += ["", "## 이 층에 들어서며 (세계의 사실 — 한 번만 들린다)", "- " + str(obs["floor_notice"])]
         L += ["", "## 장소 (네 눈이 본 만큼이 네가 아는 만큼이다)"]
         head = ("던전 %d층 > %s %s" % (obs.get("depth", 1), z.get("kind", "?"),
                                        z.get("id", "") or "")).rstrip()
@@ -1343,6 +1345,8 @@ def _wire(obs, names=None, compose=False):
             if m.get("note"):                              # D55: 캐릭터 자신의 인식 — 사실과 다른 줄(섞지 않는다)
                 L.append("  · %s에 대한 네 생각(네가 적어 둔 것): %s" % (m.get("kind", "?"), m["note"]))
     else:
+        if obs.get("floor_notice"):            # D65 개정(09-13): 보스층 진입 한마디(옛 관측 모드도 같은 자리)
+            L += ["", "## 이 층에 들어서며 (세계의 사실 — 한 번만 들린다)", "- " + str(obs["floor_notice"])]
         L += ["", "## 지금 보이는 것"]
         n0 = len(L)
         ex = s.get("exit")

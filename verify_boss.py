@@ -220,4 +220,16 @@ check("⑦ 파티가 보스룸 앞 칸 곁(체비셰프 ≤2)에서 시작·보�
       and not any(any(rm["type"] == "exit" and rm["x"] <= b["x"] < rm["x"] + rm["w"] and rm["y"] <= b["y"] < rm["y"] + rm["h"] for rm in lv7["rooms"]) for b in lv7["party"]))
 check("⑦ 러너 정상 종료(rc 0)", rc == 0)
 
+print("── ⑧ 보스층 진입 한마디(D65 개정, 09-13 파트너 '최초 진입시 이 한마디만')")
+d8, bots8 = make(True)
+b8 = bots8[0]
+check("⑧ 스폰이 심는다(보스층만) · 스냅샷 밖", b8.get("floor_notice") == G.BOSS_FLOOR_NOTICE and "floor_notice" not in G.bot_snapshot(b8)
+      and make(False)[1][0].get("floor_notice") is None)
+o8 = d8.view(b8, bots8)
+w8 = brains._wire(o8, {"1": "두란", "2": "카야"}, compose=False)
+check("⑧ 첫 관측에 floor_notice · 프롬프트 '이 층에 들어서며' + '보스룸이 있다' + '봉인이 풀려'", o8.get("floor_notice") == G.BOSS_FLOOR_NOTICE
+      and "## 이 층에 들어서며" in w8 and "보스룸이 있다" in w8 and "봉인이 풀려" in w8)
+o8b = d8.view(b8, bots8)
+check("⑧ 두 번째 관측엔 없다(한 번만)", "floor_notice" not in o8b and "이 층에 들어서며" not in brains._wire(o8b, {"1": "두란", "2": "카야"}, compose=False))
+
 print("ALL PASS" if C.failed == 0 else "FAIL %d" % C.failed)
