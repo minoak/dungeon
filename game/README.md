@@ -184,7 +184,7 @@ npm run smoke:launcher                             # = WL_GAME_URL=http://127.0.
 |---|---|
 | 경로 | `vite --mode static` → `base './'`, `dist-static/`, `wlStatic` 플러그인 없음(`vite.config.ts`). 코드 분기는 `src/paths.ts` 한 곳 — `STATIC`(= `import.meta.env.MODE === 'static'`)·`ROOT`(정적 `./`, 론처 `/`). 절대경로였던 fetch 5곳(sd·tiles·DungeonScene·live·Controls)이 `ROOT +` 를 쓴다 |
 | 에셋 | `scripts/static-bundle.mjs` 가 `viewer/tiles.json`·타일 시트 폴더(License 포함)·`viewer/assets/sprites/sd/*` 를 같은 상대 자리로 복사. `src/assets/world/*.png` 는 원래 Vite 가 번들에 넣는다 |
-| 첨부 판 | `game/static-runs.json` 의 목록(리포 루트 기준 경로, **첫 항목이 기본으로 열린다**) → `dist-static/runs/` 로 복사 + `runs/index.json`(라벨 = 날짜·시각·파티 이름·seed, run_meta 첫 줄에서). 인자 `node scripts/static-bundle.mjs runs/a.jsonl …` 또는 `WL_RUNS=` 로 덮어쓴다 |
+| 첨부 판 | `game/static-runs.json` 의 목록(리포 루트 기준 경로 문자열 또는 `{path, note}` — note 는 드롭다운 라벨 앞머리, **첫 항목이 기본으로 열린다**; 마지막 257573 판은 `smoke:static` 의 기준 판이라 뺄 수 없다) → `dist-static/runs/` 로 복사 + `runs/index.json`(라벨 = 날짜·시각·파티 이름·seed, run_meta 첫 줄에서). 인자 `node scripts/static-bundle.mjs runs/a.jsonl …` 또는 `WL_RUNS=` 로 덮어쓴다 |
 | 정적일 때 다른 점 | 기본 판 = index.json 첫 항목(`state/stream.jsonl` 아님) · 판 선택 목록 = index.json(목록 순서) · `/api/status` 요청을 내지 않고 라이브 배지 숨김 · 헤더의 시작 화면 링크 → GitHub 리포 |
 | 호스팅 | `.github/workflows/pages.yml` — main 푸시(game/·viewer/·runs/ 변경)마다 `npm ci && npm run build:static` → GitHub Pages. **한 번 켜야 한다**: 리포 Settings → Pages → Source = "GitHub Actions". 주소는 `https://minoak.github.io/dungeon/` |
 | 검증 | `npm run smoke:static`(WL_STATIC=1 → `vite preview --mode static`, `/game/` 접두 없음, B5 status 검사는 생략). 더 정직한 검사 = `cd dist-static && python -m http.server 4197` 뒤 `WL_GAME_URL=http://127.0.0.1:4197/ WL_STATIC=1 npm run smoke` (2026-09-12: 29 통과·0 실패·생략 2, 오류 0) |

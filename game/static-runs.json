@@ -1,6 +1,30 @@
 {
-  "_readme": "정적 배포(챔피언십 제출)에 첨부할 판 목록 — scripts/static-bundle.mjs 가 읽는다. 리포 루트 기준 경로, 첫 항목이 기본으로 열린다. 명령 인자나 WL_RUNS 환경변수로 덮어쓸 수 있다.",
+  "_readme": "정적 배포(챔피언십 제출)에 첨부할 판 목록 — scripts/static-bundle.mjs 가 읽는다. 리포 루트 기준 경로, 첫 항목이 기본으로 열린다. 항목은 경로 문자열 또는 {path, note}(note = 드롭다운 라벨 앞머리). 명령 인자나 WL_RUNS 환경변수로 덮어쓸 수 있다. 마지막 257573 판은 verify/smoke.mjs(smoke:static)의 기준 판이라 빼면 안 된다.",
   "runs": [
+    {
+      "path": "runs/stream-20260913-160759.jsonl",
+      "note": "마을→4층 · 도감·수첩"
+    },
+    {
+      "path": "runs/stream-20260913-154158.jsonl",
+      "note": "마을→4층"
+    },
+    {
+      "path": "runs/stream-20260913-192230.jsonl",
+      "note": "보스방 앞→보스 처치→귀환"
+    },
+    {
+      "path": "runs/stream-20260912-213044.jsonl",
+      "note": "마을→5층"
+    },
+    {
+      "path": "runs/stream-20260912-164413.jsonl",
+      "note": "마을→5층 · 사망 1"
+    },
+    {
+      "path": "runs/stream-20260913-172310.jsonl",
+      "note": "던전 1층→4층 · 600턴"
+    },
     "runs/stream-20260909-203709.jsonl"
   ]
 }

@@ -44,10 +44,14 @@ copyDir('viewer/assets/sprites/sd');                        // atlas.json + 프�
 const argRuns = process.argv.slice(2);
 const envRuns = (process.env.WL_RUNS || '').split(',').map(s => s.trim()).filter(Boolean);
 const listed = JSON.parse(fs.readFileSync(path.join(gameDir, 'static-runs.json'), 'utf8')).runs || [];
-const runs = argRuns.length ? argRuns : envRuns.length ? envRuns : listed;
+// 목록 항목은 "runs/x.jsonl" 문자열 또는 { path, note } — note 는 드롭다운 라벨 앞머리(2026-09-13, 파트너 "로그는 여러 개 넣어두자":
+// 심사위원이 판을 고를 때 무엇이 담긴 판인지 한눈에 보이게). 인자·WL_RUNS 는 경로만.
+const entries = (argRuns.length ? argRuns : envRuns.length ? envRuns : listed)
+  .map(e => (typeof e === 'string' ? { path: e, note: '' } : { path: e.path, note: e.note || '' }));
+const runs = entries.map(e => e.path);
 if (!runs.length) throw new Error('첨부할 판이 없다 — game/static-runs.json 또는 인자/WL_RUNS');
 
-function labelOf(rel) {
+function labelOf(rel, note = '') {
   const first = fs.readFileSync(path.join(root, rel), 'utf8').split('\n')[0];
   let meta = null;
   try { meta = JSON.parse(first); } catch { /* 첫 줄이 run_meta 가 아니면 파일명만 */ }
@@ -55,10 +59,10 @@ function labelOf(rel) {
   const when = stamp ? `${stamp[1]}.${stamp[2]}.${stamp[3]} · ${stamp[4]}:${stamp[5]}` : rel.replace(/^runs\//, '');
   const party = (meta?.party || []).map(p => p.name || p.job).filter(Boolean);
   const seed = meta?.seed ?? null;
-  const label = when + (party.length ? ' · ' + party.join('·') : '') + (seed != null ? ` (seed ${seed})` : '');
+  const label = (note ? note + ' · ' : '') + when + (party.length ? ' · ' + party.join('·') : '') + (seed != null ? ` (seed ${seed})` : '');
   return { path: rel, label, seed, party };
 }
-const index = { runs: runs.map(r => { copyFile(r); return labelOf(r); }) };
+const index = { runs: entries.map(e => { copyFile(e.path); return labelOf(e.path, e.note); }) };
 fs.mkdirSync(path.join(dist, 'runs'), { recursive: true });
 fs.writeFileSync(path.join(dist, 'runs', 'index.json'), JSON.stringify(index, null, 2) + '\n');
 fs.writeFileSync(path.join(dist, '.nojekyll'), '');        // GitHub Pages: 밑줄 시작 경로도 그대로 서빙
