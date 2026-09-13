@@ -12,6 +12,7 @@ import type { Bot, Char, Decision, Frame, Gear, PartyMember, Run } from '../stre
 import type { FrameChange } from '../play/Playback';
 import { el, esc } from './dom';
 import { reactionSummaryHtml } from '../text/reactions';
+import { degMark } from '../text/evline';   // D62(09-13) 몸짓 서술 접고 한 판단의 표식 — 로그 줄과 같은 문구
 import { skillsHtml } from '../../../viewer/assets/skills.js';
 
 /** 관계 뼈 라벨 — dungeon_gm.py BONES(422행) 를 그대로 복사(엔진 무접촉 — 값이 바뀌면 여기도 손으로 맞춘다).
@@ -327,7 +328,7 @@ export function installFocusCard(app: App): void {
     n.reason.classList.toggle('none', !rd);
     if (!rd || !latest.reason) put(n.reason, '<span class="none">아직 없음</span>');
     else if (rd.src === 'fallback') put(n.reason, `${FALLBACK_TEXT}${t(latest.reason)}`);
-    else put(n.reason, `${esc(rd.reason)}${t(latest.reason)}`);   // src=plan 은 "[작정] …" 그대로
+    else put(n.reason, `${degMark(rd)}${esc(rd.reason)}${t(latest.reason)}`);   // src=plan 은 "[작정] …" 그대로 · D62 표식은 앞에
 
     const sd = latest.say?.decisions[char];
     n.say.classList.toggle('none', !sd);

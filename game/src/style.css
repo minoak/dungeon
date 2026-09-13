@@ -198,6 +198,7 @@ kbd { display: inline-block; font-family: inherit; font-size: 10px; line-height:
 #app #log .say .bub { color: #cdd6e2; }
 #app #log .say .to { color: #8596ad; }
 #app #log .rsn { color: #8c9bad; font-size: 11px; line-height: 1.75; margin: 3px 0 8px; }
+#app .deg, #focusCard .deg { color: #b29c6b; font-size: 10px; border: 1px solid #b29c6b66; border-radius: 3px; padding: 0 4px; margin-right: 4px; white-space: nowrap; }   /* D62 몸짓 접음 표식 */
 #app #log .ev { font-size: 11px; margin: 4px 0; }
 #app #log .ev.dim { color: #7b899b; font-size: 10px; }
 #app #log .grp > .focus { background: #ffffff03; box-shadow: inset 2px 0 0 #b29c6b55; margin-left: -8px; padding: 2px 8px; }

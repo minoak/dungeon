@@ -94,6 +94,7 @@ export interface Decision {
   skipped?: boolean;
   relation?: { to: Char; line: string };
   floor_line?: string;
+  brain_degraded?: { what: string; key?: string; sticky?: boolean };   // D62(09-13) 안전 차단 → 몸짓 서술 접고 한 판단(접었음을 남긴다)
   [k: string]: unknown;
 }
 

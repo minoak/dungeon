@@ -20,6 +20,7 @@ import json
 import time                 # 콜별 지연 계측(사이드카 전용 — 스트림엔 절대 안 실린다)
 import threading            # think_all 이 스레드풀 — 계측 줄 섞임 방지
 import subprocess
+import hashlib              # D62(09-13) 몸짓 접기 지문(sha1) — 표현층 전용, 스트림엔 12자 지문만
 from concurrent.futures import ThreadPoolExecutor
 
 import dungeon_gm as G
@@ -171,6 +172,11 @@ NOTEBOOK_PREV = 2         # 새 장을 쓸 때 보여 주는 지난 장 수(⚠�
 PROMPT_CONTEXT_ON = os.environ.get("DUNGEON_PROMPT_CONTEXT", "1") != "0"   # D54(09-12): 판단 요청 맨 앞의 맥락 한 줄 — 파트너
                                                                             #   "이 정도로 응답을 거부해버리면 그것도 문제, 응답 가능한
                                                                             #   천장을 높여야". 표현층 스위치(기본 켬, dialogue 와 같은 급).
+BLOCK_DEGRADE_ON = os.environ.get("DUNGEON_BLOCK_DEGRADE", "1") != "0"   # D62(09-13): 모델의 안전 차단 때 '최근 친목·건네기' 줄(몸짓·건네기
+                                                                          #   서술)만 접고 같은 두뇌에게 다시 묻는다. 통과하면 그 줄들의 지문을
+                                                                          #   봇에 고정 — 다음 결정에서 같은 줄들이면 처음부터 접어 1콜. 표현층
+                                                                          #   스위치(prompt_context 와 같은 급). 세계 장부·횟수 줄은 그대로.
+ACTS_PREFIX = "  · 최근 친목·건네기: "   # D47 ② 상세 기록 렌더 줄머리 — _wire 와 _fold_gestures(D62)가 같은 문자열을 본다
 _CONTEXT_FALLBACK = ("이 글은 성인 모험가들이 등장하는 판타지 던전 게임의 판단 요청이다. "
                      "성적 내용이 없고, 폭력은 게임 규칙의 전투 판정뿐이다.")
 
@@ -1378,7 +1384,7 @@ def _wire(obs, names=None, compose=False):
             M.append("- %s: %s" % (nm(r.get("char", "?")), ", ".join(bits) if bits else "아직 없음"))
             acts = r.get("acts") or []
             if acts:                        # D47 ② 상세 기록(파트너 초안 §A-5) — 형태(무엇을)+반응(형태만: 행동|말|없음)
-                M.append("  · 최근 친목·건네기: " + " / ".join(_act_item(a, nm(r.get("char", "?"))) for a in acts))
+                M.append(ACTS_PREFIX + " / ".join(_act_item(a, nm(r.get("char", "?"))) for a in acts))   # D62 가 이 줄머리로 접는다
 
     k = obs.get("known")
     if k and (k.get("statics") or k.get("last_seen") or k.get("zones")):
@@ -1693,6 +1699,18 @@ def _safety_blocked(why):
     return "rc=200 | " in s and any(s.rstrip().endswith(t) for t in _BLOCK_TAGS)
 
 
+def _fold_gestures(prompt):
+    """D62(09-13): 프롬프트에서 '최근 친목·건네기' 줄(ACTS_PREFIX — D47 ② 몸짓·건네기 서술)만 접는다. 반환 (접은 프롬프트, 지문|None).
+    지문 = 접힌 줄들의 sha1 앞 12자. 장부(acts)는 덧붙기만 하므로 같은 지문 = 같은 줄들이 그대로라는 뜻. 횟수 줄('친목행위 ×2')은 남는다.
+    09-13 이분(t88 유나, 4콜): 시트 단어 ∧ 이 줄들이 Gemini PROHIBITED_CONTENT 의 다리 — 하나만 빼도 통과, 대화 절 무관."""
+    lines = prompt.split("\n")
+    cut = [ln for ln in lines if ln.startswith(ACTS_PREFIX)]
+    if not cut:
+        return prompt, None
+    key = hashlib.sha1("\n".join(cut).encode("utf-8")).hexdigest()[:12]
+    return "\n".join(ln for ln in lines if not ln.startswith(ACTS_PREFIX)), key
+
+
 def fallback_backend(current=None):
     """안전 차단 때 같은 판단을 대신 물을 두뇌(09-11, 파트너 "계속 검열이 걸리네"): DUNGEON_BRAIN_FALLBACK 이 있으면 그것
     (빈 문자열=끔), 없으면 키가 있는 Claude(anthropic_api → claude_cli), 그마저 현재 두뇌면 gemini_api. 현재와 같거나 dummy 면 None.
@@ -1766,11 +1784,17 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
                   + "\n\n" + _wire(obs, names)
                   + "\n\n오직 JSON 한 줄로만 답하라.")
     prompt = _with_context(prompt)                    # D54 맥락 한 줄(세 조립 공통) — 재시도·대체 두뇌도 같은 요청
+    # D62(09-13, 파트너 "나도 A가 나아보이긴 하네" → "좋아 작업 부탁할게"): 안전 차단이면 몸짓 서술 줄만 접고 같은 두뇌에게 다시 묻는다.
+    #   지난 결정에서 접어야 통과한 줄들이 그대로면(지문 일치) 처음부터 접어 1콜 — 줄이 바뀌면 전체 내용으로 돌아간다.
+    folded, fold_key = _fold_gestures(prompt) if BLOCK_DEGRADE_ON else (prompt, None)
+    sticky = bool(fold_key) and bot.get("brain_fold") == fold_key
+    degraded = sticky
+    request = folded if sticky else prompt
     errors = []
-    request = prompt
-    fallback = None                                   # 안전 차단 → 두 번째 시도의 대체 두뇌(있을 때만)
-    for attempt in range(2):
-        _TLS.backend_override = fallback if attempt == 1 else None
+    fallback = None                                   # 안전 차단 → 대체 두뇌(opt-in, 있을 때만) — 접은 뒤에도 막히면
+    reasks = 0                                        # 입력 오류(JSON 불량·없는 대상) 재요청은 옛 한도 그대로 한 번
+    while True:
+        _TLS.backend_override = fallback
         try:
             res = _call_claude(request, "haiku")
         finally:
@@ -1780,8 +1804,13 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
         if dec.get("src") != "error":
             if errors:
                 dec["brain_retries"] = errors
-            if attempt == 1 and fallback:
+            if fallback:
                 dec["brain_fallback"] = fallback          # 이 판단은 대체 두뇌가 했다(스트림 additive)
+            if degraded:                                  # 이 판단은 몸짓 서술 없이 했다(스트림 additive) — 세계 장부는 그대로
+                dec["brain_degraded"] = {"what": "gestures", "key": fold_key, "sticky": sticky}
+                bot["brain_fold"] = fold_key              # 봇 dict 에만(bot_snapshot 화이트리스트 밖 = 스트림 계약 불변)
+            else:
+                bot.pop("brain_fold", None)               # 전체 내용으로 통과 — 고정 해제
             return dec
         if backend_name() == "dummy":
             fb = _dummy_decision(obs, char, dec["reason"])
@@ -1789,14 +1818,24 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
             return fb
         errors.append({"code": dec["input_error"], "reason": dec["reason"],
                        "detail": dec["input_error_detail"]})
-        if attempt == 0 and _safety_blocked(dec["reason"]):
-            _dump_blocked_prompt(char, obs, dec["reason"], request)   # 근본 원인 부검용(09-12): 걸린 프롬프트 원문을 state 에 남긴다
-            fallback = fallback_backend()
-            if fallback:                              # 같은 프롬프트를 다른 두뇌에게 — 오류 덧말은 이 모델에겐 뜻이 없다
-                request = prompt
+        if _safety_blocked(dec["reason"]):
+            if not fallback and reasks == 0:          # 근본 원인 부검용(09-12): 걸린 원문(전체·접은 것)을 state 에 남긴다 — 덧말·대체 두뇌 시도는 안 남김
+                _dump_blocked_prompt(char, obs, dec["reason"], request)
+            if fold_key and not degraded:             # ① 우리 쪽 내용 먼저 — 몸짓 줄만 접고 같은 두뇌에게(오류 덧말 없이)
+                request, degraded = folded, True
                 continue
+            fb_name = fallback_backend()
+            if fb_name and not fallback:              # ② 대체 두뇌(opt-in) — 지금 요청 그대로(접었으면 접은 채로)
+                fallback = fb_name
+                continue
+            if degraded or fallback:                  # 접어도·바꿔도 막힘 — 정지(러너 brain_pause)
+                break
+        if reasks >= 1:
+            break
+        reasks += 1
         # 원래 관측과 시트는 그대로 둔다. 대체 행동은 추천하지 않고 실패 사실만 돌려준다.
-        request = (prompt + "\n\n# 직전 응답의 입력 오류 — 아직 행동하지 않았고 시간도 흐르지 않았다\n"
+        request = ((folded if degraded else prompt)
+                   + "\n\n# 직전 응답의 입력 오류 — 아직 행동하지 않았고 시간도 흐르지 않았다\n"
                    + json.dumps(errors[-1], ensure_ascii=False)
                    + "\n위 오류와 현재 관측을 확인하고 네 의도에 맞는 행동을 다시 판단하라. 오직 JSON 한 줄로 답하라.")
     return {**dec, "attempt_errors": errors}

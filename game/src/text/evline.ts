@@ -285,6 +285,11 @@ function lineHtml(cls: string, html: string, chars: Char[], focus: Char | null):
 }
 
 /** 결정 한 건 → 줄들(발화 .say · 속내 .rsn · 규칙 두뇌 .ev.fb). skipped 는 없음. */
+/** D62(09-13): 모델의 안전 차단으로 몸짓 서술을 접고 한 판단의 표식 — 접었음을 숨기지 않는다(⚠️문구 임시). */
+export function degMark(d: Decision | undefined): string {
+  return d?.brain_degraded ? '<span class="deg" title="모델의 안전 차단으로 몸짓 서술을 접고 판단했다">몸짓 접음</span> ' : '';
+}
+
 export function decisionLines(c: Char, d: Decision, run: Run, focus: Char | null): string {
   if (d.skipped) return '';
   const chars: Char[] = [c];
@@ -296,7 +301,7 @@ export function decisionLines(c: Char, d: Decision, run: Run, focus: Char | null
     const to = d.to ? `<span class="to">→ ${d.to === 'all' ? '모두' : esc(nameOf(run, d.to))}</span>` : '';
     out += lineHtml('say', `${nameSpan(run, c)} <span class="bub">「${esc(d.say)}」</span>${kind}${to}`, chars, focus);
   }
-  if (d.reason) out += lineHtml('rsn', esc(d.reason), chars, focus);
+  if (d.reason) out += lineHtml('rsn', `${degMark(d)}${esc(d.reason)}`, chars, focus);
   return out;
 }
 

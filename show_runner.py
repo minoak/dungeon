@@ -993,6 +993,7 @@ def main():
             dialogue=brains.DIALOGUE_ON,  # D43 대화 기억 여부 — 표현층 메타(notes 와 같은 급)
             notebook=brains.NOTEBOOK_ON,  # D59 수첩 여부 — 층 전이 descend/ascend.pages·floors[].page·notes 층에서 닫힘
             prompt_context=brains.PROMPT_CONTEXT_ON,   # D54(09-12 additive) 판단 요청 맨 앞 맥락 한 줄 여부 — 같은 급
+            block_degrade=brains.BLOCK_DEGRADE_ON,     # D62(09-13 additive) 안전 차단 때 몸짓 서술 줄만 접고 재요청(지문 고정) 여부 — 같은 급
             backend=brains.backend_name(),   # 두뇌 백엔드(2026-07-25 additive) — claude_cli/
                                        #   anthropic_api/gemini_api/dummy. gm·menu 와 같은 급의
                                        #   실행모드 메타: 같은 시드라도 백엔드가 다르면 다른 판이다
@@ -1084,6 +1085,11 @@ def main():
                 src = dec.get("src", "haiku")
                 append(botlog[b["char"]], "[t%02d] %s" % (turn, dec.get("reason", "")))
                 append(botlog[b["char"]], "        -> %s  <%s>" % (act_summary(res), src))
+                dg = dec.get("brain_degraded")           # D62(09-13): 이 판단은 몸짓 서술 줄을 접고 물은 것 — 차단 뒤 재요청 | 지문 고정으로 이어서
+                if dg:
+                    dg_line = "몸짓 세부 접고 물음 " + ("(이어서)" if isinstance(dg, dict) and dg.get("sticky") else "(차단 뒤 다시)")   # ⚠️문구 임시(파트너 문장 대기)
+                    append(botlog[b["char"]], "        ⚠ " + dg_line)
+                    event("   봇%s ⚠ %s" % (b["char"], dg_line))
                 if dec.get("say"):
                     says[b["char"]] = dec["say"]
                     if dec.get("to"):                     # D41 지목 — 말의 상대(봇 번호 | all)
