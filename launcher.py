@@ -483,7 +483,7 @@ def make_server(host, port, root=HERE, party_path=None, state_dir=None, runs_dir
 
 
 def main():
-    ap = argparse.ArgumentParser(description="원더랜드 웹 론처 — 파티 꾸미기·시작·관전을 한 창에서")
+    ap = argparse.ArgumentParser(description="봇픽던 웹 론처 — 파티 꾸미기·시작·관전을 한 창에서")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--no-browser", action="store_true")

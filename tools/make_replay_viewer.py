@@ -241,7 +241,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>원더랜드 리플레이</title>
+<title>봇픽던 리플레이</title>
 <style>
   :root { color-scheme: dark; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -274,7 +274,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h1>🏰 원더랜드 — 리플레이</h1>
+<h1>🏰 봇픽던 — 리플레이</h1>
 <div class="meta" id="meta"></div>
 <div id="wrap"><canvas id="cv"></canvas></div>
 <div id="bar">

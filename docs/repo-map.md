@@ -2,6 +2,9 @@
 
 > 파트너 "지금 깃허브 파일이 꽤 지저분하거든 … 지금이 한번 정리할 때" → "뭘 버려야 할지 감이 안 잡혀" → 기준을 정해 한 커밋으로 만들고
 > 눈으로 보고 정하기로 함. **지운 파일은 git 이력에 그대로 남는다** — 아래 '이력에서 꺼내는 법' 참고.
+>
+> **이름**: 밖으로 부르는 이름은 **봇픽던**(파트너 결정 09-13 — 제목·론처·관전 화면·package.json). 코드·파일명·주석의 `wonderland`/원더랜드 는
+> 내부 코드명이라 그대로 둔다(`wonderland.bat`·`entities/map/town_wonderland.json`·환경변수 접두 `DUNGEON_`).
 
 ## 기준 넷
 
@@ -67,4 +70,4 @@ git checkout <해시>^ -- risu/                            # 폴더 통째로 �
 
 - **2단계**: `verify_*.py` 61개 + `verify_character_presets_browser.mjs` → `verify/`, `_run_gates.sh` 도 함께. 각 게이트의 `HERE` 를 리포 루트로 재정의하고 sys.path 를 넣는 일괄 치환 — 게이트 61종 통과가 곧 검증.
 - **3단계**: `art/` 82MB(그림 원본·습작 — 런타임은 `viewer/assets`·`game/src/assets` 만 읽는다) → Git LFS 또는 릴리스 첨부 · `runs/` 48MB(판 107개) → 대표 판 유지, 스모크·중단 판 정리 여부.
-- README 첫 화면 재편(외부 이름 확정 뒤).
+- ~~README 첫 화면 재편(외부 이름 확정 뒤)~~ → 09-13 완료(봇픽던, 스크린샷 5장, 날짜별 문단은 `docs/CHANGELOG.md` 로).

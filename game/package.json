@@ -1,8 +1,8 @@
 {
-  "name": "wonderland-game",
+  "name": "botpikdun-game",
   "private": true,
   "version": "0.1.0",
-  "description": "원더랜드 게임 클라이언트 — 초점 캐릭터 카메라 뷰어 (stream.jsonl 순수 소비자, LLM 0콜)",
+  "description": "봇픽던 게임 클라이언트 — 초점 캐릭터 카메라 뷰어 (stream.jsonl 순수 소비자, LLM 0콜)",
   "type": "module",
   "scripts": {
     "dev": "vite",

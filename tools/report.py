@@ -325,7 +325,7 @@ def render_run(run):
     fb_note = ", ".join("%s %d" % (k, v) for k, v in board["fb_kinds"].most_common(3)) or "없음"
 
     h = []
-    h.append('<h1>원더랜드 원정 보고서 <span style="color:var(--muted)">— %s</span></h1>' % ESC(run["name"]))
+    h.append('<h1>봇픽던 원정 보고서 <span style="color:var(--muted)">— %s</span></h1>' % ESC(run["name"]))
     h.append('<div class="sub">시드 %s · %s×%s · 지하 %s층 · %s · %s두뇌 판</div>' % (
         meta.get("seed"), meta.get("w"), meta.get("h"), meta.get("depths"),
         ESC(meta.get("started", "")), "리모컨 " if meta.get("menu") else "자유서술 "))
@@ -427,7 +427,7 @@ def render_run(run):
                     ESC(json.dumps(t["detail"], ensure_ascii=False)),
                     t["line"], ("·e%d" % t["ev"]) if t["ev"] is not None else ""))
     h.append("</tbody></table></div>")
-    h.append("<div class='foot'>원더랜드 — 스트림(stream.jsonl)과 태그 원장에서 기계 생성(LLM 0콜). "
+    h.append("<div class='foot'>봇픽던 — 스트림(stream.jsonl)과 태그 원장에서 기계 생성(LLM 0콜). "
              "기울임 = 에이전트의 자기 보고(속내·발언)이며 엔진 진실이 아니다.</div>")
     return _page("원정 보고서 — %s" % run["name"], "\n".join(h))
 
@@ -440,7 +440,7 @@ def _page(title, body):
 
 
 def render_index(runs):
-    h = ["<h1>원더랜드 — 원정 기록 보관소</h1>",
+    h = ["<h1>봇픽던 — 원정 기록 보관소</h1>",
          "<div class='sub'>%d개 원정 · 기계 생성 보고서</div>" % len(runs),
          "<div class='scroll'><table class='idx'><thead><tr><th>원정</th><th>결말</th>"
          "<th>틱</th><th>파티</th><th>⚔</th><th>◆</th><th>☠</th><th>태그</th></tr></thead><tbody>"]
@@ -461,7 +461,7 @@ def render_index(runs):
                     end_turn, ESC(party), kills, loot, deaths, len(tg)))
     h.append("</tbody></table></div>")
     h.append("<div class='foot'>스트림·태그 원장 기반 기계 생성(LLM 0콜).</div>")
-    return _page("원더랜드 원정 기록 보관소", "\n".join(h))
+    return _page("봇픽던 원정 기록 보관소", "\n".join(h))
 
 
 def main(argv):

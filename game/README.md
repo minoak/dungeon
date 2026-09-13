@@ -1,4 +1,4 @@
-# 원더랜드 게임 클라이언트 — 초점 캐릭터 카메라 뷰어
+# 봇픽던 게임 클라이언트 — 초점 캐릭터 카메라 뷰어
 
 `stream.jsonl`(STREAM_FORMAT.md)의 순수 소비자. LLM 0콜. 엔진·프롬프트·기존 HTML 뷰어(`viewer/`)는 무접촉.
 계획·결정·수용 기준 = `design/drafts/GAME_CLIENT_PLAN_2026-09-09.md`.
