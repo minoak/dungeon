@@ -42,7 +42,13 @@ Cloud Shell에서 이 폴더를 준비한 뒤 `bash install.sh`.
 - Cloud Run 호출 권한은 `budget-guard-events` 계정만 보유하며 `allUsers` 공개 권한 없음.
 - 빌드 ID: `d3e04712-6f83-45bd-a411-c0f1222b5d01` (SUCCESS)
 
-실제 VM은 아직 없으므로 **VM 생성 후 공개 전에 시험용 예산 메시지로 실제 중지 및 TERMINATED 상태를 확인해야 한다.**
+2026-09-13 실제 VM 시험도 완료:
+- 시험 메시지 ID `21696555455679935` (실제 청구 금액 변경 없음).
+- 14:29:07 UTC 함수 로그: `BUDGET_GUARD: stop requested ["asia-northeast3-a/botpikdun"]`.
+- VM `STOPPING` → `TERMINATED` 확인 후 수동 재시작.
+- 고정 IP `34.47.94.178` 유지, 앱/Caddy 자동 시작, 로컬 상태·화면 200 확인.
+
+VM을 교체하거나 권한을 바꾸면 **시험 메시지로 실제 중지 및 TERMINATED 상태를 다시 확인한다.**
 시험은 진행 중인 판이 없는 상태에서 수행한다. 시험용 Pub/Sub 메시지는 실제 청구 금액을 바꾸지 않는다.
 
 ```bash

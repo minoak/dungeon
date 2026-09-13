@@ -84,7 +84,8 @@ launcher.py (웹 론처 :8000, 판마다 서브프로세스) ─→ show_runner.
 ## 실행 (Windows)
 
 서버 배포 없이 **내 PC에서 판을 돌리고 브라우저로 관전**한다. LLM 호출은 실행자 본인의 키로 나가고, 저장소는 키를 모른다.
-심사용 공개 서버(`server.py` — 심사위원별 세션, 자기 키로 판 시작)는 [`scripts/vm/`](scripts/vm/README.md) 로 GCP VM 에 올린다.
+심사용 공개 서버(`server.py` — 심사위원별 세션, 자기 키로 판 시작): <https://botpicdun.duckdns.org/>.
+현재 첫 실판 검증 중이며 판당 API 전송 50회 제한이 적용돼 있다. [배포·검증 상태](scripts/vm/README.md).
 
 **1. 준비물**
 - Windows 10/11 + **Python 3**(3.13에서 확인). 엔진은 표준 라이브러리만 쓴다. API 두뇌를 켤 때만 `pip install requests`.
@@ -142,7 +143,7 @@ python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer
 ```
 
 - 게이트 `verify_*.py` **61종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
-  도감·수첩·결산·보스층·차단 접기까지 설계 D1~D67의 구현부를 LLM 0콜로 검사한다. 커밋은 61종 통과가 조건이다.
+  도감·수첩·결산·보스층·차단 접기·공개 서버·API 호출 상한을 LLM 0콜로 검사한다. 전체 게이트는 63종이다.
 - `runs/`의 판 기록은 실LLM으로 얻은 원본 데이터라 저장소에 보존한다. 전부 리플레이 가능하다.
 - 관측 표현 A/B 실험(사전등록): [docs/D19_experiment_summary.md](docs/D19_experiment_summary.md).
 
@@ -155,8 +156,9 @@ python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer
 
 ## 상태 (2026-09-13)
 
-한 판의 고리(시트 → 마을 → 5층 → 보스 → 귀환)가 닫혔고 기능은 여기서 동결한다. 서빙 준비 중 — 실행자가 자기 키로 판을 여는
-공개 서버 `server.py`(D68: 세션·허용 목록·BYOK·상한)가 생겼고 배포 스크립트는 `scripts/vm/`(GCP 서울 VM + Caddy HTTPS). 새 VM 실전 검증은 아직.
+한 판의 고리(시트 → 마을 → 5층 → 보스 → 귀환)가 닫혔고 기능은 여기서 동결한다. 실행자가 자기 키로 판을 여는
+공개 서버 `server.py`(D68: 세션·허용 목록·BYOK·상한)를 GCP 서울 VM + Caddy HTTPS로 배포했다.
+첫 설치와 비용 가드의 실제 VM 중지·재시작 복구를 확인했다. 진짜 키를 사용하는 짧은 판 검증은 아직이며 첫 실판용 50회 호출 제한이 켜져 있다.
 캐릭터 영속(도감·수첩 이월)은 그 뒤의 기능이다.
 
 ## 라이선스

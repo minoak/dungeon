@@ -1,7 +1,26 @@
-# 심사용 서버 — GCP 서울 VM 배포 (2026-09-13 초안)
+# 심사용 서버 — GCP 서울 VM 배포 (2026-09-13)
 
 챔피언십 심사(9/21~10/5) 동안 심사위원이 **자기 Gemini 키(BYOK)** 로 한 판을 돌려 보는 서버.
 제품의 접속 층(계정·결제·캐릭터 영속)이 아니다. 관전만 하려면 Pages(https://minoak.github.io/dungeon/)가 있다.
+
+## 현재 배포
+- 주소: https://botpicdun.duckdns.org/ (도메인은 `botpicdun`, GCP 리소스 이름은 `botpikdun`).
+- 프로젝트/VM: `botpikdun`, `asia-northeast3-a`, e2-small, Ubuntu 24.04, 표준 디스크 20GB.
+- 고정 IP: `34.47.94.178` (`botpikdun-ip`). 전용 VPC `botpikdun-network` / 서브넷 `botpikdun-seoul`.
+- 웹 TCP 80·443만 전체 공개. SSH TCP 22는 IAP의 `35.235.240.0/20`만 허용. VM 서비스 계정 없음.
+- 첫 설치 성공: Caddy 설정 검증, HTTPS 200, gzip, Secure/HttpOnly 쿠키, `.env` 404 확인.
+- VM의 Python 3.12.3에서도 `verify_public.py`와 `verify_api_call_limit.py` 통과(실 API 0콜).
+- 시험용 예산 통지로 실제 VM `TERMINATED` 확인 후 재시작. 앱/Caddy 자동 시작과 로컬 상태·화면 200 확인.
+- 현재 첫 실판용 `DUNGEON_API_CALL_LIMIT=50` 적용 중. 진짜 키를 사용하는 실판은 아직 미검증.
+  설정 파일: `/etc/systemd/system/botpikdun.service.d/smoke-test.conf`.
+- Cloud Shell 로그: `~/botpikdun-first-install.log`, `~/botpikdun-smoke-setup.log`, `~/botpikdun-recovery.log`.
+
+## BYOK 키의 신뢰 경계
+키는 브라우저에서 HTTPS로 봇픽던 서버에 전달되고 러너 환경변수로 Gemini 호출에 사용된다.
+파일·로그에 의도적으로 저장하지 않는 구조와 가짜 키 미기록 검사는 갖췄지만, 실행 중 메모리는 서버 관리자 또는 서버를 침해한 공격자가 접근할 수 있다.
+첫 시험에는 별도 키를 사용하고 Gemini API 제한 및 서버 IP `34.47.94.178` 제한을 적용하는 것을 권한다.
+판당 50회 제한은 이 서버의 정상 코드에만 적용되며, 유출된 키의 외부 사용이나 키 프로젝트의 총비용을 제한하지 않는다.
+키 제한 방법: https://ai.google.dev/gemini-api/docs/api-key#restricting-and-securing-your-keys
 
 ## 구성
 - VM 하나(Ubuntu 24.04) · `server.py`(공개용 서버, D68 — 게이트 `verify_public`)가 127.0.0.1:8000 · Caddy 가 443 에서 HTTPS 로 받아 넘긴다.
@@ -65,4 +84,4 @@
 
 ## 아직 안 된 것
 - 판 파일 폴링을 Range 요청(추가분만)으로 바꾸는 것 — 클라이언트 변경이라 뒤로. 지금은 Caddy 압축으로 버틴다.
-- 새 VM 에서 `setup.sh` 실전 검증(아직 로컬 문법 검사만). Ubuntu 24.04 의 python3 는 3.12 — 로컬(3.13)과 차이가 있는지도 그때 확인.
+- 진짜 Gemini 키로 보스방 앞 짧은 판을 확인한 뒤 첫 실판용 50회 제한을 해제하고 심사용 긴 판을 검증하는 것.
