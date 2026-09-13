@@ -91,6 +91,34 @@ button:disabled { opacity: .4; }
 #runPicker label { color: var(--dim); font-size: 11px; white-space: nowrap; }
 #runSel { width: 245px; min-width: 0; font-size: 12px; background: #141c27; border-color: #2c3643; padding: 6px 10px; }
 .home-link { color: #b7bec8; font-size: 12px; text-decoration: none; white-space: nowrap; }
+.codex-btn { white-space: nowrap; font-size: 12px; }
+/* 도감·수첩 창(Codex, D63) — 오른쪽 고정 패널(⚠️자리는 임시 가정) */
+#codex { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); background: var(--panel); border-left: 1px solid var(--line);
+  z-index: 40; display: flex; flex-direction: column; box-shadow: -8px 0 24px #0008; }
+#codex[hidden] { display: none; }
+#codex .cx-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+#codex .cx-head h2 { margin: 0; font-size: 14px; color: var(--gold); flex: 1; white-space: nowrap; }
+#codex .cx-tabs { display: flex; gap: 4px; }
+#codex .cx-close { padding: 2px 8px; }
+#codex .cx-body { overflow: auto; padding: 10px 12px; flex: 1; font-size: 12px; line-height: 1.7; }
+#codex .cx-note { color: var(--dim); font-size: 11px; margin: 0 0 8px; }
+.cx-card { border: 1px solid var(--line); background: var(--panel2); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
+.cx-card .cx-title { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--fg); }
+.cx-card .cx-title small { color: var(--dim); font-weight: 400; }
+.cx-img { width: 48px; height: 48px; image-rendering: pixelated; background: #0006; border-radius: 4px; flex: none; }
+.cx-lore, .cx-brief { color: #cdd6e2; margin: 6px 0; }
+.cx-lore b, .cx-brief b { color: var(--gold); font-weight: 600; margin-right: 6px; }
+.cx-who { color: var(--dim); font-size: 11px; margin-left: 6px; }
+.cx-none, .cx-empty { color: var(--dim); margin: 6px 0; }
+.cx-row { border-top: 1px dashed var(--line); padding: 5px 0; }
+.cx-row .cx-tier { color: var(--dim); margin-left: 6px; font-size: 11px; }
+.cx-row .cx-line { display: block; color: #cdd6e2; }
+.cx-row .cx-line .t { color: var(--dim); font-size: 10px; margin-left: 4px; }
+.cx-prev { color: var(--gold); font-size: 10px; border: 1px solid #e8c26866; border-radius: 3px; padding: 0 4px; margin-left: 4px; white-space: nowrap; }
+.cx-chars { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.cx-page { border: 1px solid var(--line); background: var(--panel2); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+.cx-page .cx-when { color: var(--dim); font-size: 11px; margin-bottom: 4px; }
+.cx-page p { margin: 0; white-space: pre-wrap; color: #cdd6e2; }
 .home-link span { color: var(--gold); margin-left: 7px; }
 #stage { grid-row: 2; border-radius: 12px; box-shadow: 0 0 0 1px #303944, 0 12px 32px #0003; isolation: isolate; }
 #stage::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1; box-shadow: inset 0 0 70px 12px #05090d66; border-radius: inherit; }

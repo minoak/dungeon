@@ -14,6 +14,7 @@ import { installBubbles } from './scene/Bubbles';
 import { installFog } from './scene/Fog';
 import { installHandoff } from './fx/Handoff';
 import { installLive } from './stream/live';
+import { installCodex } from './ui/Codex';
 import { STATIC, fetchRunIndex } from './paths';
 
 declare global { interface Window { __wl?: App } }
@@ -51,6 +52,7 @@ async function boot(): Promise<void> {
   installControls(app); installChips(app);
   installFocusCard(app); installLog(app); installBubbles(app); installFog(app); installHandoff(app);   // Phase B 카드
   installLive(app);                                                                                     // B5 라이브 배지(론처 /api/status)
+  installCodex(app);                                                                                    // D63 도감·수첩 창(별개 창)
   if (STATIC) {                                  // 정적 배포(paths.STATIC) — 론처가 없으니 시작 화면 링크는 리포로
     for (const a of document.querySelectorAll<HTMLAnchorElement>('a[href="/launcher/"]')) {
       a.href = 'https://github.com/minoak/dungeon'; a.target = '_blank'; a.rel = 'noopener';

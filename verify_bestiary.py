@@ -45,6 +45,7 @@ os.environ.pop("DUNGEON_STREAM_OBS", None)
 
 from dungeon_gm import Dungeon, Monster, UNKNOWN_BEAST, spawn  # noqa: E402
 import bestiary  # noqa: E402
+import entities  # noqa: E402  (⑭ run_meta.bestiary_defs = entities.lore() — D63)
 
 
 class C:
@@ -350,6 +351,10 @@ check("⑦ 라이브 원장 = 스트림 오프라인 소급(결정론 투영 일
       book_off == book_led and iss_off.progress() == led_prog(led))
 check("⑫ 1판 run_meta.bestiary_progress = {}(첫 원정) · 원장 n 은 전부 ≥1", meta1.get("bestiary_progress") == {}
       and all(int(r.get('n', 0)) >= 1 for n, v in led.items() if not n.startswith('_') for r in v.values()))
+defs1 = meta1.get("bestiary_defs") or {}
+check("⑭ run_meta.bestiary_defs = entities.lore()(D63 additive — 도감·수첩 창의 본문: 고블린 brief·lore·unlock 5, 판정 무접촉)",
+      defs1 == entities.lore() and "monster:고블린" in defs1 and bool(defs1["monster:고블린"].get("brief"))
+      and bool(defs1["monster:고블린"].get("lore")) and (defs1["monster:고블린"].get("unlock") or {}).get("count") == 5)
 
 recs2 = run_once()
 meta2 = recs2[0]

@@ -460,6 +460,28 @@ try {
     await page.screenshot({path: out('ui-desktop.png')});
   });
 
+  /* ═══════════════ 도감·수첩 창(D63, 2026-09-13) — 별개 창, 재생 위치까지 쓴 것만 ═══════════════ */
+  await check('도감·수첩 창 열기 · 도감 카드·캐릭터 줄 · 수첩 장(재생 위치 존중) · Esc', async () => {
+    await page.locator('#codexBtn').click();
+    await page.waitForFunction(() => document.querySelector('#codex')?.dataset.open === '1', null, { timeout: 3000 });
+    const cards = await page.locator('#codex .cx-card').count();
+    assert(cards >= 1, '도감 카드 0');
+    assert((await page.locator('#codex .cx-row').count()) >= cards, '캐릭터 줄 없음');
+    await page.locator('#codex .cx-tab[data-tab="notebook"]').click();
+    await seekTurn(1);                                            // 아직 층을 안 떠남 → 장 0
+    await page.waitForFunction(() => document.querySelectorAll('#codex .cx-page').length === 0, null, { timeout: 3000 });
+    const hasNotebook = await page.evaluate(() => !!(window.__wl.run && window.__wl.run.meta && window.__wl.run.meta.notebook));
+    let note = `카드 ${cards}`;
+    if (hasNotebook) {
+      await page.evaluate(() => { const a = window.__wl; a.playback.setIdx(a.playback.last, 'seek'); });   // 끝 → 층을 떠나며 쓴 장
+      await page.waitForFunction(() => document.querySelectorAll('#codex .cx-page').length >= 1, null, { timeout: 3000 });
+      note += ` · 수첩 장 ${await page.locator('#codex .cx-page').count()}`;
+    } else note += ' · 옛 판(수첩 없음 — 장 0 확인)';
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.querySelector('#codex')?.dataset.open === '0', null, { timeout: 3000 });
+    return note;
+  });
+
   /* ═══════════════ (10) 브라우저 오류 0 ═══════════════ */
   await check('브라우저 오류 0(pageerror·console.error·HTTP≥400·requestfailed)', () => {
     assert.deepEqual(errors, [], '브라우저 오류');

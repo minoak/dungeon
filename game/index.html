@@ -15,7 +15,7 @@
       <svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M20 2 38 20 20 38 2 20Z" stroke="currentColor"/><path d="m20 8 4 12-4 12-4-12Z" fill="currentColor"/><path d="M8 20h24" stroke="currentColor"/></svg>
       <span><strong>WONDERLAND</strong><small>모험가들의 이야기</small></span>
     </a>
-    <div class="top-actions"><div id="runPicker"></div><a class="home-link" href="/launcher/">시작 화면 <span aria-hidden="true">↗</span></a></div>
+    <div class="top-actions"><div id="runPicker"></div><button id="codexBtn" type="button" class="codex-btn" aria-pressed="false" aria-controls="codex" title="캐릭터가 알게 된 것(도감)과 쓴 것(수첩) — 재생 위치까지">도감·수첩</button><a class="home-link" href="/launcher/">시작 화면 <span aria-hidden="true">↗</span></a></div>
   </header>
   <main id="stage" aria-label="무대">
     <div id="overlay"></div>          <!-- 말풍선·지문 등 DOM 오버레이(Bubbles) — 카메라 좌표는 app.scene.project() -->
@@ -35,6 +35,7 @@
     </div><span class="journal-hint">대화와 주요 사건</span></div>
     <div id="log" data-view="story" tabindex="0" aria-label="원정 기록"></div>
   </section>
+  <aside id="codex" hidden data-open="0" aria-label="도감·수첩"></aside>   <!-- 도감·수첩 창(Codex, D63) — 헤더 버튼으로 여닫는 별개 창 -->
 </div>
 <script type="module" src="./src/main.ts"></script>
 </body>

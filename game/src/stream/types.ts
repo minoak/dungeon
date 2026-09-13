@@ -18,12 +18,22 @@ export interface PartyMember {
   [k: string]: unknown;
 }
 
+/** 도감 원장 한 칸(run_meta.bestiary_progress — D53·D55): 조우 수·심층 여부·캐릭터가 남긴 인식 한 줄(지난 판). */
+export interface BestiaryNote { text: string; n?: number; turn?: number; depth?: number }
+export interface BestiaryEntry { n: number; deep?: boolean; deep_n?: number; asked_n?: number; due?: string; note?: BestiaryNote }
+/** 지식 본문 정의(run_meta.bestiary_defs — D63 additive, entities.lore()): 등재 한 줄(brief)·심층 본문(lore)·해금 조건. */
+export interface BestiaryDef { name: string; lore: string; brief?: string; unlock?: { event: string; count: number }; review?: { event: string; count: number } }
+
 export interface RunMeta {
   kind: 'run_meta'; v: number; started: string; seed: number; w: number; h: number; depths: number;
   sight?: number; town?: boolean; max_turns?: number; backend?: string;
   party: PartyMember[];
   give?: boolean; bond?: boolean; say_kind?: boolean; sayto?: boolean; relations?: boolean; status?: boolean;
   ally_sight?: boolean; events?: boolean; graves?: boolean;
+  notebook?: boolean;                                                  // D59 수첩 판 여부
+  bestiary?: Record<string, string[]>;                                 // 판 시작 때 이름별 아는 종키
+  bestiary_progress?: Record<string, Record<string, BestiaryEntry>>;   // 판 시작 때 이름별 진행도(note 본문까지)
+  bestiary_defs?: Record<string, BestiaryDef>;                         // D63 지식 본문 정의(옛 판은 없음)
   [k: string]: unknown;
 }
 
@@ -95,6 +105,7 @@ export interface Decision {
   relation?: { to: Char; line: string };
   floor_line?: string;
   brain_degraded?: { what: string; key?: string; sticky?: boolean };   // D62(09-13) 안전 차단 → 몸짓 서술 접고 한 판단(접었음을 남긴다)
+  book_line?: { key: string; text: string };                           // D55 도감평 — 해금 순간·N번 조우 뒤 캐릭터가 남긴 인식 한 줄
   [k: string]: unknown;
 }
 
@@ -146,6 +157,7 @@ export interface DescendLine {
   reaction_summary?: ReactionFloor;
   kind: 'descend' | 'ascend'; turn: number; to_depth: number;
   party: { char: Char; hp: number; bag: number; potions?: number }[]; fallen: Char[];
+  pages?: Record<Char, string>;                                        // D59 수첩 — 층을 떠나는 순간 캐릭터가 쓴 한 장(실패한 캐릭터는 키 없음)
 }
 
 export interface EndLine {

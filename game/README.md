@@ -191,6 +191,14 @@ npm run smoke:launcher                             # = WL_GAME_URL=http://127.0.
 
 `dist-static/` 은 .gitignore(빌드 산출물). 론처 배포(`dist/`)와 같은 소스·같은 스모크를 쓰므로 두 모드는 함께 검사한다.
 
+## 도감·수첩 창 (2026-09-13, D63 — 파트너 "화면은 별개로 확인 가능한 창을 만들어 두자 도감 창이랑 같이 기록을 볼수 있게")
+
+헤더 `도감·수첩` 버튼(`#codexBtn`)으로 여닫는 별개 창(`#codex[data-open]`, Esc 로 닫힘, `src/ui/Codex.ts`). 재생 위치까지 캐릭터가 알게 된 것·쓴 것만 보여 준다(관전 원칙 — 라이브면 자라난다).
+- 도감 탭: 몬스터 종별 카드(`.cx-card[data-key]`, 시트 frame 0 그림). 세계 지식은 `run_meta.bestiary_defs`(러너 additive — 옛 판은 없음)에서, 파티 중 누군가 등재하면 한 줄·심층이면 본문. 캐릭터 줄(`.cx-row[data-char]`) = 모름·등재·심층(조우 n/해금 수 — `tick.bots[].aware_of` 증분을 bestiary.py 와 같은 규칙으로 재구성 + `run_meta.bestiary_progress` 시드) + 도감평(이 판 `decisions.book_line` / 지난 판 `bestiary_progress.note` 는 "지난 판" 표식).
+- 수첩 탭: 캐릭터 칩(`.cx-char[data-char]`) → 층을 떠날 때 쓴 장(`.cx-page[data-char]`, `descend/ascend.pages`).
+- 스모크 1건: 창 열기·카드·캐릭터 줄·수첩 장(t1 에 0장 → 끝에 ≥1장, 옛 판은 0장)·Esc. 정적 배포에서도 같은 데이터(스트림만 읽는다).
+- 텍스트로 뽑기(0콜): 리포 루트 `python run_notes.py runs/stream-….jsonl [--md]` — 캐릭터별 수첩 장·도감평·원장(bestiary.json) note.
+
 ## 검증 규율
 
 커밋은 `npm run build`(tsc + vite) + `npm run smoke` 통과 조건부 — 정적 배포에 닿는 변경은 `npm run smoke:static` 도. 엔진 게이트 43종은 무관(엔진 무접촉 — `git diff --stat` 로 증명).

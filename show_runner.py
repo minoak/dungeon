@@ -1003,6 +1003,8 @@ def main():
             bestiary=iss.snapshot(),   # 판 시작 시점 지식(additive) — 도감이 obs 를 바꾸므로 리플레이·비교의 전제
             bestiary_progress=iss.progress(),   # D53(09-12 additive): 시작 진행도 {이름:{종키:{n, deep?}}} — 심층 해금
                                        #   시점이 obs 를 바꾸므로 이것도 전제. 오프라인 소급(bestiary.replay)의 시드
+            bestiary_defs=lore,        # D63(09-13 additive): 지식 본문 정의 {종키:{name, lore, brief?, unlock?, review?}} — 도감·수첩 창이
+                                       #   캐릭터 상태(모름·등재·심층)만큼 본문을 보여 주는 데 쓴다. 판정 무접촉·정의가 뒤에 바뀌어도 그 판이 알던 본문
             brain_failure_policy=run_control.POLICY,
             bestiary_file=bool(BESTIARY_FILE),   # 영속 여부(실행모드 메타 — gm/menu 와 같은 급)
             party=[{**G.SK.snapshot(b), **{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
