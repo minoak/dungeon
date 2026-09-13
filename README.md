@@ -6,7 +6,7 @@
 > 🎬 **데모(설치 없이 관전): <https://minoak.github.io/dungeon/>** — 실제 판 하나(유나·수나·미나 3인 파티, 마을에서 출발해 1층 탐색, 250틱 상한)를 브라우저에서
 > 재생한다. 초상을 눌러 시점을 바꾸고, 말풍선과 속내(💭)·대사(「」)가 기록으로 흐른다 — 전부 실제 LLM 판단 기록이다.
 > (GitHub Pages 정적 빌드 — 리포 설정에서 Pages 를 켠 뒤부터 열린다. 로컬에서 같은 것을 보려면 아래 "실행".)
-> 옛 단일 파일 데모 [`replay_viewer.html`](replay_viewer.html)(솔로 3인, 239틱)도 그대로 열린다.
+> 옛 단일 파일 데모 [`tools/replay_viewer.html`](tools/replay_viewer.html)(솔로 3인, 239틱)도 그대로 열린다.
 
 ![리플레이 뷰어 — t112: 카야가 그림자거미를 처치하고 두란이 문을 발견하는 장면. 밝은 칸이 이번 판에서 본 영역이다.](docs/screenshot.png)
 
@@ -54,7 +54,7 @@ show_runner.py (틱 루프) ─→ dungeon_gm.py (결정론 엔진: 생성·시�
 state/stream.jsonl (append-only JSONL 스트림 — 진실의 원장)
         ├─→ viewer/  웹 뷰어 (python -m http.server 8000 정적 서빙, 라이브 tail + 지난 판)
         ├─→ gm.py    LLM 내레이터 (옵션 — 스트림 소비자, 엔진 무접촉)
-        └─→ make_replay_viewer.py → replay_viewer.html (단일 파일 리플레이)
+        └─→ tools/make_replay_viewer.py → tools/replay_viewer.html (단일 파일 리플레이)
 ```
 
 - **관측 직렬화**: 좌표를 주지 않는다. 기하 스캐너가 격자를 방/통로/문으로 읽어
@@ -67,7 +67,7 @@ state/stream.jsonl (append-only JSONL 스트림 — 진실의 원장)
 
 ## 현재 상태 (2026-09 기준, 진행 중)
 
-**검증 완료** — 결정론 게이트 `verify_*.py` **57종**(LLM 0콜, `bash _run_gates.sh`로 일괄):
+**검증 완료** — 결정론 게이트 `verify_*.py` **61종**(LLM 0콜, `bash _run_gates.sh`로 일괄):
 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을(레이아웃 컴파일)·
 엔티티 저장소·해금형 도감·수첩·판 결산 등 설계 D1~D59의 구현부 전부가 게이트 뒤에 있다.
 관전 클라이언트(`game/`)는 헤드리스 브라우저 스모크(론처 배포·정적 배포 각각)로 검사한다.
@@ -124,7 +124,7 @@ wonderland.bat              ← 더블클릭 → [L] LAUNCHER      (또는  pyth
 
 2026-09-10: **조합형을 기본 행동 방식으로 사용한다.** 새 원정에서는 별도 방식 선택 없이 조합형 지침이 적용된다.
 `self`, 관측별 길 ID, 소지품 ID, `use` 통합과 자동 접근을 지원한다. 알려진 대상과 COMMON 9개 행동(2026-09-11 D48로 `follow` 제거 — 사람에게 `goto` 는 그가 움직이면 뒤쫓고 곁에서 멈추면 재판단)의 조합을 세계가 판정하며, 성공·실패·변화 없음을 구분해 기록한다. 받은 상호작용에 선택적으로 남기는 like/dislike와 관전용 캐릭터·층·원정 집계도 지원한다([반응 기록 안내](docs/reactions.md)).
-실행 지침은 [adventurer_prompt.md](adventurer_prompt.md), 이전 메뉴형·자유서술형은 [날짜별 백업](backups/prompts/2026-09-10/README.md)에 보존했다([적용 범위](docs/compose-probe.md)).
+실행 지침은 [prompts/adventurer_prompt.md](prompts/adventurer_prompt.md), 이전 메뉴형·자유서술형은 [날짜별 백업](prompts/legacy/2026-09-10/README.md)에 보존했다([적용 범위](docs/compose-probe.md)).
 
 **스킬 원정 (2026-09-11 기본 채택)**: 프리셋 스킬 4개, 선택 TRPG 판정, 3층 랜덤 스킬 획득을 추가했다.
 `wonderland.bat`의 **L: LAUNCHER → 새 원정**으로 시작하면 기본 적용된다. 이전 A 진입도 같은 원정으로 연결된다.
@@ -153,11 +153,11 @@ wonderland.bat              ← 더블클릭 → [L] LAUNCHER      (또는  pyth
 bash _run_gates.sh
 
 # 지난 판 → 단일 HTML 리플레이 만들기
-python make_replay_viewer.py runs/stream-XXXX.jsonl -o replay_viewer.html
+python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer.html
 
 # 지난 판 0콜 부검(이동·전투·대화 통계) / 사회층 부검(정지·정체·동행·lost·저체력 결정)
-python analyze_run.py runs/stream-XXXX.jsonl
-python analyze_social.py runs/stream-XXXX.jsonl
+python tools/analyze_run.py runs/stream-XXXX.jsonl
+python tools/analyze_social.py runs/stream-XXXX.jsonl
 ```
 
 주요 환경변수: `DUNGEON_SEED`(정수 또는 `random` — 데모 기본) `DUNGEON_SIGHT`(엔진 5 · 데모 6) `DUNGEON_ALLY_SIGHT`(동료는 반경 안에서 벽·문 무시, 기본 1) `DUNGEON_PARTY_FILE` `DUNGEON_W/H` `DUNGEON_DEPTHS` `DUNGEON_BRAIN_BACKEND`

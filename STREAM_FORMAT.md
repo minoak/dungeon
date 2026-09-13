@@ -60,7 +60,7 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 ## 조합형 행동 — 2026-09-10 additive
 
 `run_meta.action_mode`는 `menu | free | compose`다. 새 필드가 없는 구판은 기존 `menu` bool로 판별한다.
-2026-09-10 조합형 기본 승격 이후 새 원정은 기본 `compose`다. 현재 지침은 `adventurer_prompt.md`, 이전 메뉴형·자유서술형은 `backups/prompts/2026-09-10/`에 보존한다. 기존 기록의 action_mode 해석은 바꾸지 않는다.
+2026-09-10 조합형 기본 승격 이후 새 원정은 기본 `compose`다. 현재 지침은 `adventurer_prompt.md`, 이전 메뉴형·자유서술형은 `prompts/legacy/2026-09-10/`에 보존한다. 기존 기록의 action_mode 해석은 바꾸지 않는다.
 compose는 `menu:false`와 `compose_profile`을 함께 기록한다. `legacy-v0.1`은 자동 접근 없는 첫 판, `legacy-v0.2`는 거리 행동의 자동 접근을 연결한 판이다. 두 프로필 모두 v0.4 전체 resolver·reaction 구현을 뜻하지 않는다.
 
 현재 `compose-v0.4`는 본 구현 행동 계약이다. 선택적 반응 지원 여부는 별도의 `reaction` 메타로 구별한다. `Dungeon.composed_actions=True`와 `auto_approach=True`를 함께 사용한다. 아래 legacy 설명은 과거 기록의 해석용이며 새 프로필에는 다음 계약을 적용한다.

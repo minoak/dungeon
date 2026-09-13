@@ -54,7 +54,7 @@ echo NOTE they cannot fight each other - the engine has no character-vs-characte
 echo.
 echo Sheets: party_solo.json = party.json minus relationships. Same people, strangers.
 echo Gemini brain. *** COSTS MONEY *** roughly 350 KRW.
-echo After the run, read it with:  python analyze_run.py runs\NAME.jsonl
+echo After the run, read it with:  python toolsnalyze_run.py runs\NAME.jsonl
 echo Closing the new window stops the run. Previous run is auto-saved to runs/.
 start "Wonderland solo" cmd /k "set DUNGEON_W=80&& set DUNGEON_H=30&& set DUNGEON_MONSTERS=7&& set DUNGEON_TRAPS=4&& set DUNGEON_LURKERS=2&& set DUNGEON_POTIONS=1&& set DUNGEON_DEPTHS=1&& set DUNGEON_TURNS=500&& set DUNGEON_SOLO=1&& set DUNGEON_PARTY_FILE=party_solo.json&& set DUNGEON_BRAIN_BACKEND=gemini_api&& call %~dp0live.bat"
 timeout /t 4 /nobreak >nul

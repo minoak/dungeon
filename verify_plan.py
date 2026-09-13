@@ -22,6 +22,7 @@ D16: "에이전트는 결정 시 현재 행동에 더해 최대 2수를 이어 �
 """
 import io
 import os
+import sys
 import re
 import json
 import contextlib
@@ -284,6 +285,7 @@ def main():
           then_n >= 5 and plan_n >= 5)
     check("⑨ 작정 연속성 전수 감사(이행 %d·정직 파기 %d·위반 %d)"
           % (follow_ok, tear_ok, bad), bad == 0 and follow_ok >= 3)
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))   # 2026-09-13 정리: 도구는 tools/
     import ab_menu
     m = ab_menu.parse_stream(os.path.join(os.environ["DUNGEON_STATE_DIR"], "stream.jsonl"))
     check("⑨ 계측 분리(llm_calls %d + plan_steps %d == decisions %d)"

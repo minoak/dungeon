@@ -197,7 +197,7 @@ npm run smoke:launcher                             # = WL_GAME_URL=http://127.0.
 - 도감 탭: 몬스터 종별 카드(`.cx-card[data-key]`, 시트 frame 0 그림). 세계 지식은 `run_meta.bestiary_defs`(러너 additive — 옛 판은 없음)에서, 파티 중 누군가 등재하면 한 줄·심층이면 본문. 캐릭터 줄(`.cx-row[data-char]`) = 모름·등재·심층(조우 n/해금 수 — `tick.bots[].aware_of` 증분을 bestiary.py 와 같은 규칙으로 재구성 + `run_meta.bestiary_progress` 시드) + 도감평(이 판 `decisions.book_line` / 지난 판 `bestiary_progress.note` 는 "지난 판" 표식).
 - 수첩 탭: 캐릭터 칩(`.cx-char[data-char]`) → 층을 떠날 때 쓴 장(`.cx-page[data-char]`, `descend/ascend.pages`).
 - 스모크 1건: 창 열기·카드·캐릭터 줄·수첩 장(t1 에 0장 → 끝에 ≥1장, 옛 판은 0장)·Esc. 정적 배포에서도 같은 데이터(스트림만 읽는다).
-- 텍스트로 뽑기(0콜): 리포 루트 `python run_notes.py runs/stream-….jsonl [--md]` — 캐릭터별 수첩 장·도감평·원장(bestiary.json) note.
+- 텍스트로 뽑기(0콜): 리포 루트 `python tools/run_notes.py runs/stream-….jsonl [--md]` — 캐릭터별 수첩 장·도감평·원장(bestiary.json) note.
 
 ## 검증 규율
 

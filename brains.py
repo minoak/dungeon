@@ -55,12 +55,12 @@ def _load_prompt(fname, required=True):
     return _variant(raw, False), _variant(raw, True)
 
 
-LEGACY_PROMPT_DIR = os.path.join("backups", "prompts", "2026-09-10")
+LEGACY_PROMPT_DIR = os.path.join("prompts", "legacy", "2026-09-10")   # 2026-09-13 정리: backups/prompts → prompts/legacy
 ADV_PROMPT, ADV_PROMPT_SOLO = _load_prompt(os.path.join(LEGACY_PROMPT_DIR, "adventurer_prompt.md"), required=False)
 MENU_PROMPT, MENU_PROMPT_SOLO = _load_prompt(os.path.join(LEGACY_PROMPT_DIR, "adventurer_prompt_menu.md"), required=False)
-COMPOSE_PROMPT, COMPOSE_PROMPT_SOLO = _load_prompt("adventurer_prompt.md")
+COMPOSE_PROMPT, COMPOSE_PROMPT_SOLO = _load_prompt(os.path.join("prompts", "adventurer_prompt.md"))   # 2026-09-13 정리: prompts/
 # 사교 콜 프롬프트(채널 분리 2026-07-26) — 없으면 사교 채널이 통째로 꺼진다(안전망)
-SOCIAL_PROMPT, SOCIAL_PROMPT_SOLO = _load_prompt("social_prompt.md", required=False)
+SOCIAL_PROMPT, SOCIAL_PROMPT_SOLO = _load_prompt(os.path.join("prompts", "social_prompt.md"), required=False)
 
 # 조합형을 기본으로 사용한다. 명시적인 구형 환경 변수는 과거 비교 하니스와 호환한다.
 _ACTION_MODE = os.environ.get("DUNGEON_ACTION_MODE", "").strip().lower()
@@ -186,7 +186,7 @@ def _load_context():
     (파트너가 쓰던 TRPG 프리셋의 '이 글은 무엇이고 너는 무슨 역할이며 규칙은 누가 판정하나' 틀을 우리 사실로 옮긴 것 — GM 페르소나·
     콘텐츠 정책 블록은 제외). 파일이 없으면 D54 한 줄. 문장을 바꾸면 채집 차단 원문으로 재측정(1콜/건)."""
     try:
-        with open(os.path.join(HERE, "context_prompt.md"), encoding="utf-8") as f:
+        with open(os.path.join(HERE, "prompts", "context_prompt.md"), encoding="utf-8") as f:
             txt = f.read().strip()
         return txt or _CONTEXT_FALLBACK
     except OSError:

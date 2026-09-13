@@ -1398,7 +1398,7 @@ def main():
         outcome = "timeout"
         event("=== 시간 종료 (틱 한도 %d 도달, 지하 %d층) — %s 던전에 남음 / 쓰러짐 %s ==="
               % (MAX_TURNS, d.depth, left, dead or "없음"))
-        event("    (더 길게: DUNGEON_TURNS=400 bash ~/dungeon/start.sh)")
+        event("    (더 길게: 론처 옵션의 틱 상한 또는 DUNGEON_TURNS=400 scripts/start.sh)")
     if reaction_book is not None:
         reaction_book.close_floor(turn)
     summary = rs.result(outcome=outcome, depth=d.depth, survivors=won, fallen=dead)   # D58: end 직전까지의 모든 레코드

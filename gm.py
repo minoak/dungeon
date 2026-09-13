@@ -16,7 +16,7 @@ CLAUDE_BIN = "claude.exe"   # brains.py와 동일(npm 래퍼는 stdin 멈춤)
 TIMEOUT = int(os.environ.get("DUNGEON_GM_TIMEOUT", "60"))
 MODEL = os.environ.get("DUNGEON_GM_MODEL", "sonnet")   # 페이싱 급하면 haiku 강등 가능
 
-_p = os.path.join(HERE, "gm_prompt.md")
+_p = os.path.join(HERE, "prompts", "gm_prompt.md")
 GM_PROMPT = open(_p, encoding="utf-8").read() if os.path.exists(_p) else ""
 
 _CAST = ""   # 등장인물 블록(시트 외부화, 파티 가변) — set_party 가 채운다. 미설정=폴백(char/job 호칭)

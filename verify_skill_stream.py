@@ -6,6 +6,7 @@ import io
 import itertools
 import json
 import os
+import sys
 from pathlib import Path
 import tempfile
 from unittest.mock import patch
@@ -18,6 +19,7 @@ os.environ.update(DUNGEON_ACTION_MODE='compose', DUNGEON_BRAIN_BACKEND='dummy',
 import dungeon_gm as G
 import brains
 import show_runner as R
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))   # 2026-09-13 정리: 도구는 tools/
 import analyze_skills
 
 checks = 0

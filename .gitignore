@@ -33,3 +33,8 @@ state/brain_block.log
 state/oracle.json
 # 도감 원장 — 캐릭터 영속은 서빙부터(D64, 2026-09-13). 이월을 켠 판만 로컬에 쌓고 저장소엔 안 올린다
 bestiary.json
+# 2026-09-13 리포 정리(1단계): 실행 흔적·끝난 실험 산출은 추적하지 않는다(state/ 는 폴더만 .gitkeep)
+state/*
+!state/.gitkeep
+ab_runs/
+reports/

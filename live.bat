@@ -1,5 +1,5 @@
 @echo off
-rem [REAL RUN] Windows port of live.sh - writes state/ and bestiary.json. NOT a verify suite.
+rem [REAL RUN] Windows port of scripts/live.sh - writes state/ and bestiary.json. NOT a verify suite.
 rem Keep this file CRLF + ASCII-only (cp949 console safety).
 rem Usage: live.bat  (env DUNGEON_* may be set by the caller, see wonderland.bat)
 chcp 65001 >nul

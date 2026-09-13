@@ -271,7 +271,7 @@ check("⑩ scenario.py: 스위치 미러링 · potions 프리셋 · 프로브 �
 check("⑩ 지침: 건네기 절 · 내 문장('답이 필요할 때만') 제거 · 파트너 문장 유지",
       "- **건네기**: 가진 물약·무기·방어구를 넘긴다" in brains.MENU_PROMPT and "답이 필요할 때만" not in brains.MENU_PROMPT
       and "상대의 선택을 요청한다" in brains.MENU_PROMPT and "선택지의 행동(건네기·동행·합류)으로도 한다" in brains.MENU_PROMPT)
-asrc = _io.open(os.path.join(HERE, "analyze_social.py"), encoding="utf-8").read()
+asrc = _io.open(os.path.join(HERE, "tools", "analyze_social.py"), encoding="utf-8").read()
 vsrc = _io.open(os.path.join(HERE, "viewer", "index.html"), encoding="utf-8").read()
 check("⑩ analyze_social 반응 형태 · 뷰어 건네기 줄", 'replies' in asrc and "t === 'give'" in vsrc)
 
