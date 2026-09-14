@@ -811,6 +811,7 @@ class Dungeon:
         self.quest_ids = {}        # D69 관측 id('q1'…) → 의뢰 정의 id — index_quests() 가 게시판 순서로 매긴다(마을만)
         self.quest_boards = {}     # D69 의뢰 정의 id → (게시판 건물 피처 id, range)
         self.expedition_returned = False   # D69 워프게이트로 돌아온 마을 — 원정을 마친 상태(접수원 보고로 끝난다). 러너가 켠다
+        self.town_hear = None      # D70(09-14) 마을 사람 지각 — 'zone' 이면 동료·목소리·목격이 같은 구역(또는 곁 1칸)에서만. None=옛 판(전체 시야)
         self.graves = bool(graves) # D22 묘 스위치 — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_GRAVES(기본 1)로 켠다. 쓰러진 자리에 '~의 묘' 피처.
         self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
@@ -960,6 +961,7 @@ class Dungeon:
         d.npc_defs, d.feature_roles = {}, {}          # D69(09-14) NPC 정의·피처 역할 — __new__ 경유라 명시 초기화
         d.quests, d.quest_ids, d.quest_boards = None, {}, {}   # D69 의뢰 장부·관측 id·게시판 — 손그림 장면도 기본 없음(호출측이 건다)
         d.expedition_returned = False                  # D69 원정 귀환 상태 — 러너가 켠다
+        d.town_hear = None                             # D70 마을 사람 지각(구역) — 손그림 장면도 기본 없음(build_town 이 켠다)
                                    #   ⚠️ from_ascii 는 __new__ 경유라 __init__ 을 안 탄다 —
                                    #   새 스위치는 여기 명시 초기화가 필수(D21·D22·솔로 때 밟은 함정.
                                    #   빼먹으면 AttributeError 로 게이트 15개가 한꺼번에 붉어진다)
@@ -1713,11 +1715,26 @@ class Dungeon:
         근거는 실측 — 파티가 서로 못 보는 시간이 44%였고 그 압도적 다수가 거리 2칸이었다.
         벽 하나 돌아섰다고 일행을 통째로 잃는 건 사람의 인지가 아니다(발소리·기척·직전 기억).
         반경 밖은 여전히 잃는다 — '흩어짐의 비용'은 거리로 남는다."""
+        if self.town and getattr(self, 'town_hear', None) == 'zone':   # D70(09-14 파트너 "구역 단위로 가자"): 마을에선 장소는 다 알아도
+            return self.hears(bot, other['x'], other['y'])              #   사람은 같은 구역(또는 곁 1칸)에서만 보인다 — 전체 시야는 지형만
         if (other['x'], other['y']) in seen:
             return True
         if not self.ally_sight:
             return False
         return max(abs(other['x'] - bot['x']), abs(other['y'] - bot['y'])) <= SIGHT
+
+    def hears(self, o, x, y, seen=None):
+        """(x,y)에서 난 일·말이 봇 o 에게 닿는가 — 배달(말)·목격(사건)·동료 가시의 **단일 판정처**.
+        던전 = 시야(seen 이 있으면 그것, 없으면 visible_cells). 마을 구역 지각(D70, town_hear='zone') = 같은 구역이거나 곁 1칸(구역 경계에
+        나란히 선 둘은 서로 안다). 구역이 없는 옛 손그림 마을은 옛 규칙(전체)."""
+        if self.town and getattr(self, 'town_hear', None) == 'zone':
+            if max(abs(o['x'] - x), abs(o['y'] - y)) <= 1:
+                return True
+            za, zb = self._town_zone(o['x'], o['y']), self._town_zone(x, y)
+            if za is None and zb is None:
+                return True                                             # 구역 정보가 없는 마을 = 옛 규칙
+            return za is not None and za == zb
+        return (x, y) in (seen if seen is not None else self.visible_cells(o['x'], o['y']))
 
     def _sight_blocked(self, cx, cy, tx, ty):
         """(cx,cy)↔(tx,ty) 직선 '중간'에 벽·문이 있으면 시야가 가린다. 타겟 자신이 벽/문이면 보인다(중간만 막는다).
@@ -2334,6 +2351,7 @@ class Dungeon:
                 **({'town': True} if self.town else {}),   # 마을(D29) — 층의 사실(던전 obs 무변경)
                 **({'town_zone': tz} if (self.town and (tz := self._town_zone(bot['x'], bot['y'])))   # D60(09-12) 지금 있는 구역 이름
                    else {}),
+                **({'town_hear': 'zone'} if (self.town and getattr(self, 'town_hear', None) == 'zone') else {}),   # D70 사람 지각=구역(관측 문장용)
                 **({'notices': nts_} if (nts_ := self._notices(bot)) else {}),   # D61 게시판(문턱 근처)·신의 요청(09-13 개정: 어느 층에서나)
                 **({'quests': qs_} if (qs_ := self._quest_obs()) else {}),        # D69(09-14) 맡은 의뢰와 진행(파티 장부 — 정보만)
                 **({'expedition_returned': True} if (self.town and getattr(self, 'expedition_returned', False)
@@ -4114,6 +4132,10 @@ class Dungeon:
         방 타입(entrance/exit)은 안 싣는다 — '계단 방' 라벨은 안 본 계단의 존재를 누설(시야-온리).
         D19(scan): 주소도 스캐너의 기하 구역으로 — 출생기록 주소(from_ascii=전부 '방 r0')의 치료.
         통로도 id 를 얻는다('통로 c1') — 격자가 준 정체성이라 장부 지칭이 또렷해진다."""
+        if self.town:                               # D70(09-14): 마을의 주소는 구역 이름(번화가·신전 지구…) — '마지막으로 본 곳: 신전 지구'
+            tz = self._town_zone(x, y)
+            if tz:
+                return tz
         if self.scan:
             zid = self.zone_at.get((x, y))
             if zid is None:                         # 구역 밖 = 문턱(문 타일) 또는 방어적 기본
@@ -4639,7 +4661,7 @@ class Dungeon:
         for o in bots or ():
             if o['char'] in exclude or not o['alive'] or o['won']:
                 continue
-            if (x, y) in self.visible_cells(o['x'], o['y']):
+            if self.hears(o, x, y):                   # 던전=시야, 마을 구역 지각(D70)=같은 구역·곁 — 배달·가시와 같은 판정처
                 o.setdefault('witnessed', []).append(dict(fact))
                 self._floor_count_w(o, fact)          # D40 ② 층 집계 — 목격도 센다(같은 사전의 목격 라벨)
 

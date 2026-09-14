@@ -231,9 +231,12 @@ def roundtrip_runner():
         assert error is None, (p, error)
         return {**act, **SR.parse(p, obs), **{k: p[k] for k in ('say', 'to', 'say_kind') if k in p},
                 'reason': '층 왕복 검증', 'src': 'fixture'}
+    # TOWN_APART_ON=False — D70(09-14) 마을 사람 지각=구역: 흩어진 출발(D69 기본)이면 첫 마을 방문에서 둘이 다른 구역이라 말이 안 닿아
+    #   반응이 0 이 된다. 이 검사의 목적은 반응 장부의 방문별 결산이라 출발만 광장(같은 구역)으로 고정한다(구역 규칙은 verify_guild ⑨).
     with patch.object(show_runner, 'load_party', return_value={c: dict(G.HEROES[c]) for c in ('1', '2')}), \
          patch.multiple(show_runner, TOWN_ON=True, MAX_TURNS=400, DUNGEON_W=40, DUNGEON_H=16,
-                        DEPTHS=1, N_MON=0, N_TRAP=0, N_LURK=0), \
+                        DEPTHS=1, N_MON=0, N_TRAP=0, N_LURK=0,
+                        TOWN_APART_ON=False), \
          patch.object(brains, 'think_all', think), patch.object(brains, 'claude_brain', decide), \
          patch.object(brains, '_call_claude', side_effect=AssertionError('실제 모델 호출 금지')), \
          patch.object(show_runner.time, 'sleep', lambda _: None), \

@@ -12,7 +12,9 @@
   ⑥ NPC 두뇌(npc_reply): 스텁 _call_claude 로 JSON/문장/실패 세 갈래 · 프롬프트에 시트 없음·역할·사실·장면 있음 · 120자 상한
   ⑦ 러너 풀런(더미+각본, 마을 시작·2층·약한 보스): 맡기 3 → 2층 도달 완수 → 보스 처치 → 워프 → 마을 계속 → 접수원 보고 → end.returned ·
      end.quests(reported·done) · end.warped · level(2층).quests · events.log 줄 · run_summary 결산 일치 · run_meta 스위치 3
-  ⑧ 배선(소스·문서): STREAM_FORMAT · HARNESS D69 · README · 론처 체크박스·env · 클라이언트(evline·Bubbles·types) · 결산
+  ⑧ 배선(소스·문서): STREAM_FORMAT · HARNESS D69·D70 · README · 론처 체크박스·env · 클라이언트(evline·Bubbles·types) · 결산
+  ⑨ D70 마을 사람 지각=구역(09-14 파트너 "구역 단위로 가자"): 다른 구역의 동료는 안 보이고(sights.bots·party.visible·goto b<char>) 말도 안 들리고
+     목격도 없다 · 같은 구역·곁이면 전부 됨 · 관측 문장 · 장부 주소=구역 이름 · town_hear None 이면 옛 규칙
 (기존 verify 63종은 별도 실행.)
 """
 import contextlib
@@ -116,15 +118,21 @@ check("② 길드 문턱 곁: 게시판 의뢰에 tid q1~q3 · accepted 없음 �
       and sum(1 for o in o_near["options"] if o["type"] == "interact" and str(o.get("target", "")).startswith("q")) == 3)
 w_near = brains._wire(o_near, {"1": "두란"}, compose=True)
 check("② 프롬프트: '[q1] 고블린 소탕' · 'ID 를 use' 어휘", "[q1] 고블린 소탕" in w_near and "ID 를 use" in w_near)
-r_far = d2._interact(far, "q1", [far, near])
-r_ok = d2._interact(near, "q1", [far, near])
-r_again = d2._interact(near, "q1", [far, near])
+gz = d2._town_zone(gd.x, gd.y + 1)                                  # 길드 지구 — 같은 구역이되 곁(1칸)은 아닌 자리에 목격자(3)를 세운다
+wit_cell = next((x, y) for y in range(d2.h) for x in range(d2.w)
+                if d2.grid[y][x] == G.FLOOR and d2._town_zone(x, y) == gz and 2 <= max(abs(x - gd.x), abs(y - gd.y - 1)) <= 4
+                and d2.feature_at(x, y) is None)
+wit = mkbot("3", *wit_cell, job="궁수")
+r_far = d2._interact(far, "q1", [far, near, wit])
+r_ok = d2._interact(near, "q1", [far, near, wit])
+r_again = d2._interact(near, "q1", [far, near, wit])
 check("② 맡기: 멀면 too_far · 곁이면 quest_accepted(quest·title·goal·board) · 장부 accepted(turn·by) · 다시 quest_already",
       r_far["result"] == "too_far" and r_ok["result"] == "quest_accepted" and r_ok["quest"] == "goblin_cull" and r_ok["title"] == "고블린 소탕"
       and r_ok.get("goal") and r_ok.get("board") == "f%d" % gd.id and Q["accepted"]["goblin_cull"]["by"] == "2"
       and r_again["result"] == "quest_already" and r_again.get("by") == "2")
-check("② 목격: 마을(전체 시야)의 다른 봇이 ally_quest 를 봤다 · 프롬프트 문장",
-      any(w.get("kind") == "ally_quest" and w.get("what") == "고블린 소탕" for w in far.get("witnessed", []))
+check("② 목격: 같은 구역(길드 지구)의 동료 3 은 ally_quest 를 봤고, 다른 구역의 동료 1 은 못 봤다(D70) · 프롬프트 문장",
+      any(w.get("kind") == "ally_quest" and w.get("what") == "고블린 소탕" for w in wit.get("witnessed", []))
+      and not any(w.get("kind") == "ally_quest" for w in far.get("witnessed", []))
       and "의뢰 「고블린 소탕」를 맡는 것을" in brains._witness_prose({"kind": "ally_quest", "char": "1", "name": "두란", "what": "고블린 소탕"}))
 o_acc = d2.view(near, [near])
 bd2 = next(n for n in o_acc["notices"] if n["kind"] == "board")
@@ -303,8 +311,8 @@ ev = [(r["turn"], e) for r in ticks for e in (r.get("events") or [])]
 acc = [(t, e) for t, e in ev if e.get("result") == "quest_accepted"]
 rep = [(t, e) for t, e in ev if e.get("result") == "npc_report"]
 asc = [r for r in rows7 if r.get("kind") == "ascend"]
-check("⑦ run_meta: quests·town_apart True · npc_brain False(더미) · 첫 마을 level 에 두 봇이 서로 다른 건물 곁",
-      meta.get("quests") is True and meta.get("town_apart") is True and meta.get("npc_brain") is False
+check("⑦ run_meta: quests·town_apart True · npc_brain False(더미) · town_hear zone(D70) · 첫 마을 level 에 두 봇이 서로 다른 건물 곁",
+      meta.get("quests") is True and meta.get("town_apart") is True and meta.get("npc_brain") is False and meta.get("town_hear") == "zone"
       and len({(b["x"], b["y"]) for b in levels[0]["party"]}) == 2)
 check("⑦ 맡기 사건 3(q1·q2·q3, 마을 층) → 각본이 길드 앞에서 맡았다", len(acc) == 3 and sorted(e.get("quest") for _, e in acc) == ["goblin_cull", "lost_trinket", "reach_floor_2"]
       and all(e.get("type") in ("interact", "use") for _, e in acc))
@@ -331,12 +339,45 @@ check("⑦ 결산: quests{accepted 3, done ≥1, reported 1} · npc.talks ≥1, 
 check("⑦ 인박스: 보고 틱 다음 인박스 없음(판 종료) · 마을에서 접수원 대사가 'npc:길드 접수원' 잡담으로 들렸다(선물 틱)",
       any(m.get("from") == "npc:길드 접수원" for r in ticks for ms in (r.get("inbox") or {}).values() for m in ms))
 
+print("── ⑨ 마을 사람 지각=구역(D70, 09-14 파트너 '구역 단위로 가자')")
+d9, s9 = show_runner.build_town(apart=True)
+check("⑨ layout 마을은 town_hear='zone' · 옛 규칙 스위치(all)면 None",
+      d9.town_hear == "zone" and (lambda: (setattr(show_runner, "TOWN_HEAR", "all"), show_runner.build_town()[0].town_hear, setattr(show_runner, "TOWN_HEAR", "zone"))[1])() is None)
+a9, b9 = mkbot("1", *s9["1"]), mkbot("2", *s9["2"], job="도적")
+za, zb = d9._town_zone(a9["x"], a9["y"]), d9._town_zone(b9["x"], b9["y"])
+o9a = d9.view(a9, [a9, b9])
+check("⑨ 흩어진 출발 = 서로 다른 구역 · 지형은 전부 보이지만(visible_cells 전체) 동료는 sights.bots 에 없고 party.visible False · goto b2 해석 None",
+      za and zb and za != zb and len(d9.visible_cells(a9["x"], a9["y"])) > 500 and not o9a["sights"]["bots"]
+      and o9a["party"][0]["visible"] is False and d9._resolve_target("b2", [a9, b9], a9) is None)
+w9 = brains._wire(o9a, {"1": "두란", "2": "카야"}, compose=True)
+check("⑨ 관측 문장: '같은 구역 안에서만 보이고 들린다' + '지금 있는 곳' · 옛 문장('한눈에') 없음",
+      "같은 구역 안에서만 보이고 들린다" in w9 and "지금 있는 곳:" in w9 and "한눈에" not in w9)
+inbox9, _ = show_runner.deliver_and_hail(d9, [a9, b9], {"1": "카야, 어디 있어?"}, {"1": "2"}, {"1": "잡담"}, {})
+check("⑨ 다른 구역의 말은 배달되지 않는다 · 목격도 안 된다", inbox9["2"] == [] and not d9.hears(b9, a9["x"], a9["y"]))
+b9["x"], b9["y"] = a9["x"] + 1, a9["y"]                        # 곁으로
+o9a2 = d9.view(a9, [a9, b9])
+inbox9b, _ = show_runner.deliver_and_hail(d9, [a9, b9], {"1": "여기 있었네"}, {"1": "2"}, {"1": "잡담"}, {})
+check("⑨ 같은 구역(곁)이면 보이고 들린다 · goto b2 해석됨", [x["char"] for x in o9a2["sights"]["bots"]] == ["2"]
+      and inbox9b["2"] and inbox9b["2"][0]["text"] == "여기 있었네" and d9._resolve_target("b2", [a9, b9], a9) is not None)
+gd9 = by_name(d9, "building", "모험가 길드")
+a9["x"], a9["y"] = gd9.x, gd9.y + 1
+b9["x"], b9["y"] = s9["2"]
+d9.quests = G.new_quests(); d9.index_quests()
+d9._interact(a9, "q1", [a9, b9])
+check("⑨ 게시판 앞에서 맡는 걸 다른 구역의 동료는 못 본다(witnessed 없음) · 장부 주소는 구역 이름",
+      not b9.get("witnessed") and d9._zone_label(a9["x"], a9["y"]) == za)
+d9.town_hear = None
+o9c = d9.view(a9, [a9, b9])
+check("⑨ 옛 규칙(town_hear None): 다른 구역도 보인다 · 옛 문장", [x["char"] for x in o9c["sights"]["bots"]] == ["2"]
+      and "한눈에" in brains._wire(o9c, {"1": "두란", "2": "카야"}, compose=True))
+
 print("── ⑧ 배선(소스·문서)")
-check("⑧ STREAM_FORMAT: run_meta quests/town_apart/npc_brain · end.quests/warped · 이벤트 quest_accepted/npc_report · level.quests",
-      all(s_ in src("STREAM_FORMAT.md") for s_ in ("| `quests` |", "| `town_apart` |", "| `npc_brain` |", "`warped`", "quest_accepted", "npc_report", "line_src")))
-check("⑧ HARNESS D69 · CHANGELOG · README(길드 보고) · docs/entities.md(req)",
-      "D69" in src(os.path.join("design", "HARNESS_DESIGN.md")) and "D69" in src(os.path.join("docs", "CHANGELOG.md"))
-      and "접수원" in src("README.md") and "req" in src(os.path.join("docs", "entities.md")))
+check("⑧ STREAM_FORMAT: run_meta quests/town_apart/town_hear/npc_brain · end.quests/warped · 이벤트 quest_accepted/npc_report · level.quests",
+      all(s_ in src("STREAM_FORMAT.md") for s_ in ("| `quests` |", "| `town_apart` |", "| `town_hear` |", "| `npc_brain` |", "`warped`", "quest_accepted", "npc_report", "line_src")))
+check("⑧ HARNESS D69·D70 · CHANGELOG · README(길드 보고·구역) · docs/entities.md(req)",
+      "D69" in src(os.path.join("design", "HARNESS_DESIGN.md")) and "D70" in src(os.path.join("design", "HARNESS_DESIGN.md"))
+      and "D70" in src(os.path.join("docs", "CHANGELOG.md"))
+      and "접수원" in src("README.md") and "같은 구역" in src("README.md") and "req" in src(os.path.join("docs", "entities.md")))
 check("⑧ 러너 스위치 3 · 론처 체크박스 2 + env 2",
       all(s_ in src("show_runner.py") for s_ in ("DUNGEON_QUESTS", "DUNGEON_TOWN_APART", "DUNGEON_NPC_BRAIN", "npc_reply(", "npc_report"))
       and all(s_ in src(os.path.join("launcher", "index.html")) for s_ in ('id="townApart" checked', 'id="npcBrain" checked', "town_apart:", "npc_brain:"))

@@ -187,6 +187,9 @@ QUESTS_ON = os.environ.get("DUNGEON_QUESTS", "1") != "0"     # D69(09-14 파트�
 TOWN_APART_ON = os.environ.get("DUNGEON_TOWN_APART", "1") != "0"   # D69 흩어진 출발 — 마을 시작 때 셋이 광장에 붙어 서는 대신 각자 건물
                                                              #   (길드·주점·신전) 문턱 곁에서 시작(파트너 "캐릭터마다 다양한 모습").
                                                              #   러너 기본 1(⚠️임시 가정 — 배정 순서=건물 id 순). 마을 판만
+TOWN_HEAR = os.environ.get("DUNGEON_TOWN_HEAR", "zone")          # D70(09-14 파트너 "물리적으로만 멀게 해서 … 사실상 붙어있는거나 마찬가지"
+                                                             #   → "구역 단위로 가자") 마을 사람 지각: 'zone'=동료·목소리·목격이 같은 구역
+                                                             #   (또는 곁 1칸)에서만 — 장소(길·건물)는 다 안다 / 'all'=옛 전체 시야. 러너 기본 zone
 NPC_BRAIN_ON = os.environ.get("DUNGEON_NPC_BRAIN", "1") != "0"   # D69 마을 NPC 두뇌 — 캐릭터가 말을 걸면 NPC 한마디를 LLM 이 쓴다(1콜,
                                                              #   먼저 말하지 않음·잡담 배달·판정은 엔진·고정 대사=폴백). 러너 기본 1,
                                                              #   더미 두뇌(dummy) 판에선 저절로 꺼진다(콜 0 유지)
@@ -727,6 +730,7 @@ def build_town(path=None, apart=False, quests=None):
             if role:
                 d.feature_roles[fid] = role
     d.features[d._exit_fid].name = "던전 입구"   # 같은 '>'라도 마을에선 탈출구가 아니라 입구다
+    d.town_hear = "zone" if (TOWN_HEAR == "zone" and res.get("spaces")) else None   # D70 구역 지각 — 구역이 있는(layout) 마을만
     if quests is not None:                         # D69 의뢰 장부(파티 단위) — 게시판 순서로 q1, q2… 를 매긴다(결정론)
         d.quests = quests
         d.index_quests()
@@ -769,7 +773,7 @@ def deliver_and_hail(d, bots, says, say_to, say_kind=None, open_props=None):
                              **({"kind": "제안"} if (kind_on and say_kind.get(oc) == "제안") else {})}
                             for oc, t in says.items()
                             if oc != b["char"]
-                            and any(o["char"] == oc and (o["x"], o["y"]) in seen for o in bots)]
+                            and any(o["char"] == oc and d.hears(b, o["x"], o["y"], seen) for o in bots)]   # 던전=시야 · 마을 구역 지각(D70)
     by_char = {o["char"]: o for o in bots}
     reaction_book = G.SR.book(d)
     if reaction_book is not None:
@@ -1164,6 +1168,7 @@ def main():
             quests=quests is not None, # D69(09-14 additive) 길드 척추 여부 — 의뢰 맡기(use q<n>)·완료 판정·워프 귀환 뒤 마을 계속·보고=종료.
                                        #   판 모양(종료 조건)을 바꾸는 실행모드 메타(boss 급)
             town_apart=bool(TOWN_ON and TOWN_APART_ON),   # D69 additive 흩어진 출발(마을 판만) — 배치 메타(solo 급)
+            town_hear=(TOWN_HEAR if TOWN_HEAR == "zone" else "all"),   # D70 additive 마을 사람 지각 — 'zone'(같은 구역·곁)|'all'(옛 전체). 배달·가시·목격 물리 메타(ally_sight 급)
             npc_brain=bool(npc_brain), # D69 additive 마을 NPC 두뇌 여부 — 이벤트 line 이 LLM 문장(line_src 'brain')일 수 있다는 표현층 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
@@ -1339,9 +1344,10 @@ def main():
         inbox, hails = deliver_and_hail(d, bots, says, say_to, say_kind, open_props)   # 사회층 한 틱(배달·뼈·정지 — D24·D36·D41·D47)
         for c in hails:
             event("   봇%s 멈칫 — %s" % (c, "제안을 받고 돌아본다" if (SAYKIND_ON and SAYTO_ON) else "말을 걸어온 동료 쪽을 돌아본다"))
-        for npc_name, line_, to_c in npc_says:    # D69 NPC 의 답 — 마을(전체 시야)의 잡담으로 들린다: 정지 없음·뼈 없음·사교 콜 없음
+        for npc_name, line_, to_c in npc_says:    # D69 NPC 의 답 — 마을의 잡담으로 들린다: 정지 없음·뼈 없음·사교 콜 없음
+            nf = next((f for f in d.features.values() if f.type == "npc" and f.name == npc_name), None)
             for b in bots:                        #   (from 'npc:<이름>' — 두뇌는 이름으로 표기, 관계 장부는 봇만 센다)
-                if b["alive"] and not b["won"]:
+                if b["alive"] and not b["won"] and (nf is None or d.hears(b, nf.x, nf.y)):   # D70: NPC 목소리도 같은 구역에서만
                     inbox.setdefault(b["char"], []).append({"from": "npc:" + npc_name, "text": line_, "turn": turn, "to": to_c})
             event('   %s \U0001f4ac "%s"' % (npc_name, line_))
 
