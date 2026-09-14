@@ -419,6 +419,27 @@ line10 = brains.npc_reply(a10, {"result": "npc_hail", "npc": "길드 접수원",
 brains._call_claude = lambda prompt, model="haiku": ""
 check("⑩ 두뇌 옵션: npc_reply 의 npc_hail 장면('먼저 한마디') · 정해진 인사 동봉", line10 == "어서 오세요!" and "네가 먼저 한마디" in seen10["p"] and "정해진 인사" in seen10["p"])
 
+print("── ⑪ 말의 결과 되먹임(D72, 09-14 파트너 '혼자 있을 때도 동료 이름을 부르며 말한다')")
+d11, s11 = show_runner.build_town(apart=True)
+a11, b11 = mkbot("1", *s11["1"]), mkbot("2", *s11["2"], job="도적")          # 다른 구역
+show_runner.deliver_and_hail(d11, [a11, b11], {"1": "카야, 어디 있어?"}, {"1": "2"}, {"1": "잡담"}, {})
+said = [x for x in (a11.get("trail") or []) if x.get("type") == "said"]
+check("⑪ 시야 밖 동료를 지목한 말 → 궤적에 said{to 2, heard []} · 문장 '들은 사람 없음 … 혼잣말이 됐다' · 꼬리표 '말: 들은 사람 없음'",
+      len(said) == 1 and said[0]["to"] == "2" and said[0]["heard"] == []
+      and "들은 사람 없음" in brains._last_prose(said[0], {"1": "두란", "2": "카야"}) and "혼잣말이 됐다" in brains._last_prose(said[0], {"1": "두란", "2": "카야"})
+      and any(t[0] == "talk" and t[1] == "말" and "없음" in t[2] for t in G.event_tags(said[0], {"1": "두란", "2": "카야"})))
+o11 = d11.view(a11, [a11, b11])
+check("⑪ 다음 관측 trail 에 실리고 노출 뒤 비워진다 · 프롬프트에 '들은 사람 없음' 문장",
+      any(x.get("type") == "said" for x in (o11.get("trail") or [])) and not any(x.get("type") == "said" for x in (a11.get("trail") or []))
+      and "들은 사람 없음" in brains._wire(o11, {"1": "두란", "2": "카야"}, compose=True))
+b11["x"], b11["y"] = a11["x"] + 1, a11["y"]
+show_runner.deliver_and_hail(d11, [a11, b11], {"1": "여기 있었네", "2": "응"}, {"1": "2", "2": "all"}, {"1": "잡담", "2": "잡담"}, {})
+sa, sb = [x for x in a11["trail"] if x.get("type") == "said"], [x for x in b11["trail"] if x.get("type") == "said"]
+check("⑪ 같은 구역이면 heard [2] · 모두에게 한 말도 heard [1] · 문장 '카야가 들었다' · 혼잣말(to 없음)은 안 남긴다",
+      sa and sa[0]["heard"] == ["2"] and sb and sb[0]["heard"] == ["1"] and "카야이(가) 들었다" in brains._last_prose(sa[0], {"1": "두란", "2": "카야"})
+      and (lambda: (show_runner.deliver_and_hail(d11, [a11, b11], {"1": "음..."}, {}, {"1": "잡담"}, {}),
+                    not any(x.get("type") == "said" and x.get("text") == "음..." for x in a11["trail"]))[1])())
+
 print("── ⑧ 배선(소스·문서)")
 check("⑧ STREAM_FORMAT: run_meta quests/town_apart/town_hear/npc_brain/npc_hail · tick.npc_hails · end.quests/warped · 이벤트 quest_accepted/npc_report · level.quests",
       all(s_ in src("STREAM_FORMAT.md") for s_ in ("| `quests` |", "| `town_apart` |", "| `town_hear` |", "| `npc_brain` |", "| `npc_hail` |", "| `npc_hails` |",

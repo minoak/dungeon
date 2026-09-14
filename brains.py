@@ -945,6 +945,16 @@ def _last_prose(last, names=None):
     if t == "hail":                       # 말 걸림 정지(07-24 D24) — 관찰 사실만(판단은 네 몫)
         who = ", ".join((names or {}).get(c, "동료") for c in last.get("froms", [])) or "동료"
         return "%s의 말에 걸음을 멈췄다 — 걷던 길이었다" % who
+    if t == "said":                       # D72(09-14) 말의 결과 — 네 말이 누구에게 들렸나(배달 사실, 판단은 네 몫)
+        nm_ = lambda c: (names or {}).get(str(c), "동료")
+        to = last.get("to")
+        heard = [str(c) for c in (last.get("heard") or [])]
+        head = '네가 한 말 「%s」(%s)' % (last.get("text", ""), "모두에게" if to == "all" else "%s에게" % nm_(to))
+        if not heard:
+            return head + " — 들은 사람 없음: 시야 안에 아무도 없어 혼잣말이 됐다"
+        if to != "all" and str(to) not in heard:
+            return head + " — %s은(는) 시야 밖이라 못 들었고, %s이(가) 들었다" % (nm_(to), "·".join(nm_(c) for c in heard))
+        return head + " — %s이(가) 들었다" % "·".join(nm_(c) for c in heard)
     if t == "attack":
         if r == "no_target":
             return "공격 — 대상이 그 자리에 없었다"

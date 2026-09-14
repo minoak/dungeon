@@ -142,6 +142,7 @@ bash _run_gates.sh                                     # 결정론 게이트 64�
 cd game && npm run smoke                               # 관전 클라이언트 헤드리스 스모크
 python tools/analyze_run.py runs/stream-XXXX.jsonl     # 지난 판 0콜 부검(이동·전투·대화 통계)
 python tools/run_notes.py   runs/stream-XXXX.jsonl     # 도감평·수첩 텍스트 덤프
+python tools/unheard_audit.py runs/stream-XXXX.jsonl   # 동료를 지목한 말 중 못 들은 비율(D72 효과 측정)
 python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer.html   # 단일 HTML 리플레이
 ```
 

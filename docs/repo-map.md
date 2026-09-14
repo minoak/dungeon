@@ -28,6 +28,7 @@ prompts/     adventurer_prompt.md(조합형 지침) context_prompt.md(D54 앞머
              legacy/2026-09-10/(메뉴형·자유서술형 — 게이트가 메뉴형으로 돈다: 삭제 금지) legacy/2026-09-11/
 tools/       analyze_run.py analyze_skills.py analyze_social.py report.py make_replay_viewer.py replay_viewer.html
              maze_metrics.py check_town.py run_skill_alpha.py ab_menu.py(verify_plan 이 파서로 import) ab_persona.py run_notes.py
+             unheard_audit.py(D72 — 던전에서 지목한 말 중 상대가 못 들은 비율, 0콜)
 scripts/     start.sh live.sh verify.sh watch_map.sh (Linux/WSL 시대 — 전부 `~/dungeon` 을 가정, VPS 서빙 때 손볼 것)
              vm/ setup.sh deploy.sh botpikdun.service Caddyfile README.md (심사용 서버 GCP 서울 VM 배포, 09-13)
 verify_*.py  게이트 64종(루트 — 2단계에서 verify/ 로 이동 예정; verify_public 은 server.py 게이트, verify_guild 는 D69 길드 척추)

@@ -835,6 +835,18 @@ def deliver_and_hail(d, bots, says, say_to, say_kind=None, open_props=None):
             got = d.hail_stop(b, froms) if froms else []
             if got:
                 hails[b["char"]] = got
+    # D72(09-14 파트너 "혼자 있을 때도 동료의 이름을 부르면서 동료에게 말하는 것처럼 말한다 … 이상한 부분"): 말의 결과 되먹임 —
+    #   지목한 말(to=번호|all)이 누구에게 들렸는지를 말한 사람의 궤적에 남긴다(0콜, 자기 경험 = 시야-온리 무위반). 규칙을 더 적는 대신
+    #   "네 말을 들은 사람: 없음"을 다음 결정에서 보게 한다(D1 "자기 행동의 결과를 관측"). 혼잣말(to 없음)은 남기지 않는다.
+    for oc, t in says.items():
+        if not say_to.get(oc):
+            continue
+        sb = by_char.get(oc)
+        if sb is None or not sb["alive"]:
+            continue
+        heard = [b["char"] for b in bots if b["char"] != oc and any(m["from"] == oc for m in inbox.get(b["char"], []))]
+        d._trail_add(sb, {"type": "said", "to": say_to[oc], "kind": say_kind.get(oc, "잡담"), "heard": heard,
+                          "text": str(t)[:40], "turn": d.turn})
     return inbox, hails
 
 

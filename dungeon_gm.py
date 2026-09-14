@@ -280,6 +280,9 @@ def event_tags(rec, names=None):
     if t == 'hail':
         who = ', '.join(nm(c) for c in rec.get('froms', [])) or '동료'
         return [('hail', '부름', '%s의 말에 멈춤' % who)]
+    if t == 'said':                                        # D72 말의 결과 — 누가 들었나(러너 배달 사실)
+        heard = rec.get('heard') or []
+        return [('talk', '말', ('들은 사람 ' + '·'.join(nm(c) for c in heard)) if heard else '들은 사람 없음')]
     if t == 'plan_broken':
         st = rec.get('step') or {}
         return [('plan_broken', '작정 깨짐', '%s %s — %s' % (st.get('type', '?'), place_word(st.get('target', ''), 'decide'), rec.get('why', '?')))]
