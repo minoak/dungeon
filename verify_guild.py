@@ -15,6 +15,8 @@
   ⑧ 배선(소스·문서): STREAM_FORMAT · HARNESS D69·D70 · README · 론처 체크박스·env · 클라이언트(evline·Bubbles·types) · 결산
   ⑨ D70 마을 사람 지각=구역(09-14 파트너 "구역 단위로 가자"): 다른 구역의 동료는 안 보이고(sights.bots·party.visible·goto b<char>) 말도 안 들리고
      목격도 없다 · 같은 구역·곁이면 전부 됨 · 관측 문장 · 장부 주소=구역 이름 · town_hear None 이면 옛 규칙
+  ⑩ D71 NPC 가 먼저 말을 건다(09-14 파트너 "npc 가 먼저 말을 걸게 하면 어때?"): 상황별 인사 6종·한 번만·구역/범위/이미 말한 NPC 제외 ·
+     러너 풀런에서 tick.npc_hails·inbox 'npc:'·귀환 뒤 hail_return · npc_reply 의 npc_hail 장면(두뇌 옵션)
 (기존 verify 63종은 별도 실행.)
 """
 import contextlib
@@ -371,13 +373,63 @@ o9c = d9.view(a9, [a9, b9])
 check("⑨ 옛 규칙(town_hear None): 다른 구역도 보인다 · 옛 문장", [x["char"] for x in o9c["sights"]["bots"]] == ["2"]
       and "한눈에" in brains._wire(o9c, {"1": "두란", "2": "카야"}, compose=True))
 
+print("── ⑩ NPC 가 먼저 말을 건다(D71, 09-14 파트너 'npc 가 먼저 말을 걸게 하면 어때?')")
+Q10 = G.new_quests()
+d10, s10 = show_runner.build_town(quests=Q10)
+rec10 = by_name(d10, "npc", "길드 접수원")
+tav10 = by_name(d10, "npc", "주점 주인")
+tem10 = by_name(d10, "npc", "성직자")
+d10.rumor = {"depth": 1, "monsters": {"고블린": 2, "그림자거미": 1}, "traps": 3, "features": {"treasure": 4}}
+a10 = mkbot("1", rec10.x + 2, rec10.y + 2)                       # 접수원 근처(같은 구역, 곁 아님), 물약 0
+g1 = d10.npc_greetings([a10])
+check("⑩ 물약 0 이면 hail_no_potion — 이름 채움 · 한 번만(두 번째 호출 빈 목록)",
+      len(g1) == 1 and g1[0][0] == "길드 접수원" and g1[0][1] == "1" and g1[0][5] == "hail_no_potion" and "두란 님" in g1[0][2] and "물약" in g1[0][2]
+      and d10.npc_greetings([a10]) == [])
+b10 = mkbot("2", rec10.x + 2, rec10.y + 2, job="도적"); b10["potions"] = 1
+g2 = d10.npc_greetings([b10])
+check("⑩ 물약 있고 안 맡은 의뢰 3 → hail_board(수 채움)", len(g2) == 1 and g2[0][5] == "hail_board" and "3개" in g2[0][2])
+for qid in d10.quest_ids.values():
+    Q10["accepted"][qid] = {"turn": 1, "by": "1"}
+c10 = mkbot("3", rec10.x + 2, rec10.y + 2, job="궁수"); c10["potions"] = 1
+check("⑩ 전부 맡았고 물약 있으면 기본 hail", (lambda g: len(g) == 1 and g[0][5] == "hail")(d10.npc_greetings([c10])))
+Q10["returned"] = 50; d10.expedition_returned = True
+r10 = mkbot("4", rec10.x + 3, rec10.y + 1); r10["potions"] = 0
+check("⑩ 돌아온 파티(보고 전)면 물약보다 hail_return 이 먼저", (lambda g: len(g) == 1 and g[0][5] == "hail_return" and "보고" in g[0][2])(d10.npc_greetings([r10])))
+t10 = mkbot("5", tav10.x + 1, tav10.y + 2); e10 = mkbot("6", tem10.x + 2, tem10.y + 1)
+d10.oracle = {"id": "x", "text": "조심해라", "turn": 1}
+g3 = {g[0]: g for g in d10.npc_greetings([t10, e10])}
+check("⑩ 주점 주인 hail_rumor(고블린 2마리·함정 3) · 성직자 hail_oracle(신의 요청)",
+      g3.get("주점 주인", [None] * 6)[5] == "hail_rumor" and "고블린 2마리" in g3["주점 주인"][2] and "함정도 3개" in g3["주점 주인"][2]
+      and g3.get("성직자", [None] * 6)[5] == "hail_oracle")
+far10 = mkbot("7", *s10["1"])                                    # 광장(번화가) — 접수원과 다른 구역
+d10.oracle = None
+n10 = mkbot("8", tem10.x + 2, tem10.y + 1); n10["npc_met"] = {"성직자"}
+check("⑩ 다른 구역·범위 밖은 인사 없음 · 이미 말한 NPC 는 없음 · 신의 요청 없으면 성직자 기본 hail",
+      d10.npc_greetings([far10]) == [] and d10.npc_greetings([n10]) == []
+      and (lambda g: len(g) == 1 and g[0][5] == "hail")(d10.npc_greetings([mkbot("9", tem10.x + 2, tem10.y + 1)])))
+hails7 = [(r["turn"], h) for r in ticks for h in (r.get("npc_hails") or [])]
+first = next(((t, h) for t, h in hails7 if h["npc"] == "길드 접수원" and h["char"] == "1"), None)
+check("⑦+⑩ 러너: 길드 곁에서 출발한 봇1 에게 접수원 인사가 tick.npc_hails 와 그 틱 inbox('npc:길드 접수원')로 · run_meta.npc_hail · 귀환 뒤 hail_return",
+      meta.get("npc_hail") is True and first is not None and first[0] <= 3
+      and any(m.get("from") == "npc:길드 접수원" for m in (next(r for r in ticks if r["turn"] == first[0]).get("inbox") or {}).get("1", []))
+      and any(h.get("key") == "hail_return" and t > asc[0]["turn"] for t, h in hails7))
+seen10 = {}
+brains._call_claude = lambda p, m="haiku": (seen10.__setitem__("p", p), ('{"line": "어서 오세요!"}', None))[1]
+line10 = brains.npc_reply(a10, {"result": "npc_hail", "npc": "길드 접수원", "line": "정해진 인사", "key": "hail_no_potion"}, None, [], npc=ENT.npc("guild_receptionist"))
+brains._call_claude = lambda prompt, model="haiku": ""
+check("⑩ 두뇌 옵션: npc_reply 의 npc_hail 장면('먼저 한마디') · 정해진 인사 동봉", line10 == "어서 오세요!" and "네가 먼저 한마디" in seen10["p"] and "정해진 인사" in seen10["p"])
+
 print("── ⑧ 배선(소스·문서)")
-check("⑧ STREAM_FORMAT: run_meta quests/town_apart/town_hear/npc_brain · end.quests/warped · 이벤트 quest_accepted/npc_report · level.quests",
-      all(s_ in src("STREAM_FORMAT.md") for s_ in ("| `quests` |", "| `town_apart` |", "| `town_hear` |", "| `npc_brain` |", "`warped`", "quest_accepted", "npc_report", "line_src")))
-check("⑧ HARNESS D69·D70 · CHANGELOG · README(길드 보고·구역) · docs/entities.md(req)",
-      "D69" in src(os.path.join("design", "HARNESS_DESIGN.md")) and "D70" in src(os.path.join("design", "HARNESS_DESIGN.md"))
-      and "D70" in src(os.path.join("docs", "CHANGELOG.md"))
-      and "접수원" in src("README.md") and "같은 구역" in src("README.md") and "req" in src(os.path.join("docs", "entities.md")))
+check("⑧ STREAM_FORMAT: run_meta quests/town_apart/town_hear/npc_brain/npc_hail · tick.npc_hails · end.quests/warped · 이벤트 quest_accepted/npc_report · level.quests",
+      all(s_ in src("STREAM_FORMAT.md") for s_ in ("| `quests` |", "| `town_apart` |", "| `town_hear` |", "| `npc_brain` |", "| `npc_hail` |", "| `npc_hails` |",
+                                                    "`warped`", "quest_accepted", "npc_report", "line_src")))
+check("⑧ HARNESS D69·D70·D71 · CHANGELOG · README(길드 보고·구역·먼저 말) · docs/entities.md(req·hail) · 클라이언트 npc_hails",
+      all(k in src(os.path.join("design", "HARNESS_DESIGN.md")) for k in ("D69", "D70", "D71"))
+      and "D70" in src(os.path.join("docs", "CHANGELOG.md")) and "D71" in src(os.path.join("docs", "CHANGELOG.md"))
+      and "접수원" in src("README.md") and "같은 구역" in src("README.md") and "먼저 말" in src("README.md")
+      and "req" in src(os.path.join("docs", "entities.md")) and "hail_rumor" in src(os.path.join("docs", "entities.md"))
+      and "npc_hails" in src(os.path.join("game", "src", "stream", "parse.ts")) and "npc_hails" in src(os.path.join("game", "src", "scene", "Bubbles.ts"))
+      and "npc_hails" in src(os.path.join("game", "src", "text", "evline.ts")))
 check("⑧ 러너 스위치 3 · 론처 체크박스 2 + env 2",
       all(s_ in src("show_runner.py") for s_ in ("DUNGEON_QUESTS", "DUNGEON_TOWN_APART", "DUNGEON_NPC_BRAIN", "npc_reply(", "npc_report"))
       and all(s_ in src(os.path.join("launcher", "index.html")) for s_ in ('id="townApart" checked', 'id="npcBrain" checked', "town_apart:", "npc_brain:"))

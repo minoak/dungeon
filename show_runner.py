@@ -190,6 +190,10 @@ TOWN_APART_ON = os.environ.get("DUNGEON_TOWN_APART", "1") != "0"   # D69 흩어�
 TOWN_HEAR = os.environ.get("DUNGEON_TOWN_HEAR", "zone")          # D70(09-14 파트너 "물리적으로만 멀게 해서 … 사실상 붙어있는거나 마찬가지"
                                                              #   → "구역 단위로 가자") 마을 사람 지각: 'zone'=동료·목소리·목격이 같은 구역
                                                              #   (또는 곁 1칸)에서만 — 장소(길·건물)는 다 안다 / 'all'=옛 전체 시야. 러너 기본 zone
+NPC_HAIL_ON = os.environ.get("DUNGEON_NPC_HAIL", "1") != "0"     # D71(09-14 파트너 "npc 가 먼저 말을 걸게 하면 어때?") NPC 가 먼저 거는 인사 —
+                                                             #   같은 구역·6칸 안에 오면 캐릭터당 NPC 당 한 번, 정의의 상황별 문장(0콜),
+                                                             #   잡담 배달(정지 없음). 러너 기본 1(마을만)
+NPC_HAIL_BRAIN_ON = os.environ.get("DUNGEON_NPC_HAIL_BRAIN", "0") == "1"   # D71 인사도 LLM 이 쓴다(인사당 1콜, 최대 캐릭터×NPC) — 기본 0(고정 문장)
 NPC_BRAIN_ON = os.environ.get("DUNGEON_NPC_BRAIN", "1") != "0"   # D69 마을 NPC 두뇌 — 캐릭터가 말을 걸면 NPC 한마디를 LLM 이 쓴다(1콜,
                                                              #   먼저 말하지 않음·잡담 배달·판정은 엔진·고정 대사=폴백). 러너 기본 1,
                                                              #   더미 두뇌(dummy) 판에선 저절로 꺼진다(콜 0 유지)
@@ -1048,7 +1052,7 @@ def main():
     if TOWN_ON:                            # 마을 판(D29): 원정은 고향에서 시작한다
         d, tstarts = town_for_run(TOWN_APART_ON, quests)   # D69 흩어진 출발·의뢰 장부(게이트 스텁 허용)
         d.lore = lore
-        if npc_brain:                      # D69 주점 소문 재료 — 지하 1층의 실제 배치(같은 시드=같은 층, 0콜)
+        if npc_brain or NPC_HAIL_ON:       # D69·D71 주점 소문 재료 — 지하 1층의 실제 배치(같은 시드=같은 층, 0콜): NPC 답·인사의 숫자
             d.rumor = floor_rumor(new_floor(1, lore))
     else:
         d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION, depth=START_DEPTH,   # D67: 프리셋이면 최심층
@@ -1170,6 +1174,7 @@ def main():
             town_apart=bool(TOWN_ON and TOWN_APART_ON),   # D69 additive 흩어진 출발(마을 판만) — 배치 메타(solo 급)
             town_hear=(TOWN_HEAR if TOWN_HEAR == "zone" else "all"),   # D70 additive 마을 사람 지각 — 'zone'(같은 구역·곁)|'all'(옛 전체). 배달·가시·목격 물리 메타(ally_sight 급)
             npc_brain=bool(npc_brain), # D69 additive 마을 NPC 두뇌 여부 — 이벤트 line 이 LLM 문장(line_src 'brain')일 수 있다는 표현층 메타
+            npc_hail=bool(NPC_HAIL_ON),   # D71 additive NPC 가 먼저 거는 인사 여부 — tick.npc_hails·inbox 'npc:' 잡담(마을만). 표현층 메타(콜 0)
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
@@ -1226,6 +1231,19 @@ def main():
         d.turn = turn       # 장부(D17) 목격 스탬프 — 판정 무관여, "언제 봤나"의 단일 원천
         if PENDING_ON:                        # D47 배관: 걷는 동안 들은(안 세운) 말을 이번 결정에 함께 읽힌다
             inbox = merge_inbox(pending, inbox)
+        npc_hails = []                        # D71 NPC 가 먼저 거는 인사 — 같은 구역·6칸 안, 캐릭터당 NPC 당 한 번, 잡담(정지 없음)
+        if NPC_HAIL_ON and getattr(d, "town", False):
+            for nm_, ch_, line_, hx_, hy_, key_ in d.npc_greetings(bots):
+                src_ = None
+                if npc_brain and NPC_HAIL_BRAIN_ON:   # 옵션: 인사도 LLM 이(인사당 1콜) — 기본은 정의의 문장(0콜)
+                    b_ = next((x for x in bots if x["char"] == ch_), None)
+                    line2 = brains.npc_reply(b_, {"result": "npc_hail", "npc": nm_, "line": line_, "key": key_}, None,
+                                             npc_facts(d, nm_, bots, fallen, quests), npc=(getattr(d, "npc_defs", None) or {}).get(nm_)) if b_ else None
+                    if line2:
+                        line_, src_ = line2, "brain"
+                inbox.setdefault(ch_, []).append({"from": "npc:" + nm_, "text": line_, "turn": turn, "to": ch_})
+                npc_hails.append({"npc": nm_, "char": ch_, "line": line_, "key": key_, **({"line_src": src_} if src_ else {})})
+                event('   %s → 봇%s \U0001f4ac "%s"' % (nm_, ch_, line_))
         inbox_in = inbox    # 이번 틱 사고에 주입된 받은편지함 — 루프 끝에서 이름이 새 dict 로
                             # 재바인딩되므로(덮어씀) think_all 직전 참조를 잡아 스트림에 남긴다
         # order 없는 봇만 사고(자동보행 중인 봇은 LLM 0콜)
@@ -1361,6 +1379,7 @@ def main():
                     **({"answers": answers} if answers else {}),   # 제안 반응(D47) {받은 봇: {한 봇: 답함 여부}} — additive 계측
                     **({"replies": replies} if replies else {}),   # 반응 형태(D47 ②) [{from,to,kind,how}] — additive 계측
                     **({"oracle": oracle_new} if oracle_new else {}),   # D61 개정(09-13 additive) 이 틱에 새로 들린 신의 요청 {id,text}
+                    **({"npc_hails": npc_hails} if npc_hails else {}),  # D71(09-14 additive) 이 틱에 NPC 가 먼저 건 인사 [{npc,char,line,key,line_src?}]
                     "events": turn_events,
                     "bots": [G.bot_snapshot(b) for b in bots],
                     "monsters": [m.as_dict() for m in d.monsters],

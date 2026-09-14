@@ -299,11 +299,15 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None):
     who = "%s(%s)" % (bot.get("name") or ("모험가 %s" % bot.get("char", "?")), bot.get("job", "모험가"))
     r = res.get("result")
     scene = []
-    if said:
+    if r == "npc_hail":                               # D71 먼저 거는 인사 — 상대는 아직 말이 없다
+        scene.append("- %s이(가) 네 근처를 지나간다. 아직 네게 말을 걸지 않았다 — 네가 먼저 한마디 건넨다(상황: %s)" % (who, res.get("key", "hail")))
+    elif said:
         scene.append('- %s이(가) 네게 말을 걸었다: "%s"' % (who, str(said)[:160]))
     else:
         scene.append("- %s이(가) 말없이 다가와 네 앞에 섰다" % who)
-    if r == "npc_gift":
+    if r == "npc_hail":
+        pass
+    elif r == "npc_gift":
         scene.append("- 세계의 판정: 너는 %s에게 %s을(를) 건넸다(정해진 원정 물품 — 이번 원정 몫)" % (who, res.get("item", "?")))
     elif r == "npc_report":
         t_ = res.get("titles") or {}
@@ -315,7 +319,7 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None):
     else:
         scene.append("- 세계의 판정: 줄 물건은 없다(대화만)")
     if res.get("line"):
-        scene.append('- (두뇌가 없을 때의 정해진 대사: "%s" — 같은 뜻이면 네 말로 바꿔도 된다)' % res["line"])
+        scene.append('- (두뇌가 없을 때의 정해진 %s: "%s" — 같은 뜻이면 네 말로 바꿔도 된다)' % ("인사" if r == "npc_hail" else "대사", res["line"]))
     prompt = (_npc_prompt_raw().replace("{name}", name).replace("{role}", npc.get("role") or "마을 사람")
               .replace("{persona}", npc.get("persona") or "평범한 마을 사람").replace("{maxlen}", str(NPC_LINE_LEN))
               .replace("{facts}", "\n".join("- " + str(x) for x in (facts or [])) or "- (특별히 아는 것 없음)")

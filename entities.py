@@ -278,7 +278,9 @@ def npc(eid):
             # D69(09-14): 역할 한 줄·성격·보고 역할·보고 대사(전부 선택 — 없으면 None. 판정은 report 만, 나머지는 문장 재료)
             'role': c.get('role'), 'persona': c.get('persona'), 'report': bool(c.get('report')),
             'line_report': c.get('line_report'), 'line_report_failed': c.get('line_report_failed'),
-            'line_report_empty': c.get('line_report_empty'), 'knows': list(c.get('knows') or [])}
+            'line_report_empty': c.get('line_report_empty'), 'knows': list(c.get('knows') or []),
+            # D71(09-14): NPC 가 먼저 거는 인사 — hail(기본)·hail_no_potion·hail_board·hail_return·hail_rumor·hail_oracle(전부 선택, 상황별)
+            **{k: c.get(k) for k in ('hail', 'hail_no_potion', 'hail_board', 'hail_return', 'hail_rumor', 'hail_oracle')}}
 
 
 def lore():
