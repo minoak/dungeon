@@ -654,7 +654,7 @@ class Feature:
     """던전의 '오브젝트/피처' — 출구·보물·문·가구·발판 등. 칸이 아니라 이름붙은 객체.
     봇은 칸이 아니라 *보이는 피처*를 핑한다(Stage 2). 칸격자 substrate 탈출의 핵심 표현.
     concealed=숨김(인지 판정으로만 드러남), perception_gate=드러내는 데 필요한 인지 난도(0=자동)."""
-    __slots__ = ('id', 'type', 'name', 'x', 'y', 'room_id', 'concealed', 'perception_gate', 'worn')
+    __slots__ = ('id', 'type', 'name', 'x', 'y', 'room_id', 'concealed', 'perception_gate', 'worn', 'walker')
 
     def __init__(self, fid, ftype, name, x, y, room_id=None,
                  concealed=False, perception_gate=0):
@@ -663,11 +663,13 @@ class Feature:
         self.concealed, self.perception_gate = concealed, perception_gate
         self.worn = set()      # D56(09-12): 이 장비를 착용해 본 캐릭터들 — 내려놓거나 건네져 바닥에 놓일 때 이어받는다.
                                #   obs 에서 '착용한 적 없음'(new) 표시의 근거(파트너 "진짜 착용한 적이 없는 장비만 new").
+        self.walker = False    # D73(09-14): 마을 행인 NPC — 틱마다 제 구역 안을 걷는다(피처 좌표가 바뀐다). 스냅샷엔 True 일 때만 실린다
 
     def as_dict(self):
         return {'id': self.id, 'type': self.type, 'name': self.name,
                 'x': self.x, 'y': self.y, 'room_id': self.room_id,
-                'concealed': self.concealed, 'perception_gate': self.perception_gate}
+                'concealed': self.concealed, 'perception_gate': self.perception_gate,
+                **({'walker': True} if self.walker else {})}   # D73 additive — 걷는 NPC 표식(관전·검증이 정착 NPC 와 가른다)
 
 
 class Room:
@@ -816,6 +818,8 @@ class Dungeon:
         self.expedition_returned = False   # D69 워프게이트로 돌아온 마을 — 원정을 마친 상태(접수원 보고로 끝난다). 러너가 켠다
         self.town_hear = None      # D70(09-14) 마을 사람 지각 — 'zone' 이면 동료·목소리·목격이 같은 구역(또는 곁 1칸)에서만. None=옛 판(전체 시야)
         self.rumor = None          # D71 주점 소문 재료(지하 1층 실측 — 러너 floor_rumor). 인사 문장의 숫자 자리에 들어간다
+        self.walkers = {}          # D73(09-14) 마을 행인 — 피처 id → {'region': 구역 이름, 'rate': 틱당 걸음 확률}. build_town 이 채운다
+        self.walk_rng = None       # D73 행인 걸음 전용 RNG(시드 파생) — 판정용 self.rng 를 안 건드린다(결정론은 그대로)
         self.graves = bool(graves) # D22 묘 스위치 — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_GRAVES(기본 1)로 켠다. 쓰러진 자리에 '~의 묘' 피처.
         self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
@@ -967,6 +971,7 @@ class Dungeon:
         d.expedition_returned = False                  # D69 원정 귀환 상태 — 러너가 켠다
         d.town_hear = None                             # D70 마을 사람 지각(구역) — 손그림 장면도 기본 없음(build_town 이 켠다)
         d.rumor = None                                 # D71 소문 재료 — 러너가 채운다
+        d.walkers, d.walk_rng = {}, None               # D73 마을 행인 — build_town 이 채운다(__new__ 경유라 명시 초기화)
                                    #   ⚠️ from_ascii 는 __new__ 경유라 __init__ 을 안 탄다 —
                                    #   새 스위치는 여기 명시 초기화가 필수(D21·D22·솔로 때 밟은 함정.
                                    #   빼먹으면 AttributeError 로 게이트 15개가 한꺼번에 붉어진다)
@@ -1893,7 +1898,8 @@ class Dungeon:
                              **({'new': True} if (f.type in ('weapon', 'armor')            # D57: 아무도 착용한 적 없는 장비(객체 사실,
                                                  and not getattr(f, 'worn', None)) else {})})   #   파트너 "진짜 착용한 적이 없는 것만 new")
                  for f in self.features.values()
-                 if f.type != 'exit' and not f.concealed and (f.x, f.y) in seen]
+                 if f.type != 'exit' and not f.concealed and (f.x, f.y) in seen
+                 and (not getattr(f, 'walker', False) or self.hears(bot, f.x, f.y))]   # D73: 행인은 사람 — 마을 구역 지각(D70)을 탄다(정착 NPC 는 장소처럼 늘 보인다)
         if self.events:                        # D22 개정(09-06 파트너 발제 "두란의 묘지를 발견한다면
             for f in self.features.values():   #   [두란의 죽음을 발견] 한 줄"): 묘는 공공연한 표지판 —
                 if (f.type == 'grave' and (f.x, f.y) in seen   # 죽음을 못 본 동료도 묘를 본 순간 안다
@@ -2995,6 +3001,54 @@ class Dungeon:
         line = line.replace('{undone}', '·'.join(titles[x] for x in undone))
         return {'char': bot['char'], 'type': 'interact', 'target': 'f%d' % f.id, 'result': 'npc_report', 'npc': f.name,
                 'line': line, 'done': done, 'undone': undone, 'titles': titles, 'bag': int(bot.get('bag', 0))}
+
+    # ── D73(2026-09-14 파트너 "마을에 돌아다니는 일반 캐릭터들이 필요해 … 플레이어블 캐릭터의 반응을 확인해보고 싶어") 마을 행인 ──
+    def add_walker(self, name, region_name, rate, avoid=()):
+        """행인 NPC 하나를 제 구역(region_name = layout 구역 이름)의 빈 바닥 칸에 세운다(시드 파생 RNG — 결정론). 반환 fid(자리가 없으면 None).
+        피한다: 피처(문턱·NPC·입구)·avoid 칸(출발 자리)·출구 곁 1칸."""
+        if self.walk_rng is None:
+            self.walk_rng = random.Random(self._derive_seed(self.master_seed, 0) ^ 0x57A1C)
+        cells = [(x, y) for y in range(self.h) for x in range(self.w)
+                 if self.grid[y][x] == FLOOR and self._town_zone(x, y) == region_name
+                 and self.feature_at(x, y) is None and (x, y) not in avoid
+                 and max(abs(x - self.exit[0]), abs(y - self.exit[1])) > 1]
+        if not cells:
+            return None
+        x, y = self.walk_rng.choice(cells)
+        fid = self._add_feature('npc', name, x, y)
+        self.features[fid].walker = True
+        self.walkers[fid] = {'region': region_name, 'rate': float(rate)}
+        return fid
+
+    def walk_npcs(self, bots):
+        """행인 한 틱 — 각자 확률(rate)로 제 구역 안 이웃 바닥 칸으로 한 걸음(4방향, 시드 파생 RNG). 사람·피처·출구 곁은 안 밟는다.
+        반환 = 움직인 행인 [{type:'npc_move', id:'f<n>', npc, to:[x,y]}](스트림 이벤트 additive — 관전은 스냅샷으로 그린다). 판정 무접촉."""
+        out = []
+        if not self.walkers or self.walk_rng is None:
+            return out
+        occupied = {(b['x'], b['y']) for b in bots if b['alive'] and not b['won']}
+        for fid in sorted(self.walkers):
+            f = self.features.get(fid)
+            w = self.walkers[fid]
+            if f is None:
+                continue
+            if self.walk_rng.random() >= w['rate']:
+                continue
+            opts = []
+            for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+                nx, ny = f.x + dx, f.y + dy
+                if not (0 <= nx < self.w and 0 <= ny < self.h) or self.grid[ny][nx] != FLOOR:
+                    continue
+                if (nx, ny) in occupied or self.feature_at(nx, ny) is not None or self._town_zone(nx, ny) != w['region']:
+                    continue
+                if max(abs(nx - self.exit[0]), abs(ny - self.exit[1])) <= 1:
+                    continue
+                opts.append((nx, ny))
+            if not opts:
+                continue
+            f.x, f.y = self.walk_rng.choice(opts)
+            out.append({'type': 'npc_move', 'id': 'f%d' % fid, 'npc': f.name, 'to': [f.x, f.y]})
+        return out
 
     # ── D71(2026-09-14 파트너 "npc 가 먼저 말을 걸게 하면 어때?") NPC 가 먼저 거는 인사 — 세계가 먼저 손을 내민다, 갈지는 캐릭터 몫 ──
     NPC_HAIL_RANGE = 6   # ⚠️임시 가정 — 같은 구역(hears) 안에서 이 체비셰프 거리 안에 들어오면 한 번

@@ -1,0 +1,25 @@
+{
+  "id": "street_vendor",
+  "name": "노점 상인",
+  "kind": "npc",
+  "tags": [
+    "npc",
+    "street",
+    "vendor"
+  ],
+  "sprite": "wl-town-npcs#2",
+  "note": "SilenceBreaker 임시 초안(2026-09-14 D73 마을 행인) — 문장·이름·성격 전부 파트너 대기. walk.region 은 layout 구역 id, rate 는 틱당 한 걸음 확률. 도트는 아직 없음(관전은 기본 타일) — 파트너 에셋 대기.",
+  "comps": {
+    "npc": {
+      "line": "구경하고 가세요! 던전에서 나온 잡동사니예요. 아직 값은 안 매겼어요.",
+      "line_again": "아까 봤죠? 사고파는 건 아직이에요. 다음에 꼭.",
+      "role": "노점 · 잡동사니 구경(아직 사고팔 수는 없다)",
+      "persona": "넉살 좋고 시끄럽다. 손님이면 누구든 붙잡는다.",
+      "hail": "{name} 님, 구경만 해도 돼요! 던전 잡동사니 있어요~",
+      "walk": {
+        "region": "main_street",
+        "rate": 0.3
+      }
+    }
+  }
+}

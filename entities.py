@@ -113,6 +113,12 @@ def _problems(pairs, root):
                     out.append('%s: trap.%s 정수 필요' % (rel, k))
         if kind == 'npc' and not (comps.get('npc') or {}).get('line'):
             out.append('%s: npc.line 필요' % rel)
+        if kind == 'npc' and (comps.get('npc') or {}).get('walk') is not None:   # D73 행인 — 구역 id 문자열 + 걸음 확률 0~1
+            wk = (comps.get('npc') or {}).get('walk')
+            if not isinstance(wk, dict) or not isinstance(wk.get('region'), str) or not wk['region']:
+                out.append('%s: npc.walk 는 {region(layout 구역 id), rate} 객체' % rel)
+            elif not (isinstance(wk.get('rate', 0.5), (int, float)) and 0 <= wk.get('rate', 0.5) <= 1):
+                out.append('%s: npc.walk.rate 는 0~1' % rel)
         if kind == 'map':
             space = comps.get('space') or {}
             if space.get('role') not in ('town', 'district', 'street'):
@@ -280,7 +286,8 @@ def npc(eid):
             'line_report': c.get('line_report'), 'line_report_failed': c.get('line_report_failed'),
             'line_report_empty': c.get('line_report_empty'), 'knows': list(c.get('knows') or []),
             # D71(09-14): NPC 가 먼저 거는 인사 — hail(기본)·hail_no_potion·hail_board·hail_return·hail_rumor·hail_oracle(전부 선택, 상황별)
-            **{k: c.get(k) for k in ('hail', 'hail_no_potion', 'hail_board', 'hail_return', 'hail_rumor', 'hail_oracle')}}
+            **{k: c.get(k) for k in ('hail', 'hail_no_potion', 'hail_board', 'hail_return', 'hail_rumor', 'hail_oracle')},
+            'walk': (dict(c['walk']) if isinstance(c.get('walk'), dict) else None)}   # D73(09-14) 행인: {region: layout 구역 id, rate}
 
 
 def lore():

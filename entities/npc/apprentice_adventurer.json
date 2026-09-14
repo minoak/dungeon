@@ -1,0 +1,25 @@
+{
+  "id": "apprentice_adventurer",
+  "name": "견습 모험자",
+  "kind": "npc",
+  "tags": [
+    "npc",
+    "street",
+    "adventurer"
+  ],
+  "sprite": "wl-town-npcs#0",
+  "note": "SilenceBreaker 임시 초안(2026-09-14 D73 마을 행인) — 문장·이름·성격 전부 파트너 대기. walk.region 은 layout 구역 id, rate 는 틱당 한 걸음 확률. 도트는 아직 없음(관전은 기본 타일) — 파트너 에셋 대기.",
+  "comps": {
+    "npc": {
+      "line": "저, 저도 곧 던전에 내려갈 거예요! 아직 파티가 없지만요…",
+      "line_again": "파티… 아직 못 구했어요. 같이 가 주실 순 없죠?",
+      "role": "파티를 못 구한 견습 모험자",
+      "persona": "들뜨고 어설프다. 모험가를 동경하고, 같이 가고 싶어 하지만 대놓고는 못 말한다.",
+      "hail": "{name} 님! 진짜 모험가시죠? 저, 저도 언젠가는…",
+      "walk": {
+        "region": "alley",
+        "rate": 0.4
+      }
+    }
+  }
+}

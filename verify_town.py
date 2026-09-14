@@ -272,8 +272,8 @@ d1a, d1b = levels[1], levels[3]
 check("⑤ 재입장 = 같은 1층 — 층 시드·격자 동일 + '<' 보존(세계가 이어진다)",
       d1a['level_seed'] == d1b['level_seed'] and d1a['grid'] == d1b['grid']
       and all(any(f['type'] == 'stairs_up' for f in lv['features']) for lv in (d1a, d1b)))
-check("⑤ 마을 level — NPC 3 실림(관전자 등급 진실)",
-      sum(1 for f in levels[0]['features'] if f['type'] == 'npc') == 3)
+check("⑤ 마을 level — 정착 NPC 3 실림(관전자 등급 진실; D73 행인은 walker 표식으로 따로)",
+      sum(1 for f in levels[0]['features'] if f['type'] == 'npc' and not f.get('walker')) == 3)
 check("⑤ 마을 v1 level 에 시각 레이어(visual: town-visual-v1 — 바닥 사각형·건물·소품·NPC 행) 실림, 던전 층엔 없음",
       levels[0].get('visual', {}).get('schema') == 'town-visual-v1' and {b['texture'] for b in levels[0]['visual']['buildings']} == {'guild','temple','tavern','gate'}
       and len(levels[0]['visual']['npcs']) == 3 and 'visual' not in levels[1])

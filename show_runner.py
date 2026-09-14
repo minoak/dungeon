@@ -194,6 +194,9 @@ NPC_HAIL_ON = os.environ.get("DUNGEON_NPC_HAIL", "1") != "0"     # D71(09-14 파
                                                              #   같은 구역·6칸 안에 오면 캐릭터당 NPC 당 한 번, 정의의 상황별 문장(0콜),
                                                              #   잡담 배달(정지 없음). 러너 기본 1(마을만)
 NPC_HAIL_BRAIN_ON = os.environ.get("DUNGEON_NPC_HAIL_BRAIN", "0") == "1"   # D71 인사도 LLM 이 쓴다(인사당 1콜, 최대 캐릭터×NPC) — 기본 0(고정 문장)
+TOWN_WALKERS_ON = os.environ.get("DUNGEON_TOWN_WALKERS", "1") != "0"   # D73(09-14 파트너 "마을에 돌아다니는 일반 캐릭터들 … 플레이어블 캐릭터의
+                                                             #   반응을 확인") 마을 행인 — 정의(npc.walk)가 있는 NPC 가 제 구역을 걷는다(0콜,
+                                                             #   말 걸면 대답·인사도 D69·D71 그대로). 러너 기본 1(마을 판만), build_town 직접 호출은 끔
 NPC_BRAIN_ON = os.environ.get("DUNGEON_NPC_BRAIN", "1") != "0"   # D69 마을 NPC 두뇌 — 캐릭터가 말을 걸면 NPC 한마디를 LLM 이 쓴다(1콜,
                                                              #   먼저 말하지 않음·잡담 배달·판정은 엔진·고정 대사=폴백). 러너 기본 1,
                                                              #   더미 두뇌(dummy) 판에선 저절로 꺼진다(콜 0 유지)
@@ -660,7 +663,7 @@ def mon_summary(e):
 
 
 # ── 마을(D29, 2026-07-30) — 마을(0층)↔던전(1층~) 왕복의 러너 몫 ──────────────
-def build_town(path=None, apart=False, quests=None):
+def build_town(path=None, apart=False, quests=None, walkers=False):
     """town.json(손그림 고정 맵 — 고향은 랜덤이 아니다) → 마을 Dungeon.
     NPC 는 좌표로 심는다(맵의 '&'는 그림 표기 — from_ascii 는 바닥으로 읽음).
     town.json 이 {"layout": "<상대경로>"} 면(09-11, 맵 트랙 저작 원본 참조 — 상대 경로는 town 파일 위치 기준) 그 layout 을
@@ -735,6 +738,23 @@ def build_town(path=None, apart=False, quests=None):
                 d.feature_roles[fid] = role
     d.features[d._exit_fid].name = "던전 입구"   # 같은 '>'라도 마을에선 탈출구가 아니라 입구다
     d.town_hear = "zone" if (TOWN_HEAR == "zone" and res.get("spaces")) else None   # D70 구역 지각 — 구역이 있는(layout) 마을만
+    if walkers and res.get("spaces"):              # D73 마을 행인 — 정의(npc.walk)가 있는 NPC 를 제 구역의 빈 칸에(시드 파생 RNG, 결정론)
+        rname = {r["id"]: r.get("name") for r in res["spaces"]["regions"]}
+        avoid = {tuple(v) for v in starts.values()}
+        for eid in sorted(e for e, dd in G.ENT.load().items() if dd["kind"] == "npc" and (dd["comps"].get("npc") or {}).get("walk")):
+            spec_w = G.ENT.npc(eid)
+            region = rname.get((spec_w.get("walk") or {}).get("region"))
+            if not region:
+                continue
+            fid = d.add_walker(spec_w["name"], region, (spec_w.get("walk") or {}).get("rate", 0.5), avoid=avoid)
+            if fid is None:
+                continue
+            d.npc_defs[spec_w["name"]] = {k: v for k, v in spec_w.items() if v not in (None, [], "")}
+            if spec_w.get("role"):
+                d.feature_roles[fid] = spec_w["role"]
+            d.npc_lines[spec_w["name"]] = spec_w.get("line") or "…"
+            if spec_w.get("line_again"):
+                d.npc_lines_again[spec_w["name"]] = spec_w["line_again"]
     if quests is not None:                         # D69 의뢰 장부(파티 단위) — 게시판 순서로 q1, q2… 를 매긴다(결정론)
         d.quests = quests
         d.index_quests()
@@ -947,12 +967,12 @@ def arrive_cells(d, ax, ay, k):
     return out[:k]
 
 
-def town_for_run(apart, quests):
+def town_for_run(apart, quests, walkers=False):
     """build_town 호출 자리(D69) — 게이트 둘(verify_approach·verify_reactions)이 build_town 을 **인자 없는 스텁**으로 갈아 끼우므로,
     시그니처에 apart 가 없으면 옛 방식으로 부르고 의뢰 장부만 건다(스텁 마을에도 보고·맡기 배관이 죽지 않게)."""
     import inspect
     if 'apart' in inspect.signature(build_town).parameters:
-        return build_town(apart=apart, quests=quests)
+        return build_town(apart=apart, quests=quests, walkers=walkers)
     d, starts = build_town()
     if quests is not None and getattr(d, 'quests', None) is None:
         d.quests = quests
@@ -1062,7 +1082,7 @@ def main():
     npc_brain = NPC_BRAIN_ON and brains.backend_name() != "dummy"       # D69 마을 NPC 두뇌 — 더미 판은 콜 0 유지
 
     if TOWN_ON:                            # 마을 판(D29): 원정은 고향에서 시작한다
-        d, tstarts = town_for_run(TOWN_APART_ON, quests)   # D69 흩어진 출발·의뢰 장부(게이트 스텁 허용)
+        d, tstarts = town_for_run(TOWN_APART_ON, quests, TOWN_WALKERS_ON)   # D69 흩어진 출발·의뢰 장부 · D73 행인(게이트 스텁 허용)
         d.lore = lore
         if npc_brain or NPC_HAIL_ON:       # D69·D71 주점 소문 재료 — 지하 1층의 실제 배치(같은 시드=같은 층, 0콜): NPC 답·인사의 숫자
             d.rumor = floor_rumor(new_floor(1, lore))
@@ -1187,6 +1207,7 @@ def main():
             town_hear=(TOWN_HEAR if TOWN_HEAR == "zone" else "all"),   # D70 additive 마을 사람 지각 — 'zone'(같은 구역·곁)|'all'(옛 전체). 배달·가시·목격 물리 메타(ally_sight 급)
             npc_brain=bool(npc_brain), # D69 additive 마을 NPC 두뇌 여부 — 이벤트 line 이 LLM 문장(line_src 'brain')일 수 있다는 표현층 메타
             npc_hail=bool(NPC_HAIL_ON),   # D71 additive NPC 가 먼저 거는 인사 여부 — tick.npc_hails·inbox 'npc:' 잡담(마을만). 표현층 메타(콜 0)
+            town_walkers=bool(TOWN_ON and TOWN_WALKERS_ON),   # D73 additive 마을 행인 여부 — level/tick features 의 npc 가 걷는다(walker 표식). 배치 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
@@ -1369,6 +1390,8 @@ def main():
         if mon_events:
             write_map(d, bots, turn)
         turn_events += mon_events
+        if TOWN_WALKERS_ON and getattr(d, "walkers", None):   # D73 마을 행인 걸음(0콜) — 사건은 npc_move, 관전은 스냅샷 좌표로 그린다
+            turn_events += d.walk_npcs(bots)
 
         # 의논 핑퐁: say -> 동료가 *볼 수 있을 때만*(근접/시야) 다음 틱 받은편지함
         inbox, hails = deliver_and_hail(d, bots, says, say_to, say_kind, open_props)   # 사회층 한 틱(배달·뼈·정지 — D24·D36·D41·D47)
@@ -1482,7 +1505,7 @@ def main():
                 mem = saved[nd]["mem"]
                 fresh = False
             elif nd == 0:                 # D65: 마을 시작이 아닌 판의 워프 귀환 — 마을(D52 v1)을 새로 짓는다
-                d, _tstarts = town_for_run(False, quests)   # D69 장부를 건다(보고를 받을 접수원이 있는 마을) — 도착은 입구 곁이라 apart 없음
+                d, _tstarts = town_for_run(False, quests, TOWN_WALKERS_ON)   # D69 장부를 건다(보고를 받을 접수원이 있는 마을) — 도착은 입구 곁이라 apart 없음
                 d.lore = lore
                 fresh = False
             else:

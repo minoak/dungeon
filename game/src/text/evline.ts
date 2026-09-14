@@ -105,6 +105,7 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
     return L('combat', `✦ ${esc(e.skill_name || e.skill_id)} → ${esc(tgt())}: ${esc(detail)}` + skillRollHtml(e));
   }
   if (t === 'monster_status') return L('combat', `${esc(e.monster)} — ${esc(e.status)} ${num(e.dmg)} 피해${e.killed ? '·쓰러짐' : ''}`);
+  if (t === 'npc_move') return null;              // D73 마을 행인 걸음 — 지도가 보여준다(스냅샷 좌표), 로그는 소음
 
   if (e.result === 'approaching') return L('dim', `↗ ${esc(tgt())} — 실행 거리까지 접근한다`);
   if (e.result === 'no_path' && e.parent_action_id) return L('dim', `${esc(tgt())} — 접근할 길이 없다`);

@@ -176,6 +176,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | `town_apart` | (2026-09-14 D69 additive) 흩어진 출발 여부(bool, `DUNGEON_TOWN_APART` 러너 기본 1, 마을 판만). true 면 첫 마을 `level.party` 의 출발 칸이 광장(layout starts)이 아니라 각자 건물(길드·주점·신전, id 순 ↔ 캐릭터 번호 순) 문턱 곁이다. 배치 메타(solo 급) |
 | `town_hear` | (2026-09-14 D70 additive) 마을 사람 지각 `'zone'`\|`'all'`(`DUNGEON_TOWN_HEAR` 러너 기본 zone, layout 마을만 뜻이 있다). zone 이면 마을에서 **장소(길·건물·NPC 위치)는 전체가 보이지만 동료·목소리·목격은 같은 구역(layout regions — 번화가·신전 지구…) 또는 곁 1칸에서만**: obs `sights.bots`·`party[].visible`·`inbox` 배달·`witnessed`·`goto b<char>` 해석이 전부 이 규칙(`Dungeon.hears`)을 탄다. 장부 `known.last_seen[].zone` 은 구역 이름. all=옛 전체 시야(D29). 배달·가시 물리 메타(ally_sight 급 — 리플레이·판 비교의 전제) |
 | `npc_hail` | (2026-09-14 D71 additive) NPC 가 먼저 거는 인사 여부(bool, `DUNGEON_NPC_HAIL` 러너 기본 1, 마을만). true 면 캐릭터가 NPC 와 같은 구역(D70)·6칸 안에 들어오는 틱에 NPC 가 정의의 상황별 인사(접수원 hail_return/hail_no_potion/hail_board/hail · 주점 주인 hail_rumor(실측 수)/hail · 성직자 hail_oracle/hail — ⚠️문장 임시)를 **잡담**으로 건넨다(캐릭터당 NPC 당 방문당 1회, 정지·뼈·콜 없음). `tick.npc_hails[]`·그 틱 `inbox` 의 `from:'npc:<이름>'`. `DUNGEON_NPC_HAIL_BRAIN=1` 이면 인사 문장을 LLM 이 쓴다(인사당 1콜, `line_src:'brain'`) |
+| `town_walkers` | (2026-09-14 D73 additive) 마을 행인 여부(bool, `DUNGEON_TOWN_WALKERS` 러너 기본 1, 마을 판만). true 면 정의에 `npc.walk{region, rate}` 가 있는 NPC(떠돌이 모험자·견습 모험자·노점 상인)가 제 구역의 빈 칸에 서고(`features[].walker: true`) 틱마다 확률로 한 걸음 걷는다(`tick.events[] npc_move{id, npc, to}` — 관전은 스냅샷 `features` 좌표로 그린다). 행인은 사람이라 마을 구역 지각(D70)을 탄다(같은 구역에서만 보인다), 정착 NPC 는 장소처럼 늘 보인다. 말 걸기(npc_talk)·인사(D71)는 같다. 걸음은 전용 RNG(walk_rng)라 판정용 rng 를 안 건드린다 |
 | `npc_brain` | (2026-09-14 D69 additive) 마을 NPC 두뇌 여부(bool, `DUNGEON_NPC_BRAIN` 러너 기본 1 — 더미 백엔드면 false). true 면 `npc_talk/npc_gift/npc_report` 의 `line` 이 LLM 문장일 수 있다(`line_src:'brain'`, 원문은 `line_fixed`; 실패면 필드 없음=고정 대사). NPC 는 캐릭터가 말을 걸 때만 1콜, 먼저 말하지 않는다. 그 답은 다음 틱 `inbox` 에 `{from:'npc:<이름>', text, turn, to:<말 건 봇>}` 잡담으로(정지·뼈·사교 콜 없음). 표현층 메타(prompt_context 급) |
 | `graves` | (2026-07-20 D22 additive) 묘 여부(bool, `DUNGEON_GRAVES` 러너 기본 1·엔진 기본 0). true면 봇 사망 이벤트에 `grave={id,name,x,y}` 가 병기되고 그 칸에 '~의 묘' 피처(글리프 `T`)가 생긴다 — 피처 셋을 바꾸는 세계 물리 메타 |
 | `events` | (2026-07-20 D22 additive) 사건층 여부(bool, `DUNGEON_EVENTS` 러너 기본 1·엔진 기본 0). true면 obs 에 목격 어휘가 늘고(witnessed: ally_hit/kill/trap/heal + ally_loot/spot/mishap(07-29 — 상자 결과는 D30 확장으로 ally_use 이관) + ally_use{what,id,result?}(D30 09-05: 문 타일 밟기 · 계단 하강/상행·마을 입구(남는 사람만 본다) · 상자{result=보물을 꺼냈다/독침에 당했다}) + 비몬스터 ally_down) 목격한 전사가 memories(fallen, 휘발 0)로 재제시된다 — obs 를 바꾸는 실행모드 메타(스트림 이벤트 자체는 불변, `grave` 병기 제외) |
@@ -197,7 +198,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | `gate` | (2026-09-13 D65 additive, 보스층만) `{sealed, boss}` — 이 층의 출구는 워프게이트다: 층 시작 때 봉인 여부·보스 몹 id(`monsters[].boss: true`). 봉인은 틱 중 풀린다(보스 처치 `attack` 결과 `unsealed: true`) |
 | `quests` | (2026-09-14 D69 additive, `run_meta.quests` 판 · 있을 때만) 이 층에 들어서며 채워진 층 도달형 의뢰 `[{id,title,n,need,done}]` — 러너가 level 방출 직전에 `_quest_event('reach')` 로 센다 |
 | `rooms[]` | 방 전수: `id x y w h type neighbours[]` (type ∈ entrance/exit/standard) — `feature.room_id` 의 해소처 |
-| `features[]` | Feature 전수: `id type name x y room_id concealed perception_gate` (type ∈ exit/treasure/chest/fountain) |
+| `features[]` | Feature 전수: `id type name x y room_id concealed perception_gate` (type ∈ exit/treasure/chest/fountain …). `walker?: true`(2026-09-14 D73 additive) = 마을 행인 NPC — 틱마다 좌표가 바뀔 수 있다(tick.features 로 따라간다) |
 | `traps[]` | Trap 전수: `x y kind name dc dmg hidden sprung` (kind ∈ spike/dart/alarm) |
 | `monsters[]` | Monster 전수(아래 몹 스냅샷 스키마) |
 | `party[]` | 봇 스냅샷(아래) — 강하 이월 hp/bag 포함한 이 층 개시 상태 |
@@ -300,6 +301,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | `monster_join` | `id monster ally(m<n>) ally_kind state(HUNTING|WANDERING)` | (2026-09-11 D51 additive) 도주하던 몹이 근처 다른 몹 곁에 닿아 합류 — 보이는 봇이 있으면 함께 문다(HUNTING), 없으면 곁에서 진정. 합류 전 이동은 `monster_move`에 `fleeing:true, joining:true` |
 | `monster_attack` | `id monster target roll mod total ac hit`, `surprise? from_hiding? dmg? hp? down? grave? status?` | 몹의 공격. surprise=몹 기습(they-ambush), from_hiding=매복자가 정체 드러내는 일격. **hit 이면 피격 인터럽트**(D1 개정): 당한 봇의 진행 중 order 가 그 자리에서 비워진다(다음 틱 스냅샷 `order:null` + 그 봇 재결정으로 관측 가능). 피격은 시드 RNG 결정론이므로 리플레이 무해. `status`(2026-09-06 D34 additive, `run_meta.status` 판만) = 몹의 특수로 붙은 태그(그림자거미=둔화, 생존 시). `ac` 는 중독이면 −2 된 값 그대로. `grave`(2026-07-20 D22 additive, `DUNGEON_GRAVES` 판만) = down 과 함께 `{id,name,x,y}` — 쓰러진 자리에 선 '~의 묘' 피처(글리프 `T`). trap/chest_trap/fountain_harm 의 down 에도 같은 문법으로 병기 |
 | `monster_move` | `id monster to=[x,y]`, `fleeing?`, `door?` | 몹 이동 — **봇 시야에 들어온 이동만** 기록(시야 밖 배회는 무음. 전체 위치는 스냅샷 monsters 로 시킹) |
+| `npc_move` | `id(f<n>) npc to=[x,y]` | (2026-09-14 D73 additive, `run_meta.town_walkers` 마을 판만) 행인 NPC 의 한 걸음 — 전부 기록(마을은 지형이 다 보인다). 관전 로그엔 안 싣고 지도가 보여 준다 |
 
 ## 조인 규칙 — tick 은 turn 이 아니라 **파일 순서**로 층에 묶인다
 tick 은 파일 순서상 **직전 level** 에 속한다. 강하 턴에는 `tick.turn == descend.turn == 새 level.turn`

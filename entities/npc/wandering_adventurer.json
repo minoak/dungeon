@@ -1,0 +1,26 @@
+{
+  "id": "wandering_adventurer",
+  "name": "떠돌이 모험자",
+  "kind": "npc",
+  "tags": [
+    "npc",
+    "street",
+    "adventurer"
+  ],
+  "sprite": "wl-town-npcs#0",
+  "note": "SilenceBreaker 임시 초안(2026-09-14 D73 마을 행인) — 문장·이름·성격 전부 파트너 대기. walk.region 은 layout 구역 id, rate 는 틱당 한 걸음 확률. 도트는 아직 없음(관전은 기본 타일) — 파트너 에셋 대기.",
+  "comps": {
+    "npc": {
+      "line": "던전에서 막 올라온 참이야. 2층 계단 옆에 거미가 매복하더라 — 조심해.",
+      "line_again": "아까 말했잖아, 2층 거미. 그것만 기억해.",
+      "role": "다른 파티의 모험자 · 던전 소문",
+      "persona": "말수가 적고 피곤해 보인다. 던전 얘기는 정확하게, 그 밖엔 무심하다.",
+      "hail": "{name}? 처음 보는 얼굴이네. 던전 내려가나?",
+      "hail_rumor": "{name}, 내려갈 거면 알아 둬. 1층엔 {monsters}가 있어. 함정은 {traps}개 봤어.",
+      "walk": {
+        "region": "main_street",
+        "rate": 0.5
+      }
+    }
+  }
+}

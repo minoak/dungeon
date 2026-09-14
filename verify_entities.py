@@ -32,9 +32,9 @@ NPC_SHA = 'b6c1e5f26edb42b1e7ad09a6f0db05b8f62d30df43dd846cf67d649f9e8fd1b7'
 
 # ① 로드
 defs = ENT.load()
-check('① 정의 로드 — 기존 20개와 마을 공간 정의(맵 7·건물 4) + 의뢰 3(D61) + 보스 1(D65)',
-      {d['kind'] for d in defs.values()} == set(ENT.KINDS) and len(defs) == 35
-      and len(ENT.by_kind('monster')) == 3 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('object')) == 9 and len(ENT.by_kind('npc')) == 6
+check('① 정의 로드 — 기존 20개와 마을 공간 정의(맵 7·건물 4) + 의뢰 3(D61) + 보스 1(D65) + 행인 3(D73)',
+      {d['kind'] for d in defs.values()} == set(ENT.KINDS) and len(defs) == 38
+      and len(ENT.by_kind('monster')) == 3 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('object')) == 9 and len(ENT.by_kind('npc')) == 9
       and len(ENT.by_kind('map')) == 7 and len(ENT.by_kind('building')) == 4 and len(ENT.by_kind('quest')) == 3)
 
 # ② 엔진 유도값 == 이관 전 리터럴(동작 그대로)

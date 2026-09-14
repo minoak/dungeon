@@ -440,6 +440,50 @@ check("⑪ 같은 구역이면 heard [2] · 모두에게 한 말도 heard [1] ·
       and (lambda: (show_runner.deliver_and_hail(d11, [a11, b11], {"1": "음..."}, {}, {"1": "잡담"}, {}),
                     not any(x.get("type") == "said" and x.get("text") == "음..." for x in a11["trail"]))[1])())
 
+print("── ⑫ 마을 행인(D73, 09-14 파트너 '마을에 돌아다니는 일반 캐릭터들')")
+d12, s12 = show_runner.build_town(walkers=True)
+wk = {f.name: f for f in d12.features.values() if f.type == "npc" and getattr(f, "walker", False)}
+check("⑫ 행인 3 — 떠돌이 모험자·노점 상인(번화가)·견습 모험자(샛길) 제 구역 바닥에 · 스냅샷 walker 표식 · 정착 NPC 는 표식 없음 · 기본 build_town() 엔 없음",
+      set(wk) == {"떠돌이 모험자", "견습 모험자", "노점 상인"}
+      and d12._town_zone(wk["떠돌이 모험자"].x, wk["떠돌이 모험자"].y) == "번화가" and d12._town_zone(wk["노점 상인"].x, wk["노점 상인"].y) == "번화가"
+      and d12._town_zone(wk["견습 모험자"].x, wk["견습 모험자"].y) == "샛길"
+      and all(f.as_dict().get("walker") is True for f in wk.values()) and "walker" not in by_name(d12, "npc", "길드 접수원").as_dict()
+      and not any(getattr(f, "walker", False) for f in show_runner.build_town()[0].features.values())
+      and all(d12.npc_defs.get(n) and d12.feature_roles.get(f.id) for n, f in wk.items()))
+b12 = mkbot("1", *s12["1"])
+start12 = {n: (f.x, f.y) for n, f in wk.items()}
+moved = 0; bad = 0; traj = []
+for _ in range(40):
+    ev = d12.walk_npcs([b12])
+    moved += len(ev); traj.append(tuple((f.x, f.y) for f in wk.values()))
+    for n, f in wk.items():
+        if d12._town_zone(f.x, f.y) != {"떠돌이 모험자": "번화가", "노점 상인": "번화가", "견습 모험자": "샛길"}[n] or d12.grid[f.y][f.x] != G.FLOOR \
+                or (f.x, f.y) == (b12["x"], b12["y"]) or sum(1 for g in d12.features.values() if (g.x, g.y) == (f.x, f.y)) != 1:
+            bad += 1
+check("⑫ 40틱 걸음: 움직였고(≥5) 제 구역·바닥 안에서만 · 사람·피처와 안 겹침 · 사건 npc_move{id,npc,to}",
+      moved >= 5 and bad == 0 and all(e.get("type") == "npc_move" and e.get("npc") and len(e.get("to", [])) == 2 for e in ev) if ev else moved >= 5 and bad == 0)
+d12b, _ = show_runner.build_town(walkers=True)
+wkb = {f.name: f for f in d12b.features.values() if f.type == "npc" and getattr(f, "walker", False)}
+startb = {n: (f.x, f.y) for n, f in wkb.items()}                  # 걷기 전 자리(비교는 출발끼리·궤적끼리)
+trajb = []
+for _ in range(40):
+    d12b.walk_npcs([mkbot("1", *s12["1"])]); trajb.append(tuple((f.x, f.y) for f in wkb.values()))
+check("⑫ 결정론: 같은 시드면 출발 자리·40틱 궤적이 같다(판정용 rng 무접촉 — walk_rng)",
+      startb == start12 and trajb[-1] == traj[-1] and d12b.rng.getstate() == show_runner.build_town(walkers=True)[0].rng.getstate())
+w1 = wk["떠돌이 모험자"]
+n12 = mkbot("2", *next((x, y) for y in range(d12.h) for x in range(d12.w) if d12.grid[y][x] == G.FLOOR and d12._town_zone(x, y) == "번화가"
+                                and d12.feature_at(x, y) is None and 2 <= max(abs(x - w1.x), abs(y - w1.y)) <= 4))
+o12 = d12.view(n12, [n12])
+seen12 = {f["name"]: f for f in o12["sights"]["features"] if f["type"] == "npc"}
+check("⑫ 구역 지각: 번화가의 봇은 떠돌이 모험자(역할 줄)와 노점 상인은 보고 샛길의 견습 모험자는 못 본다 · 정착 NPC 는 늘 보인다",
+      "떠돌이 모험자" in seen12 and seen12["떠돌이 모험자"].get("role") and "노점 상인" in seen12 and "견습 모험자" not in seen12
+      and {"길드 접수원", "성직자", "주점 주인"} <= set(seen12))
+n12["x"], n12["y"] = w1.x + 1, w1.y
+r12 = d12._interact(n12, "f%d" % w1.id, [n12])
+check("⑫ 말 걸기: npc_talk(정의 대사) · 두 번째는 line_again · 인사(D71)는 행인도 건다(hail_rumor 재료 있으면 숫자)",
+      r12["result"] == "npc_talk" and "거미" in r12["line"] and d12._interact(n12, "f%d" % w1.id, [n12]).get("again") is True
+      and (lambda g: len(g) == 1 and g[0][0] == "떠돌이 모험자" and g[0][5] == "hail")(d12.npc_greetings([mkbot("3", w1.x + 2, w1.y)])))
+
 print("── ⑧ 배선(소스·문서)")
 check("⑧ STREAM_FORMAT: run_meta quests/town_apart/town_hear/npc_brain/npc_hail · tick.npc_hails · end.quests/warped · 이벤트 quest_accepted/npc_report · level.quests",
       all(s_ in src("STREAM_FORMAT.md") for s_ in ("| `quests` |", "| `town_apart` |", "| `town_hear` |", "| `npc_brain` |", "| `npc_hail` |", "| `npc_hails` |",
