@@ -32,6 +32,9 @@ const STYLE = `
 #overlay .bubble.focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 2px 6px rgba(0, 0, 0, .45); }
 #overlay .bubble.proposal { border-color: #d99a00; background: #fff8e6; }
 #overlay .bubble.proposal::after { border-top-color: #fff8e6; }
+#overlay .bubble.npc { border-color: #9fb3d6; background: #eef4ff; }
+#overlay .bubble.npc::after { border-top-color: #eef4ff; }
+#overlay .bubble.npc .who { color: #3b5484; }
 #overlay .bubble .meta { display: flex; gap: 6px; align-items: center; margin-top: 3px; font-size: 11px; color: #666; }
 #overlay .bubble .who { color: #444; font-weight: bold; display: inline-flex; align-items: center; gap: 4px; }
 #overlay .bubble .who .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0, 0, 0, .35); }
@@ -50,6 +53,7 @@ export function installBubbles(app: App): void {
   const overlay = app.dom.overlay;
   const bubbles = new Map<Char, Float>();
   const dirs = new Map<Char, Float>();
+  const npcs = new Map<string, Float>();         // D69 마을 NPC 의 답(이벤트 npc_talk/npc_gift/npc_report 의 line) — 키 = NPC 이름
   let raf = 0;
 
   const life = (): number => Math.max(app.playback.tickMs * 1.2, 900);
@@ -58,7 +62,8 @@ export function installBubbles(app: App): void {
   function clearAll(): void {
     for (const b of bubbles.values()) b.el.remove();
     for (const d of dirs.values()) d.el.remove();
-    bubbles.clear(); dirs.clear();
+    for (const n of npcs.values()) n.el.remove();
+    bubbles.clear(); dirs.clear(); npcs.clear();
   }
 
   /** 기존 것의 남은 수명을 life 로 조인다(정지 상태에서 무한이던 것도 다음 프레임부터는 흐른다). */
@@ -66,6 +71,14 @@ export function installBubbles(app: App): void {
     const until = now + life();
     for (const b of bubbles.values()) b.expires = Math.min(b.expires, until);
     for (const d of dirs.values()) d.expires = Math.min(d.expires, until);
+    for (const n of npcs.values()) n.expires = Math.min(n.expires, until);
+  }
+
+  /** D69 NPC 말풍선 — 화자는 NPC 이름(색 점 없음), 두뇌가 쓴 문장이면 작은 표식. */
+  function showNpcBubble(name: string, line: string, src: unknown, expires: number): void {
+    const html = `<div class="bt">${esc(line)}</div><div class="meta"><span class="who">${esc(name)}</span>`
+      + (src === 'brain' ? '<span class="kind">두뇌</span>' : '') + '</div>';
+    upsert(npcs, name, 'bubble npc', html, expires);
   }
 
   function upsert(map: Map<Char, Float>, c: Char, cls: string, html: string, expires: number): Float {
@@ -117,12 +130,24 @@ export function installBubbles(app: App): void {
       if (d.to && d.to !== 'all' && d.to in run.names) app.scene.turnToward(c, d.to);
     }
     for (const e of cur.events) {
+      if ((e.result === 'npc_talk' || e.result === 'npc_gift' || e.result === 'npc_report') && typeof e.npc === 'string' && e.line) {
+        showNpcBubble(e.npc, String(e.line), e.line_src, expires);   // D69 NPC 의 답 — NPC 머리 위
+        continue;
+      }
       if (e.type !== 'bond' || e.result !== 'done' || !e.char || !e.form) continue;
       if (!speakerVisible(e.char)) continue;
       showDir(e.char, String(e.form), expires);
       if (typeof e.to === 'string' && e.to in run.names) app.scene.turnToward(e.char, e.to);   // 몸짓도 상대를 향한다
     }
     ensureLoop();
+  }
+
+  /** NPC 머리 위 앵커(화면 px) — 마을 NPC 스프라이트가 그려져 있을 때만. */
+  function npcAnchor(name: string): { x: number; y: number } | null {
+    const head = app.scene.npcHeadOf(name);
+    if (!head) return null;
+    const p = app.scene.project(head.x, head.y);
+    return { x: p.x, y: p.y - TAIL };
   }
 
   /** 화자 머리 위 앵커(화면 px, 이름표 위) — 스프라이트가 없거나 안 보이면 null. */
@@ -185,14 +210,15 @@ export function installBubbles(app: App): void {
 
   function loop(now: number): void {
     raf = 0;
-    expire(bubbles, now); expire(dirs, now);
+    expire(bubbles, now); expire(dirs, now); expire(npcs, now);
     if (!app.scene) { ensureLoop(); return; }
     const zoom = app.scene.zoom ?? 1;
     const W = overlay.clientWidth, H = overlay.clientHeight;
     const placed: Rect[] = [];
-    // 말풍선 — 화면 아래쪽(앞에 선 화자)부터 제자리에, 뒤의 것은 겹치면 위로
+    // 말풍선 — 화면 아래쪽(앞에 선 화자)부터 제자리에, 뒤의 것은 겹치면 위로. NPC 말풍선(D69)도 같은 규칙으로 섞어 놓는다
     const order: { f: Float; a: { x: number; y: number } }[] = [];
     for (const [c, f] of bubbles) { const a = anchor(c, zoom); if (a) order.push({ f, a }); else hide(f); }
+    for (const [n, f] of npcs) { const a = npcAnchor(n); if (a) order.push({ f, a }); else hide(f); }
     order.sort((p, q) => q.a.y - p.a.y);
     for (const o of order) settle(o.f, o.a, placed, W, H);
     // 지문 — 제 말풍선 위(없으면 머리 위), 그 뒤 겹침 해소
@@ -202,9 +228,9 @@ export function installBubbles(app: App): void {
       const b = bubbles.get(c);
       settle(f, b && !b.out && b.rect ? { x: a.x, y: b.rect.top - GAP } : a, placed, W, H);
     }
-    if (bubbles.size || dirs.size) raf = requestAnimationFrame(loop);
+    if (bubbles.size || dirs.size || npcs.size) raf = requestAnimationFrame(loop);
   }
-  function ensureLoop(): void { if (!raf && (bubbles.size || dirs.size)) raf = requestAnimationFrame(loop); }
+  function ensureLoop(): void { if (!raf && (bubbles.size || dirs.size || npcs.size)) raf = requestAnimationFrame(loop); }
 
   app.playback.on('frame', onFrame);
   app.bus.on('run', clearAll);

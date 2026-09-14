@@ -181,6 +181,15 @@ ORACLE_MAX = 200
 TOWN_BUILDINGS_ON = os.environ.get("DUNGEON_TOWN_BUILDINGS", "1") != "0"   # 마을 관측(D60, 09-12 파트너 "마을에서는 관측 정보를
                                                              #   느슨하게") — 건물 = 문턱 칸의 피처(이름·방위·거리·goto)
                                                              #   + obs.town_zone(구역 이름). 러너 기본 1(build_town 만)
+QUESTS_ON = os.environ.get("DUNGEON_QUESTS", "1") != "0"     # D69(09-14 파트너 "던전과 마을을 이어주는 연결점이 바로 길드") 길드 척추 —
+                                                             #   게시판 의뢰 맡기(use q<n>)·엔진 완료 판정·워프 귀환 뒤 마을에서 이어
+                                                             #   놀고 접수원 보고 = 원정의 끝(returned). 러너 기본 1(notices 필요), 엔진 기본 없음
+TOWN_APART_ON = os.environ.get("DUNGEON_TOWN_APART", "1") != "0"   # D69 흩어진 출발 — 마을 시작 때 셋이 광장에 붙어 서는 대신 각자 건물
+                                                             #   (길드·주점·신전) 문턱 곁에서 시작(파트너 "캐릭터마다 다양한 모습").
+                                                             #   러너 기본 1(⚠️임시 가정 — 배정 순서=건물 id 순). 마을 판만
+NPC_BRAIN_ON = os.environ.get("DUNGEON_NPC_BRAIN", "1") != "0"   # D69 마을 NPC 두뇌 — 캐릭터가 말을 걸면 NPC 한마디를 LLM 이 쓴다(1콜,
+                                                             #   먼저 말하지 않음·잡담 배달·판정은 엔진·고정 대사=폴백). 러너 기본 1,
+                                                             #   더미 두뇌(dummy) 판에선 저절로 꺼진다(콜 0 유지)
 REST_ON = os.environ.get("DUNGEON_REST", "1") != "0"         # 휴식(D35, 09-06) — 러너 기본 1, 엔진
                                                              #   기본 0. 회복이 붙은 wait: 틱마다 HP,
                                                              #   완료 시 상태 태그 소거. 사건이 깨운다
@@ -393,6 +402,13 @@ def read_oracle():
     return {"id": str(o["id"]), "text": text, "turn": o.get("turn")} if text else None
 
 
+def quest_sfx(res):
+    """D69 결과에 실린 의뢰 진행 → ' 📜 의뢰 「…」 2/3'(세계가 센 숫자). 없으면 빈 문자열."""
+    bits = ["의뢰 「%s」 %s" % (q.get("title", "?"), "완수!" if q.get("done") else "%d/%d" % (int(q.get("n") or 0), int(q.get("need") or 1)))
+            for q in (res or {}).get("quest") or []]
+    return (" \U0001f4dc " + " · ".join(bits)) if bits else ""
+
+
 def act_summary(res):
     """봇 한 행동/자동보행 결과를 한 줄 요약 — 로그/이벤트 공용."""
     t = res["type"]
@@ -544,6 +560,16 @@ def act_summary(res):
             return '%s — %s 받음 — "%s"' % (res.get("npc", "?"), res.get("item", "?"), res.get("line", "…"))
         if r == "npc_talk":
             return '%s — "%s"' % (res.get("npc", "?"), res.get("line", "…"))
+        if r == "npc_report":                      # D69 귀환 보고
+            tt = res.get("titles") or {}
+            return '%s에게 원정 보고 — 완수 %s / 미완 %s — "%s"' % (
+                res.get("npc", "?"), "·".join(tt.get(x, x) for x in (res.get("done") or [])) or "없음",
+                "·".join(tt.get(x, x) for x in (res.get("undone") or [])) or "없음", res.get("line", "…"))
+        if r == "quest_accepted":                  # D69 의뢰 맡음
+            return "\U0001f4dc 의뢰 맡음: %s — %s%s" % (res.get("title", "?"), res.get("goal", "?"),
+                                                     (" (보상: %s)" % res["reward"]) if res.get("reward") else "")
+        if r == "quest_already":
+            return "\U0001f4dc 이미 맡은 의뢰: %s" % res.get("title", "?")
         if r == "wait_allies":
             bits = ([f"아직: 봇{'·'.join(res['missing'])}"] if res.get("missing") else []) \
                  + ([f"볼일 중: 봇{'·'.join(res['busy'])}"] if res.get("busy") else [])
@@ -563,7 +589,7 @@ def act_summary(res):
                 (" (헌 %s은 그 자리에)" % res["dropped"]) if res.get("dropped") else "")
         tag = {"treasure": "$ 획득", "potion": "! 회복 물약 획득", "too_far": "너무 멀다",
                "nothing": "허탕", "no_target": "대상 없음"}
-        return "상호작용 %s — %s" % (res.get("target", "?"), tag.get(r, r))
+        return "상호작용 %s — %s%s" % (res.get("target", "?"), tag.get(r, r), quest_sfx(res))
     if t == "give":                                            # 건네기(D47 ②)
         if res.get("result") == "given":
             return "봇%s에게 %s 건넴%s" % (res.get("to", "?"), res.get("what", "?"),
@@ -589,7 +615,7 @@ def act_summary(res):
             return "%s공격 %s — 빗나감" % (sneak, res["target"])
         head = sneak + ("대성공! " if res.get("crit") else "")
         tail = " 처치!" if res.get("killed") else " (적HP%d)" % res["monster_hp"]
-        return "공격 %s — %s%d피해%s" % (res["target"], head, res["dmg"], tail)
+        return "공격 %s — %s%d피해%s%s" % (res["target"], head, res["dmg"], tail, quest_sfx(res))
     if t == "search":
         f = res.get("found", [])
         if not f:
@@ -627,12 +653,14 @@ def mon_summary(e):
 
 
 # ── 마을(D29, 2026-07-30) — 마을(0층)↔던전(1층~) 왕복의 러너 몫 ──────────────
-def build_town(path=None):
+def build_town(path=None, apart=False, quests=None):
     """town.json(손그림 고정 맵 — 고향은 랜덤이 아니다) → 마을 Dungeon.
     NPC 는 좌표로 심는다(맵의 '&'는 그림 표기 — from_ascii 는 바닥으로 읽음).
     town.json 이 {"layout": "<상대경로>"} 면(09-11, 맵 트랙 저작 원본 참조 — 상대 경로는 town 파일 위치 기준) 그 layout 을
     Dungeon.from_layout 으로 격자화하고 NPC 배치는 layout 의 id·칸을 쓴다(이름·대사·선물은 entities/npc).
-    반환: (dungeon, starts) — starts=맵 숫자 표기 자리(첫 출발)."""
+    D69(09-14): apart=True 면 출발 자리를 건물(길드·주점·신전) 문턱 곁으로 흩는다(캐릭터 번호 순 ↔ 건물 id 순, 결정론) ·
+    quests=의뢰 장부(new_quests)를 걸고 게시판 순서로 관측 id 를 매긴다(index_quests) · NPC 정의 전체·역할 한 줄을 엔진에 둔다.
+    반환: (dungeon, starts) — starts=맵 숫자 표기 자리(첫 출발) 또는 흩어진 자리."""
     path = path or os.path.join(HERE, "town.json")
     with open(path, encoding="utf-8") as f:
         spec = json.load(f)
@@ -669,7 +697,10 @@ def build_town(path=None):
             if n.get("id") else n              # D50: 배치(id·좌표)는 town.json, 이름·대사·선물은 entities/npc — 옛 인라인 꼴도 읽힌다
         if d.grid[y][x] != G.FLOOR:            # 좌표-그림 어긋남은 시작 전에 죽는 게 낫다
             raise ValueError("town.json NPC %r 좌표 (%d,%d)가 바닥이 아니다" % (spec_n["name"], x, y))
-        d._add_feature("npc", spec_n["name"], x, y)
+        nfid = d._add_feature("npc", spec_n["name"], x, y)
+        d.npc_defs[spec_n["name"]] = {k: v for k, v in spec_n.items() if v not in (None, [], "")}   # D69 역할·성격·보고 대사(판정은 report 만)
+        if spec_n.get("role"):                 # D69 역할 한 줄 — 관측 "길드 접수원 (원정 물품 · 의뢰 접수와 귀환 보고)"
+            d.feature_roles[nfid] = spec_n["role"]
         d.npc_lines[spec_n["name"]] = spec_n.get("line") or "…"
         if spec_n.get("gift"):                 # D32 상점 v0 — 고정 선물(물약 1/방문·빈손이면 단검)
             d.npc_gifts[spec_n["name"]] = dict(spec_n["gift"])
@@ -689,7 +720,30 @@ def build_town(path=None):
             fid = d._add_feature("building", names.get(e.get("building"), "건물"), x, y)
             if NOTICES_ON:                         # D61 건물 역할 부품 — 정의의 board/oracle 을 _notices 가 읽는다
                 d.building_defs[fid] = ents.get(e.get("building"))
+            try:                                   # D69 건물 역할 한 줄(정의 comps.building.role) — 관측 "모험가 길드 (의뢰 게시판 · …)"
+                role = ((G.ENT.get(ents.get(e.get("building"))) or {}).get("comps") or {}).get("building", {}).get("role")
+            except Exception:
+                role = None
+            if role:
+                d.feature_roles[fid] = role
     d.features[d._exit_fid].name = "던전 입구"   # 같은 '>'라도 마을에선 탈출구가 아니라 입구다
+    if quests is not None:                         # D69 의뢰 장부(파티 단위) — 게시판 순서로 q1, q2… 를 매긴다(결정론)
+        d.quests = quests
+        d.index_quests()
+    if apart and res.get("entrances"):             # D69 흩어진 출발 — 던전 입구 건물(문턱이 '>' 곁)은 빼고, 건물 id 순 ↔ 캐릭터 번호 순
+        ents = sorted((e for e in res["entrances"]
+                       if max(abs(int(e["cell"][0]) - d.exit[0]), abs(int(e["cell"][1]) - d.exit[1])) > 1),
+                      key=lambda e: str(e.get("building")))
+        taken, apart_starts = set(), {}
+        for i, c in enumerate(sorted(starts)):
+            if i >= len(ents):
+                break                              # 건물보다 사람이 많으면 나머지는 광장 자리 그대로
+            x, y = int(ents[i]["cell"][0]), int(ents[i]["cell"][1])
+            cells = [p for p in arrive_cells(d, x, y, 8) if p not in taken]
+            if cells:
+                apart_starts[c] = cells[0]
+                taken.add(cells[0])
+        starts = {**starts, **apart_starts}
     return d, starts
 
 
@@ -873,6 +927,90 @@ def arrive_cells(d, ax, ay, k):
     return out[:k]
 
 
+def town_for_run(apart, quests):
+    """build_town 호출 자리(D69) — 게이트 둘(verify_approach·verify_reactions)이 build_town 을 **인자 없는 스텁**으로 갈아 끼우므로,
+    시그니처에 apart 가 없으면 옛 방식으로 부르고 의뢰 장부만 건다(스텁 마을에도 보고·맡기 배관이 죽지 않게)."""
+    import inspect
+    if 'apart' in inspect.signature(build_town).parameters:
+        return build_town(apart=apart, quests=quests)
+    d, starts = build_town()
+    if quests is not None and getattr(d, 'quests', None) is None:
+        d.quests = quests
+        if hasattr(d, 'index_quests'):
+            d.index_quests()
+    return d, starts
+
+
+def new_floor(nd, lore, quests=None):
+    """던전 층 하나(nd ≥ 1) — 시작 층·층 전이·소문 미리보기가 같은 인자로 짓는다(D69 에서 한곳으로). 시드 파생이라 같은 nd 는 같은 층."""
+    d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
+                  n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
+                  scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
+                  graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
+                  wait_verb=WAIT_ON, motion=MOTION_ON, ally_doing=ALLY_DOING_ON,
+                  ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON,
+                  n_gear=N_GEAR, status=STATUS_ON, rest_verb=REST_ON,
+                  relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON,
+                  give_verb=GIVE_ON,
+                  bond_verb=BOND_ON,               # (verify_give ⑩ 이 give·bond 인자 한 줄짜리를 두 곳(시작·전이)만 세므로 여기선 두 줄로 나눈다)
+                  auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE,
+                  skills=SKILLS_ON, trpg_combat=TRPG_COMBAT_ON, random_skill=RANDOM_SKILL_ON,
+                  boss=BOSS_ON and nd >= DEPTHS,   # D65: 최심층 = 보스층(보스·봉인 워프게이트·상자)
+                  plan_max=G.PLAN_MAX if PLAN_ON else 0)   # D66: 작정 스위치
+    d.lore = lore
+    d.quests = quests                              # D69 의뢰 장부는 층을 넘어 같은 객체
+    return d
+
+
+def floor_rumor(d):
+    """D69 소문 재료 — 층 하나의 실제 배치를 세계가 센 숫자로(0콜): 몬스터 종별 수·함정·보물·상자·물약·장비. 주점 주인의 '아는 것'."""
+    kinds = {}
+    for m in d.monsters:
+        kinds[m.kind] = kinds.get(m.kind, 0) + 1
+    feats = {}
+    for f in d.features.values():
+        if f.type in ("treasure", "chest", "potion", "weapon", "armor", "fountain"):
+            feats[f.type] = feats.get(f.type, 0) + 1
+    return {"depth": d.depth, "monsters": kinds, "traps": len(d.traps), "features": feats}
+
+
+def npc_facts(d, npc_name, bots, fallen, quests):
+    """D69 NPC 두뇌의 '아는 것' — 전부 세계의 사실(정의·장부·배치)이고 캐릭터 시트는 없다. NPC 역할별로 다른 사실을 준다:
+    접수원=게시판 의뢰·맡은 의뢰·진행·보고 결과 / 주점 주인=지하 1층 실측 소문 / 성직자=신의 요청·묘. 공통=파티 명단·귀환 여부."""
+    nd = (getattr(d, "npc_defs", None) or {}).get(npc_name) or {}
+    alive = [b for b in bots if b["alive"]]
+    facts = ["파티: " + ", ".join("%s(%s, HP %d/%d)" % (b.get("name") or ("모험가 %s" % b["char"]), b["job"], b["hp"], b["maxhp"]) for b in alive)]
+    if fallen:
+        facts.append("이번 원정에서 쓰러진 사람: " + ", ".join(str(c) for c in fallen))
+    facts.append("지금은 " + ("원정에서 돌아온 뒤다(워프게이트로 귀환)" if getattr(d, "expedition_returned", False) else "원정을 떠나기 전이다"))
+    if nd.get("report") and quests is not None:
+        board = []
+        for tid, qid in sorted((getattr(d, "quest_ids", None) or {}).items()):
+            qd = G.quest_def(qid) or {}
+            st = "완수" if qid in quests["done"] else ("맡음 %d/%d" % (quests["progress"].get(qid, 0), int((qd.get("req") or {}).get("n") or 1))
+                                                       if qid in quests["accepted"] else "게시 중")
+            board.append("%s(%s%s) — %s" % (qd.get("title", qid), qd.get("goal", ""), (", 보상: %s" % qd["reward"]) if qd.get("reward") else "", st))
+        facts.append("게시판 의뢰: " + (" / ".join(board) or "없음"))
+    if nd.get("role") and "소문" in nd["role"] and getattr(d, "rumor", None):
+        r = d.rumor
+        mons = ", ".join("%s %d마리" % (k, v) for k, v in r["monsters"].items()) or "몬스터 없음"
+        fe = r.get("features") or {}
+        facts.append("지하 %d층 소문(세계가 센 실제 수): %s · 함정 %d개 · 보물 %d · 상자 %d · 물약 %d · 장비 %d"
+                     % (r["depth"], mons, r["traps"], fe.get("treasure", 0), fe.get("chest", 0), fe.get("potion", 0),
+                        fe.get("weapon", 0) + fe.get("armor", 0)))
+        if quests is not None:
+            mine = [G.quest_def(q) or {} for q in quests["accepted"] if (G.quest_def(q) or {}).get("client") == npc_name]
+            if mine:
+                facts.append("네가 낸 의뢰를 이 파티가 맡았다: " + ", ".join(q.get("title", "?") for q in mine))
+    if nd.get("role") and "신" in nd["role"]:
+        orc = getattr(d, "oracle", None) or {}
+        facts.append(("신의 요청이 걸려 있다: 「%s」" % orc["text"]) if orc.get("text") else "지금 걸려 있는 신의 요청은 없다")
+        graves = [f.name for f in d.features.values() if f.type == "grave"]
+        if graves:
+            facts.append("마을의 묘: " + ", ".join(graves))
+    return facts
+
+
 def main():
     run_control.reset(STATE)
     if SKILLS_ON and not brains.COMPOSE:
@@ -900,10 +1038,14 @@ def main():
     brain_pause = run_control.BrainPause(STATE, sw, names, event)
     returned, returned_party = False, []   # D65 워프게이트 귀환으로 끝난 판의 표식(outcome 'returned')·귀환한 사람들
     last_oracle_id = None                  # D61 개정: 마지막으로 스트림에 남긴 신의 요청 id(새 요청·거둠을 한 번만 적는다)
+    quests = G.new_quests() if (QUESTS_ON and NOTICES_ON) else None   # D69 의뢰 장부(파티 단위·판 전체) — 층마다 같은 객체를 건다
+    npc_brain = NPC_BRAIN_ON and brains.backend_name() != "dummy"       # D69 마을 NPC 두뇌 — 더미 판은 콜 0 유지
 
     if TOWN_ON:                            # 마을 판(D29): 원정은 고향에서 시작한다
-        d, tstarts = build_town()
+        d, tstarts = town_for_run(TOWN_APART_ON, quests)   # D69 흩어진 출발·의뢰 장부(게이트 스텁 허용)
         d.lore = lore
+        if npc_brain:                      # D69 주점 소문 재료 — 지하 1층의 실제 배치(같은 시드=같은 층, 0콜)
+            d.rumor = floor_rumor(new_floor(1, lore))
     else:
         d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION, depth=START_DEPTH,   # D67: 프리셋이면 최심층
                       n_monsters=N_MON + START_DEPTH - 1, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,   #   (층 전이와 같은 몹 수 규칙)
@@ -916,6 +1058,7 @@ def main():
                       boss=BOSS_ON and START_DEPTH >= DEPTHS,   # D65: 첫 층이 곧 최심층이면 여기가 보스층(D67 프리셋 포함)
                       plan_max=G.PLAN_MAX if PLAN_ON else 0)   # D66: 작정 스위치(러너 기본 0)
         d.lore = lore
+        d.quests = quests                  # D69 던전 시작 판(보스 프리셋 등)도 장부를 든다 — 워프 귀환 뒤 마을에서 보고
     d.plan_max = G.PLAN_MAX if PLAN_ON else 0    # 마을(from_layout)도 같은 스위치
     bots = []
     for c in chars:
@@ -1018,6 +1161,10 @@ def main():
             bond=BOND_ON,              # 친목(D47 ②) 여부 — 메뉴(options bond)·관계 뼈·tick.replies 를 바꾸는 사회층 메타
             town_buildings=TOWN_BUILDINGS_ON,   # 마을 관측(D60, 09-12) 여부 — 마을 level.features 에 building 피처·obs.town_zone 표현층 메타
             notices=NOTICES_ON,        # 건물 역할 부품(D61, 09-12) 여부 — obs.notices(게시판·신의 요청)·decisions.oracle_reply 표현층 메타
+            quests=quests is not None, # D69(09-14 additive) 길드 척추 여부 — 의뢰 맡기(use q<n>)·완료 판정·워프 귀환 뒤 마을 계속·보고=종료.
+                                       #   판 모양(종료 조건)을 바꾸는 실행모드 메타(boss 급)
+            town_apart=bool(TOWN_ON and TOWN_APART_ON),   # D69 additive 흩어진 출발(마을 판만) — 배치 메타(solo 급)
+            npc_brain=bool(npc_brain), # D69 additive 마을 NPC 두뇌 여부 — 이벤트 line 이 LLM 문장(line_src 'brain')일 수 있다는 표현층 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
             obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
             notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
@@ -1109,6 +1256,7 @@ def main():
         thinkers = "·".join(sorted(decisions)) if decisions else "-"
         event("-- tick %d --  (사고:%s / 나머지 자동보행)" % (turn, thinkers))
         turn_events = []
+        npc_says = []                        # D69 이번 틱 NPC 의 답 [(NPC 이름, 문장, 말 건 봇)] — 배달은 아래(잡담·정지 없음)
         says = dict(social)                  # 걸으면서 한 말도 같은 배달 규칙을 탄다
         say_to = {}                          # D41 지목 — 이번 틱 말의 상대(봇 번호 | all), 없으면 혼잣말
         say_kind = {}                        # D47 말의 종류 — 잡담(기본)|제안. 사교 콜의 말은 종류 없음=잡담
@@ -1129,6 +1277,14 @@ def main():
                 res = d.act(b, dec, bots)                # 핑/공격/상호작용 판정 = 진실
                 res["reason"] = dec.get("reason", "")
                 src = dec.get("src", "haiku")
+                if res.get("result") in ("npc_talk", "npc_gift", "npc_report") and res.get("npc"):   # D69 마을 NPC — 말을 걸었다
+                    if npc_brain:                        # NPC 두뇌: 판정(선물·보고)은 끝났고 문장만 LLM 이(1콜, 실패=고정 대사)
+                        npc_def = (getattr(d, "npc_defs", None) or {}).get(res["npc"]) or {}
+                        line_ = brains.npc_reply(b, res, dec.get("say"), npc_facts(d, res["npc"], bots, fallen, quests), npc=npc_def)
+                        if line_:
+                            res["line_fixed"], res["line"], res["line_src"] = res.get("line"), line_, "brain"
+                    if res.get("line"):
+                        npc_says.append((res["npc"], res["line"], b["char"]))
                 append(botlog[b["char"]], "[t%02d] %s" % (turn, dec.get("reason", "")))
                 append(botlog[b["char"]], "        -> %s  <%s>" % (act_summary(res), src))
                 dg = dec.get("brain_degraded")           # D62(09-13): 이 판단은 몸짓 서술 줄을 접고 물은 것 — 차단 뒤 재요청 | 지문 고정으로 이어서
@@ -1183,6 +1339,11 @@ def main():
         inbox, hails = deliver_and_hail(d, bots, says, say_to, say_kind, open_props)   # 사회층 한 틱(배달·뼈·정지 — D24·D36·D41·D47)
         for c in hails:
             event("   봇%s 멈칫 — %s" % (c, "제안을 받고 돌아본다" if (SAYKIND_ON and SAYTO_ON) else "말을 걸어온 동료 쪽을 돌아본다"))
+        for npc_name, line_, to_c in npc_says:    # D69 NPC 의 답 — 마을(전체 시야)의 잡담으로 들린다: 정지 없음·뼈 없음·사교 콜 없음
+            for b in bots:                        #   (from 'npc:<이름>' — 두뇌는 이름으로 표기, 관계 장부는 봇만 센다)
+                if b["alive"] and not b["won"]:
+                    inbox.setdefault(b["char"], []).append({"from": "npc:" + npc_name, "text": line_, "turn": turn, "to": to_c})
+            event('   %s \U0001f4ac "%s"' % (npc_name, line_))
 
         # 스트림 tick — 빈 틱 포함 매 반복(turn 연속 불변식). GM 블록 *앞*에서 emit:
         # 여기서 즉시 직렬화되므로 GM 지연·이후 dict 변경과 독립(공유 오염 방어).
@@ -1230,6 +1391,15 @@ def main():
                 pass
             gm_q.put((turn, turn_events, party))  # 비동기 — 루프는 즉시 다음 틱으로
 
+        if quests is not None and any(e.get("result") == "npc_report" for e in turn_events):   # D69 길드 보고 = 원정의 끝
+            rep = next(e for e in turn_events if e.get("result") == "npc_report")
+            returned, returned_party = True, [b["char"] for b in bots if b["alive"]]
+            tt = rep.get("titles") or {}
+            event("=== 길드에 보고했다 — 완수 %s / 미완 %s — 원정 완료 ==="
+                  % ("·".join(tt.get(x, x) for x in (rep.get("done") or [])) or "없음",
+                     "·".join(tt.get(x, x) for x in (rep.get("undone") or [])) or "없음"))
+            break
+
         if all(b["won"] or not b["alive"] for b in bots):
             survivors = [b for b in bots if b["won"]]
             fallen += [b["char"] for b in bots if not b["alive"]]
@@ -1275,7 +1445,7 @@ def main():
                 mem = saved[nd]["mem"]
                 fresh = False
             elif nd == 0:                 # D65: 마을 시작이 아닌 판의 워프 귀환 — 마을(D52 v1)을 새로 짓는다
-                d, _tstarts = build_town()
+                d, _tstarts = town_for_run(False, quests)   # D69 장부를 건다(보고를 받을 접수원이 있는 마을) — 도착은 입구 곁이라 apart 없음
                 d.lore = lore
                 fresh = False
             else:
@@ -1292,6 +1462,7 @@ def main():
                               boss=BOSS_ON and nd >= DEPTHS,   # D65: 최심층 = 보스층(보스·봉인 워프게이트·상자)
                               plan_max=G.PLAN_MAX if PLAN_ON else 0)   # D66: 작정 스위치
                 d.lore = lore
+                d.quests = quests         # D69 의뢰 장부 — 새 층도 같은 객체(처치·획득 판정이 여기로 센다)
                 fresh = True
             d.plan_max = G.PLAN_MAX if PLAN_ON else 0    # 복원한 층·새로 지은 마을도 같은 스위치
             # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,
@@ -1357,8 +1528,13 @@ def main():
                    **({'skill_acquisitions': acquired_skills} if acquired_skills else {}),
                    **({'reaction_stats': reaction_book.snapshot()} if reaction_book is not None else {}),
                    "party": [G.bot_snapshot(b) for b in bots]}
+            qv_ = d._quest_event("reach", depth=d.depth) if (quests is not None and nd >= 1) else []   # D69 층 도달형 의뢰
+            if qv_:
+                lvl["quests"] = qv_                  # additive — 이 층에 들어서며 채워진 의뢰
             sw.emit("level", **lvl)
             iss.consume("level", lvl)               # 새 층 몹 id→종 지도 갱신
+            for qv in qv_:
+                event("   \U0001f4dc 의뢰 %s: %s (%d/%d)" % ("완수" if qv.get("done") else "진행", qv.get("title", "?"), qv.get("n", 0), qv.get("need", 0)))
             if warp:
                 event("=== 워프게이트의 빛이 걷힌다 — 마을이다. 원정에서 돌아왔다 ===")   # D65
             elif up:
@@ -1370,18 +1546,25 @@ def main():
                       % (nd, N_MON + nd - 1))
             write_map(d, bots, turn)
             time.sleep(1.0)
-            if warp:                          # D65: 마을 도착 = 원정 완료 — 판을 여기서 닫는다(⚠️임시 가정: 마을에서 이어 놀지 않는다)
-                returned, returned_party = True, [b["char"] for b in survivors]
-                break
+            if warp:                          # D65: 마을 도착 = 원정 완료 — 옛 판(의뢰 없음)은 여기서 닫는다
+                if quests is not None:        # D69(09-14 파트너 "원정의 끝을 게이트가 아니라 길드 보고로"): 마을에서 이어 논다 —
+                    quests["returned"] = turn  #   접수원에게 말을 걸면 보고(원정 완료). 안 하면 턴 상한으로 끝난다(세계 규칙, 캐릭터 규칙 아님)
+                    d.expedition_returned = True
+                    event("=== 원정에서 돌아왔다 — 길드 접수원에게 보고하면 원정이 끝난다 ===")
+                else:
+                    returned, returned_party = True, [b["char"] for b in survivors]
+                    break
 
     won = [b["char"] for b in bots if b["won"]]
     dead = fallen + [b["char"] for b in bots if not b["alive"] and b["char"] not in fallen]
     left = [b["char"] for b in bots if b["alive"] and not b["won"]]
-    if returned:                                     # D65: 보스를 잡고 워프게이트로 마을 귀환 = 원정 완료
+    if returned:                                     # D65: 보스를 잡고 워프게이트로 마을 귀환 = 원정 완료 (D69: 길드 보고까지)
         outcome = "returned"
         won = list(returned_party)
-        event("=== 종료 (turn %d) — 보스를 쓰러뜨리고 워프게이트로 마을 귀환!! (원정 완료) %s / 쓰러짐 %s ==="
-              % (turn, won, dead or "없음"))
+        left = []                                    # 돌아온 사람들은 '던전에 남은 자'가 아니다(D69 — 마을에서 보고하고 끝났다)
+        event("=== 종료 (turn %d) — %s (원정 완료) %s / 쓰러짐 %s ==="
+              % (turn, "워프게이트로 마을 귀환, 길드에 보고" if quests is not None else "보스를 쓰러뜨리고 워프게이트로 마을 귀환!!",
+                 won, dead or "없음"))
     elif won and d.depth >= DEPTHS:
         outcome = "escaped"                          # 최심층 돌파 = 진짜 탈출(승리)
         if TOWN_ON:                                  # 마을 판(D29): 아래 계단 = 관측 클리어 조건
@@ -1407,6 +1590,8 @@ def main():
                if reaction_book is not None else {}),
             survivors=won, fallen=dead, remaining=left,
             bots=[G.bot_snapshot(b) for b in bots],
+            **({"quests": G.quest_summary(quests)} if quests is not None else {}),   # D69 additive — 의뢰 장부(맡음·진행·완수·귀환·보고 틱)
+            **({"warped": True} if (quests is not None and quests.get("returned") is not None) else {}),   # D69 additive — 워프로 돌아온 판
             summary=summary)                          # D58 additive — 오프라인 `python run_summary.py` 와 같은 계산
     sw.close()
     for ln in run_summary.render(summary, names):    # 1차 부검은 여기서(파트너 "이러려고 결산 기능을 만든 거잖아")

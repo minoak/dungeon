@@ -39,9 +39,13 @@ class EntityError(ValueError):
     """정의 파일의 문제 — 전부 모아 한 번에 알린다(로드 단계에서 죽는 게 낫다)."""
 
 
+QUEST_REQ_KINDS = ('kill', 'reach', 'loot')   # D69(09-14) 의뢰 완료 조건의 종류 — dungeon_gm.QUEST_REQ_KINDS 와 같은 목록
+
+
 def _problems(pairs, root):
     out, ids = [], {}
     boards, kinds_by_id = [], {}                     # D61 2차 검사 재료
+    quest_mons = []                                  # D69 2차 검사 재료(처치형 의뢰의 몬스터 id)
     for path, d in pairs:
         rel = os.path.relpath(path, root)
         stem = os.path.splitext(os.path.basename(path))[0]
@@ -136,11 +140,32 @@ def _problems(pairs, root):
             q = comps.get('quest') or {}
             if not isinstance(q.get('goal'), str) or not q['goal'].strip():
                 out.append('%s: quest.goal 필요' % rel)
+            req = q.get('req')                       # D69(09-14) 완료 조건 — 엔진이 세는 사건. 없으면 정보만인 의뢰(맡을 수는 있다)
+            if req is not None:
+                if not isinstance(req, dict) or req.get('kind') not in QUEST_REQ_KINDS:
+                    out.append('%s: quest.req.kind 는 %s 중 하나' % (rel, '|'.join(QUEST_REQ_KINDS)))
+                else:
+                    n = req.get('n', 1)
+                    if not (isinstance(n, int) and n >= 1):
+                        out.append('%s: quest.req.n 은 정수≥1' % rel)
+                    if req['kind'] == 'kill' and not isinstance(req.get('monster'), str):
+                        out.append('%s: quest.req(kill) 은 monster(몬스터 정의 id) 필요' % rel)
+                    if req['kind'] == 'reach' and not (isinstance(req.get('depth'), int) and req['depth'] >= 1):
+                        out.append('%s: quest.req(reach) 은 depth(정수≥1) 필요' % rel)
+                    if req['kind'] == 'loot' and not isinstance(req.get('object'), str):
+                        out.append('%s: quest.req(loot) 은 object(엔진 피처 type) 필요' % rel)
+                    if req.get('depth') is not None and not (isinstance(req['depth'], int) and req['depth'] >= 1):
+                        out.append('%s: quest.req.depth 는 정수≥1' % rel)
+                    if req['kind'] == 'kill':
+                        quest_mons.append((rel, req.get('monster')))
         kinds_by_id[eid] = kind
     for rel, qids in boards:                         # 2차: 게시판이 가리키는 의뢰가 실제 quest 정의인가
         for qid in qids:
             if kinds_by_id.get(qid) != 'quest':
                 out.append('%s: board.quests 의 %r 는 quest 정의가 아니다' % (rel, qid))
+    for rel, mid in quest_mons:                      # 2차(D69): 처치형 의뢰의 몬스터가 실제 monster 정의인가
+        if kinds_by_id.get(mid) != 'monster':
+            out.append('%s: quest.req.monster %r 는 monster 정의가 아니다' % (rel, mid))
     return out
 
 
@@ -249,7 +274,11 @@ def npc(eid):
     if d['kind'] != 'npc':
         raise EntityError('%s 은(는) npc 가 아니다' % eid)
     c = d['comps']['npc']
-    return {'name': d['name'], 'line': c.get('line'), 'line_again': c.get('line_again'), 'gift': c.get('gift')}
+    return {'name': d['name'], 'line': c.get('line'), 'line_again': c.get('line_again'), 'gift': c.get('gift'),
+            # D69(09-14): 역할 한 줄·성격·보고 역할·보고 대사(전부 선택 — 없으면 None. 판정은 report 만, 나머지는 문장 재료)
+            'role': c.get('role'), 'persona': c.get('persona'), 'report': bool(c.get('report')),
+            'line_report': c.get('line_report'), 'line_report_failed': c.get('line_report_failed'),
+            'line_report_empty': c.get('line_report_empty'), 'knows': list(c.get('knows') or [])}
 
 
 def lore():

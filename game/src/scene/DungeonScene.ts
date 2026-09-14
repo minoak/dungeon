@@ -106,6 +106,14 @@ export class DungeonScene extends Phaser.Scene {
     const a = this.actors.get(char);
     return a ? { x: a.sprite.x, y: a.sprite.y - FOOT_Y + 6 } : null;
   }
+  /** 마을 NPC 머리 위(월드 px) — 이름으로 찾는다(D69 NPC 말풍선 앵커). 그려져 있지 않으면 null. */
+  npcHeadOf(name: string): { x: number; y: number } | null {
+    const ft = this.frame?.features.find(f => f.type === 'npc' && f.name === name);
+    if (!ft) return null;
+    const s = this.feats.get('npc#' + ft.id);
+    if (!s || !s.visible) return null;
+    return { x: s.x, y: s.y - s.displayHeight * s.originY + 6 };
+  }
   /** 월드 px → #stage 안 화면 px(DOM 오버레이용). */
   project(wx: number, wy: number): { x: number; y: number } {
     const cam = this.cameras.main;

@@ -95,6 +95,7 @@ export interface LevelLine {
   party: Bot[];                                  // 이 층 개시 스냅샷(스폰 칸)
   visual?: TownVisual;                           // 마을 v1 시각 레이어(마을 층만)
   gate?: { sealed: boolean; boss?: number | null };   // D65(09-13) 보스층: 출구=워프게이트(층 시작 때 봉인 여부·보스 id)
+  quests?: { id: string; title?: string; n?: number; need?: number; done?: boolean }[];   // D69(09-14) 이 층에 들어서며 채워진 의뢰(층 도달형)
 }
 
 export interface Then { type: string; target?: string }
@@ -120,7 +121,7 @@ export interface StreamEvent {
   [k: string]: unknown;
 }
 
-export interface InboxMsg { from: Char; text: string; turn?: number; to?: string; kind?: string; social_event_id?: string }
+export interface InboxMsg { from: Char; text: string; turn?: number; to?: string; kind?: string; social_event_id?: string }   // D69: from 'npc:<이름>' = 마을 NPC 의 답(잡담)
 export interface Reply { from: Char; to: Char; kind: string; how: string }
 
 export interface SocialEvent {
@@ -165,8 +166,12 @@ export interface DescendLine {
 
 export interface EndLine {
   reaction_summary?: ReactionSummary; reaction_floors?: ReactionFloor[];
-  kind: 'end'; turn: number; outcome: 'escaped' | 'wiped' | 'timeout' | string; depth: number;
+  kind: 'end'; turn: number; outcome: 'escaped' | 'wiped' | 'timeout' | 'returned' | string; depth: number;
   survivors: Char[]; fallen: Char[]; remaining?: Char[]; bots: Bot[];
+  quests?: { accepted: { id: string; turn?: number; by?: string }[]; done: Record<string, number>;   // D69(09-14) 의뢰 장부
+             progress?: Record<string, number>; titles?: Record<string, string>; returned?: number | null; reported?: number | null };
+  warped?: boolean;                              // D69 워프게이트로 마을에 돌아온 판(보고 여부와 무관)
+  [k: string]: unknown;
 }
 
 export type StreamLine = RunMeta | LevelLine | TickLine | DescendLine | EndLine | { kind: string; [k: string]: unknown };

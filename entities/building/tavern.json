@@ -16,7 +16,9 @@
         6,
         6
       ],
-      "texture": "tavern"
+      "texture": "tavern",
+      "role": "소문 · 쉬어 가는 자리"
     }
-  }
+  },
+  "note": "role 은 관측 한 줄(SilenceBreaker 임시 문구, 2026-09-14 D69 — 파트너 문장 대기)."
 }

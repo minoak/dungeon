@@ -272,6 +272,67 @@ def notebook_page(bot, entry, names, roster=None, up=False):
     page = page[:NOTEBOOK_LEN]
     _brainlog(kind="notebook", char=bot.get("char"), depth=entry.get("depth"), ok=bool(page), why=why)
     return page or None
+
+
+# ── D69 마을 NPC 두뇌(2026-09-14 파트너 "마을에서만 호출을 통한 npc 를 몇 명만 더 만들어 둬서 내용을 보려고") ──
+NPC_PROMPT_FILE = os.path.join("prompts", "npc_prompt.md")   # ⚠️ 문장 임시(파트너 대기) — {name}{role}{persona}{facts}{scene}{maxlen} 자리
+NPC_LINE_LEN = 120                                            # NPC 한마디 상한(⚠️임시 가정 — 캐릭터 say 160 보다 짧게)
+_NPC_PROMPT_FALLBACK = ("# 마을 사람 — 너는 {name}이다\n- 역할: {role}\n- 성격: {persona}\n\n## 네가 아는 것\n{facts}\n\n"
+                        "## 방금 일어난 일\n{scene}\n\n한두 문장, {maxlen}자 안. 응답은 JSON 한 줄: {\"line\": \"네 한마디\"}")
+
+
+def _npc_prompt_raw():
+    try:
+        with open(os.path.join(HERE, NPC_PROMPT_FILE), encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return _NPC_PROMPT_FALLBACK
+
+
+def npc_reply(bot, res, said, facts, npc=None, roster=None):
+    """마을 NPC 의 한마디(1콜, 재시도 0 — 실패·차단이면 None 으로 고정 대사가 남는다). 캐릭터가 말을 걸 때만 불린다(NPC 는 먼저 말하지
+    않는다 — 콜 폭증 방지). 재료 = NPC 정의(역할·성격) + 세계가 준 사실(facts, 러너가 조립: 의뢰·소문 숫자·파티 상태) + 방금 일어난 일
+    (누가 무슨 말을 걸었고 엔진이 뭘 판정했나). **캐릭터 시트는 넣지 않는다**(차단 재료 차단 · NPC 는 시트를 모른다).
+    판정은 엔진이 이미 했다(선물·보고) — 여기서는 문장만. 엔진·러너는 내용을 안 읽는다(수첩·도감평과 같은 살)."""
+    npc = npc or {}
+    name = res.get("npc") or npc.get("name") or "마을 사람"
+    who = "%s(%s)" % (bot.get("name") or ("모험가 %s" % bot.get("char", "?")), bot.get("job", "모험가"))
+    r = res.get("result")
+    scene = []
+    if said:
+        scene.append('- %s이(가) 네게 말을 걸었다: "%s"' % (who, str(said)[:160]))
+    else:
+        scene.append("- %s이(가) 말없이 다가와 네 앞에 섰다" % who)
+    if r == "npc_gift":
+        scene.append("- 세계의 판정: 너는 %s에게 %s을(를) 건넸다(정해진 원정 물품 — 이번 원정 몫)" % (who, res.get("item", "?")))
+    elif r == "npc_report":
+        t_ = res.get("titles") or {}
+        done = "·".join(t_.get(x, x) for x in (res.get("done") or [])) or "없음"
+        undone = "·".join(t_.get(x, x) for x in (res.get("undone") or [])) or "없음"
+        scene.append("- 세계의 판정: 원정 보고를 받았다 — 완수한 의뢰: %s / 미완: %s. 이 보고로 원정이 끝난다" % (done, undone))
+    elif res.get("again"):
+        scene.append("- 세계의 판정: 오늘 이미 만난 사람이다 — 새로 줄 물건은 없다")
+    else:
+        scene.append("- 세계의 판정: 줄 물건은 없다(대화만)")
+    if res.get("line"):
+        scene.append('- (두뇌가 없을 때의 정해진 대사: "%s" — 같은 뜻이면 네 말로 바꿔도 된다)' % res["line"])
+    prompt = (_npc_prompt_raw().replace("{name}", name).replace("{role}", npc.get("role") or "마을 사람")
+              .replace("{persona}", npc.get("persona") or "평범한 마을 사람").replace("{maxlen}", str(NPC_LINE_LEN))
+              .replace("{facts}", "\n".join("- " + str(x) for x in (facts or [])) or "- (특별히 아는 것 없음)")
+              .replace("{scene}", "\n".join(scene)))
+    try:
+        out = _call_claude(prompt, "haiku")
+    except Exception as e:                            # 두뇌 예외도 판을 세우지 않는다(NPC 는 살 — 없으면 고정 대사)
+        _brainlog(kind="npc", npc=name, error=_head(e))
+        return None
+    raw, why = out if isinstance(out, tuple) else (out, None)
+    obj, _ = _extract(raw)
+    line = str((obj or {}).get("line") or "").strip() if isinstance(obj, dict) else ""
+    if not line and raw and not str(raw).lstrip().startswith("{"):
+        line = str(raw).strip()
+    line = " ".join(line.split())[:NPC_LINE_LEN]
+    _brainlog(kind="npc", npc=name, char=bot.get("char"), result=r, ok=bool(line), why=why)
+    return line or None
 NOTE_MAX = 5             # 유지 줄 수(합의 5~7 하한) — 넘치면 오래된 것부터 바랜다(FIFO,
                          #   사람도 옛 기억부터 바래듯). 판 간 영속은 없음(월드 러너 상 재론).
 NOTE_LEN = 80            # 한 줄 상한 — 수필 방지(say 160 의 절반: 기억은 말보다 압축된다)
@@ -680,6 +741,8 @@ def _witness_prose(w):
         if what == "상자":
             return "%s가 상자에서 보물을 꺼내는 것을" % who
         return "%s가 %s을(를) 챙기는 것을" % (who, what)
+    if k == "ally_quest":                                  # D69 게시판 앞에서 의뢰를 맡는 걸 봄(파티의 의뢰가 됐다)
+        return "%s가 게시판의 의뢰 「%s」를 맡는 것을" % (who, w.get("what", "?"))
     if k == "ally_spot":
         return "%s가 숨어 있던 %s을(를) 찾아내는 것을" % (who, w.get("mon") or w.get("what", "?"))
     if k == "ally_mishap":
@@ -836,7 +899,7 @@ def _last_prose(last, names=None):
         if r == "at_exit":
             return "계단 앞에 섰다"
         if r == "treasure":
-            return "길에서 보물을 주웠다"
+            return "길에서 보물을 주웠다%s" % _quest_sfx(last)   # D69 획득형 의뢰 진행(있을 때만)
         if r == "potion":
             return "길에서 회복 물약을 챙겼다"
         if r == "swapped":                    # 교대(D18 개정)의 수동태 — 밀려난 쪽의 자기 관측
@@ -891,6 +954,7 @@ def _last_prose(last, names=None):
                 s += ", 쓰러뜨렸다!"
             if last.get("unsealed"):          # D65: 보스가 쓰러지는 순간 워프게이트의 봉인이 풀린다(세계가 보여 주는 사실)
                 s += " 그 순간 워프게이트의 봉인이 풀렸다"
+            s += _quest_sfx(last)             # D69: 이 처치가 의뢰를 채웠다(정보)
             return ("기습! " if last.get("surprise") else "") + s
     if t == "interact":
         if r == "exit":
@@ -914,6 +978,19 @@ def _last_prose(last, names=None):
             return '%s에게 말을 걸었다 — %s. "%s"' % (last.get("npc", "?"), got, last.get("line", "…"))
         if r == "npc_talk":
             return '%s에게 말을 걸었다 — "%s"' % (last.get("npc", "?"), last.get("line", "…"))
+        if r == "npc_report":               # D69 귀환 보고 — 원정이 끝났다(세계의 사실)
+            t_ = last.get("titles") or {}
+            bits = []
+            if last.get("done"):
+                bits.append("완수: " + "·".join(t_.get(x, x) for x in last["done"]))
+            if last.get("undone"):
+                bits.append("미완: " + "·".join(t_.get(x, x) for x in last["undone"]))
+            return '%s에게 원정을 보고했다%s — "%s"' % (last.get("npc", "?"), (" (%s)" % " / ".join(bits)) if bits else "", last.get("line", "…"))
+        if r == "quest_accepted":           # D69 의뢰 맡음 — 파티의 의뢰가 됐다
+            return '게시판의 의뢰 「%s」를 맡았다 — %s%s' % (last.get("title", "?"), last.get("goal", "?"),
+                                                      (" (보상: %s)" % last["reward"]) if last.get("reward") else "")
+        if r == "quest_already":
+            return '의뢰 「%s」는 이미 맡은 의뢰다' % last.get("title", "?")
         if r == "wait_allies":
             # D66(09-13 파트너 "팀원이 전부 모여야 계단을 내려갈 수 있다고 가르쳐줘야 하는 건 우리가 해야 할 일"): 규칙을 그 자리에서 말한다
             what = "워프게이트" if last.get("gate") else "계단"
@@ -927,7 +1004,9 @@ def _last_prose(last, names=None):
             return ("%s에서 %s 했지만 — 아직 안 모였다. %s은(는) 살아 있는 일행 전원이 곁(3칸 안)에 모이고 하던 일을 마쳐야 함께 쓴다"
                     "(혼자나 일부만은 안 된다). %s" % (what, verb, what, " / ".join(parts)))
         if r == "chest_loot":
-            return "상자를 열었다 — 보물 %d개!" % last.get("loot", 0)
+            return "상자를 열었다 — 보물 %d개!%s" % (last.get("loot", 0), _quest_sfx(last))
+        if r == "treasure":
+            return "보물을 주웠다%s" % _quest_sfx(last)   # D69 획득형 의뢰 진행(있을 때만) — verify_wire ⑥ 어휘 '주웠다' 유지
         if r == "chest_trap":
             return "상자에서 독침이 튀었다 — %d 피해%s" % (
                 last.get("dmg", 0), (", [%s]이(가) 붙었다" % last["status"]) if last.get("status") else "")
@@ -1001,9 +1080,23 @@ def _hist_item(h):
                                (" %s" % G.place_word(h["target"], "decide")) if h.get("target") else "", what, h.get("turn", "?"), tag)
 
 
+def _quest_sfx(last):
+    """D69 결과에 실린 의뢰 진행 [{title,n,need,done}] → ' (의뢰 「…」 2/3)' — 세계가 센 숫자, 없으면 빈 문자열."""
+    bits = []
+    for qv in (last or {}).get("quest") or []:
+        bits.append("의뢰 「%s」 %s" % (qv.get("title", "?"), "완수" if qv.get("done") else "%d/%d" % (int(qv.get("n") or 0), int(qv.get("need") or 1))))
+    return (" (" + " · ".join(bits) + ")") if bits else ""
+
+
+def _npc_name(c):
+    """D69 마을 NPC 의 말(inbox from='npc:<이름>') — 화자 표기는 그 이름(봇 번호 없음). 봇이면 None."""
+    s = str(c or "")
+    return s[4:] if s.startswith("npc:") else None
+
+
 def _dlg_who(m, nm):
     """대화 한 마디의 화자→상대(D43): '카야(봇2)→나' / '나→카야(봇2)' / '미나(봇3)→모두' / '카야(봇2)(혼잣말)'. 이름은 wire 의 nm."""
-    who = "나" if m.get("mine") else nm(m.get("from", "?"))
+    who = "나" if m.get("mine") else (_npc_name(m.get("from")) or nm(m.get("from", "?")))
     to = m.get("to")
     if to == "all":
         return "%s→모두" % who
@@ -1211,13 +1304,18 @@ def _wire(obs, names=None, compose=False):
         # 마을(D29) — 사실만: 안전·전체 가시. 여기서 뭘 할지는 캐릭터 몫(추천 안 싣는다).
         L.append("- 여기는 마을이다 — 위험한 것이 없고, 마을 전체가 한눈에 보인다"
                  + ((" · 지금 있는 곳: %s" % obs["town_zone"]) if obs.get("town_zone") else ""))   # D60(09-12) 구역 이름
+    if obs.get("expedition_returned"):          # D69(09-14) 원정에서 돌아온 마을 — 세계의 규칙(파트너 "원정의 끝을 길드 보고로"). ⚠️문구 임시
+        L.append("- 원정에서 돌아온 참이다 — 원정은 길드 접수원에게 보고해야 끝난다(맡은 의뢰가 없어도 보고는 한다)")
     for n in obs.get("notices") or []:          # D61 건물 역할 부품(문턱 근처) · 신의 요청(09-13 개정: 어느 층에서나). 사실만, 맡으라·따르라는 말은 없다
         if n.get("kind") == "board":
-            L.append("- %s 앞 게시판(의뢰 — 맡을지는 네가 정한다, 맡았다면 말이나 기억으로 남긴다):" % n.get("name", "건물"))
+            L.append("- %s 앞 게시판(의뢰 — 맡을지는 네가 정한다%s):"
+                     % (n.get("name", "건물"), ". 맡으려면 그 의뢰의 ID 를 use 한다(파티의 의뢰가 된다)"   # D69 맡기 어휘(정보)
+                        if any(q.get("tid") for q in (n.get("quests") or [])) else ", 맡았다면 말이나 기억으로 남긴다"))
             for q in n.get("quests") or []:
-                L.append("  · %s — %s%s%s" % (q.get("title", "?"), q.get("goal", "?"),
-                                             (" (보상: %s)" % q["reward"]) if q.get("reward") else "",
-                                             (" — 의뢰인 %s" % q["client"]) if q.get("client") else ""))
+                L.append("  · %s%s — %s%s%s%s" % (("[%s] " % q["tid"]) if q.get("tid") else "", q.get("title", "?"), q.get("goal", "?"),
+                                                 (" (보상: %s)" % q["reward"]) if q.get("reward") else "",
+                                                 (" — 의뢰인 %s" % q["client"]) if q.get("client") else "",
+                                                 " — 완수했다" if q.get("done") else (" — 이미 맡았다" if q.get("accepted") else "")))
         elif n.get("kind") == "oracle":
             where = ("%s 앞 — " % n.get("name", "신전")) if n.get("building") else ""   # 어디서나 들리는 목소리엔 자리 말이 없다
             if n.get("replied"):
@@ -1225,6 +1323,11 @@ def _wire(obs, names=None, compose=False):
             else:
                 L.append("- %s신의 요청이 들려온다: 「%s」 (요청이지 명령이 아니다 — 따를지는 네가 정한다."
                          " 답하려면 응답 JSON 의 `oracle_reply` 필드, 선택, 120자)" % (where, n.get("text", "")))
+    qs = obs.get("quests")                       # D69 맡은 의뢰(파티 장부) — 어느 층에서나, 진행은 세계가 센 숫자
+    if qs:
+        L.append("- 맡은 의뢰: " + " · ".join("%s(%s)" % (q.get("title", "?"), "완수" if q.get("done")
+                                                          else "%d/%d" % (int(q.get("n") or 0), int(q.get("need") or 1)))
+                                              for q in qs))
     z = obs.get("zone")
     scan = isinstance((z or {}).get("doors"), list)   # D19 구조 조회가 실려 있으면 트리 직렬화
     if z and not scan:
@@ -1318,8 +1421,10 @@ def _wire(obs, names=None, compose=False):
                                " (인접 — 칠 수 있다)" if m.get("adj") else ""))
         for f in s.get("features", []):
             put(f.get("bearing"), f.get("dist", 0),
-                "%s %s %dm%s" % (f.get("name", "?"), f.get("id", "?"), f.get("dist", 0),
-                                 " (와 본 자리)" if f.get("visited") else "") + G._tagsfx(f))   # D39 태그 접미
+                "%s %s%s %dm%s" % (f.get("name", "?"), f.get("id", "?"),
+                                   (" (%s)" % f["role"]) if f.get("role") else "",   # D69 역할 한 줄(마을) — 이름·id 뒤
+                                   f.get("dist", 0),
+                                   " (와 본 자리)" if f.get("visited") else "") + G._tagsfx(f))   # D39 태그 접미
         for t in s.get("traps", []):
             put(t.get("bearing"), t.get("dist", 0),
                 "%s %dm (발각됨 — 위치를 안다)" % (t.get("name", "함정"), t.get("dist", 0)))
@@ -1375,9 +1480,11 @@ def _wire(obs, names=None, compose=False):
             if m.get("note"):                              # D55: 캐릭터 자신의 인식 — 사실과 다른 줄(섞지 않는다)
                 L.append("  · 네 생각(네가 적어 둔 것): %s" % m["note"])
         for f in s.get("features", []):
-            L.append("- %s %s — %s%s%s" % (f.get("name", "?"), f.get("id", "?"), at(f),
-                                           " (와 본 자리)" if f.get("visited") else "",
-                                           " (new)" if f.get("new") else "") + G._tagsfx(f))   # D39 태그 접미 · D57 new(아무도 안 걸쳐 본 것)
+            L.append("- %s %s%s — %s%s%s" % (f.get("name", "?"), f.get("id", "?"),
+                                             (" (%s)" % f["role"]) if f.get("role") else "",   # D69 역할 한 줄(마을) — 이름·id 뒤
+                                             at(f),
+                                             " (와 본 자리)" if f.get("visited") else "",
+                                             " (new)" if f.get("new") else "") + G._tagsfx(f))   # D39 태그 접미 · D57 new(아무도 안 걸쳐 본 것)
         for b in s.get("bots", []):
             L.append("- %s — HP %s/%s%s — %s%s%s"                                    # 09-08 D45: 숫자+태그(겉보기 4단 폐지)
                      % (who(b.get("char", "?")), b.get("hp", "?"), b.get("maxhp", "?"),
@@ -1575,7 +1682,7 @@ def _wire(obs, names=None, compose=False):
                        else (" (%s에게)" % nm(to)) if to else " (혼잣말)")
             mt = m.get("turn")                   # D47 배관: 보관된 말 — 지난 턴보다 오래된 말은 얼마나 전인지 병기
             old = (" — %d턴 전" % (now - mt)) if (now is not None and mt is not None and now - mt >= 2) else ""
-            L.append('- %s: "%s"%s%s' % (nm(m.get("from", "?")), m.get("text", ""), tag, old))
+            L.append('- %s: "%s"%s%s' % (_npc_name(m.get("from")) or nm(m.get("from", "?")), m.get("text", ""), tag, old))   # D69 NPC 의 말은 이름으로
 
     # ── 조립(09-08 D44, 파트너 네 갈래 "시트=나는 누구인가 · 관측=뭘 보고 있나 · 기억=무엇을 기억하나 · 선택지=지금 주어진 것"):
     #   시트·지침은 claude_brain 이 앞에 붙이고 선택지는 뒤에 붙인다. 여기서는 **기억 → 관측** 순 — 내 선택(임시 가정): 지금 보고

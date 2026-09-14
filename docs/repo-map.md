@@ -30,9 +30,9 @@ tools/       analyze_run.py analyze_skills.py analyze_social.py report.py make_r
              maze_metrics.py check_town.py run_skill_alpha.py ab_menu.py(verify_plan 이 파서로 import) ab_persona.py run_notes.py
 scripts/     start.sh live.sh verify.sh watch_map.sh (Linux/WSL 시대 — 전부 `~/dungeon` 을 가정, VPS 서빙 때 손볼 것)
              vm/ setup.sh deploy.sh botpikdun.service Caddyfile README.md (심사용 서버 GCP 서울 VM 배포, 09-13)
-verify_*.py  게이트 62종(루트 — 2단계에서 verify/ 로 이동 예정; verify_public 은 server.py 게이트)
+verify_*.py  게이트 64종(루트 — 2단계에서 verify/ 로 이동 예정; verify_public 은 server.py 게이트, verify_guild 는 D69 길드 척추)
 entities/    몬스터·함정·오브젝트·NPC·맵·건물·의뢰 정의(D50)
-design/      HARNESS_DESIGN.md(D1~D68) · drafts/
+design/      HARNESS_DESIGN.md(D1~D69) · drafts/
 docs/        문서·연대기·데브로그·스크린샷 · PIXEL_DUNGEON_REFERENCE.md(참고 게임 메모)
 game/        관전 클라이언트(Phaser+Vite) · verify/smoke.mjs
 viewer/      옛 HTML 뷰어 + 공용 에셋(타일·스프라이트)

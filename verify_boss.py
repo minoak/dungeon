@@ -142,12 +142,21 @@ def weak(kind):                                        # 보스 수치만 1/0/0/
 
 G.ENT.monster_stats = weak
 import show_runner                                     # noqa: E402  (env 는 위에서 — 보스 켬·마을 없음·1층=최심층)
+_real_dummy5 = G.dummy_brain
+def scripted5(obs, char="?"):                          # D69(09-14): 워프로 돌아온 마을에선 접수원에게 보고해야 원정이 끝난다 — 각본으로 보고
+    if obs.get("town") and obs.get("expedition_returned"):
+        rec_ = next((f for f in obs["sights"]["features"] if f["type"] == "npc" and f["name"] == "길드 접수원"), None)
+        if rec_:
+            return {"type": "interact" if rec_["adj"] else "goto", "target": rec_["id"]}
+    return _real_dummy5(obs, char)
+G.dummy_brain = scripted5
 buf = io.StringIO()
 with contextlib.redirect_stdout(buf):
     try:
         show_runner.main()
     except SystemExit:
         pass
+G.dummy_brain = _real_dummy5
 G.ENT.monster_stats = orig_stats
 with open(os.path.join(STATE, "stream.jsonl"), encoding="utf-8") as f:
     rows = [json.loads(ln) for ln in f if ln.strip()]
@@ -161,11 +170,15 @@ check("⑤ run_meta.boss · 1층 level.gate(sealed) · 처치(unsealed) 사건",
 check("⑤ ascend{to_depth 0, gate} · 게이트 사용 사건(gate) · 마을 level(depth 0, gate 없음)",
       len(asc) == 1 and asc[0].get("to_depth") == 0 and asc[0].get("gate") is True and gates and gates[0][1].get("gate") is True
       and len(levels) == 2 and levels[1].get("depth") == 0 and "gate" not in levels[1])
-check("⑤ end.outcome returned · 생존자 2 · 순서(처치 < 게이트)", end.get("kind") == "end" and end.get("outcome") == "returned"
-      and sorted(end.get("survivors") or []) == ["1", "2"] and not end.get("fallen") and kills[0][0] < gates[0][0] == asc[0]["turn"])
+reps = [(r["turn"], e) for r in ticks for e in (r.get("events") or []) if e.get("result") == "npc_report"]
+check("⑤ end.outcome returned · 생존자 2 · 순서(처치 < 게이트 < 보고 = 종료 틱) · D69 end.warped·quests.reported", end.get("kind") == "end" and end.get("outcome") == "returned"
+      and sorted(end.get("survivors") or []) == ["1", "2"] and not end.get("fallen") and kills[0][0] < gates[0][0] == asc[0]["turn"]
+      and len(reps) == 1 and reps[0][0] > asc[0]["turn"] and end.get("turn") == reps[0][0] and end.get("warped") is True
+      and (end.get("quests") or {}).get("reported") == reps[0][0])
 with open(os.path.join(STATE, "events.log"), encoding="utf-8") as f:
     log = f.read()
-check("⑤ events.log — 귀환 줄·종료 줄", "봉인 풀린 워프게이트로 마을 귀환" in log and "워프게이트로 마을 귀환!! (원정 완료)" in log)
+check("⑤ events.log — 귀환 줄·보고 줄·종료 줄", "봉인 풀린 워프게이트로 마을 귀환" in log and "접수원에게 보고하면 원정이 끝난다" in log
+      and "(원정 완료)" in log)
 
 print("── ⑥ 배선(소스)")
 check("⑥ 러너 스위치·전이·종료", all(s_ in src("show_runner.py") for s_ in ("DUNGEON_BOSS", "boss=BOSS_ON and nd >= DEPTHS", 'outcome = "returned"', "elif nd == 0:")))

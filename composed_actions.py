@@ -41,6 +41,17 @@ def observe(d, bot, bots, obs):
     if sights.get('exit'):
         refs['exit'] = {'kind': 'exit', 'key': 'exit'}
         targets.append({'id': 'exit', 'kind': 'exit', 'name': '계단', 'tags': ['object', 'interactable']})
+    for n in obs.get('notices') or []:               # D69(09-14) 게시판의 의뢰 — 문턱 근처에 섰을 때만 대상이 된다(use=맡기, goto=게시판으로)
+        if n.get('kind') != 'board':
+            continue
+        for q in n.get('quests') or []:
+            tid = q.get('tid')
+            if not tid:
+                continue
+            refs[tid] = {'kind': 'quest', 'qid': q.get('id'), 'building': n.get('building')}
+            targets.append({'id': tid, 'kind': 'quest', 'name': '의뢰 「%s」' % q.get('title', '?'),
+                            'tags': ['object', 'quest'] + (['accepted'] if q.get('accepted') else []),
+                            **{k: q[k] for k in ('goal', 'reward', 'client') if q.get(k)}})
     seen = d.visible_cells(bot['x'], bot['y'])
     for rid, door in sorted(d.doors.items()):
         visible = door.cell in seen if door.cell else any(p in seen for p in door.sides.values())
@@ -215,6 +226,12 @@ def entity(d, bot, target, bots, refs=None):
     if kind in ('feature', 'exit'):
         obj = d.features.get(d._exit_fid) if kind == 'exit' else d._feature_by_target(target)
         return (kind, (obj.x, obj.y), obj) if obj and not obj.concealed and (obj.x, obj.y) in seen else None
+    if kind == 'quest':                                  # D69 의뢰 — 그 게시판 건물 문턱의 range 안에 서 있을 때만 실물(글)이다
+        fid, rng = (getattr(d, 'quest_boards', None) or {}).get(ref.get('qid'), (None, 2))
+        f = d.features.get(fid) if fid is not None else None
+        if not f or max(abs(f.x - bot['x']), abs(f.y - bot['y'])) > rng:
+            return None
+        return kind, (f.x, f.y), ref
     if kind == 'door':
         door = d.doors.get(target)
         if not door:
@@ -243,6 +260,8 @@ def in_range(d, bot, action, target, at=None):
     x, y = at if at is not None else (bot['x'], bot['y'])
     tx, ty = target[1]
     if target[0] == 'item' or (target[0] == 'bot' and target[2] is bot):
+        return True
+    if target[0] == 'quest':                              # D69 게시판의 글 — 대상이 된 시점에 이미 range 안(entity 가 재확인)
         return True
     distance = abs(x - tx) + abs(y - ty)
     if action['type'] == 'attack':
@@ -336,6 +355,9 @@ def execute(d, bot, action, bots):
             d._obj_tag(bot, obj, res)
             if res.get('result') == 'nothing':
                 return _base(bot, action, 'no_effect', reason_code='no_intrinsic_use')
+            return {**res, 'type': 'use', 'effect_type': 'interact'}
+        if kind == 'quest':                               # D69 의뢰 맡기 — 게시판 글의 '기능'은 맡는 것이다
+            res = d._interact(bot, rid, bots)
             return {**res, 'type': 'use', 'effect_type': 'interact'}
         return _base(bot, action, 'no_effect', reason_code='no_intrinsic_use')
     return _base(bot, action, 'no_effect')

@@ -53,6 +53,9 @@ entities/
 | object `equipment.bonus` | `GEAR_KINDS` | `GEAR_CYCLE`(배치 순환)은 코드 — 이름이 정의에 있는지 게이트가 본다 |
 | object `tags` | 조합형 관측 태그(`composed_actions.observe`) | 장비·물약 = `object+item` |
 | npc `npc.line·line_again·gift` | `show_runner.build_town` | 마을 v1: `town.json`이 layout 을 참조하고 배치는 `layout.npcs`(id·칸). 옛 마을 `town-v0.json`은 `{"id","x","y"}` 배치. `gift`에 `potions`와 `weapon`을 함께 두면 둘 다 준다(길드 기본 물품) |
+| npc `npc.role·persona·report·line_report·line_report_failed·line_report_empty` | `Dungeon.npc_defs`(build_town) · `_report_quests` · `brains.npc_reply` | **D69(2026-09-14)**: `role`=관측 한 줄("길드 접수원 (원정 물품 · 의뢰 접수와 귀환 보고)"), `report:true`=원정에서 돌아온 파티가 말을 걸면 보고(원정의 끝)를 받는 NPC, 보고 대사 3종은 `{done}`·`{undone}` 자리에 의뢰 제목이 들어간다. `persona`·`role` 은 NPC 두뇌 프롬프트 재료(캐릭터 시트는 안 들어간다). ⚠️문장 전부 임시(파트너 대기) |
+| building `building.role` | `Dungeon.feature_roles`(build_town) | D69: 건물 문턱 피처의 역할 한 줄 — 관측 "모험가 길드 (의뢰 게시판 · 원정 물품 · 귀환 보고)". 어디서 뭘 얻는지의 사실(캐릭터마다 갈 데가 갈리는 재료) |
+| quest `quest.req{kind, n?, monster?, depth?, object?}` | `Dungeon._quest_event`(kill=`_damage_monster` 공용 지점 · reach=러너 level 방출 직전 · loot=treasure/chest 획득) | D69: 엔진이 세는 완료 조건. `kill`(monster=몬스터 정의 id, depth 옵션, n) · `reach`(depth) · `loot`(object=엔진 피처 type, n). 없으면 맡을 수는 있지만 완수가 없는 정보성 의뢰. 검증기가 kind 어휘·monster 존재·수치를 잡는다 |
 | `knowledge.deep` | `Dungeon.lore[key].lore` | 키 = `monster:<name>` / `trap:<id>` / `feature:<type>`. 도감 원장(`bestiary.json`)의 종키와 같다 |
 | `knowledge.brief` · `knowledge.unlock{event, count}` | `Dungeon.lore[key].brief/unlock` → `view()` 의 `_knowledge` + `bestiary.Issuer.rules` | **지식 3층(D53, 2026-09-12)**: 모름(`낯선 짐승`) → 등재(brief 한 줄 + 진행도 `deep_progress{event,n,need}`) → 심층(deep 본문). 카운트는 발급기(`bestiary.py`)가 스트림에서 센다(LLM 0콜). 지금 세는 사건은 `encounter`(개체 하나를 새로 인지 = `aware_of` 증분)뿐이고 프리셋은 몬스터 2종 공통 `{encounter, 5}`(파트너 "5번 조우하면 심층 — 공통으로, 일단 몬스터만"). `unlock` 이 없는 종(함정·상자·샘)은 옛 2층(등재 즉시 본문). `unlock` 이 있으면 `deep` 필수, `count` 정수≥1 |
 

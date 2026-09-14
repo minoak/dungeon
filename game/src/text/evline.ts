@@ -57,6 +57,13 @@ export function resolveTarget(t: unknown, f: Frame, run: Run): string {
   return s;
 }
 
+/** D69 결과에 실린 의뢰 진행 [{title,n,need,done}] → ' 📜 의뢰 「…」 2/3'(세계가 센 숫자). 없으면 ''. */
+export function questSfx(e: StreamEvent): string {
+  const qs = arr(e.quest).map(obj).filter(q => q !== null) as Record<string, unknown>[];
+  if (!qs.length) return '';
+  return ' 📜 ' + qs.map(q => `의뢰 「${esc(str(q.title, '?'))}」 ${q.done ? '완수!' : `${num(q.n)}/${num(q.need, 1)}`}`).join(' · ');
+}
+
 /** 명단([{char,name}] | [char] | [{name}]) → 이름 나열(·). */
 function listNames(v: unknown, run: Run): string {
   return arr(v).map(x => {
@@ -157,8 +164,7 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
       const bits = [missing ? `아직: ${missing}` : '', busy ? `바쁨: ${busy}` : ''].filter(Boolean).join(' · ');
       return L('notable', `계단에서 동료를 기다린다${bits ? ` (${bits})` : ''}`);
     }
-    if (r === 'treasure') return L('gold', '◆ 보물 획득');
-    if (r === 'chest_loot') return L('gold', `상자를 열었다 — 보물 ${num(e.loot)}개! (d20 ${num(e.total)})`);
+    if (r === 'chest_loot') return L('gold', `상자를 열었다 — 보물 ${num(e.loot)}개! (d20 ${num(e.total)})` + questSfx(e));
     if (r === 'chest_trap') return L('combat', `상자에서 독침이! ${num(e.dmg)}피해 (d20 ${num(e.total)})${e.down ? ' — 쓰러졌다!' : ''}`);
     if (r === 'fountain_heal') return L('gold', `샘물을 마셨다 — HP ${num(e.heal)} 회복`);
     if (r === 'fountain_harm') return L('combat', `샘물이 오염돼 있었다 — ${num(e.dmg)}피해${e.down ? ' — 쓰러졌다!' : ''}`);
@@ -172,6 +178,16 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
       const item = esc(str(e.item, '무언가'));
       return L('gold', `${esc(str(e.npc, 'NPC'))}에게서 ${item}${eul(item)} 받았다 — 「${esc(str(e.line))}」`);
     }
+    if (r === 'npc_report') {                    // D69 귀환 보고 — 원정의 끝
+      const titles = obj(e.titles) || {};
+      const names = (v: unknown): string => arr(v).map(x => esc(str(titles[str(x)], str(x)))).join('·');
+      const done = names(e.done), undone = names(e.undone);
+      const bits = [done ? `완수: ${done}` : '', undone ? `미완: ${undone}` : ''].filter(Boolean).join(' / ');
+      return L('gold', `📜 ${esc(str(e.npc, 'NPC'))}에게 원정 보고${bits ? ` (${bits})` : ''} — 「${esc(str(e.line))}」`);
+    }
+    if (r === 'quest_accepted') return L('gold', `📜 의뢰 맡음 — 「${esc(str(e.title, '?'))}」 ${esc(str(e.goal))}${e.reward ? ` (보상: ${esc(str(e.reward))})` : ''}`);   // D69
+    if (r === 'quest_already') return L('dim', `📜 이미 맡은 의뢰 — 「${esc(str(e.title, '?'))}」`);
+    if (r === 'treasure') return L('gold', '◆ 보물 획득' + questSfx(e));
     const tag: Record<string, string> = { too_far: '너무 멀다', nothing: '허탕', no_target: '대상 없음' };
     return L('dim', `상호작용 ${esc(tgt())} — ${esc(tag[r] || r)}`);
   }
@@ -190,7 +206,7 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
     if (!e.hit) return L('combat', `⚔ ${sneak}${target} 공격 — 빗나감${roll}`);
     const head = sneak + (e.crit ? '대성공! ' : '');
     const tail = (e.killed ? ' — 처치!' : ` (${e.target_kind === 'bot' ? '대상' : '적'} HP ${Math.max(0, num(e.monster_hp))})`)
-      + (e.unsealed ? ' ◈ 워프게이트의 봉인이 풀렸다' : '');   // D65 보스 처치
+      + (e.unsealed ? ' ◈ 워프게이트의 봉인이 풀렸다' : '') + questSfx(e);   // D65 보스 처치 · D69 의뢰 진행
     return L('combat', `⚔ ${target} 공격 — ${head}${num(e.dmg)}피해${tail}${roll}`);
   }
   if (t === 'search') {
@@ -320,8 +336,12 @@ export function levelHead(f: Frame, run: Run): string {
 
 /** 한 프레임의 로그 그룹 — 결정(발화·속내)·사건·층 전이. 비면 ''. */
 export function groupHtml(f: Frame, run: Run, focus: Char | null): string {
-  if (f.kind === 'level') return `<div class="grp lvl" data-turn="${f.turn}">${levelHead(f, run)}` +
-    acquisitionHtml(f.level.skill_acquisitions, run.names) + '</div>';
+  if (f.kind === 'level') {
+    const qs = arr(f.level.quests).map(obj).filter(q => q !== null) as Record<string, unknown>[];   // D69 층 도달형 의뢰
+    const qh = qs.length ? `<div class="ev gold">📜 ${qs.map(q => `의뢰 「${esc(str(q.title, '?'))}」 ${q.done ? '완수!' : `${num(q.n)}/${num(q.need, 1)}`}`).join(' · ')}</div>` : '';
+    return `<div class="grp lvl" data-turn="${f.turn}">${levelHead(f, run)}` +
+      acquisitionHtml(f.level.skill_acquisitions, run.names) + qh + '</div>';
+  }
   const parts: string[] = [];
   if (f.oracle) parts.push(lineHtml('ev gold', `🔮 신의 요청 — 「${esc(f.oracle.text)}」 (요청이지 명령이 아니다)`, [], focus));   // D61 개정(09-13) 어디서나
   for (const c of Object.keys(f.decisions)) parts.push(decisionLines(c, f.decisions[c], run, focus));
@@ -351,8 +371,17 @@ export function groupHtml(f: Frame, run: Run, focus: Char | null): string {
 export function endGroupHtml(run: Run): string {
   const end = run.end;
   if (!end) return '';
-  const OC: Record<string, string> = { escaped: '던전 돌파 — 탈출!!', wiped: '전멸', timeout: '시간 종료' };
+  const OC: Record<string, string> = { escaped: '던전 돌파 — 탈출!!', wiped: '전멸', timeout: '시간 종료',
+    returned: '마을 귀환 — 원정 완료' };   // D65·D69(길드 보고까지)
   const bits = [`▣ 원정 결말 — ${esc(OC[end.outcome] || end.outcome)} (t${end.turn})`];
+  const q = obj(end.quests);                                           // D69 의뢰 장부(맡음·완수·보고)
+  if (q) {
+    const acc = arr(q.accepted).map(obj).filter(x => x !== null) as Record<string, unknown>[];
+    const done = obj(q.done) || {}, titles = obj(q.titles) || {};
+    if (acc.length) bits.push('📜 의뢰: ' + acc.map(a => `「${esc(str(titles[str(a.id)], str(a.id)))}」${str(a.id) in done ? ' 완수' : ' 미완'}`).join(' · ')
+      + (q.reported != null ? ` — 길드 보고 t${esc(str(q.reported))}` : (q.returned != null ? ' — 보고 없이 끝남' : '')));
+    else if (q.returned != null) bits.push(`📜 맡은 의뢰 없음${q.reported != null ? ` — 길드 보고 t${esc(str(q.reported))}` : ''}`);
+  }
   if (arr(end.fallen).length) bits.push(`☠ 쓰러진 자: ${arr(end.fallen).map(c => esc(nameOf(run, c))).join(', ')}`);
   if (arr(end.survivors).length) bits.push(`🛡 생환: ${arr(end.survivors).map(c => esc(nameOf(run, c))).join(', ')}`);
   if (arr(end.remaining).length) bits.push(`⏳ 남은 자: ${arr(end.remaining).map(c => esc(nameOf(run, c))).join(', ')}`);

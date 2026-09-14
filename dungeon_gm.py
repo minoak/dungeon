@@ -194,6 +194,7 @@ EVENT_KINDS = {
     'wander': True, 'enter': True, 'descend': True, 'ascend': True, 'plan_broken': True,
     'wait_allies': True, 'search': True, 'exhausted': True,
     'give': True, 'bond': True, 'received': True, 'bonded': True,   # D47 ② 건네기·친목(한 쪽·받은 쪽)
+    'quest': True,                                                   # D69 의뢰 맡음·진행·완수(층 집계에도 센다)
     'move': False, 'start': False, 'arrive': False, 'blocked': False, 'swap': False, 'misc': False,
 }
 WITNESS_LABELS = {              # 목격 사건(witnessed kind) → 집계 라벨. 문장은 brains._witness_prose 그대로
@@ -201,6 +202,7 @@ WITNESS_LABELS = {              # 목격 사건(witnessed kind) → 집계 라�
     'ally_trap': '동료 함정', 'ally_heal': '동료 회복', 'ally_loot': '동료 획득', 'ally_spot': '동료 발견',
     'ally_mishap': '동료 사고', 'ally_use': '동료 사용', 'mon_use': '몹 문 사용', 'ally_status': '동료 상태',
     'ally_give': '동료 건넴', 'ally_bond': '동료 친목',   # D47 ②(09-09) 건네기·친목 목격
+    'ally_quest': '동료 의뢰 맡음',                       # D69(09-14) 게시판 앞에서 의뢰를 맡는 걸 봄
 }
 _RUN_RESULTS = {'walking': '걸음', 'following': '틱 동행', 'beside': '틱 곁',   # beside = D48 개정 goto<아군> 추적의 곁 유지 틱
                 'waiting': '틱 대기', 'resting': '틱 휴식'}
@@ -286,7 +288,11 @@ def event_tags(rec, names=None):
             return [('miss', '헛침', '대상 없음' if r == 'no_target' else '사거리 밖')]
         who = '%s(%s)' % (rec.get('target', '?'), rec.get('target_id', '?'))
         if rec.get('killed'):
-            return [('kill', '처치', who)]
+            out = [('kill', '처치', who)]
+            for qv in rec.get('quest') or []:                     # D69 처치가 의뢰를 채웠다(정보)
+                out.append(('quest', '의뢰 완수' if qv.get('done') else '의뢰 진행',
+                            '%s %d/%d' % (qv.get('title', '?'), qv.get('n', 0), qv.get('need', 0))))
+            return out
         if rec.get('hit'):
             return [('hit', '명중', '%s −%d%s' % (who, rec.get('dmg', 0), ' 회심' if rec.get('crit') else ''))]
         return [('miss', '빗나감', who)]
@@ -336,6 +342,12 @@ def event_tags(rec, names=None):
             return [('talk', '대화', '%s: %s 받음' % (rec.get('npc', '?'), rec.get('item', '?')))]
         elif r == 'npc_talk':
             return [('talk', '대화', '%s "%s"' % (rec.get('npc', '?'), (rec.get('line') or '')[:30]))]
+        elif r == 'npc_report':                                # D69 귀환 보고 — 원정의 끝
+            return [('talk', '보고', '%s: 완수 %d·미완 %d' % (rec.get('npc', '?'), len(rec.get('done') or []), len(rec.get('undone') or [])))]
+        elif r == 'quest_accepted':                            # D69 의뢰 맡음
+            return [('quest', '의뢰 맡음', str(rec.get('title') or rec.get('quest') or '?'))]
+        elif r == 'quest_already':
+            return [('misc', '이미 맡은 의뢰', str(rec.get('title') or '?'))]
         elif r in ('nothing', 'too_far', 'no_target'):
             return [('misc', '헛손질', r)]
         if out:
@@ -453,6 +465,41 @@ def addressed_to(msg, char):
     배달(들림)은 러너가 시야로 정하고, 정지(말 걸림)·대화 뼈는 이 판정을 지난 말만 센다."""
     to = (msg or {}).get('to')
     return to == 'all' or (to is not None and str(to) == str(char))
+
+
+QUEST_REQ_KINDS = ('kill', 'reach', 'loot')   # D69 의뢰 완료 조건의 종류 — 엔진이 세는 사건(처치·층 도달·획득)
+
+
+def new_quests():
+    """D69(2026-09-14 파트너 "던전과 마을을 이어주는 연결점이 바로 길드") 의뢰 장부 — 파티 단위, 판 전체(러너가 층마다 d.quests 로 건다).
+    accepted{qid:{turn,by}} 맡은 의뢰 · progress{qid:n} 진행 · done{qid:turn} 완수 · returned=워프게이트로 마을에 돌아온 틱 ·
+    reported=접수원에게 보고한 틱(=원정의 끝). 판정은 전부 여기 숫자로만 — 보상·평판·이월은 후속(메모 §4-4)."""
+    return {'accepted': {}, 'progress': {}, 'done': {}, 'returned': None, 'reported': None}
+
+
+def quest_def(qid):
+    """의뢰 정의(entities/quest) → {id, title, goal, reward?, client?, req?} — 모르면 None."""
+    try:
+        q = ENT.get(qid)
+    except Exception:
+        return None
+    if not q or q.get('kind') != 'quest':
+        return None
+    qc = (q.get('comps') or {}).get('quest') or {}
+    return {'id': qid, 'title': q.get('name'), 'goal': qc.get('goal'),
+            **({'reward': qc['reward']} if qc.get('reward') else {}),
+            **({'client': qc['client']} if qc.get('client') else {}),
+            **({'req': dict(qc['req'])} if isinstance(qc.get('req'), dict) else {})}
+
+
+def quest_summary(q):
+    """스트림 end.quests / run_meta 소비용 — 장부의 사실만(제목은 정의에서)."""
+    if not q:
+        return None
+    return {'accepted': [{'id': k, 'turn': v.get('turn'), 'by': v.get('by')} for k, v in q['accepted'].items()],
+            'done': dict(q['done']), 'progress': dict(q['progress']),
+            'titles': {k: ((quest_def(k) or {}).get('title') or k) for k in q['accepted']},   # 관전 결말용 제목(정의가 뒤에 바뀌어도 그 판의 제목)
+            'returned': q.get('returned'), 'reported': q.get('reported')}
 
 
 def floor_freeze(bot, depth, turn):
@@ -758,6 +805,12 @@ class Dungeon:
         self.npc_lines = {}        # NPC 이름→인사 한 줄(town.json 데이터 — lore 선례. 판정 무접촉)
         self.npc_gifts = {}        # D32(09-05) 상점 v0: NPC 이름→선물({'potions':1}|{'weapon':'단검'}) — build_town 이 채운다
         self.npc_lines_again = {}  #   두 번째 이후(또는 줄 게 없을 때) 대사 — 정해진 문장만(파트너 확정)
+        self.npc_defs = {}         # D69(09-14) NPC 정의 전체(role·persona·report·보고 대사) — build_town 이 채운다(판정은 report 만 읽는다)
+        self.feature_roles = {}    # D69 피처 id → 역할 한 줄(건물 role·NPC role) — 관측 한 줄(표현층, 판정 무접촉)
+        self.quests = None         # D69 의뢰 장부(new_quests — 파티 단위·판 전체) — 러너가 층마다 건다. None=의뢰 없음(옛 판 비트 동일)
+        self.quest_ids = {}        # D69 관측 id('q1'…) → 의뢰 정의 id — index_quests() 가 게시판 순서로 매긴다(마을만)
+        self.quest_boards = {}     # D69 의뢰 정의 id → (게시판 건물 피처 id, range)
+        self.expedition_returned = False   # D69 워프게이트로 돌아온 마을 — 원정을 마친 상태(접수원 보고로 끝난다). 러너가 켠다
         self.graves = bool(graves) # D22 묘 스위치 — 기본 꺼짐(기존 verify 비트 동일). 러너가
                                    #   DUNGEON_GRAVES(기본 1)로 켠다. 쓰러진 자리에 '~의 묘' 피처.
         self.events = bool(events) # D22 사건층 스위치 — 기본 꺼짐. 러너가 DUNGEON_EVENTS(기본 1).
@@ -904,6 +957,9 @@ class Dungeon:
         d.npc_lines = {}           # NPC 인사 사전 — build_town 이 채운다(데이터, 판정 무접촉)
         d.npc_gifts = {}           # D32 상점 v0 — from_ascii 는 __new__ 경유라 여기서도 명시 초기화(함정 계보)
         d.npc_lines_again = {}
+        d.npc_defs, d.feature_roles = {}, {}          # D69(09-14) NPC 정의·피처 역할 — __new__ 경유라 명시 초기화
+        d.quests, d.quest_ids, d.quest_boards = None, {}, {}   # D69 의뢰 장부·관측 id·게시판 — 손그림 장면도 기본 없음(호출측이 건다)
+        d.expedition_returned = False                  # D69 원정 귀환 상태 — 러너가 켠다
                                    #   ⚠️ from_ascii 는 __new__ 경유라 __init__ 을 안 탄다 —
                                    #   새 스위치는 여기 명시 초기화가 필수(D21·D22·솔로 때 밟은 함정.
                                    #   빼먹으면 AttributeError 로 게이트 15개가 한꺼번에 붉어진다)
@@ -1806,9 +1862,11 @@ class Dungeon:
                             **({'in_range': True} if self._can_hit(bot, m) else {})})
                 for m in self.monsters
                 if m.alive and not m.concealed and (m.x, m.y) in seen]
+        roles_ = getattr(self, 'feature_roles', None) or {}   # D69 건물·NPC 역할 한 줄(마을 — 어디서 뭘 얻는지의 사실)
         feats = [_knowledge('feature:' + f.type,
                             {'id': 'f%d' % f.id, 'type': f.type, 'name': f.name,
                              'visited': (f.x, f.y) in self.visited, **bear(f.x, f.y),
+                             **({'role': roles_[f.id]} if roles_.get(f.id) else {}),   # D69(09-14) 역할(있을 때만)
                              **self._obj_tag_obs(bot, f),       # D39 오브젝트 태그(있을 때만)
                              **({'new': True} if (f.type in ('weapon', 'armor')            # D57: 아무도 착용한 적 없는 장비(객체 사실,
                                                  and not getattr(f, 'worn', None)) else {})})   #   파트너 "진짜 착용한 적이 없는 것만 new")
@@ -2016,6 +2074,13 @@ class Dungeon:
                      '계단에서 하강 시도 (규칙: 너 혼자 내려간다 — 기다릴 일행이 없다)'
                      if self.solo else
                      '계단에서 하강 시도 (규칙: 살아있는 파티 전원이 계단 근처에 모이고 저마다 하던 일이 없어야 내려간다)')
+        for n_ in (self._notices(bot) if getattr(self, 'quests', None) is not None else []):   # D69 게시판 의뢰 — 문턱 근처면 '맡기'가 어휘가 된다
+            if n_.get('kind') != 'board':
+                continue
+            for q_ in n_.get('quests') or []:
+                if q_.get('tid') and not q_.get('accepted'):
+                    _add('interact', q_['tid'], '의뢰 맡기: %s — %s%s' % (q_.get('title', '?'), q_.get('goal', '?'),
+                                                                     (' (보상: %s)' % q_['reward']) if q_.get('reward') else ''))
         for f in feats:
             if f['adj']:
                 if f['type'] == 'building':    # D60(09-12) 마을 관측: 건물은 문턱까지(goto)만 — 안으로 드는 동사는 없다(실내는 후속)
@@ -2270,6 +2335,9 @@ class Dungeon:
                 **({'town_zone': tz} if (self.town and (tz := self._town_zone(bot['x'], bot['y'])))   # D60(09-12) 지금 있는 구역 이름
                    else {}),
                 **({'notices': nts_} if (nts_ := self._notices(bot)) else {}),   # D61 게시판(문턱 근처)·신의 요청(09-13 개정: 어느 층에서나)
+                **({'quests': qs_} if (qs_ := self._quest_obs()) else {}),        # D69(09-14) 맡은 의뢰와 진행(파티 장부 — 정보만)
+                **({'expedition_returned': True} if (self.town and getattr(self, 'expedition_returned', False)
+                                                     and (getattr(self, 'quests', None) or {}).get('reported') is None) else {}),   # D69 원정에서 돌아온 마을(보고 전)
                                       # 장비(07-30) — 자기 몸의 사실(더미·BYO 소비용 데이터).
                                       # ⚠️ 프롬프트 상시 노출은 금지 계약: 착용 정보는 시트(불변
                                       # 프리픽스=캐싱)에 살고, 비교는 입수 메뉴 라벨에만 나온다
@@ -2755,6 +2823,8 @@ class Dungeon:
             dist = max(abs(bot['x'] - f.x), abs(bot['y'] - f.y))
             if board and dist <= int(board.get('range', 2) or 2):
                 items = []
+                tids = {v: k for k, v in (getattr(self, 'quest_ids', None) or {}).items()}   # D69 정의 id → 관측 id('q1'…)
+                ledger = getattr(self, 'quests', None)
                 for qid in board.get('quests') or []:
                     try:
                         q = ENT.get(qid)
@@ -2763,7 +2833,10 @@ class Dungeon:
                     qc = (q.get('comps') or {}).get('quest') or {}
                     items.append({'id': qid, 'title': q.get('name'), 'goal': qc.get('goal'),
                                   **({'reward': qc['reward']} if qc.get('reward') else {}),
-                                  **({'client': qc['client']} if qc.get('client') else {})})
+                                  **({'client': qc['client']} if qc.get('client') else {}),
+                                  **({'tid': tids[qid]} if (ledger is not None and qid in tids) else {}),   # D69 맡기의 대상 id
+                                  **({'accepted': True} if (ledger and qid in ledger['accepted']) else {}),
+                                  **({'done': True} if (ledger and qid in ledger['done']) else {})})
                 out.append({'kind': 'board', 'building': 'f%d' % fid, 'name': f.name, 'quests': items})
             if oracle and orc and orc.get('text') and dist <= int(oracle.get('range', 2) or 2):
                 mine = (bot.get('oracle_replies') or {}).get(orc.get('id'))
@@ -2777,6 +2850,128 @@ class Dungeon:
             out.append({'kind': 'oracle', 'where': 'sky', 'id': orc.get('id'), 'text': orc['text'], 'turn': orc.get('turn'),
                         **({'replied': mine} if mine else {})})
         return out
+
+    # ── D69(2026-09-14) 길드 척추 — 의뢰 맡기·진행·귀환 보고. 파트너 "이 세상이 던전만 있는 건 아니라는 걸 보여주고 싶다 …
+    #    던전과 마을을 이어주는 연결점이 바로 길드". 판정은 전부 여기(엔진)·숫자로만, 문장은 정의·두뇌 몫. ──
+    def index_quests(self):
+        """게시판(building_defs 의 board 부품) 순서로 의뢰에 관측 id 'q1','q2'… 를 매긴다(마을 한 번, 결정론). quests 장부가 없으면 무시."""
+        self.quest_ids, self.quest_boards = {}, {}
+        if getattr(self, 'quests', None) is None:
+            return
+        n = 0
+        for fid, eid in sorted((getattr(self, 'building_defs', None) or {}).items()):
+            try:
+                board = ((ENT.get(eid) or {}).get('comps') or {}).get('board') if eid else None
+            except Exception:
+                board = None
+            if not board:
+                continue
+            for qid in board.get('quests') or []:
+                if qid in self.quest_boards or not quest_def(qid):
+                    continue
+                n += 1
+                self.quest_ids['q%d' % n] = qid
+                self.quest_boards[qid] = (fid, int(board.get('range', 2) or 2))
+
+    def _quest_obs(self):
+        """맡은 의뢰의 관측 투영 [{tid?, id, title, goal, n, need, done, reward?}] — 어느 층에서나(장부는 파티 단위). 없으면 []."""
+        q = getattr(self, 'quests', None)
+        if not q or not q['accepted']:
+            return []
+        tids = {v: k for k, v in (getattr(self, 'quest_ids', None) or {}).items()}
+        out = []
+        for qid in q['accepted']:
+            qd = quest_def(qid)
+            if not qd:
+                continue
+            need = int((qd.get('req') or {}).get('n') or 1)
+            out.append({'id': qid, 'title': qd.get('title'), 'goal': qd.get('goal'),
+                        'n': int(q['progress'].get(qid, 0)), 'need': need, 'done': qid in q['done'],
+                        **({'reward': qd['reward']} if qd.get('reward') else {}),
+                        **({'tid': tids[qid]} if qid in tids else {})})
+        return out
+
+    def _quest_event(self, kind, **facts):
+        """세계의 사건 하나(kill/reach/loot)를 맡은 의뢰들에 대본다. 맞는 의뢰의 진행이 오르고, 다 차면 done(틱). 반환 = 바뀐 의뢰
+        [{id, title, n, need, done}] — 결과 dict 의 `quest` 로 실린다(정보 — 누가 세었나가 스트림에 남는다). 장부 없으면 []."""
+        q = getattr(self, 'quests', None)
+        if not q or not q['accepted']:
+            return []
+        out = []
+        for qid in list(q['accepted']):
+            if qid in q['done']:
+                continue
+            qd = quest_def(qid)
+            req = (qd or {}).get('req') or {}
+            if req.get('kind') != kind:
+                continue
+            if kind == 'kill':
+                mdef = ENT.monster(str(facts.get('monster') or ''))
+                if not mdef or mdef.get('id') != req.get('monster'):
+                    continue
+                if req.get('depth') is not None and int(req['depth']) != int(self.depth):
+                    continue
+            elif kind == 'reach':
+                if int(facts.get('depth', self.depth)) < int(req.get('depth') or 1):
+                    continue
+            elif kind == 'loot':
+                if str(facts.get('object') or '') != str(req.get('object') or ''):
+                    continue
+            else:
+                continue
+            need = int(req.get('n') or 1)
+            n = need if kind == 'reach' else int(q['progress'].get(qid, 0)) + 1
+            q['progress'][qid] = n
+            done = n >= need
+            if done:
+                q['done'][qid] = self.turn
+            out.append({'id': qid, 'title': qd.get('title'), 'n': n, 'need': need, 'done': done})
+        return out
+
+    def _accept_quest(self, bot, tid, bots=None):
+        """게시판의 의뢰를 맡는다(interact/use q<n>) — 그 의뢰가 붙은 건물 문턱의 range 안이어야 한다(글은 곁에서 읽는다).
+        이미 맡았으면 quest_already(사실만). 판정·보상 없음 — 장부에 (틱, 누가)만 남는다. 파티 단위: 한 사람이 맡으면 전원의 의뢰다."""
+        base = {'char': bot['char'], 'type': 'interact', 'target': tid}
+        q = getattr(self, 'quests', None)
+        qid = (getattr(self, 'quest_ids', None) or {}).get(tid)
+        if q is None or not qid:
+            return {**base, 'result': 'no_target'}
+        fid, rng = self.quest_boards.get(qid, (None, 2))
+        f = self.features.get(fid) if fid is not None else None
+        if not f or max(abs(bot['x'] - f.x), abs(bot['y'] - f.y)) > rng:
+            return {**base, 'result': 'too_far'}
+        qd = quest_def(qid) or {'title': qid}
+        if qid in q['accepted']:
+            return {**base, 'result': 'quest_already', 'quest': qid, 'title': qd.get('title'),
+                    'by': q['accepted'][qid].get('by'), 'since': q['accepted'][qid].get('turn')}
+        q['accepted'][qid] = {'turn': self.turn, 'by': bot['char']}
+        self._witness(bots, f.x, f.y,            # 마을=전체 시야 — 게시판 앞에서 맡는 걸 본 사람은 안다(획득 목격 문법)
+                      {'kind': 'ally_quest', 'char': bot['char'], 'what': qd.get('title')},
+                      exclude=(bot['char'],))
+        return {**base, 'result': 'quest_accepted', 'quest': qid, 'title': qd.get('title'), 'goal': qd.get('goal'),
+                **({'reward': qd['reward']} if qd.get('reward') else {}),
+                **({'client': qd['client']} if qd.get('client') else {}), 'board': 'f%d' % f.id}
+
+    def _report_quests(self, bot, f, bots=None):
+        """원정에서 돌아와 보고 역할 NPC(접수원)에게 말을 건다 = 보고. 맡은 의뢰를 완수/미완으로 가르고 장부에 reported(틱)을 찍는다 —
+        러너는 이 결과를 보고 원정을 닫는다(파트너 09-14 "원정의 끝을 게이트가 아니라 길드 보고로"). 문장은 정의의 보고 대사(임시)
+        — NPC 두뇌가 켜진 판은 러너가 line 을 LLM 문장으로 바꾼다(line_fixed 에 원문). 보상·평판은 후속."""
+        q = self.quests
+        acc = list(q['accepted'])
+        done = [qid for qid in acc if qid in q['done']]
+        undone = [qid for qid in acc if qid not in q['done']]
+        titles = {qid: (quest_def(qid) or {}).get('title') or qid for qid in acc}
+        q['reported'] = self.turn
+        nd = (getattr(self, 'npc_defs', None) or {}).get(f.name) or {}
+        if done:
+            line = (nd.get('line_report') or '{done} — 확인했다.').replace('{done}', '·'.join(titles[x] for x in done))
+        elif undone:
+            line = (nd.get('line_report_failed') or '{undone} — 이번엔 못 채웠군.').replace('{undone}', '·'.join(titles[x] for x in undone))
+        else:
+            line = nd.get('line_report_empty') or nd.get('line') or '…'
+        line = line.replace('{undone}', '·'.join(titles[x] for x in undone))
+        return {'char': bot['char'], 'type': 'interact', 'target': 'f%d' % f.id, 'result': 'npc_report', 'npc': f.name,
+                'line': line, 'done': done, 'undone': undone, 'titles': titles, 'bag': int(bot.get('bag', 0))}
 
     def _town_zone(self, x, y):
         """마을 관측(D60, 2026-09-12 파트너 "마을에서는 시야나 관측 정보를 느슨하게 줘도 될 것 같다"):
@@ -2845,6 +3040,11 @@ class Dungeon:
             return ('door', door.sides[door.zones[0]])   # 구역 밖에서 부르면 첫쪽 문턱(결정론)
         if s[:1] == 'f' and s[1:].isdigit():
             f = self.features.get(int(s[1:]))
+            return ('feature', (f.x, f.y)) if f else None
+        if s[:1] == 'q' and s[1:].isdigit():            # D69 의뢰 id → 그 의뢰가 붙은 게시판(건물 문턱) 칸 — goto 대상
+            qid = (getattr(self, 'quest_ids', None) or {}).get(s)
+            fid = ((getattr(self, 'quest_boards', None) or {}).get(qid) or (None, 0))[0]
+            f = self.features.get(fid) if fid is not None else None
             return ('feature', (f.x, f.y)) if f else None
         if s[:1] == 'm' and s[1:].isdigit():
             m = next((m for m in self.monsters if m.id == int(s[1:]) and m.alive), None)
@@ -3808,6 +4008,9 @@ class Dungeon:
         tf = self.feature_at(nx, ny, 'treasure')
         if tf and not tf.concealed:               # 숨은 보물은 밟아도 모른다 — 인지로 드러나야 줍는다
             del self.features[tf.id]; bot['bag'] += 1; out['treasure'] = True
+            qv = self._quest_event('loot', object='treasure')   # D69: 걸으며 주운 보물도 획득형 의뢰에 센다
+            if qv:
+                out['quest'] = qv
             self._witness(bots, nx, ny,           # 전달층(D22 확장 07-29): 획득도 목격 — 보물이 눈앞에서
                           {'kind': 'ally_loot', 'char': bot['char'], 'what': '보물'},
                           exclude=(bot['char'],))  # 사라지는 걸 본 사람은 누가 가져갔는지도 본 사람이다
@@ -4055,6 +4258,9 @@ class Dungeon:
           안 모였으면 wait_allies — 동료를 부르거나 데리러 가거나, 볼일이 끝나길 기다려라.
         상자/샘(Stage 3) = 도박: 상자 d20+DEX≥10 → 보물2 / 실패 → 독침 2피해. 샘 d20≥8 → 회복3 / 오염 1피해."""
         base = {'char': bot['char'], 'type': 'interact', 'target': target_id}
+        tid_ = str(target_id or '')
+        if tid_[:1] == 'q' and tid_[1:].isdigit():   # D69(09-14) 게시판의 의뢰 — 문턱 근처(range)면 맡는다(닿을 필요 없음: 글이다)
+            return self._accept_quest(bot, tid_, bots)
         res = self._resolve_target(target_id, bots)
         if not res:
             return {**base, 'result': 'no_target'}
@@ -4122,6 +4328,11 @@ class Dungeon:
             self._witness_use(bots, tx, ty, group, f.name, 'f%d' % f.id)      # D30 — 하강과 대칭
             return {**base, 'result': 'ascend', 'party': sorted(o['char'] for o in group)}
         if f and f.type == 'npc':                # NPC(D29) 말 걸기 + D32(09-05) 상점 v0: 정해진 대사 + 선물
+            q_ = getattr(self, 'quests', None)   # D69(09-14): 원정에서 돌아온 뒤 보고 역할 NPC(접수원)에게 말을 걸면 = 보고(원정의 끝)
+            if (q_ and q_.get('returned') is not None and q_.get('reported') is None
+                    and ((getattr(self, 'npc_defs', None) or {}).get(f.name) or {}).get('report')):
+                bot.setdefault('npc_met', set()).add(f.name)
+                return self._report_quests(bot, f, bots)
             gift = (getattr(self, 'npc_gifts', None) or {}).get(f.name) or {}
             served = bot.setdefault('shop_served', set())   # 방문 단위 — 층 전이의 재스폰이 새 봇 dict 를
             met = bot.setdefault('npc_met', set())          #   만들므로 마을에 다시 오면 자동으로 비어 있다
@@ -4155,7 +4366,8 @@ class Dungeon:
             self._witness(bots, tx, ty,          # 전달층(D22 확장 07-29): 획득도 목격 — 사라진 보물의 행방
                           {'kind': 'ally_loot', 'char': bot['char'], 'what': '보물'},
                           exclude=(bot['char'],))
-            return {**base, 'result': 'treasure'}
+            qv = self._quest_event('loot', object='treasure')   # D69: 획득형 의뢰(잃어버린 장신구=보물 하나)의 진행
+            return {**base, 'result': 'treasure', **({'quest': qv} if qv else {})}
         if f and f.type == 'potion':             # 회복 물약 — 곁에서 집기(줍기 문법, 마시는 건 drink)
             del self.features[f.id]
             bot['potions'] = bot.get('potions', 0) + 1
@@ -4189,8 +4401,9 @@ class Dungeon:
                               {'kind': 'ally_use', 'char': bot['char'], 'what': '상자',   # (07-29 좋은/나쁜
                                'id': cid, 'result': '보물을 꺼냈다'},                   #  결과 대칭 보존)
                               exclude=(bot['char'],))
+                qv = self._quest_event('loot', object='treasure')   # D69: 상자의 보물도 획득이다
                 return {**base, 'result': 'chest_loot', 'roll': r, 'mod': bot['dex'],
-                        'total': total, 'loot': 2}
+                        'total': total, 'loot': 2, **({'quest': qv} if qv else {})}
             bot['hp'] -= 2
             out = {**base, 'result': 'chest_trap', 'roll': r, 'mod': bot['dex'],
                    'total': total, 'dmg': 2, 'hp': bot['hp']}
@@ -4314,6 +4527,9 @@ class Dungeon:
             if getattr(self, 'boss', None) is mon and getattr(self, 'sealed', False):   # D65: 보스가 쓰러지면 워프게이트 봉인 해제
                 self.sealed = False                       #   (다음 관측부터 게이트가 '열려 있다' — 결과 unsealed 는 로그·관전용)
                 res['unsealed'] = True
+            qv = self._quest_event('kill', monster=mon.kind)   # D69: 처치형 의뢰의 진행(기본 공격·스킬 공용 지점)
+            if qv:
+                res['quest'] = qv
             if self.relations and mon.state == 'HUNTING' and mon.target \
                     and mon.target != bot['char']:    # 나를 구함(D36): 나를 물던 몹을 동료가 처치 —
                 victim = next((o for o in (bots or []) if o['char'] == mon.target   # 그 처치를 본 사람만

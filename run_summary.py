@@ -58,6 +58,8 @@ class Collector:
         self.retries = 0                                           # brain_retry(사람이 누른 재시도)
         self._run = {}                                             # char -> [key, t0, t1, n]
         self.longest = {}                                          # char -> (n, key, t0, t1)
+        self.q_accepted, self.q_done, self.q_reported = 0, 0, 0    # D69 의뢰 맡음·완수(사건에서 셈)·보고 횟수
+        self.npc_talks, self.npc_brain = 0, 0                      # D69 NPC 접촉(npc_talk/gift/report)·그중 LLM 문장(line_src brain)
         self._prev = {}
         self.repeat = collections.Counter()
         self.together = 0
@@ -88,6 +90,9 @@ class Collector:
         elif kind == 'level':
             self.levels += 1
             self.depth_max = max(self.depth_max, int(rec.get('depth') or 0))
+            for qv in rec.get('quests') or []:                          # D69 층 도달형 의뢰(level 레코드에 실린다)
+                if isinstance(qv, dict) and qv.get('done'):
+                    self.q_done += 1
         elif kind == 'tick':
             self._tick(rec)
         elif kind == 'brain_pause':
@@ -156,6 +161,17 @@ class Collector:
                 self.give += 1
             if t == 'bond' and r == 'done':
                 self.bond += 1
+            if r == 'quest_accepted':                                  # D69
+                self.q_accepted += 1
+            if r == 'npc_report':
+                self.q_reported += 1
+            if r in ('npc_talk', 'npc_gift', 'npc_report'):
+                self.npc_talks += 1
+                if e.get('line_src') == 'brain':
+                    self.npc_brain += 1
+            for qv in e.get('quest') or []:
+                if isinstance(qv, dict) and qv.get('done'):
+                    self.q_done += 1
             if r == 'equip':
                 c = str(e.get('char'))
                 self.equip[c] += 1
@@ -213,6 +229,8 @@ class Collector:
             'bestiary': {'book_lines': self.book_lines},
             'events': dict(self.events.most_common(12)),
             'movement': self.movement.result(),
+            'quests': {'accepted': self.q_accepted, 'done': self.q_done, 'reported': self.q_reported},   # D69 길드 척추(맡음·완수·보고)
+            'npc': {'talks': self.npc_talks, 'brain_lines': self.npc_brain},                            # D69 NPC 접촉·LLM 문장 수
         }
         s['flags'] = self.flags(s)
         return s
