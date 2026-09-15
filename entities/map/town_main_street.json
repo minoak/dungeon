@@ -9,6 +9,11 @@
   "comps": {
     "space": {
       "role": "street"
+    },
+    "story": {
+      "trait": "넓고 트인 길. 노점 상인과 떠돌이 모험자가 다닌다",
+      "history": "길드·주점·신전을 잇는 큰길. 낮이면 노점이 서고 지나가는 모험자가 많다."
     }
-  }
+  },
+  "note": "story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md)."
 }

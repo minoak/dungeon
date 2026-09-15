@@ -7,7 +7,7 @@
     "guild"
   ],
   "sprite": "wl-town-npcs#1",
-  "note": "대사·역할·성격·먼저 거는 인사(hail_*)는 SilenceBreaker 임시 초안(2026-09-14 D69·D71) — 파트너 문장으로 교체할 것. 선물·보고 판정은 엔진, 문장은 두뇌가 켜지면 LLM 이 대신 쓴다(고정 대사=폴백). {name}=캐릭터 이름, {quests}=안 맡은 의뢰 수, {monsters}/{traps}/{treasure}=지하 1층 실측.",
+  "note": "대사·역할·성격·먼저 거는 인사(hail_*)는 SilenceBreaker 임시 초안(2026-09-14 D69·D71) — 파트너 문장으로 교체할 것. 선물·보고 판정은 엔진, 문장은 두뇌가 켜지면 LLM 이 대신 쓴다(고정 대사=폴백). {name}=캐릭터 이름, {quests}=안 맡은 의뢰 수, {monsters}/{traps}/{treasure}=지하 1층 실측. story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md).",
   "comps": {
     "npc": {
       "line": "모험가 길드예요. 원정 나가는 분께 기본 물품을 드려요 — 물약 하나, 빈손이면 단검도요.",
@@ -26,6 +26,10 @@
       "hail_no_potion": "{name} 님, 물약도 없이 내려가시게요? 원정 물품 받아 가세요.",
       "hail_board": "{name} 님, 게시판에 아직 안 맡은 의뢰가 {quests}개 있어요. 보고 가실래요?",
       "hail_return": "{name} 님, 돌아오셨군요! 원정 보고하시겠어요?"
+    },
+    "story": {
+      "trait": "원정 물품(물약, 빈손이면 단검)을 주고 의뢰 접수와 귀환 보고를 받는다",
+      "history": "길드 장부를 혼자 다 쓴다. 규정엔 까다롭지만 살아 돌아온 사람에게는 누구보다 먼저 웃는다. 던전엔 한 번도 내려간 적이 없다."
     }
   }
 }

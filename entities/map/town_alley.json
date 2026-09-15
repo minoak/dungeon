@@ -9,6 +9,11 @@
   "comps": {
     "space": {
       "role": "street"
+    },
+    "story": {
+      "trait": "좁고 꺾이는 길. 견습 모험자가 서성인다",
+      "history": "주점 뒷문으로 이어지는 골목. 파티를 못 구한 이들이 여기서 나가는 파티를 눈으로 좇는다."
     }
-  }
+  },
+  "note": "story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md)."
 }

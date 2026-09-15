@@ -9,6 +9,11 @@
   "comps": {
     "space": {
       "role": "district"
+    },
+    "story": {
+      "trait": "신전과 성직자가 있는 구역",
+      "history": "마을에서 제일 조용한 자리. 기도하러 오는 사람보다 이름을 읽으러 오는 사람이 많다."
     }
-  }
+  },
+  "note": "story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md)."
 }

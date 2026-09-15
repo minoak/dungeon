@@ -9,6 +9,11 @@
   "comps": {
     "space": {
       "role": "district"
+    },
+    "story": {
+      "trait": "길드 건물과 게시판이 있는 구역",
+      "history": "던전 입구에서 가장 가까운 지붕. 원정 나가는 사람과 돌아온 사람이 여기서 엇갈린다."
     }
-  }
+  },
+  "note": "story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md)."
 }

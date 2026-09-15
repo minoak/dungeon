@@ -27,8 +27,8 @@ KINDS = ('monster', 'trap', 'object', 'npc', 'map', 'building', 'quest')   # que
 COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
          'trap': {'trap', 'knowledge'},
          'object': {'equipment', 'consumable', 'loot', 'container', 'heal', 'exit', 'knowledge'},
-         'npc': {'npc', 'knowledge'},
-         'map': {'space'}, 'building': {'building', 'board', 'oracle'},   # D61 건물 역할 부품(메모 §4-4 [제안]): 게시판·신탁
+         'npc': {'npc', 'knowledge', 'story'},   # story=D75(09-15) 장소·사람 소개(trait 한 줄·history 본문) — 도감 지식과 다른 층(해금 없음)
+         'map': {'space', 'story'}, 'building': {'building', 'board', 'oracle', 'story'},   # D61 건물 역할 부품(메모 §4-4 [제안]): 게시판·신탁 · story=D75
          'quest': {'quest'}}
 UNLOCK_EVENTS = {'encounter', 'kill', 'search_first', 'trap_avoid', 'trap_disarm', 'visit', 'talk'}   # 메모 §2-5 어휘.
 #   코드가 세는 건 encounter 뿐(bestiary.Issuer, D53) — 나머지는 검증기만 아는 예약어(정의에 적어도 아직 안 센다).
@@ -88,6 +88,10 @@ def _problems(pairs, root):
                 out.append('%s: knowledge.review 는 event(해금 사건 어휘) + count(정수≥1) 필요' % rel)
             if kn.get('unlock') is None:
                 out.append('%s: 인식 갱신 조건(review)은 해금 조건(unlock)이 있어야 뜻이 있다' % rel)
+        st = comps.get('story')                              # D75(09-15) 장소·사람 소개 — trait(특징 한 줄)·history(역사·이야기), 문자열만(하나 이상)
+        if st is not None and (not isinstance(st, dict) or not st or set(st) - {'trait', 'history'}
+                               or not all(isinstance(v, str) and v.strip() for v in st.values())):
+            out.append('%s: story 는 trait(특징 한 줄)·history(역사·이야기) 문자열만(하나 이상)' % rel)
         sp = d.get('sprite')
         if sp:
             tex = str(sp).split('#')[0]

@@ -184,6 +184,7 @@ def _tagsfx(f):
 # 궤적(D38)·층 집계·결산이 **같은 사전**을 센다(STATUS_KINDS·BONES 선례 — 사전 하나). 값=(집계 여부).
 # 문장형 서술(_last_prose·act_summary·_witness_prose)은 관전·스트림·목격 줄에 남는다 — 캐릭터 자기 궤적만 꼬리표다.
 BOSS_KIND = '고블린 대장'   # D65(09-13) 보스층의 보스 — 정의 entities/monster/goblin_chief.json(수치·습성·지식). 랜덤 몹 풀엔 안 든다
+PLACE_STORY_RANGE = 2    # D75(09-15) 장소·사람의 이야기(history)가 보이는 거리(체비셰프) — 게시판 range 와 같은 2칸
 BOSS_FLOOR_NOTICE = ("여기는 최심층이다 — 이 층 어딘가에 보스룸이 있다. 보스가 쓰러져야 이 층 출구(워프게이트)의 봉인이 풀려 마을로 돌아갈 수 있다.")
 #   D65 개정(09-13 파트너 "5층 진입시 보스룸이 있다는걸 알려주면 될 것 같아. 최초 진입시 이 한마디만"): 보스층에 들어선 캐릭터의
 #   첫 결정 관측에 한 번만 실리는 세계의 사실(행동 지시 아님 — §4-0). ⚠️문구는 임시(파트너 문장 대기)
@@ -1896,10 +1897,12 @@ class Dungeon:
                 for m in self.monsters
                 if m.alive and not m.concealed and (m.x, m.y) in seen]
         roles_ = getattr(self, 'feature_roles', None) or {}   # D69 건물·NPC 역할 한 줄(마을 — 어디서 뭘 얻는지의 사실)
+        story_ = getattr(self, 'place_story', None) or {}    # D75(09-15) 장소·사람 소개 — trait 한 줄(멀리서도, 있을 때만)
         feats = [_knowledge('feature:' + f.type,
                             {'id': 'f%d' % f.id, 'type': f.type, 'name': f.name,
                              'visited': (f.x, f.y) in self.visited, **bear(f.x, f.y),
                              **({'role': roles_[f.id]} if roles_.get(f.id) else {}),   # D69(09-14) 역할(있을 때만)
+                             **({'about': story_[f.id]['trait']} if (story_.get(f.id) or {}).get('trait') else {}),   # D75 특징 한 줄(있을 때만)
                              **self._obj_tag_obs(bot, f),       # D39 오브젝트 태그(있을 때만)
                              **({'new': True} if (f.type in ('weapon', 'armor')            # D57: 아무도 착용한 적 없는 장비(객체 사실,
                                                  and not getattr(f, 'worn', None)) else {})})   #   파트너 "진짜 착용한 적이 없는 것만 new")
@@ -2376,6 +2379,7 @@ class Dungeon:
                 **({'town': True} if self.town else {}),   # 마을(D29) — 층의 사실(던전 obs 무변경)
                 **({'town_zone': tz} if (self.town and (tz := self._town_zone(bot['x'], bot['y'])))   # D60(09-12) 지금 있는 구역 이름
                    else {}),
+                **({'town_zone_about': za} if (self.town and (za := ((getattr(self, 'zone_story', None) or {}).get(self._town_zone(bot['x'], bot['y'])) or {}).get('trait'))) else {}),   # D75 구역 특징 한 줄
                 **({'town_hear': 'zone'} if (self.town and getattr(self, 'town_hear', None) == 'zone') else {}),   # D70 사람 지각=구역(관측 문장용)
                 **({'notices': nts_} if (nts_ := self._notices(bot)) else {}),   # D61 게시판(문턱 근처)·신의 요청(09-13 개정: 어느 층에서나)
                 **({'quests': qs_} if (qs_ := self._quest_obs()) else {}),        # D69(09-14) 맡은 의뢰와 진행(파티 장부 — 정보만)
@@ -2886,6 +2890,14 @@ class Dungeon:
                 out.append({'kind': 'oracle', 'building': 'f%d' % fid, 'name': f.name,
                             'id': orc.get('id'), 'text': orc['text'], 'turn': orc.get('turn'),
                             **({'replied': mine} if mine else {})})
+        story_ = getattr(self, 'place_story', None) or {}          # D75(09-15) 장소·사람의 이야기(history) — 곁(PLACE_STORY_RANGE)에서만, 정보만
+        if story_ and defs:                                          #   역할 부품 스위치(building_defs)가 꺼진 판(옛 검증)엔 안 실린다
+            for fid, st in story_.items():
+                f = self.features.get(fid)
+                if not f or not (st or {}).get('history'):
+                    continue
+                if max(abs(bot['x'] - f.x), abs(bot['y'] - f.y)) <= PLACE_STORY_RANGE:
+                    out.append({'kind': 'place', 'id': 'f%d' % fid, 'name': f.name, 'text': st['history']})
         if orc and orc.get('text') and not any(n.get('kind') == 'oracle' for n in out):
             # D61 개정(2026-09-13 파트너 "플레이 중에 신탁을 내릴 수 있게 하자, 그래야 행동을 어느 정도는 사용자가 조작 가능"):
             # 신의 요청은 어느 층에서나 모든 캐릭터에게 들린다(where 'sky' — 건물 없음). 요청이지 명령이 아니다(§4-0 신은 절대자가 아니다).
@@ -5495,7 +5507,8 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'look': sheet.get('look'),      # D37(09-06) 외형 — run_meta 기록용·뷰어 전용. 엔진·프롬프트 무접촉
             'relationships': dict(sheet.get('relationships') or {}),
             'bag': 0, 'alive': True, 'won': False,
-            'floor_notice': (BOSS_FLOOR_NOTICE if getattr(dungeon, 'boss_on', False) else None),   # D65 개정: 보스층 진입 한마디(첫 관측 1회, view 가 지운다)
+            'floor_notice': (getattr(dungeon, 'town_notice', None) if getattr(dungeon, 'town', False)   # D75(09-15) 마을 진입 한마디(마을 정의 story.history, 첫 관측 1회)
+                             else (BOSS_FLOOR_NOTICE if getattr(dungeon, 'boss_on', False) else None)),   # D65 개정: 보스층 진입 한마디(첫 관측 1회, view 가 지운다)
             'potions': 0,                   # 소지 회복 물약(07-17) — 첫 소비 아이템. 층 이월은
                                             # 러너 재스폰이 담당(bag 이월 선례)
             'boons': 0,                     # 축복의 물약(D74, 09-15) — 신전 기도의 답. 마시면 공격 능력치 +1. 층 이월=러너 재스폰(str/dex 도 함께)

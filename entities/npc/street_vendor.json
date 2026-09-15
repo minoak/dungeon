@@ -8,7 +8,7 @@
     "vendor"
   ],
   "sprite": "wl-npc-vendor#0",
-  "note": "SilenceBreaker 임시 초안(2026-09-14 D73 마을 행인) — 문장·이름·성격 전부 파트너 대기. walk.region 은 layout 구역 id, rate 는 틱당 한 걸음 확률. 2026-09-15: 여성 SD 외형과 4방향 걷기 적용(art/npc-sprites-v1).",
+  "note": "SilenceBreaker 임시 초안(2026-09-14 D73 마을 행인) — 문장·이름·성격 전부 파트너 대기. walk.region 은 layout 구역 id, rate 는 틱당 한 걸음 확률. 2026-09-15: 여성 SD 외형과 4방향 걷기 적용(art/npc-sprites-v1). story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md).",
   "comps": {
     "npc": {
       "line": "구경하고 가세요! 던전에서 나온 잡동사니예요. 아직 값은 안 매겼어요.",
@@ -20,6 +20,10 @@
         "region": "main_street",
         "rate": 0.3
       }
+    },
+    "story": {
+      "trait": "잡동사니 구경만 된다(사고팔기는 아직 없다)",
+      "history": "던전에서 나온 물건이라며 파는 것 대부분이 마을에서 만든 것이다. 목소리가 커서 번화가 어디서든 알아볼 수 있다."
     }
   }
 }

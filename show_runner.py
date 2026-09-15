@@ -667,6 +667,14 @@ def mon_summary(e):
 
 
 # ── 마을(D29, 2026-07-30) — 마을(0층)↔던전(1층~) 왕복의 러너 몫 ──────────────
+def _story_of(eid):
+    """D75(09-15) 정의의 story 부품({trait, history}) — 없으면 None(옛 인라인 NPC·정의 없는 건물)."""
+    try:
+        return ((G.ENT.get(eid) or {}).get("comps") or {}).get("story") if eid else None
+    except Exception:
+        return None
+
+
 def build_town(path=None, apart=False, quests=None, walkers=False):
     """town.json(손그림 고정 맵 — 고향은 랜덤이 아니다) → 마을 Dungeon.
     NPC 는 좌표로 심는다(맵의 '&'는 그림 표기 — from_ascii 는 바닥으로 읽음).
@@ -704,6 +712,7 @@ def build_town(path=None, apart=False, quests=None, walkers=False):
     d.give_verb, d.bond_verb = GIVE_ON, BOND_ON                         # D47 ② 건네기·친목(마을에서도 곁이면 된다)
     d.auto_approach = brains.COMPOSE
     d.composed_actions = brains.COMPOSE
+    d.place_story, d.zone_story, d.town_notice = {}, {}, None   # D75(09-15) 장소·사람 소개(피처 id → {trait, history}) · 구역 이름 → 같은 꼴 · 마을 진입 한마디
     d.skills, d.trpg_combat, d.random_skill = SKILLS_ON and brains.COMPOSE, TRPG_COMBAT_ON, RANDOM_SKILL_ON
     for n in placements:
         x, y = int(n["x"]), int(n["y"])
@@ -716,6 +725,8 @@ def build_town(path=None, apart=False, quests=None, walkers=False):
         if spec_n.get("role"):                 # D69 역할 한 줄 — 관측 "길드 접수원 (원정 물품 · 의뢰 접수와 귀환 보고)"
             d.feature_roles[nfid] = spec_n["role"]
         d.npc_lines[spec_n["name"]] = spec_n.get("line") or "…"
+        if n.get("id") and _story_of(n["id"]):
+            d.place_story[nfid] = dict(_story_of(n["id"]))   # D75 소개(정의가 있는 NPC 만)
         if spec_n.get("gift"):                 # D32 상점 v0 — 고정 선물(물약 1/방문·빈손이면 단검)
             d.npc_gifts[spec_n["name"]] = dict(spec_n["gift"])
         if spec_n.get("line_again"):           #   두 번째 대사(정해진 문장만)
@@ -740,8 +751,17 @@ def build_town(path=None, apart=False, quests=None, walkers=False):
                 role = None
             if role:
                 d.feature_roles[fid] = role
+            if _story_of(ents.get(e.get("building"))):
+                d.place_story[fid] = dict(_story_of(ents.get(e.get("building"))))   # D75 건물 소개
     d.features[d._exit_fid].name = "던전 입구"   # 같은 '>'라도 마을에선 탈출구가 아니라 입구다
+    if _story_of("dungeon_gate"):
+        d.place_story[d._exit_fid] = dict(_story_of("dungeon_gate"))   # D75 던전 입구 소개(입구 피처=건물 정의 dungeon_gate)
     d.town_hear = "zone" if (TOWN_HEAR == "zone" and res.get("spaces")) else None   # D70 구역 지각 — 구역이 있는(layout) 마을만
+    if res.get("spaces"):                          # D75 구역·마을 소개 — 구역 이름 → story, 마을 전체 history 는 진입 한마디(첫 관측 1회, G.spawn 이 floor_notice 로)
+        for r_ in res["spaces"].get("regions", []):
+            if r_.get("name") and _story_of(r_.get("entity")):
+                d.zone_story[r_["name"]] = dict(_story_of(r_.get("entity")))
+        d.town_notice = (_story_of("town_wonderland") or {}).get("history") or None
     if walkers and res.get("spaces"):              # D73 마을 행인 — 정의(npc.walk)가 있는 NPC 를 제 구역의 빈 칸에(시드 파생 RNG, 결정론)
         rname = {r["id"]: r.get("name") for r in res["spaces"]["regions"]}
         avoid = {tuple(v) for v in starts.values()}
@@ -757,6 +777,8 @@ def build_town(path=None, apart=False, quests=None, walkers=False):
             if spec_w.get("role"):
                 d.feature_roles[fid] = spec_w["role"]
             d.npc_lines[spec_w["name"]] = spec_w.get("line") or "…"
+            if _story_of(eid):
+                d.place_story[fid] = dict(_story_of(eid))   # D75 행인 소개
             if spec_w.get("line_again"):
                 d.npc_lines_again[spec_w["name"]] = spec_w["line_again"]
     if quests is not None:                         # D69 의뢰 장부(파티 단위) — 게시판 순서로 q1, q2… 를 매긴다(결정론)

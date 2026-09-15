@@ -8,7 +8,7 @@
     "adventurer"
   ],
   "sprite": "wl-npc-wanderer#0",
-  "note": "SilenceBreaker 임시 초안(2026-09-14 D73 마을 행인) — 문장·이름·성격 전부 파트너 대기. walk.region 은 layout 구역 id, rate 는 틱당 한 걸음 확률. 2026-09-15: 여성 SD 외형과 4방향 걷기 적용(art/npc-sprites-v1).",
+  "note": "SilenceBreaker 임시 초안(2026-09-14 D73 마을 행인) — 문장·이름·성격 전부 파트너 대기. walk.region 은 layout 구역 id, rate 는 틱당 한 걸음 확률. 2026-09-15: 여성 SD 외형과 4방향 걷기 적용(art/npc-sprites-v1). story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md).",
   "comps": {
     "npc": {
       "line": "던전에서 막 올라온 참이야. 2층 계단 옆에 거미가 매복하더라 — 조심해.",
@@ -21,6 +21,10 @@
         "region": "main_street",
         "rate": 0.5
       }
+    },
+    "story": {
+      "trait": "다른 파티의 모험자. 1층 몬스터·함정 수를 안다",
+      "history": "혼자 다닌다. 어느 파티에 있었는지는 말하지 않고, 던전 얘기만은 정확하게 한다. 피곤해 보이지만 계속 내려간다."
     }
   }
 }

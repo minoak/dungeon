@@ -18,7 +18,11 @@
       ],
       "texture": "tavern",
       "role": "소문 · 쉬어 가는 자리"
+    },
+    "story": {
+      "trait": "주인이 던전 1층 소문을 안다. 쉬어 가는 자리",
+      "history": "던전에서 올라온 사람이 처음 들르는 곳이라 소문이 여기로 모인다. 술값 대신 이야기를 받는다는 말이 있을 만큼 주인이 듣는 걸 좋아한다. 번화가 쪽 정문과 샛길 쪽 뒷문이 있다."
     }
   },
-  "note": "role 은 관측 한 줄(SilenceBreaker 임시 문구, 2026-09-14 D69 — 파트너 문장 대기)."
+  "note": "role 은 관측 한 줄(SilenceBreaker 임시 문구, 2026-09-14 D69 — 파트너 문장 대기). story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md)."
 }

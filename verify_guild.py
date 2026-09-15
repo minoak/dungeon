@@ -20,6 +20,8 @@
   ⑬ D74 기도의 답 = 축복의 물약(09-15 파트너 "기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자"): 성직자 gift.boon → npc_gift ·
      관측(obs.boons·[i4]·effect 사실) · 조합형 use self i4 → drink_boon(공격 능력치 +1, 목격) · 메뉴형 drink item=boon(궁수=민첩) ·
      빈 손 no_boon · 건네기 · 계단 줄 정합(09-15 수선) · 러너 이월 배선(boons·str/dex) · 문서·클라이언트 배선
+  ⑭ D75 장소·사람의 이야기(09-15 파트너 "역사나 이야기 그리고 장소의 특징을 정해두는게"): 정의 story 17·검증기 · place_story/zone_story/town_notice ·
+     멀리서 trait(피처 줄·구역 줄)·진입 한마디(한 번) · 곁 2칸 history(notices place) · 스폰 배선 · 문서 배선
 (기존 verify 63종은 별도 실행.)
 """
 import contextlib
@@ -544,6 +546,44 @@ check("⑬ 러너 이월 배선: 재스폰이 boons 와 str/dex 를 실어 나�
       'n["boons"] = b.get("boons", 0)' in src("show_runner.py") and 'n["str"], n["dex"] = b["str"], b["dex"]' in src("show_runner.py")
       and '"boons": b["boons"]' in src("show_runner.py") and "'no_boon', 'no_room'" in src("composed_actions.py"))
 
+print("── ⑭ D75 장소·사람의 이야기(09-15 파트너 '각 장소나 오브젝트에 … 역사나 이야기 그리고 장소의 특징을 정해두는게')")
+defs14 = ENT.load()
+with_story = [k for k, v in defs14.items() if (v["comps"].get("story") or {})]
+check("⑭ 정의: story{trait, history} 17(건물 4·마을 NPC 6·구역 6·마을 1) · 검증기가 잘못된 story(빈 trait·모르는 키)를 잡는다",
+      len(with_story) == 17 and all(set(defs14[k]["comps"]["story"]) == {"trait", "history"} for k in with_story)
+      and bool(ENT._problems([("map/bad.json", {"id": "bad", "name": "b", "kind": "map", "tags": ["town"], "comps": {"space": {"role": "district"}, "story": {"trait": ""}}})], "map"))
+      and bool(ENT._problems([("map/bad2.json", {"id": "bad2", "name": "b", "kind": "map", "tags": ["town"], "comps": {"space": {"role": "district"}, "story": {"lore": "x"}}})], "map")))
+d14, s14 = show_runner.build_town(apart=True, walkers=True)
+pr14 = by_name(d14, "npc", "성직자"); tp14 = by_name(d14, "building", "신전")
+check("⑭ 엔진: place_story 에 건물 3·던전 입구·정착 NPC 3·행인 3 = 10 · zone_story 6 · town_notice = 마을 정의 history",
+      len(d14.place_story) == 10 and d14._exit_fid in d14.place_story and pr14.id in d14.place_story and tp14.id in d14.place_story
+      and len(d14.zone_story) == 6 and d14.town_notice == ENT.get("town_wonderland")["comps"]["story"]["history"])
+far_xy = next((x, y) for y in range(d14.h) for x in range(d14.w)
+              if d14.grid[y][x] == G.FLOOR and d14.feature_at(x, y) is None and d14._town_zone(x, y)
+              and all(max(abs(x - d14.features[i].x), abs(y - d14.features[i].y)) > G.PLACE_STORY_RANGE for i in d14.place_story))
+a14 = mkbot("1", *far_xy); a14["floor_notice"] = d14.town_notice          # 스폰이 넣는 값(G.spawn) — 여기선 직접
+o14 = d14.view(a14, [a14])
+w14 = brains._wire(o14, {"1": "두란"}, compose=True)
+fpr = next(f for f in o14["sights"]["features"] if f["id"] == "f%d" % pr14.id)
+check("⑭ 멀리서: 피처 about=trait · 프롬프트 '성직자 f<n> (역할) — … — <trait>' · 구역 특징 한 줄 · 마을 진입 한마디(헤더 '마을에 들어서며', 한 번만) · place notice 없음",
+      fpr.get("about") == d14.place_story[pr14.id]["trait"] and ("성직자 f%d (" % pr14.id) in w14 and (" — " + d14.place_story[pr14.id]["trait"]) in w14
+      and o14.get("town_zone_about") == d14.zone_story[o14["town_zone"]]["trait"]
+      and ("지금 있는 곳: %s — %s" % (o14["town_zone"], o14["town_zone_about"])) in w14
+      and o14.get("floor_notice") == d14.town_notice and "## 마을에 들어서며" in w14 and d14.town_notice in w14
+      and not any(n.get("kind") == "place" for n in (o14.get("notices") or []))
+      and not d14.view(a14, [a14]).get("floor_notice"))
+n14 = mkbot("2", pr14.x + 1, pr14.y, job="도적")
+on14 = d14.view(n14, [n14]); pl = {n["name"]: n for n in (on14.get("notices") or []) if n.get("kind") == "place"}
+wn14 = brains._wire(on14, {"2": "카야"}, compose=True)
+check("⑭ 곁(2칸): notices place 에 성직자·신전 history · 프롬프트 줄 '- 성직자 — <history>' · 두 번째 관측도 그대로(정보, 한 번 아님)",
+      "성직자" in pl and pl["성직자"]["text"] == d14.place_story[pr14.id]["history"] and "신전" in pl
+      and ("- 성직자 — " + d14.place_story[pr14.id]["history"]) in wn14
+      and any(n.get("kind") == "place" and n["name"] == "성직자" for n in (d14.view(n14, [n14]).get("notices") or [])))
+sp14 = G.spawn(d14, "1", [], sheet=G.HEROES["1"])
+check("⑭ 스폰: 마을이면 floor_notice=town_notice(보스 문구 아님) · 던전 층 스폰은 옛 그대로(town 아님 → None/보스 문구)",
+      sp14.get("floor_notice") == d14.town_notice and "보스룸" not in (sp14.get("floor_notice") or "")
+      and G.spawn(G.Dungeon(w=40, h=16, seed=7), "1", [], sheet=G.HEROES["1"]).get("floor_notice") in (None, G.BOSS_FLOOR_NOTICE))
+
 print("── ⑧ 배선(소스·문서)")
 check("⑧ STREAM_FORMAT: run_meta quests/town_apart/town_hear/npc_brain/npc_hail · tick.npc_hails · end.quests/warped · 이벤트 quest_accepted/npc_report · level.quests",
       all(s_ in src("STREAM_FORMAT.md") for s_ in ("| `quests` |", "| `town_apart` |", "| `town_hear` |", "| `npc_brain` |", "| `npc_hail` |", "| `npc_hails` |",
@@ -571,6 +611,11 @@ check("⑧ D74 배선(문서·클라이언트): HARNESS D74 · CHANGELOG 2026-09
       and "gift.boon" in src(os.path.join("docs", "entities.md")) and "축복의 물약" in src("README.md")
       and "boons?: number" in src(os.path.join("game", "src", "stream", "types.ts"))
       and "drink_boon" in src(os.path.join("game", "src", "text", "evline.ts")) and "축복" in src(os.path.join("game", "src", "ui", "FocusCard.ts")))
+
+check("⑧ D75 배선(문서): HARNESS D75 · CHANGELOG · entities.md story{trait, history} · README '특징 한 줄' · 검토표 docs/wording_review_2026-09-15.md",
+      "D75" in src(os.path.join("design", "HARNESS_DESIGN.md")) and "D75" in src(os.path.join("docs", "CHANGELOG.md"))
+      and "story{trait, history}" in src(os.path.join("docs", "entities.md")) and "특징 한 줄" in src("README.md")
+      and os.path.exists(os.path.join(HERE, "docs", "wording_review_2026-09-15.md")))
 
 print("ALL PASS — verify_guild (D69 길드 척추: 의뢰 맡기·완료 판정·워프 귀환 뒤 보고=원정의 끝 · 흩어진 출발 · NPC 두뇌)" if C.failed == 0 else "FAIL %d" % C.failed)
 raise SystemExit(1 if C.failed else 0)

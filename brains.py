@@ -1333,7 +1333,8 @@ def _wire(obs, names=None, compose=False):
         L.append(("- 여기는 마을이다 — 위험한 것이 없고, 길과 건물이 어디 있는지는 다 안다. 사람과 목소리는 같은 구역 안에서만 보이고 들린다"
                   if obs.get("town_hear") == "zone" else
                   "- 여기는 마을이다 — 위험한 것이 없고, 마을 전체가 한눈에 보인다")
-                 + ((" · 지금 있는 곳: %s" % obs["town_zone"]) if obs.get("town_zone") else ""))   # D60(09-12) 구역 이름
+                 + ((" · 지금 있는 곳: %s%s" % (obs["town_zone"], (" — %s" % obs["town_zone_about"]) if obs.get("town_zone_about") else ""))
+                    if obs.get("town_zone") else ""))   # D60(09-12) 구역 이름 · D75 구역 특징 한 줄
     if obs.get("expedition_returned"):          # D69(09-14) 원정에서 돌아온 마을 — 세계의 규칙(파트너 "원정의 끝을 길드 보고로"). ⚠️문구 임시
         L.append("- 원정에서 돌아온 참이다 — 원정은 길드 접수원에게 보고해야 끝난다(맡은 의뢰가 없어도 보고는 한다)")
     for n in obs.get("notices") or []:          # D61 건물 역할 부품(문턱 근처) · 신의 요청(09-13 개정: 어느 층에서나). 사실만, 맡으라·따르라는 말은 없다
@@ -1346,6 +1347,8 @@ def _wire(obs, names=None, compose=False):
                                                  (" (보상: %s)" % q["reward"]) if q.get("reward") else "",
                                                  (" — 의뢰인 %s" % q["client"]) if q.get("client") else "",
                                                  " — 완수했다" if q.get("done") else (" — 이미 맡았다" if q.get("accepted") else "")))
+        elif n.get("kind") == "place":               # D75(09-15) 장소·사람의 이야기 — 곁(2칸)에서만, 정보만(무엇을 하라는 말은 없다)
+            L.append("- %s — %s" % (n.get("name", "?"), n.get("text", "")))
         elif n.get("kind") == "oracle":
             where = ("%s 앞 — " % n.get("name", "신전")) if n.get("building") else ""   # 어디서나 들리는 목소리엔 자리 말이 없다
             if n.get("replied"):
@@ -1394,7 +1397,7 @@ def _wire(obs, names=None, compose=False):
         # 침묵을 정보로), 1칸=1m, 출처 딱지(본 적 있음/온 적 있음/발각됨 — 기억≠시야 구분 필수).
         # 정정(07-15): "짜임은 확실히"는 과독이었다 — 네 눈이 본 만큼이 네가 아는 만큼이다.
         if obs.get("floor_notice"):            # D65 개정(09-13): 보스층에 들어서며 한 번 — 세계의 사실(지시 아님)
-            L += ["", "## 이 층에 들어서며 (세계의 사실 — 한 번만 들린다)", "- " + str(obs["floor_notice"])]
+            L += ["", "## %s (세계의 사실 — 한 번만 들린다)" % ("마을에 들어서며" if obs.get("town") else "이 층에 들어서며"), "- " + str(obs["floor_notice"])]
         L += ["", "## 장소 (네 눈이 본 만큼이 네가 아는 만큼이다)"]
         head = ("던전 %d층 > %s %s" % (obs.get("depth", 1), z.get("kind", "?"),
                                        z.get("id", "") or "")).rstrip()
@@ -1451,10 +1454,11 @@ def _wire(obs, names=None, compose=False):
                                " (인접 — 칠 수 있다)" if m.get("adj") else ""))
         for f in s.get("features", []):
             put(f.get("bearing"), f.get("dist", 0),
-                "%s %s%s %dm%s" % (f.get("name", "?"), f.get("id", "?"),
+                "%s %s%s %dm%s%s" % (f.get("name", "?"), f.get("id", "?"),
                                    (" (%s)" % f["role"]) if f.get("role") else "",   # D69 역할 한 줄(마을) — 이름·id 뒤
                                    f.get("dist", 0),
-                                   " (와 본 자리)" if f.get("visited") else "") + G._tagsfx(f))   # D39 태그 접미
+                                   " (와 본 자리)" if f.get("visited") else "",
+                                   (" — %s" % f["about"]) if f.get("about") else "") + G._tagsfx(f))   # D39 태그 접미 · D75 특징 한 줄
         for t in s.get("traps", []):
             put(t.get("bearing"), t.get("dist", 0),
                 "%s %dm (발각됨 — 위치를 안다)" % (t.get("name", "함정"), t.get("dist", 0)))
@@ -1497,7 +1501,7 @@ def _wire(obs, names=None, compose=False):
                 L.append("  · %s에 대한 네 생각(네가 적어 둔 것): %s" % (m.get("kind", "?"), m["note"]))
     else:
         if obs.get("floor_notice"):            # D65 개정(09-13): 보스층 진입 한마디(옛 관측 모드도 같은 자리)
-            L += ["", "## 이 층에 들어서며 (세계의 사실 — 한 번만 들린다)", "- " + str(obs["floor_notice"])]
+            L += ["", "## %s (세계의 사실 — 한 번만 들린다)" % ("마을에 들어서며" if obs.get("town") else "이 층에 들어서며"), "- " + str(obs["floor_notice"])]
         L += ["", "## 지금 보이는 것"]
         n0 = len(L)
         ex = s.get("exit")
@@ -1510,11 +1514,12 @@ def _wire(obs, names=None, compose=False):
             if m.get("note"):                              # D55: 캐릭터 자신의 인식 — 사실과 다른 줄(섞지 않는다)
                 L.append("  · 네 생각(네가 적어 둔 것): %s" % m["note"])
         for f in s.get("features", []):
-            L.append("- %s %s%s — %s%s%s" % (f.get("name", "?"), f.get("id", "?"),
+            L.append("- %s %s%s — %s%s%s%s" % (f.get("name", "?"), f.get("id", "?"),
                                              (" (%s)" % f["role"]) if f.get("role") else "",   # D69 역할 한 줄(마을) — 이름·id 뒤
                                              at(f),
                                              " (와 본 자리)" if f.get("visited") else "",
-                                             " (new)" if f.get("new") else "") + G._tagsfx(f))   # D39 태그 접미 · D57 new(아무도 안 걸쳐 본 것)
+                                             " (new)" if f.get("new") else "",
+                                             (" — %s" % f["about"]) if f.get("about") else "") + G._tagsfx(f))   # D39 태그 접미 · D57 new(아무도 안 걸쳐 본 것) · D75 특징 한 줄
         for b in s.get("bots", []):
             L.append("- %s — HP %s/%s%s — %s%s%s"                                    # 09-08 D45: 숫자+태그(겉보기 4단 폐지)
                      % (who(b.get("char", "?")), b.get("hp", "?"), b.get("maxhp", "?"),
