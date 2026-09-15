@@ -284,7 +284,7 @@ def event_tags(rec, names=None):
             out.append(('status', rec['status'], '걸림'))
         return out
     if t == 'hail':
-        who = ', '.join(nm(c) for c in rec.get('froms', [])) or '동료'
+        who = ', '.join((str(c)[4:] if str(c).startswith('npc:') else nm(c)) for c in rec.get('froms', [])) or '동료'   # D76: NPC 인사 정지는 'npc:<이름>'
         return [('hail', '부름', '%s의 말에 멈춤' % who)]
     if t == 'said':                                        # D72 말의 결과 — 누가 들었나(러너 배달 사실)
         heard = rec.get('heard') or []
@@ -4093,6 +4093,18 @@ class Dungeon:
                        **self._cancel_approach(bot)}
         self._trail_add(bot, bot['last'])       # D38 궤적 — 말 걸림도 자기 경험
         return fresh
+
+    def npc_hail_stop(self, bot, npc_name):
+        """D76(2026-09-15 파트너 "npc가 캐릭터에게 말을 걸릴 때도 멈추게 하자"): NPC 가 먼저 건 인사(D71)는 걷던·기다리던·쉬던 몸을
+        **실제로 세운다** — 동료 말 걸림(D24)이 사교 채널 판에서 작정을 안 부수고 사교 콜만 여는 것과 다르다: NPC 는 파티가 아니라
+        사교 콜이 없고, 요점은 '노점에 가 볼까'를 고를 결정권이다(09-14 판 685433 부검: 수나가 자동보행 28틱 동안 인사 둘을 지나침).
+        order 가 없으면(이미 결정 차례) 할 일이 없다(False). 쿨다운 없음 — 인사는 NPC 당 방문당 한 번(npc_greetings). 판정 무접촉."""
+        if not (bot.get('order') and bot['alive'] and not bot['won']):
+            return False
+        bot['order'], bot['path'], bot['plan'] = None, [], []   # 인터럽트 문법(D16) — 작정 파기(대기·휴식도 order 라 함께 깬다: D25 "말을 걸어오면 깬다")
+        bot['last'] = {'type': 'hail', 'result': 'hailed', 'froms': ['npc:' + npc_name], **self._cancel_approach(bot)}
+        self._trail_add(bot, bot['last'])       # D38 궤적 — 말 걸림도 자기 경험
+        return True
 
     def _order_done(self, bot, bots, base):
         """경로 소진 마감 보고. 움직이는 목표(몹 m·동료 b)는 '지금 정말 곁에 있나'로, 소모성

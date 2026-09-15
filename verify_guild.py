@@ -17,6 +17,7 @@
      목격도 없다 · 같은 구역·곁이면 전부 됨 · 관측 문장 · 장부 주소=구역 이름 · town_hear None 이면 옛 규칙
   ⑩ D71 NPC 가 먼저 말을 건다(09-14 파트너 "npc 가 먼저 말을 걸게 하면 어때?"): 상황별 인사 6종·한 번만·구역/범위/이미 말한 NPC 제외 ·
      러너 풀런에서 tick.npc_hails·inbox 'npc:'·귀환 뒤 hail_return · npc_reply 의 npc_hail 장면(두뇌 옵션)
+     · D76(09-15 파트너 "npc가 캐릭터에게 말을 걸릴 떄도 멈추게 하자") 인사에 걸음을 멈춘다(npc_hail_stop · tick.npc_hails[].stopped · DUNGEON_NPC_HAIL_STOP)
   ⑬ D74 기도의 답 = 축복의 물약(09-15 파트너 "기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자"): 성직자 gift.boon → npc_gift ·
      관측(obs.boons·[i4]·effect 사실) · 조합형 use self i4 → drink_boon(공격 능력치 +1, 목격) · 메뉴형 drink item=boon(궁수=민첩) ·
      빈 손 no_boon · 건네기 · 계단 줄 정합(09-15 수선) · 러너 이월 배선(boons·str/dex) · 문서·클라이언트 배선
@@ -423,6 +424,22 @@ brains._call_claude = lambda p, m="haiku": (seen10.__setitem__("p", p), ('{"line
 line10 = brains.npc_reply(a10, {"result": "npc_hail", "npc": "길드 접수원", "line": "정해진 인사", "key": "hail_no_potion"}, None, [], npc=ENT.npc("guild_receptionist"))
 brains._call_claude = lambda prompt, model="haiku": ""
 check("⑩ 두뇌 옵션: npc_reply 의 npc_hail 장면('먼저 한마디') · 정해진 인사 동봉", line10 == "어서 오세요!" and "네가 먼저 한마디" in seen10["p"] and "정해진 인사" in seen10["p"])
+
+d10s, s10s = show_runner.build_town(apart=True)
+pr10 = by_name(d10s, "npc", "성직자")
+wk10 = mkbot("1", pr10.x + 2, pr10.y); wk10["order"], wk10["path"] = "exit", [(pr10.x + 3, pr10.y)]   # 성직자 곁을 지나 걷는 중(작정 있음)
+g10 = d10s.npc_greetings([wk10])
+st10 = d10s.npc_hail_stop(wk10, "성직자")
+check("⑩ D76 NPC 인사에 걸음을 멈춘다(09-15 파트너 'npc가 캐릭터에게 말을 걸릴 때도 멈추게 하자'): 걷던 봇 → order/path 비움 · last hail hailed froms ['npc:성직자'] · 문장 '성직자의 말에 걸음을 멈췄다' · 꼬리표 '성직자의 말에 멈춤' · order 없으면 False",
+      len(g10) == 1 and g10[0][0] == "성직자" and st10 is True and wk10["order"] is None and wk10["path"] == []
+      and wk10["last"]["type"] == "hail" and wk10["last"]["froms"] == ["npc:성직자"]
+      and "성직자의 말에 걸음을 멈췄다" in brains._last_prose(wk10["last"], {"1": "두란"})
+      and any(t_[0] == "hail" and "성직자의 말에 멈춤" in t_[2] for t_ in G.event_tags(wk10["last"], {"1": "두란"}))
+      and d10s.npc_hail_stop(mkbot("2", pr10.x + 2, pr10.y, job="도적"), "성직자") is False)
+check("⑩ D76 배선: 러너 스위치 DUNGEON_NPC_HAIL_STOP(기본 1) · run_meta npc_hail_stop · tick.npc_hails[].stopped · STREAM·HARNESS D76·CHANGELOG·README",
+      "DUNGEON_NPC_HAIL_STOP" in src("show_runner.py") and "npc_hail_stop=" in src("show_runner.py") and '"stopped": True' in src("show_runner.py")
+      and "| `npc_hail_stop` |" in src("STREAM_FORMAT.md") and "stopped?" in src("STREAM_FORMAT.md")
+      and "D76" in src(os.path.join("design", "HARNESS_DESIGN.md")) and "D76" in src(os.path.join("docs", "CHANGELOG.md")) and "멈춰" in src("README.md"))
 
 print("── ⑪ 말의 결과 되먹임(D72, 09-14 파트너 '혼자 있을 때도 동료 이름을 부르며 말한다')")
 d11, s11 = show_runner.build_town(apart=True)

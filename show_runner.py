@@ -194,6 +194,8 @@ NPC_HAIL_ON = os.environ.get("DUNGEON_NPC_HAIL", "1") != "0"     # D71(09-14 파
                                                              #   같은 구역·6칸 안에 오면 캐릭터당 NPC 당 한 번, 정의의 상황별 문장(0콜),
                                                              #   잡담 배달(정지 없음). 러너 기본 1(마을만)
 NPC_HAIL_BRAIN_ON = os.environ.get("DUNGEON_NPC_HAIL_BRAIN", "0") == "1"   # D71 인사도 LLM 이 쓴다(인사당 1콜, 최대 캐릭터×NPC) — 기본 0(고정 문장)
+NPC_HAIL_STOP_ON = os.environ.get("DUNGEON_NPC_HAIL_STOP", "1") != "0"   # D76(09-15 파트너 "npc가 캐릭터에게 말을 걸릴 때도 멈추게 하자") 인사를 받은
+#   걷던·기다리던 캐릭터는 그 자리에 서서 그 틱에 결정한다(Dungeon.npc_hail_stop, 0콜) — 러너 기본 1(엔진은 호출해야만 선다)
 TOWN_WALKERS_ON = os.environ.get("DUNGEON_TOWN_WALKERS", "1") != "0"   # D73(09-14 파트너 "마을에 돌아다니는 일반 캐릭터들 … 플레이어블 캐릭터의
                                                              #   반응을 확인") 마을 행인 — 정의(npc.walk)가 있는 NPC 가 제 구역을 걷는다(0콜,
                                                              #   말 걸면 대답·인사도 D69·D71 그대로). 러너 기본 1(마을 판만), build_town 직접 호출은 끔
@@ -1232,6 +1234,7 @@ def main():
             town_apart=bool(TOWN_ON and TOWN_APART_ON),   # D69 additive 흩어진 출발(마을 판만) — 배치 메타(solo 급)
             town_hear=(TOWN_HEAR if TOWN_HEAR == "zone" else "all"),   # D70 additive 마을 사람 지각 — 'zone'(같은 구역·곁)|'all'(옛 전체). 배달·가시·목격 물리 메타(ally_sight 급)
             npc_brain=bool(npc_brain), # D69 additive 마을 NPC 두뇌 여부 — 이벤트 line 이 LLM 문장(line_src 'brain')일 수 있다는 표현층 메타
+            npc_hail_stop=bool(NPC_HAIL_ON and NPC_HAIL_STOP_ON),   # D76 additive NPC 인사에 걸음을 멈추는 판(0콜)
             npc_hail=bool(NPC_HAIL_ON),   # D71 additive NPC 가 먼저 거는 인사 여부 — tick.npc_hails·inbox 'npc:' 잡담(마을만). 표현층 메타(콜 0)
             town_walkers=bool(TOWN_ON and TOWN_WALKERS_ON),   # D73 additive 마을 행인 여부 — level/tick features 의 npc 가 걷는다(walker 표식). 배치 메타
             obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
@@ -1290,7 +1293,7 @@ def main():
         d.turn = turn       # 장부(D17) 목격 스탬프 — 판정 무관여, "언제 봤나"의 단일 원천
         if PENDING_ON:                        # D47 배관: 걷는 동안 들은(안 세운) 말을 이번 결정에 함께 읽힌다
             inbox = merge_inbox(pending, inbox)
-        npc_hails = []                        # D71 NPC 가 먼저 거는 인사 — 같은 구역·6칸 안, 캐릭터당 NPC 당 한 번, 잡담(정지 없음)
+        npc_hails = []                        # D71 NPC 가 먼저 거는 인사 — 같은 구역·6칸 안, 캐릭터당 NPC 당 한 번, 잡담 · D76 걸음을 멈춘다(NPC_HAIL_STOP_ON)
         if NPC_HAIL_ON and getattr(d, "town", False):
             for nm_, ch_, line_, hx_, hy_, key_ in d.npc_greetings(bots):
                 src_ = None
@@ -1301,8 +1304,13 @@ def main():
                     if line2:
                         line_, src_ = line2, "brain"
                 inbox.setdefault(ch_, []).append({"from": "npc:" + nm_, "text": line_, "turn": turn, "to": ch_})
-                npc_hails.append({"npc": nm_, "char": ch_, "line": line_, "key": key_, **({"line_src": src_} if src_ else {})})
-                event('   %s → 봇%s \U0001f4ac "%s"' % (nm_, ch_, line_))
+                stopped_ = False
+                if NPC_HAIL_STOP_ON:                  # D76(09-15): 걷던·기다리던 몸을 세워 이 틱에 결정권을 준다(order 없으면 이미 결정 차례)
+                    b2_ = next((x for x in bots if x["char"] == ch_), None)
+                    stopped_ = bool(b2_ is not None and d.npc_hail_stop(b2_, nm_))
+                npc_hails.append({"npc": nm_, "char": ch_, "line": line_, "key": key_, **({"line_src": src_} if src_ else {}),
+                                  **({"stopped": True} if stopped_ else {})})   # stopped=D76 additive
+                event('   %s → 봇%s \U0001f4ac "%s"%s' % (nm_, ch_, line_, " — 걸음을 멈췄다" if stopped_ else ""))
         inbox_in = inbox    # 이번 틱 사고에 주입된 받은편지함 — 루프 끝에서 이름이 새 dict 로
                             # 재바인딩되므로(덮어씀) think_all 직전 참조를 잡아 스트림에 남긴다
         # order 없는 봇만 사고(자동보행 중인 봇은 LLM 0콜)

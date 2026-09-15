@@ -953,7 +953,7 @@ def _last_prose(last, names=None):
         return ("이 자리에서 쉬기로 했다 — 틱마다 HP가 차고, 다 나으면 몸 상태가 낫는다."
                 " 맞거나 새것을 보거나 말을 걸어오면 깬다")
     if t == "hail":                       # 말 걸림 정지(07-24 D24) — 관찰 사실만(판단은 네 몫)
-        who = ", ".join((names or {}).get(c, "동료") for c in last.get("froms", [])) or "동료"
+        who = ", ".join((_npc_name(c) or (names or {}).get(c, "동료")) for c in last.get("froms", [])) or "동료"   # D76: NPC 인사('npc:<이름>')도 여기로
         return "%s의 말에 걸음을 멈췄다 — 걷던 길이었다" % who
     if t == "said":                       # D72(09-14) 말의 결과 — 네 말이 누구에게 들렸나(배달 사실, 판단은 네 몫)
         nm_ = lambda c: (names or {}).get(str(c), "동료")
