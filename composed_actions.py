@@ -15,11 +15,11 @@ PROFILE = 'compose-v0.5'   # 행동 계약(run_meta.compose_profile) — D48(202
 # 엔진의 follow order(D18 A-5)는 메뉴형(비교용 옛 규칙)·구판 리플레이용으로 남는다 — 조합형 파서만 모르는 동사가 된다.
 COMMON = ('goto', 'explore', 'search', 'attack', 'use', 'give', 'bond', 'wait', 'rest')
 DISTANCE_ACTIONS = ('search', 'attack', 'use', 'give', 'bond')
-ITEM_SLOTS = {'i1': 'potion', 'i2': 'weapon', 'i3': 'armor'}
+ITEM_SLOTS = {'i1': 'potion', 'i2': 'weapon', 'i3': 'armor', 'i4': 'boon'}   # i4=축복의 물약(D74, 09-15) — 병 단위, 있을 때만 관측에
 
 
 def item_value(bot, slot):
-    return bot.get('potions', 0) if slot == 'potion' else bot.get(slot)
+    return bot.get('potions', 0) if slot == 'potion' else bot.get('boons', 0) if slot == 'boon' else bot.get(slot)
 
 
 def observe(d, bot, bots, obs):
@@ -72,10 +72,13 @@ def observe(d, bot, bots, obs):
             continue
         refs[rid] = {'kind': 'item', 'slot': slot, 'value': copy.deepcopy(value)}
         entry = {'id': rid, 'kind': 'item', 'slot': slot,
-                 'name': '회복 물약' if slot == 'potion' else value['name'],
-                 'tags': ['item', 'consumable', 'healing'] if slot == 'potion' else ['item', 'equipment']}
-        if slot == 'potion':
+                 'name': '회복 물약' if slot == 'potion' else '축복의 물약' if slot == 'boon' else value['name'],
+                 'tags': (['item', 'consumable', 'healing'] if slot == 'potion'
+                          else ['item', 'consumable', 'blessing'] if slot == 'boon' else ['item', 'equipment'])}
+        if slot in ('potion', 'boon'):
             entry['count'] = value
+            if slot == 'boon':                                   # D74(09-15): 마시면 무엇이 오르나 — 세계의 사실(공격 능력치, Dungeon._bless 와 같은 갈림)
+                entry['effect'] = '마시면 %s +1' % ('민첩' if int(bot.get('atk_range') or 1) > 1 else '힘')
         else:
             entry['bonus'] = value.get('bonus', 0)
         items.append(entry)
@@ -244,7 +247,7 @@ def entity(d, bot, target, bots, refs=None):
         return (kind, (obj.x, obj.y), obj) if not obj.hidden and not obj.sprung and (obj.x, obj.y) in seen else None
     if kind == 'item':
         value = item_value(bot, ref['slot'])
-        if not value or (ref['slot'] != 'potion' and value != ref['value']):
+        if not value or (ref['slot'] not in ('potion', 'boon') and value != ref['value']):   # 병 단위 슬롯은 수만 본다
             return None
         return kind, (bot['x'], bot['y']), ref
     if kind == 'way' and ref['depth'] == d.depth and ((ref['epoch'] == bot.get('_way_epoch') and tuple(ref['origin']) == (bot['x'], bot['y']))
@@ -328,6 +331,12 @@ def execute(d, bot, action, bots):
         if item_id:
             if not item or item[0] != 'item':
                 return _base(bot, action, 'nothing', reason_code='item_not_owned')
+            if item[2]['slot'] == 'boon':                        # D74(09-15) 축복의 물약 — 자기에게만(남에게 넘기려면 give)
+                if not ((kind == 'item' and obj['slot'] == 'boon') or (kind == 'bot' and obj is bot)):
+                    return _base(bot, action, 'no_effect', reason_code='no_item_effect')
+                eff = d._bless(bot, bots)
+                return (_base(bot, action, 'drink_boon', **eff, item_used=item_id) if eff
+                        else _base(bot, action, 'nothing', reason_code='item_not_owned'))
             if item[2]['slot'] != 'potion' or kind not in ('bot', 'monster', 'item') or (kind == 'item' and obj['slot'] != 'potion'):
                 return _base(bot, action, 'no_effect', reason_code='no_item_effect')
             recipient = bot if kind == 'item' else obj
@@ -423,7 +432,7 @@ def decorate(bot, action, result):
     pending = bool(bot.get('order')) and (r in ('approaching', 'pathed', 'walking', 'following', 'beside', 'resting', 'waiting') or result.get('approach_status') == 'ready')
     if pending:
         status = None
-    elif r in ('lost', 'no_target', 'too_far', 'no_path', 'blocked', 'nothing', 'no_potion', 'no_room', 'wait_allies', 'disabled', 'skill_failed', 'skill_missed'):
+    elif r in ('lost', 'no_target', 'too_far', 'no_path', 'blocked', 'nothing', 'no_potion', 'no_boon', 'no_room', 'wait_allies', 'disabled', 'skill_failed', 'skill_missed'):
         status = 'failed'
     elif r in ('no_effect', 'already_beside') or (action['type'] == 'search' and not result.get('found')):
         status = 'no_effect'

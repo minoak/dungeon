@@ -203,6 +203,7 @@ WITNESS_LABELS = {              # 목격 사건(witnessed kind) → 집계 라�
     'ally_mishap': '동료 사고', 'ally_use': '동료 사용', 'mon_use': '몹 문 사용', 'ally_status': '동료 상태',
     'ally_give': '동료 건넴', 'ally_bond': '동료 친목',   # D47 ②(09-09) 건네기·친목 목격
     'ally_quest': '동료 의뢰 맡음',                       # D69(09-14) 게시판 앞에서 의뢰를 맡는 걸 봄
+    'ally_bless': '동료 축복',                           # D74(09-15) 곁의 동료가 축복의 물약을 마시는 걸 봄
 }
 _RUN_RESULTS = {'walking': '걸음', 'following': '틱 동행', 'beside': '틱 곁',   # beside = D48 개정 goto<아군> 추적의 곁 유지 틱
                 'waiting': '틱 대기', 'resting': '틱 휴식'}
@@ -261,6 +262,10 @@ def event_tags(rec, names=None):
         return [('misc', '접근 불가', place_word(tgt, 'decide'))]
     if r == 'no_effect':
         return [('misc', '변화 없음', '%s %s' % (t, tgt))]
+    if r == 'drink_boon':                                     # D74(09-15) 축복의 물약 — drink(item=boon) / use(self, i4)
+        return [('use', '사용', '축복의 물약 (%s +1 → %d, 남은 %d병)' % (STAT_KR.get(rec.get('stat'), '?'), rec.get('value', 0), rec.get('boons', 0)))]
+    if r == 'no_boon':
+        return [('misc', '기타', '축복의 물약 없음')]
     if t == 'healed' or (t == 'use' and r == 'healed'):
         return [('heal', '회복', '%s +%d (HP %d)' % (tgt, rec.get('heal', 0), rec.get('hp', 0)))]
     if t == 'use' and rec.get('effect_type'):
@@ -559,7 +564,8 @@ STRONG_BONES = ('rescued', 'at_death')   # 즉시 청한다 — 한 번이 열 �
 ACTS_MAX = 8             # 관계 장부의 상세 기록(D47 ②: 친목·건네기 한 건=형태+상대 반응) 보존 상한 — 상대별
 ACTS_SHOW = 4            # 결정 obs 에 되돌려주는 최근 기록 수(상대별)
 BOND_LEN = 120           # 친목 서술(응답 form) 한 줄 상한 — 행동의 맥락을 보존한다. 관계 평가는 캐릭터의 요약 몫.
-ITEM_KR = {'potion': '회복 물약', 'weapon': '무기', 'armor': '방어구'}   # 건네기 item 키 → 사람 말(메뉴·장부·궤적 공용)
+ITEM_KR = {'potion': '회복 물약', 'boon': '축복의 물약', 'weapon': '무기', 'armor': '방어구'}   # 건네기 item 키 → 사람 말(메뉴·장부·궤적 공용). boon=D74(09-15)
+STAT_KR = {'str': '힘', 'dex': '민첩'}   # D74(09-15) 축복의 물약이 올리는 능력치 → 사람 말(엔진 꼬리표·두뇌·러너 공용)
 
 
 def status_prose(tag):
@@ -1919,7 +1925,7 @@ class Dungeon:
             far = [o for o in others if self._cheb(o['x'], o['y'], ex, ey) > EXIT_GATHER]
             busy = self._gather_busy(bot, [o for o in others if o not in far], 'exit')
             if far or busy:
-                exit_obj['gather'] = {'missing': [{'char': o['char'], 'seen': (o['x'], o['y']) in seen} for o in far],
+                exit_obj['gather'] = {'missing': [{'char': o['char'], 'seen': self._ally_seen(bot, o, seen)} for o in far],   # 09-15: 동료 보임은 단일 판정처(D70 구역 지각 정합 — 파티 명단 '시야 밖'과 모순 수선)
                                       'busy': [o['char'] for o in busy]}
         led = bot.get('ledger')            # D17 스위치: 장부 켠 판만 구역 어휘·known 노출
                                            # (끈 판 obs 는 구판과 자구까지 동일 — 게이트 무수정 통과)
@@ -2136,6 +2142,10 @@ class Dungeon:
                  '회복 물약을 마신다 — 상처가 전부 아문다 (한 턴 소모, 소지 %d병)%s'
                  % (bot['potions'],
                     ' ※ 지금은 상처가 없다' if bot['hp'] >= bot['maxhp'] else ''))
+        if bot.get('boons'):                   # D74(09-15) 축복의 물약 — 소지 중일 때만 어휘(물약 선례). 사실만: 무엇이 오르나
+            _add('drink', None, '축복의 물약을 마신다 — 네 %s이 1 오른다 (한 턴 소모, 소지 %d병)'
+                 % (STAT_KR['dex' if int(bot.get('atk_range') or 1) > 1 else 'str'], bot['boons']))
+            options[-1]['item'] = 'boon'
         # D47 ②(2026-09-09 파트너 "제안은 열리게 하는 대신 응답에서 제안 승낙 시 선택지 안에서 행동할 수 있게"): 건네기·친목은
         # **곁(체비셰프≤1 — 동행의 '곁'과 같은 자)의 동료에게 늘 열리는 즉시 행동**이다 — 제안이 있어서 생기는 줄이 아니다(파트너
         # 초안 §A-1 "관계가 동료라는 이유만으로 행동을 숨기지는 않는다"). 승낙 = 이 줄을 고르는 것(엔진은 제안 내용을 안 읽는다).
@@ -2151,6 +2161,9 @@ class Dungeon:
                     if bot.get('potions'):
                         _add('give', a['id'], '건네기: 회복 물약 → %s (곁, 소지 %d병)' % (who_, bot['potions']))
                         options[-1]['item'] = 'potion'
+                    if bot.get('boons'):                  # D74(09-15) 축복의 물약도 건넨다(물약 문법)
+                        _add('give', a['id'], '건네기: 축복의 물약 → %s (곁, 소지 %d병)' % (who_, bot['boons']))
+                        options[-1]['item'] = 'boon'
                     for slot in ('weapon', 'armor'):
                         g = bot.get(slot)
                         if g:
@@ -2358,6 +2371,7 @@ class Dungeon:
                 'job': bot['job'], 'sex': bot['sex'],
                 'str': bot['str'], 'dex': bot['dex'], 'inventory': bot['bag'],
                 'potions': bot.get('potions', 0),   # 소지 회복 물약(07-17) — 자기 몸의 사실
+                **({'boons': bot['boons']} if bot.get('boons') else {}),   # D74(09-15) 축복의 물약 — 있을 때만(additive)
                 'gear': {'weapon': bot.get('weapon'), 'armor': bot.get('armor')},
                 **({'town': True} if self.town else {}),   # 마을(D29) — 층의 사실(던전 obs 무변경)
                 **({'town_zone': tz} if (self.town and (tz := self._town_zone(bot['x'], bot['y'])))   # D60(09-12) 지금 있는 구역 이름
@@ -2520,7 +2534,7 @@ class Dungeon:
         elif typ == 'search':
             res = self._search(bot, bots)
         elif typ == 'drink':
-            res = self._drink(bot, bots)              # 회복 물약(07-17) — 무대상 즉시 동사(search 선례)
+            res = self._drink(bot, bots, action.get('item'))   # 회복 물약(07-17)·축복의 물약(D74, item='boon') — 무대상 즉시 동사(search 선례)
         elif typ == 'wait':
             res = self._set_wait(bot, bots)           # 제자리 대기(D25) — 사건 기반, 숫자 없음
         elif typ == 'rest':
@@ -2596,7 +2610,7 @@ class Dungeon:
             return {**base, 'result': 'no_target'}
         if typ == 'give' and not self.composed_actions:
             item = action.get('item')
-            if not bot.get('potions' if item == 'potion' else item or ''):
+            if not bot.get({'potion': 'potions', 'boon': 'boons'}.get(item or '', item or '')):   # D74: boon 도 병 단위
                 return {**base, 'result': 'nothing'}
         if self._action_in_range(bot, action, target):
             return None
@@ -4484,6 +4498,9 @@ class Dungeon:
                 if gift.get('potions'):
                     bot['potions'] = bot.get('potions', 0) + int(gift['potions'])
                     got.append('물약')
+                if gift.get('boon'):                             # D74(09-15 파트너 "기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자"): 성직자=축복의 물약
+                    bot['boons'] = bot.get('boons', 0) + int(gift['boon'])
+                    got.append('축복의 물약')
                 if gift.get('weapon') and not bot.get('weapon'):     # 빈손일 때만 — 스왑·비교는 던전 몫(D28)
                     nm = str(gift['weapon'])
                     bot['weapon'] = {'id': self._alloc_fid(), 'name': nm, 'bonus': GEAR_KINDS.get(nm, 1),
@@ -4698,12 +4715,15 @@ class Dungeon:
             if surprise:
                 mon.skip_turns = 1               # 기습라운드 = 다음 몹턴 반격 1회 스킵(대상 턴 스킵)
 
-    def _drink(self, bot, bots=None):
+    def _drink(self, bot, bots=None, item=None):
         """회복 물약 마시기(07-17): 확정 완전 회복 — 샘(그 자리 d20 도박)과 대비되는 '들고 다니는
         보험'(PD 문법). 굴림 없음(아이템의 약속은 확실성), 한 턴 소모. 만피에 마셔도 소모된다
         (세계는 낭비를 말리지 않는다 — 리모컨 라벨의 사실 주석이 알려줄 뿐). 빈 손 = no_potion
         정직 보고(plan_step 열린 동사 선례: 유무는 발동 시점 판정)."""
         base = {'char': bot['char'], 'type': 'drink'}
+        if item == 'boon':                        # D74(09-15) 축복의 물약 — 같은 동사, 다른 병(공용 지점 _bless)
+            eff = self._bless(bot, bots)
+            return {**base, 'result': 'drink_boon', **eff} if eff else {**base, 'result': 'no_boon'}
         if not bot.get('potions'):
             return {**base, 'result': 'no_potion'}
         bot['potions'] -= 1
@@ -4714,6 +4734,22 @@ class Dungeon:
                       exclude=(bot['char'],))
         return {**base, 'result': 'drink_heal', 'heal': heal, 'hp': bot['hp'],
                 'potions': bot['potions']}
+
+    def _bless(self, bot, bots=None):
+        """축복의 물약(D74, 2026-09-15 파트너 "기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자")을 마신 효과 —
+        메뉴형 drink(item=boon)과 조합형 use(self, i4)의 **공용 지점**. 공격 판정에 쓰는 능력치가 1 오른다: 근접(atk_range 1)은
+        힘, 원거리는 민첩(_attack 의 mod 갈림과 같은 근거 — 관측이 "마시면 힘 +1"이라 말하는 것이 참이 되게). 굴림 없음·한 턴·
+        이 판 안에서 영구(층 이월은 러너 재스폰이 str/dex 를 실어 나른다). 빈 손이면 None(호출자가 no_boon 정직 보고).
+        ⚠️임시 가정(파트너 미답): 오르는 능력치=공격 능력치 자동(마시는 이가 고르지 않는다) · 최대 HP 는 안 오른다."""
+        if not bot.get('boons'):
+            return None
+        bot['boons'] -= 1
+        stat = 'dex' if int(bot.get('atk_range') or 1) > 1 else 'str'
+        bot[stat] += 1
+        self._witness(bots, bot['x'], bot['y'],   # 전달층(D22): 마시는 장면도 시야를 탄다(회복 물약 선례)
+                      {'kind': 'ally_bless', 'char': bot['char'], 'stat': stat},
+                      exclude=(bot['char'],))
+        return {'stat': stat, 'value': bot[stat], 'boons': bot['boons']}
 
     def _search(self, bot, bots=()):
         """능동 search(SPD 능동/수동 분리의 능동쪽): 턴을 통째로 써서 인지 반경(search_r) 내
@@ -4895,6 +4931,13 @@ class Dungeon:
             recv['potions'] = recv.get('potions', 0) + 1
             what = '물약'
             extra, got = {'potions': bot['potions']}, {'potions': recv['potions']}
+        elif item == 'boon':                                # D74(09-15) 축복의 물약 — 회복 물약과 같은 문법(병 단위, 굴림 없음)
+            if not bot.get('boons'):
+                return {**base, 'result': 'nothing'}
+            bot['boons'] -= 1
+            recv['boons'] = recv.get('boons', 0) + 1
+            what = '축복의 물약'
+            extra, got = {'boons': bot['boons']}, {'boons': recv['boons']}
         elif item in ('weapon', 'armor'):
             g = bot.get(item)
             if not g:
@@ -5455,6 +5498,7 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'floor_notice': (BOSS_FLOOR_NOTICE if getattr(dungeon, 'boss_on', False) else None),   # D65 개정: 보스층 진입 한마디(첫 관측 1회, view 가 지운다)
             'potions': 0,                   # 소지 회복 물약(07-17) — 첫 소비 아이템. 층 이월은
                                             # 러너 재스폰이 담당(bag 이월 선례)
+            'boons': 0,                     # 축복의 물약(D74, 09-15) — 신전 기도의 답. 마시면 공격 능력치 +1. 층 이월=러너 재스폰(str/dex 도 함께)
             'status': {},                   # 상태 태그(D34, 09-06): 태그→{n, by, since}. 몹·함정의 특수가
                                             # 붙이고 휴식(D35)만 지운다. 층 이월=러너 재스폰(물약 선례)
             'bleed_steps': 0,               # 출혈 걸음 부기(BLEED_STEPS 마다 HP 1)
@@ -5509,6 +5553,7 @@ def bot_snapshot(b):
             'x': b['x'], 'y': b['y'], 'hp': b['hp'], 'maxhp': b['maxhp'],
             'bag': b['bag'], 'alive': b['alive'], 'won': b['won'],
             'potions': b.get('potions', 0),   # 회복 물약 소지(07-17 additive)
+            **({'boons': b['boons']} if b.get('boons') else {}),   # 축복의 물약(D74 09-15 additive, 있을 때만)
             'weapon': b.get('weapon'), 'armor': b.get('armor'),   # 장비(07-30 additive)
             'order': b.get('order'),
             **({'approach': dict(b['approach'])} if b.get('approach') and b.get('order') else {}),

@@ -83,7 +83,7 @@ check("① BONES gave/received 라벨 · 강한 뼈 아님",
       and not any(k in G.STRONG_BONES for k in ("gave", "received")))
 check("① EVENT_KINDS give/received 집계 · WITNESS_LABELS ally_give · ITEM_KR",
       G.EVENT_KINDS.get("give") is True and G.EVENT_KINDS.get("received") is True
-      and G.WITNESS_LABELS.get("ally_give") == "동료 건넴" and G.ITEM_KR == {"potion": "회복 물약", "weapon": "무기", "armor": "방어구"})
+      and G.WITNESS_LABELS.get("ally_give") == "동료 건넴" and G.ITEM_KR == {"potion": "회복 물약", "boon": "축복의 물약", "weapon": "무기", "armor": "방어구"})
 d_def = Dungeon(seed=7, w=30, h=12)
 d_asc, _ = Dungeon.from_ascii(ROWS, seed=7)
 check("① 엔진 기본 꺼짐(__init__·from_ascii) · 러너 기본 켬",

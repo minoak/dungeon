@@ -52,7 +52,7 @@ entities/
 | object `name` | `_add_feature` 이름 | `'숨은 보물'`은 `treasure`의 숨김 변형 이름(코드 리터럴) |
 | object `equipment.bonus` | `GEAR_KINDS` | `GEAR_CYCLE`(배치 순환)은 코드 — 이름이 정의에 있는지 게이트가 본다 |
 | object `tags` | 조합형 관측 태그(`composed_actions.observe`) | 장비·물약 = `object+item` |
-| npc `npc.line·line_again·gift` | `show_runner.build_town` | 마을 v1: `town.json`이 layout 을 참조하고 배치는 `layout.npcs`(id·칸). 옛 마을 `town-v0.json`은 `{"id","x","y"}` 배치. `gift`에 `potions`와 `weapon`을 함께 두면 둘 다 준다(길드 기본 물품) |
+| npc `npc.line·line_again·gift` | `show_runner.build_town` | 마을 v1: `town.json`이 layout 을 참조하고 배치는 `layout.npcs`(id·칸). 옛 마을 `town-v0.json`은 `{"id","x","y"}` 배치. `gift`에 `potions`와 `weapon`을 함께 두면 둘 다 준다(길드 기본 물품). **D74(2026-09-15)** `gift.boon`=축복의 물약 병 수(성직자 — 기도의 답, 방문당 한 번, 마시면 공격 능력치 +1) |
 | npc `npc.role·persona·report·line_report·line_report_failed·line_report_empty` | `Dungeon.npc_defs`(build_town) · `_report_quests` · `brains.npc_reply` | **D69(2026-09-14)**: `role`=관측 한 줄("길드 접수원 (원정 물품 · 의뢰 접수와 귀환 보고)"), `report:true`=원정에서 돌아온 파티가 말을 걸면 보고(원정의 끝)를 받는 NPC, 보고 대사 3종은 `{done}`·`{undone}` 자리에 의뢰 제목이 들어간다. `persona`·`role` 은 NPC 두뇌 프롬프트 재료(캐릭터 시트는 안 들어간다). ⚠️문장 전부 임시(파트너 대기) |
 | npc `npc.hail·hail_no_potion·hail_board·hail_return·hail_rumor·hail_oracle` | `Dungeon.npc_greetings/_npc_hail_line` → 러너가 잡담 배달 | **D71(2026-09-14)**: NPC 가 먼저 거는 인사(상황별, 전부 선택). 자리 채움 `{name}`(캐릭터 이름) `{quests}`(안 맡은 의뢰 수) `{monsters}`·`{traps}`·`{treasure}`(지하 1층 실측). 같은 구역·6칸 안·캐릭터당 NPC 당 방문당 1회. ⚠️문장 임시 |
 | npc `npc.walk{region, rate}` | `show_runner.build_town(walkers=True)` → `Dungeon.add_walker/walk_npcs` | **D73(2026-09-14)**: 마을 행인 — layout 구역 id(main_street·alley…)의 빈 칸에 서서 틱당 rate 확률로 한 걸음(전용 RNG). 배치는 layout 이 아니라 정의가 정한다. 행인은 구역 지각(D70)을 탄다. 도트 행이 없으면 관전은 기본 타일 |

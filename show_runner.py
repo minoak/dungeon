@@ -432,6 +432,10 @@ def act_summary(res):
         return '%s %s — 변화 없음 (%s)' % (t, res.get('target', '?'), res.get('reason_code', 'no_effect'))
     if t == 'use' and res.get('result') == 'healed':
         return '%s에게 물약 사용 — HP +%d (HP %d)' % (res.get('target', '?'), res.get('heal', 0), res.get('hp', 0))
+    if res.get('result') == 'drink_boon':                  # D74(09-15) 축복의 물약 — drink(item=boon)·use(self, i4) 공용
+        return '축복의 물약을 들이켰다 — %s +1 (지금 %d), 남은 %d병' % (G.STAT_KR.get(res.get('stat'), '?'), res.get('value', 0), res.get('boons', 0))
+    if res.get('result') == 'no_boon':
+        return '축복의 물약을 마시려 했지만 — 없다'
     if t == 'use' and res.get('effect_type'):
         return act_summary({**res, 'type': res['effect_type']})
     if t == 'use':
@@ -1496,7 +1500,7 @@ def main():
                     **({'pages': pages} if pages else {}),    # D59 additive — 캐릭터별 수첩 한 장(플레이 데이터)
                     **({'reaction_summary': reaction_book.close_floor(turn)} if reaction_book is not None else {}),
                     party=[{"char": b["char"], "hp": b["hp"], "bag": b["bag"],
-                            "potions": b.get("potions", 0)}
+                            "potions": b.get("potions", 0), **({"boons": b["boons"]} if b.get("boons") else {})}   # boons=D74 additive
                            for b in sorted(survivors, key=lambda b: b["char"])],
                     fallen=list(fallen))
             mem = {}
@@ -1543,6 +1547,8 @@ def main():
                     d.visited.add((n["x"], n["y"]))
                 n["hp"], n["bag"] = b["hp"], b["bag"]     # HP·보물 이월     외부 시트 봇('3'+)이 2층서 죽는다
                 n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
+                n["boons"] = b.get("boons", 0)            # 축복의 물약도 이월(D74, 09-15)
+                n["str"], n["dex"] = b["str"], b["dex"]   # 축복으로 오른 능력치는 이 판 안에서 영구(D74) — 시트 초기값을 덮는다
                 n["weapon"] = b.get("weapon")             # 장비도 이월(07-30) — 걸치고 내려간다
                 n["armor"] = b.get("armor")
                 d.adopt_gear(n)                           # D57: 개체 번호는 층-로컬 — 새 층의 번호를 받는다

@@ -308,7 +308,8 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None):
     if r == "npc_hail":
         pass
     elif r == "npc_gift":
-        scene.append("- 세계의 판정: 너는 %s에게 %s을(를) 건넸다(정해진 원정 물품 — 이번 원정 몫)" % (who, res.get("item", "?")))
+        scene.append("- 세계의 판정: 너는 %s에게 %s을(를) 건넸다(%s — 이번 원정 몫)"
+                     % (who, res.get("item", "?"), "기도의 답, 마시면 공격 능력치가 1 오른다" if res.get("item") == "축복의 물약" else "정해진 원정 물품"))   # D74
     elif r == "npc_report":
         t_ = res.get("titles") or {}
         done = "·".join(t_.get(x, x) for x in (res.get("done") or [])) or "없음"
@@ -740,6 +741,8 @@ def _witness_prose(w):
         return "%s가 %s에 당하는 것을" % (who, w.get("trap", "함정"))
     if k == "ally_heal":
         return "%s가 %s으로 기운을 차리는 것을" % (who, w.get("how", "?"))
+    if k == "ally_bless":                  # D74(09-15) 축복의 물약 — 겉으로 드러나는 장면(무엇이 올랐는지는 그의 몸)
+        return "%s가 축복의 물약을 들이켜는 것을" % who
     if k == "ally_loot":
         what = w.get("what", "?")
         if what == "상자":
@@ -800,6 +803,11 @@ def _last_prose(last, names=None):
         return "%s에게 접근할 길이 없었다" % _tgt_name(tgt, names)
     if r == 'no_effect':
         return '%s에 %s을(를) 시도했으나 변화가 없었다 (%s)' % (_tgt_name(tgt, names), t, last.get('reason_code', 'no_effect'))
+    if r == 'drink_boon':                 # D74(09-15) 축복의 물약 — 자기 행동의 결과(사실만). drink(item=boon)·use(self, i4) 공용
+        return "축복의 물약을 들이켰다 — %s이 1 올랐다(지금 %s %d, 남은 축복의 물약 %d병)" % (
+            G.STAT_KR.get(last.get('stat'), '?'), G.STAT_KR.get(last.get('stat'), '?'), last.get('value', 0), last.get('boons', 0))
+    if r == 'no_boon':
+        return "축복의 물약을 마시려 했지만 — 가진 것이 없다"
     if t == 'healed' or (t == 'use' and r == 'healed'):
         return '%s — 물약으로 HP %d 회복 (HP %d)' % (_tgt_name(tgt, names) if tgt else '나', last.get('heal', 0), last.get('hp', 0))
     if t == 'use' and last.get('effect_type'):
@@ -811,6 +819,7 @@ def _last_prose(last, names=None):
     if t == "give":                       # D47 ② 건네기 — 자기 행동의 결과(사실만)
         if r == "given":
             tail = ((" (남은 물약 %d병)" % last.get("potions", 0)) if last.get("item") == "potion"
+                    else (" (남은 축복의 물약 %d병)" % last.get("boons", 0)) if last.get("item") == "boon"   # D74
                     else (" — 그의 발밑에 놓였다(자리가 차 있었다)" if last.get("placed") else " — 그가 바로 걸쳤다"))
             return "%s에게 %s을(를) 건넸다%s" % (_who(last.get("to")), last.get("what", "?"), tail)
         return "건네려 했지만 — " + {"too_far": "곁에 없었다(붙어야 건넨다)", "nothing": "줄 것이 없었다",
@@ -821,6 +830,7 @@ def _last_prose(last, names=None):
         return "몸짓을 하려 했지만 — " + {"too_far": "곁에 없었다", "no_target": "상대가 그 자리에 없었다"}.get(r, str(r))
     if t == "received":                   # D47 ② 받은 쪽(hurt 문법 — 남이 내게 한 일)
         tail = ((" (소지 물약 %d병)" % last.get("potions", 0)) if last.get("item") == "potion"
+                else (" (소지 축복의 물약 %d병)" % last.get("boons", 0)) if last.get("item") == "boon"   # D74
                 else (" — 발밑에 놓였다(걸칠지는 네 몫)" if last.get("placed") else " — 바로 걸쳤다"))
         return "%s에게서 %s을(를) 받았다%s" % (_who(last.get("from")), last.get("what", "?"), tail)
     if t == "bonded":
@@ -988,7 +998,9 @@ def _last_prose(last, names=None):
             return "다 모여서 — 함께 마을로 올라갔다(%s)" % "·".join(group)
         if r == "npc_gift":                 # D32 상점 v0 — 받은 것은 사실로(무기는 바로 걸친다, 물약은 소지 +1)
             item = last.get("item", "?")
-            got = "물약을 받았다(소지 물약 +1)" if item == "물약" else "%s을(를) 받아 걸쳤다" % item
+            got = ("물약을 받았다(소지 물약 +1)" if item == "물약"
+                   else "축복의 물약을 받았다(소지 +1 — 마시면 공격 능력치가 1 오른다)" if item == "축복의 물약"   # D74(09-15) 기도의 답
+                   else "%s을(를) 받아 걸쳤다" % item)
             return '%s에게 말을 걸었다 — %s. "%s"' % (last.get("npc", "?"), got, last.get("line", "…"))
         if r == "npc_talk":
             return '%s에게 말을 걸었다 — "%s"' % (last.get("npc", "?"), last.get("line", "…"))
@@ -1310,9 +1322,10 @@ def _wire(obs, names=None, compose=False):
     M = []          # (09-08 D44) 기억 절 모음 — 관측(L)과 따로 모아 조립 때 갈래 순서를 정한다
     # (09-08 D44) 직업·성별·힘·민첩은 '나는 누구'라 시트만 말한다 — 여기는 지금의 몸(관측)만. 파트너 "시트는 나는 누구인가를,
     #   관측은 뭘 보고 있는지를". HP 는 x/y 그대로(비율=위급 감각의 재료 — 최대치가 시트에 있어도 읽는 값은 관측이다).
-    L.append("- HP %d/%d, 모은 보물 %d개%s — 지금 %d층"
+    L.append("- HP %d/%d, 모은 보물 %d개%s%s — 지금 %d층"
              % (obs.get("hp", 0), obs.get("maxhp", 0), obs.get("inventory", 0),
                 (", 회복 물약 %d병" % obs["potions"]) if obs.get("potions") else "",
+                (", 축복의 물약 %d병" % obs["boons"]) if obs.get("boons") else "",   # D74(09-15) 있을 때만
                 obs.get("depth", 1)))
     if obs.get("town"):
         # 마을(D29) — 사실만: 안전·전체 가시. 여기서 뭘 할지는 캐릭터 몫(추천 안 싣는다).
@@ -1716,6 +1729,8 @@ def _wire(obs, names=None, compose=False):
         out += ["", "## 소지품 — 착용 현황"]
         if not obs.get('action_schema'):
             out += ["- potion: 회복 물약 %d병" % obs.get("potions", 0)]
+            if obs.get("boons"):
+                out += ["- boon: 축복의 물약 %d병" % obs["boons"]]   # D74(09-15)
         gear_all = obs.get("gear") or {}
         if not gear_all.get("weapon") and not gear_all.get("armor"):
             out.append("- weapon/armor: 없음 (기본 무장)")                                  # 09-12 관측 정리: 빈 칸 둘은 한 줄
@@ -1747,10 +1762,11 @@ def _wire(obs, names=None, compose=False):
             placed |= {"b" + c for c in re.findall(r"\(봇(\d)\)", place_txt)}
             out += ["", "## 대상 — 지금 참조할 수 있는 ID (자리는 장소 절에)"]
             for target in obs.get('targets', []):
-                out.append('- [%s] %s (%s)%s%s' % (
+                out.append('- [%s] %s (%s)%s%s%s' % (
                     target['id'], target.get('name', target['id']), ', '.join(target['tags']),
                     (' — ' + at(target)) if ('dist' in target and target['id'] not in placed) else '',
-                    (' · %d개' % target['count']) if 'count' in target else ''))
+                    (' · %d개' % target['count']) if 'count' in target else '',
+                    (' · %s' % target['effect']) if target.get('effect') else ''))   # D74 축복의 물약: 마시면 무엇이 오르나
         out += ["", "## 행동과 의사소통", "COMMON: " + " / ".join(G.CA.COMMON if obs.get('action_schema') else _compose_types()),
                 "의사소통: 잡담 / 제안"]
         if obs.get('skills'):

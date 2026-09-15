@@ -313,7 +313,7 @@ export function installFocusCard(app: App): void {
       if (n.hpfill.style.background !== col) n.hpfill.style.background = col;
       put(n.hp, `${hp}/${b.maxhp}`);
       put(n.status, (b.status || []).map(s => `<span class="tag">${esc(s)}</span>`).join(''));
-      put(n.items, `<div><span>물약</span><strong>${b.potions ?? 0}병</strong></div><div><span>무기</span><strong>${gearText(b.weapon, '맨손')}</strong></div><div><span>방어구</span><strong>${gearText(b.armor, '맨몸')}</strong></div>`);
+      put(n.items, `<div><span>물약</span><strong>${b.potions ?? 0}병</strong></div>${b.boons ? `<div><span>축복</span><strong>${b.boons}병</strong></div>` : ''}<div><span>무기</span><strong>${gearText(b.weapon, '맨손')}</strong></div><div><span>방어구</span><strong>${gearText(b.armor, '맨몸')}</strong></div>`);
     } else {
       if (n.hpfill.style.width !== '0%') n.hpfill.style.width = '0%';
       put(n.hp, '—'); put(n.status, ''); put(n.items, '<span class="none">—</span>');

@@ -43,6 +43,7 @@ export interface Bot {
   char: Char; job?: string; sex?: string;
   x: number; y: number; hp: number; maxhp: number; bag?: number;
   alive: boolean; won: boolean; potions?: number;
+  boons?: number;                                // D74(09-15) 축복의 물약 병 수 — 있을 때만
   weapon?: Gear | null; armor?: Gear | null;
   order?: string | null;                         // 'm0' 'b1' 'f2' 'exit' '@x,y' 'follow:b1' 'rest' …
   status?: string[] | null;                      // 상태 태그(둔화·출혈·중독 …)
@@ -164,7 +165,7 @@ export interface NpcHail { npc: string; char: Char; line: string; key?: string; 
 export interface DescendLine {
   reaction_summary?: ReactionFloor;
   kind: 'descend' | 'ascend'; turn: number; to_depth: number;
-  party: { char: Char; hp: number; bag: number; potions?: number }[]; fallen: Char[];
+  party: { char: Char; hp: number; bag: number; potions?: number; boons?: number }[]; fallen: Char[];   // boons=D74 additive
   pages?: Record<Char, string>;                                        // D59 수첩 — 층을 떠나는 순간 캐릭터가 쓴 한 장(실패한 캐릭터는 키 없음)
 }
 

@@ -111,6 +111,9 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
   if (e.result === 'no_path' && e.parent_action_id) return L('dim', `${esc(tgt())} — 접근할 길이 없다`);
   if (e.result === 'no_effect') return L('dim', `${esc(tgt())} — ${esc(t)} 시도, 변화 없음`);
   if (t === 'use' && e.result === 'healed') return L('gold', `${esc(tgt())}에게 물약 사용 — HP +${num(e.heal)} (HP ${num(e.hp)})`);
+  if (e.result === 'drink_boon')                 // D74(09-15) 축복의 물약 — drink(item=boon)·use(self, i4) 공용
+    return L('gold', `축복의 물약을 들이켰다 — ${e.stat === 'dex' ? '민첩' : '힘'} +1 (지금 ${num(e.value)}), 남은 ${num(e.boons)}병`);
+  if (e.result === 'no_boon') return L('dim', '축복의 물약을 마시려 했지만 — 없다');
   if (t === 'use' && (e.effect_type === 'interact' || e.effect_type === 'goto')) return evLine({ ...e, type: e.effect_type }, f, run);
   if (t === 'use') return L('dim', `${esc(tgt())} 사용 실패 — ${esc(e.result)}`);
 

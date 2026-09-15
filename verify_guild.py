@@ -17,6 +17,9 @@
      목격도 없다 · 같은 구역·곁이면 전부 됨 · 관측 문장 · 장부 주소=구역 이름 · town_hear None 이면 옛 규칙
   ⑩ D71 NPC 가 먼저 말을 건다(09-14 파트너 "npc 가 먼저 말을 걸게 하면 어때?"): 상황별 인사 6종·한 번만·구역/범위/이미 말한 NPC 제외 ·
      러너 풀런에서 tick.npc_hails·inbox 'npc:'·귀환 뒤 hail_return · npc_reply 의 npc_hail 장면(두뇌 옵션)
+  ⑬ D74 기도의 답 = 축복의 물약(09-15 파트너 "기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자"): 성직자 gift.boon → npc_gift ·
+     관측(obs.boons·[i4]·effect 사실) · 조합형 use self i4 → drink_boon(공격 능력치 +1, 목격) · 메뉴형 drink item=boon(궁수=민첩) ·
+     빈 손 no_boon · 건네기 · 계단 줄 정합(09-15 수선) · 러너 이월 배선(boons·str/dex) · 문서·클라이언트 배선
 (기존 verify 63종은 별도 실행.)
 """
 import contextlib
@@ -484,6 +487,63 @@ check("⑫ 말 걸기: npc_talk(정의 대사) · 두 번째는 line_again · �
       r12["result"] == "npc_talk" and "거미" in r12["line"] and d12._interact(n12, "f%d" % w1.id, [n12]).get("again") is True
       and (lambda g: len(g) == 1 and g[0][0] == "떠돌이 모험자" and g[0][5] == "hail")(d12.npc_greetings([mkbot("3", w1.x + 2, w1.y)])))
 
+print("── ⑬ D74 기도의 답 = 축복의 물약(09-15 파트너 '기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자')")
+d13, s13 = show_runner.build_town(apart=True)
+pr13 = by_name(d13, "npc", "성직자")
+a13 = mkbot("1", pr13.x + 1, pr13.y)                                     # 성직자 곁, 전사(근접 → 힘)
+b13 = mkbot("2", pr13.x + 1, pr13.y + 1, job="도적")                      # 곁의 동료(목격자)
+r13 = d13._interact(a13, "f%d" % pr13.id, [a13, b13])
+check("⑬ 정의·엔진: 성직자 gift.boon 1 · 곁에서 use → npc_gift item '축복의 물약' · boons 1 · 두 번째는 npc_talk(again, 병 안 늘음)",
+      (ENT.npc("temple_attendant")["gift"] or {}).get("boon") == 1
+      and r13["result"] == "npc_gift" and r13["item"] == "축복의 물약" and a13["boons"] == 1
+      and d13._interact(a13, "f%d" % pr13.id, [a13, b13]).get("again") is True and a13["boons"] == 1)
+o13 = d13.view(a13, [a13, b13])
+i4 = next((t for t in o13["targets"] if t["id"] == "i4"), None)
+w13 = brains._wire(o13, {"1": "두란", "2": "카야"}, compose=True)
+check("⑬ 관측: obs.boons 1 · 조합형 대상 [i4] 축복의 물약(consumable·blessing, 1개, effect '마시면 힘 +1') · 프롬프트 '축복의 물약 1병'·'마시면 힘 +1' · 받은 문장",
+      o13.get("boons") == 1 and i4 is not None and i4.get("count") == 1 and "blessing" in i4["tags"] and i4.get("effect") == "마시면 힘 +1"
+      and "축복의 물약 1병" in w13 and "마시면 힘 +1" in w13
+      and "축복의 물약을 받았다" in brains._last_prose(r13, {"1": "두란"}))
+str13 = a13["str"]
+res13 = G.CA.execute(d13, a13, {"type": "use", "target": "self", "item": "i4", "action_id": "t13"}, [a13, b13])
+ob13 = d13.view(b13, [a13, b13])
+check("⑬ 조합형 use self item=i4 → result drink_boon(stat str, value +1, boons 0, item_used i4) · 힘 +1 · 병 0 · 곁의 동료가 목격(ally_bless → '들이켜는 것을')",
+      res13.get("result") == "drink_boon" and res13.get("stat") == "str" and res13.get("value") == str13 + 1 and res13.get("boons") == 0
+      and res13.get("item_used") == "i4" and a13["str"] == str13 + 1 and a13["boons"] == 0
+      and any(w.get("kind") == "ally_bless" for w in (ob13.get("witnessed") or []))
+      and any("들이켜는 것을" in brains._witness_prose(w) for w in (ob13.get("witnessed") or [])))
+check("⑬ 빈 손: 조합형은 i4 가 대상에서 사라진다 · 메뉴형 drink(item=boon) → no_boon(정직 보고) · 문장·요약·꼬리표 3종",
+      not any(t["id"] == "i4" for t in d13.view(a13, [a13, b13])["targets"])
+      and d13._drink(a13, [a13, b13], "boon")["result"] == "no_boon"
+      and "축복의 물약" in brains._last_prose(res13, {"1": "두란"}) and "힘이 1 올랐다" in brains._last_prose(res13, {"1": "두란"})
+      and "축복의 물약을 들이켰다 — 힘 +1" in show_runner.act_summary(res13)
+      and any(t_[0] == "use" and "축복의 물약" in t_[2] and "힘 +1" in t_[2] for t_ in G.event_tags(res13, {"1": "두란"}))
+      and "축복의 물약을 마시려 했지만" in show_runner.act_summary({"type": "drink", "result": "no_boon"}))
+c13 = mkbot("3", pr13.x + 2, pr13.y, job="궁수"); c13["atk_range"] = 2; c13["boons"] = 1                    # 원거리 → 민첩
+dex13 = c13["dex"]
+rc13 = d13._drink(c13, [c13], "boon")
+check("⑬ 메뉴형 drink(item=boon): 궁수(atk_range 2)는 민첩 +1 · 메뉴 어휘 '축복의 물약을 마신다 — 네 민첩이 1 오른다'(소지 중일 때만) · 건네기 어휘",
+      rc13["result"] == "drink_boon" and rc13["stat"] == "dex" and c13["dex"] == dex13 + 1
+      and (lambda c_: any(o["type"] == "drink" and o.get("item") == "boon" and "네 민첩이 1 오른다" in o["label"] for o in d13.view(c_, [c_])["options"]))
+          ({**c13, "boons": 1})
+      and not any(o.get("item") == "boon" for o in d13.view(c13, [c13])["options"]))
+g13 = mkbot("1", pr13.x + 1, pr13.y); g13["boons"] = 1
+h13 = mkbot("2", pr13.x + 1, pr13.y + 1, job="도적")
+rg13 = d13._give(g13, "b2", "boon", [g13, h13])
+check("⑬ 건네기: give item=boon → given(what '축복의 물약', boons 0) · 받은 쪽 boons 1 · 받은 문장 '(소지 축복의 물약 1병)'",
+      rg13.get("result") == "given" and rg13.get("what") == "축복의 물약" and rg13.get("boons") == 0 and h13["boons"] == 1
+      and "축복의 물약" in brains._last_prose(rg13, {"1": "두란", "2": "카야"})
+      and "(소지 축복의 물약 1병)" in brains._last_prose({"type": "received", "from": "1", "what": "축복의 물약", "item": "boon", "boons": 1}, {"1": "두란", "2": "카야"}))
+dz, sz = show_runner.build_town(apart=True)
+az, bz = mkbot("1", *sz["1"]), mkbot("2", *sz["2"], job="도적")            # 다른 구역
+oz = dz.view(az, [az, bz])
+gz = ((oz["sights"].get("exit") or {}).get("gather") or {}).get("missing", [])
+check("⑬ 계단 줄 정합(09-15 수선): 마을 구역 지각에서 다른 구역의 동료는 exit.gather.missing 에 seen False(파티 명단 '시야 밖'과 같은 판정처)",
+      not any(x["char"] == "2" for x in oz["sights"]["bots"]) and len(gz) == 1 and gz[0]["char"] == "2" and gz[0]["seen"] is False)
+check("⑬ 러너 이월 배선: 재스폰이 boons 와 str/dex 를 실어 나른다 · descend party 에 boons(있을 때만) · 조합형 판정표에 no_boon=failed",
+      'n["boons"] = b.get("boons", 0)' in src("show_runner.py") and 'n["str"], n["dex"] = b["str"], b["dex"]' in src("show_runner.py")
+      and '"boons": b["boons"]' in src("show_runner.py") and "'no_boon', 'no_room'" in src("composed_actions.py"))
+
 print("── ⑧ 배선(소스·문서)")
 check("⑧ STREAM_FORMAT: run_meta quests/town_apart/town_hear/npc_brain/npc_hail · tick.npc_hails · end.quests/warped · 이벤트 quest_accepted/npc_report · level.quests",
       all(s_ in src("STREAM_FORMAT.md") for s_ in ("| `quests` |", "| `town_apart` |", "| `town_hear` |", "| `npc_brain` |", "| `npc_hail` |", "| `npc_hails` |",
@@ -504,6 +564,13 @@ check("⑧ 클라이언트: evline(quest_accepted·npc_report·questSfx·returne
       and "showNpcBubble" in src(os.path.join("game", "src", "scene", "Bubbles.ts")) and "npcHeadOf" in src(os.path.join("game", "src", "scene", "DungeonScene.ts"))
       and "warped?" in src(os.path.join("game", "src", "stream", "types.ts")))
 check("⑧ 프롬프트 파일 prompts/npc_prompt.md 존재 · 자리 6개", all(k in src(os.path.join("prompts", "npc_prompt.md")) for k in ("{name}", "{role}", "{persona}", "{facts}", "{scene}", "{maxlen}")))
+
+check("⑧ D74 배선(문서·클라이언트): HARNESS D74 · CHANGELOG 2026-09-15 · STREAM drink_boon/boons/gift.boon · entities.md gift.boon · README 기도 · types boons · evline drink_boon · FocusCard 축복",
+      "D74" in src(os.path.join("design", "HARNESS_DESIGN.md")) and "D74" in src(os.path.join("docs", "CHANGELOG.md"))
+      and all(s_ in src("STREAM_FORMAT.md") for s_ in ("drink_boon", "`boons?`", "gift.boon"))
+      and "gift.boon" in src(os.path.join("docs", "entities.md")) and "축복의 물약" in src("README.md")
+      and "boons?: number" in src(os.path.join("game", "src", "stream", "types.ts"))
+      and "drink_boon" in src(os.path.join("game", "src", "text", "evline.ts")) and "축복" in src(os.path.join("game", "src", "ui", "FocusCard.ts")))
 
 print("ALL PASS — verify_guild (D69 길드 척추: 의뢰 맡기·완료 판정·워프 귀환 뒤 보고=원정의 끝 · 흩어진 출발 · NPC 두뇌)" if C.failed == 0 else "FAIL %d" % C.failed)
 raise SystemExit(1 if C.failed else 0)
