@@ -7,8 +7,8 @@
     "street",
     "adventurer"
   ],
-  "sprite": "wl-town-npcs#0",
-  "note": "SilenceBreaker 임시 초안(2026-09-14 D73 마을 행인) — 문장·이름·성격 전부 파트너 대기. walk.region 은 layout 구역 id, rate 는 틱당 한 걸음 확률. 도트는 아직 없음(관전은 기본 타일) — 파트너 에셋 대기.",
+  "sprite": "wl-npc-wanderer#0",
+  "note": "SilenceBreaker 임시 초안(2026-09-14 D73 마을 행인) — 문장·이름·성격 전부 파트너 대기. walk.region 은 layout 구역 id, rate 는 틱당 한 걸음 확률. 2026-09-15: 여성 SD 외형과 4방향 걷기 적용(art/npc-sprites-v1).",
   "comps": {
     "npc": {
       "line": "던전에서 막 올라온 참이야. 2층 계단 옆에 거미가 매복하더라 — 조심해.",

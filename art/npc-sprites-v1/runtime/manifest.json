@@ -1,0 +1,38 @@
+{
+  "cell": 96,
+  "foot": 91,
+  "columns": 3,
+  "directions": [
+    "front",
+    "right",
+    "back",
+    "left"
+  ],
+  "walk": [
+    1,
+    0,
+    2,
+    0
+  ],
+  "frame_ms": 125,
+  "characters": [
+    {
+      "id": "wandering_adventurer",
+      "name": "떠돌이 모험자",
+      "key": "wl-npc-wanderer",
+      "sheet": "npc-wanderer.png"
+    },
+    {
+      "id": "apprentice_adventurer",
+      "name": "견습 모험자",
+      "key": "wl-npc-apprentice",
+      "sheet": "npc-apprentice.png"
+    },
+    {
+      "id": "street_vendor",
+      "name": "노점 상인",
+      "key": "wl-npc-vendor",
+      "sheet": "npc-vendor.png"
+    }
+  ]
+}

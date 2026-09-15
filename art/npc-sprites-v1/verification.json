@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "llmCalls": 0,
+  "fixture": "controlled visual preview based on town-v2",
+  "checks": [
+    "Gallery loads 12 views; idle and frame controls; mobile width.",
+    "All three bundled textures load with 12 frames and correct identities.",
+    "Four walking directions, idle on arrival, exact destination and depth.",
+    "Seeking, 16x playback, concealment and reappearance retain correct art.",
+    "Existing fixed NPCs, unknown NPC fallback, dialogue anchor unchanged."
+  ],
+  "errors": []
+}

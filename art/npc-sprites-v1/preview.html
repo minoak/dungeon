@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>원더랜드 · 마을의 세 사람</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#151c23;color:#e9e5df;font:16px/1.6 system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:40px 24px}header{margin-bottom:24px}small{color:#d6b36d;letter-spacing:.15em}h1{margin:6px 0;font-size:32px}p{margin:6px 0;color:#adb8c2}.toolbar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:24px 0}button,select{font:inherit;border:1px solid #53606b;color:#f5e9d7;background:#26313b;padding:8px 16px;border-radius:7px;cursor:pointer}button:focus-visible,select:focus-visible{outline:2px solid #edc370;outline-offset:3px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}article{background:#1d2730;border:1px solid #3b4650;border-radius:14px;padding:20px}h2{font-size:21px;margin:0}article p{min-height:48px;font-size:14px}.views{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:20px}.view{background:#33463f;border-radius:8px;text-align:center;padding:8px 0;color:#d0d9d4;font-size:12px}canvas{width:144px;height:144px;image-rendering:pixelated;display:block;margin:auto}footer{margin-top:24px;color:#99a6b1;font-size:13px}a{color:#e5c483}@media(max-width:1000px){.cards{grid-template-columns:1fr}article{max-width:450px;width:100%;margin:auto}}
+</style>
+<main><header><small>WONDERLAND · NPC COLLECTION 01</small><h1>마을의 세 사람</h1><p>떠돌이 모험자, 견습 모험자, 노점 상인 · 4방향과 걷기</p></header>
+<div class="toolbar"><button id="play" type="button" aria-pressed="true">걷기 멈추기</button><button id="idle" type="button">정지 자세</button><button id="step" type="button">다음 프레임</button><label>속도 <select id="speed"><option value="1">1배</option><option value="0.5">0.5배</option><option value="2">2배</option></select></label><span id="status" aria-live="polite"></span></div>
+<section class="cards" id="cards" aria-label="캐릭터 미리보기"></section>
+<footer>96px 셀 · 정지 + 걷기 2장 × 4방향 · <a href="README.md">제작 기록</a> · <a href="runtime/manifest.json">에셋 목록</a></footer></main>
+<script>
+const data=[['wanderer','떠돌이 모험자','회보라 양갈래 · 청록 망토와 배낭'],['apprentice','견습 모험자','금발 트윈테일 · 남색 장비와 붉은 리본'],['vendor','노점 상인','장밋빛 곱슬 양갈래 · 앞치마와 바구니']];
+const dirs=['정면','오른쪽','뒷면','왼쪽'],views=[];
+let playing=true,phase=0,last=0,mode='walk';
+for(const [id,name,desc] of data){
+ const card=document.createElement('article'),h=document.createElement('h2'),p=document.createElement('p'),grid=document.createElement('div');
+ h.textContent=name;p.textContent=desc;grid.className='views';card.append(h,p,grid);document.querySelector('#cards').append(card);
+ const img=new Image();img.src='runtime/npc-'+id+'.png';img.onload=draw;
+ for(let row=0;row<4;row++){const box=document.createElement('div'),canvas=document.createElement('canvas'),label=document.createElement('span');box.className='view';canvas.width=canvas.height=96;canvas.setAttribute('aria-label',name+' '+dirs[row]);label.textContent=dirs[row];box.append(canvas,label);grid.append(box);views.push({canvas,img,row});}
+}
+function draw(){const col=mode==='idle'?0:[1,0,2,0][phase];for(const {canvas,img,row} of views){if(!img.complete||!img.naturalWidth)continue;const g=canvas.getContext('2d');g.imageSmoothingEnabled=false;g.clearRect(0,0,96,96);g.drawImage(img,col*96,row*96,96,96,0,0,96,96);}document.querySelector('#status').textContent=mode==='idle'?'정지 자세':'걷기 '+(phase+1)+'/4';}
+function sync(){document.querySelector('#play').textContent=playing?'걷기 멈추기':'걷기 재생';document.querySelector('#play').setAttribute('aria-pressed',String(playing));draw();}
+document.querySelector('#play').onclick=()=>{playing=!playing;mode='walk';last=performance.now();sync();};
+document.querySelector('#idle').onclick=()=>{playing=false;mode='idle';sync();};
+document.querySelector('#step').onclick=()=>{playing=false;mode='walk';phase=(phase+1)%4;sync();};
+function tick(t){if(playing&&t-last>=125/Number(document.querySelector('#speed').value)){phase=(phase+1)%4;last=t;draw();}requestAnimationFrame(tick);}requestAnimationFrame(tick);sync();
+</script></html>

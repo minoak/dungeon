@@ -4,7 +4,8 @@
 // Phase B 카드가 쓰는 공개 API: feetOf/headOf/project/actorOf/turnToward/tileFrame/seenSet/visibleSet/DEPTH/TILE.
 import Phaser from 'phaser';
 import type { App } from '../app';
-import type { Bot, Char, Dir, Frame, LevelState, Monster, TownVisual } from '../stream/types';
+import type { Bot, Char, Dir, Feature, Frame, LevelState, Monster, TownVisual } from '../stream/types';
+import { NPC_CELL, NPC_FOOT, npcTexture, npcFrame, npcWalk, queueNpcs, registerNpcAnims } from '../assets/npcs';
 import { townTerrainData, TOWN_PROP_CELL, TOWN_PROP_FOOT, TOWN_NPC_CELL, TOWN_NPC_FOOT } from '../assets/world';
 import type { FrameChange } from '../play/Playback';
 import { TILE, tileIndex, type Tileset, type TilesCfg } from '../assets/tiles';
@@ -66,6 +67,7 @@ export class DungeonScene extends Phaser.Scene {
     this.load.spritesheet('tiny', ROOT + 'viewer/' + this.ts.sheet, { frameWidth: this.ts.tile, frameHeight: this.ts.tile });
     queueSdSheets(this.load, this.atlas);
     queueWorld(this.load);
+    queueNpcs(this.load);
   }
 
   create(): void {
@@ -73,6 +75,7 @@ export class DungeonScene extends Phaser.Scene {
     this.cols = Math.max(1, Math.floor(src.width / this.ts.tile));
     registerAnims(this.anims, this.atlas);
     registerWorldAnims(this.anims);
+    registerNpcAnims(this.anims);
     this.footprints = this.add.graphics().setDepth(DEPTH.footprint);
     this.ring = this.add.graphics().setDepth(DEPTH.focusRing);
     const cam = this.cameras.main;
@@ -190,7 +193,7 @@ export class DungeonScene extends Phaser.Scene {
     this.levelObjs = [];
     for (const s of this.mobs.values()) s.destroy();
     this.mobs.clear();
-    for (const s of this.feats.values()) s.destroy();
+    for (const s of this.feats.values()) { this.tweens.killTweensOf(s); s.destroy(); }
     this.feats.clear();
     for (const s of this.traps.values()) s.destroy();
     this.traps.clear();
@@ -306,6 +309,11 @@ export class DungeonScene extends Phaser.Scene {
       if (!known(ft.x, ft.y)) continue;
       const k = ft.type + '#' + ft.id;
       seenFeats.add(k);
+      const npcArt = ft.type === 'npc' ? npcTexture(ft.name) : undefined;
+      if (npcArt) {
+        this.updateNpc(ft, npcArt, prev, snap).setAlpha(canSee(ft.x, ft.y) ? 1 : 0.7);
+        continue;
+      }
       let s = this.feats.get(k);
       const c = this.worldOf(ft.x, ft.y);
       if (!s) {
@@ -318,7 +326,9 @@ export class DungeonScene extends Phaser.Scene {
       } else s.setPosition(c.x, c.y);
       s.setAlpha(canSee(ft.x, ft.y) ? 1 : 0.7);
     }
-    for (const [k, s] of this.feats) if (!seenFeats.has(k)) { s.destroy(); this.feats.delete(k); }
+    for (const [k, s] of this.feats) if (!seenFeats.has(k)) {
+      this.tweens.killTweensOf(s); s.destroy(); this.feats.delete(k);
+    }
 
     // 함정 — 드러난 것만(hidden 은 안 그린다), sprung 은 어둡게
     const seenTraps = new Set<string>();
@@ -410,6 +420,39 @@ export class DungeonScene extends Phaser.Scene {
       s.anims.stop();
       s.setPosition(target.x, target.y).setFrame(frameIndex(this.atlas, dir, -1));
     }
+  }
+
+  /** NPC identity follows its instance id, so walking off its spawn tile keeps its appearance. */
+  private updateNpc(ft: Feature, texture: string, prev: Frame | null, snap: boolean): Phaser.GameObjects.Sprite {
+    const key = 'npc#' + ft.id, c = this.worldOf(ft.x, ft.y);
+    let s = this.feats.get(key);
+    if (!s) {
+      s = this.add.sprite(c.x, c.y, texture, 0).setOrigin(0.5, NPC_FOOT / NPC_CELL).setName('npc-' + ft.id);
+      this.feats.set(key, s);
+      snap = true;
+    }
+    const pf = prev?.features.find(f => f.type === 'npc' && f.id === ft.id);
+    const moved = !!pf && (ft.x !== pf.x || ft.y !== pf.y);
+    let dir: Dir = snap ? 'front' : s.getData('dir') || 'front';
+    if (moved && !snap) {
+      const dx = ft.x - pf!.x, dy = ft.y - pf!.y;
+      dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'back' : 'front');
+    }
+    s.setData('dir', dir).setDepth(DEPTH.stand + ft.y * 0.01 - 0.005);
+    this.tweens.killTweensOf(s);
+    if (!snap && moved) {
+      const duration = Math.min(400, this.app.playback.tickMs * 0.8);
+      s.play(npcWalk(texture, dir), true);
+      s.anims.timeScale = 500 / duration;
+      const frame = this.frame, sprite = s;
+      this.tweens.add({ targets: s, x: c.x, y: c.y, duration, ease: 'Linear',
+        onComplete: () => {
+          if (this.frame === frame && sprite.active) { sprite.anims.stop(); sprite.setFrame(npcFrame(dir)); }
+        } });
+    } else {
+      s.anims.stop(); s.setPosition(c.x, c.y).setFrame(npcFrame(dir));
+    }
+    return s;
   }
 
   private updateMob(mob: Monster, prev: Frame | null, snap: boolean): void {
