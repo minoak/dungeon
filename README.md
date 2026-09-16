@@ -152,7 +152,7 @@ python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer
 
 - 게이트 `verify_*.py` **67종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
   도감·수첩·결산·보스층·차단 접기·공개 서버·계정(키 지문)·캠페인(저장 캐릭터의 원정 기록)·이어가기(스냅샷=끊기지 않은 판)·API 호출 상한·길드 척추(의뢰·보고·NPC 두뇌)를 LLM 0콜로 검사한다.
-- `runs/`의 판 기록은 실LLM으로 얻은 원본 데이터라 저장소에 보존한다. 전부 리플레이 가능하다.
+- `runs/`의 판 기록은 실LLM으로 얻은 원본 데이터지만 **개인 플레이 기록이라 로컬에만 보존한다**(`.gitignore`, 2026-09-16). 저장소엔 정적 관전용 데모 판(`game/static-runs.json`)만 남는다. 전부 리플레이 가능하다.
 - 관측 표현 A/B 실험(사전등록): [docs/D19_experiment_summary.md](docs/D19_experiment_summary.md).
 
 ## 리포 지도
