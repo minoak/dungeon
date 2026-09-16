@@ -241,6 +241,8 @@ let slots = [                                   // look(D37) = {head, body, colo
 let partyMode = 'custom';
 let characterPresets = [];
 const selectedPresets = ['', '', ''], presetLabels = ['', '', ''];
+const slotFrom = ['', '', ''];                   // D78 이 칸의 캐릭터가 어느 저장본에서 왔나(불러오기·저장 때 기록) — 판 기록·캠페인의 키
+let campaignById = {};                           // D78 /api/characters 의 campaign{id: 요약} — 기록 있는 저장 캐릭터만
 
 /* ═══ 외형(D37) — 그림에만 닿는다(엔진·프롬프트 무접촉). sheetkit.random_look 과 같은 규칙(가정 A). ═══ */
 const LOOK_KEYS = ['hair', 'skin', 'top', 'bottom'];
@@ -395,7 +397,7 @@ async function loadPresets() {
     $('keyCard').hidden = false;
     $('brain').value = 'gemini_api'; $('brain').disabled = true;
     $('brainHint').textContent = '공개 서버는 Gemini API 로만 돈다. 아래 칸의 키가 이 판에만 쓰인다.';
-    $('bestiary').checked = false; $('bestiary').disabled = true;    // D64 — 공개 서버는 원장 이월 없음
+    $('bestiary').checked = !!presets.account; $('bestiary').disabled = true;    // D64/D78 — 익명은 이월 없음, 계정에 들어오면 저장 캐릭터의 도감이 계정에 남는다(서버가 정한다)
   }
   await loadSprites();                                                 // D37 미리보기 합성기
   for (const s of slots) if (!s.look) {
@@ -450,6 +452,7 @@ async function refreshCharacters() {
   try {
     const result = await api('/api/characters');
     characterPresets = result.presets;
+    campaignById = result.campaign || {};                              // D78 기록 요약(없으면 빈 객체 — 옛 론처 응답도 산다)
     $('presetStatus').textContent = characterPresets.length
       ? `저장된 캐릭터 ${characterPresets.length}명 · 어느 파티 칸에도 불러올 수 있어요.`
       : '마음에 드는 캐릭터를 저장해 두고 다음 원정에서 다시 불러오세요.';
@@ -463,10 +466,15 @@ function paintPresetControls() {
     const i = +card.dataset.i, select = card.querySelector('[data-preset-select]');
     if (!characterPresets.some(p => p.id === selectedPresets[i])) selectedPresets[i] = '';
     select.replaceChildren(new Option('저장된 캐릭터 선택', ''),
-      ...characterPresets.map(p => new Option(`${p.label} · ${p.slot.job}`, p.id)));
+      ...characterPresets.map(p => new Option(`${p.label} · ${p.slot.job}${campaignById[p.id] ? ` · 원정 ${campaignById[p.id].runs}` : ''}`, p.id)));
     select.value = selectedPresets[i];
     for (const action of ['load', 'update', 'delete']) card.querySelector(`[data-preset-${action}]`).disabled = !select.value;
   }
+}
+function campaignLine(p) {                       // D78 저장 캐릭터의 기록 한 줄(없으면 빈 문자열)
+  const c = p && campaignById[p.id];
+  if (!c) return '';
+  return ` — 원정 ${c.runs}회${c.deaths ? `, 쓰러짐 ${c.deaths}` : ''}, 마지막 ${c.last.label}`;
 }
 function presetMessage(i, text, error=false) {
   const el = $('cards').querySelector(`[data-i="${i}"] [data-preset-message]`);
@@ -486,8 +494,9 @@ function bindPresetControls(card, i) {
     if (!chosen) return;
     // 저장본과 편집 중인 캐릭터를 분리한다. 다른 칸에서 같은 프리셋을 골라도 함께 변하지 않는다.
     slots[i] = JSON.parse(JSON.stringify(chosen.slot));
+    slotFrom[i] = chosen.id;                                          // D78 이 칸은 이 저장본이다 — 원정 기록이 여기로 쌓인다
     if (!slots[i].look) slots[i].look = randomLook(slots[i].sex);
-    renderCards(); presetMessage(i, `${chosen.label} 불러옴`);
+    renderCards(); presetMessage(i, `${chosen.label} 불러옴` + campaignLine(chosen));
   };
   for (const action of ['save', 'update', 'delete']) {
     card.querySelector(`[data-preset-${action}]`).onclick = async () => {
@@ -499,14 +508,14 @@ function bindPresetControls(card, i) {
       try {
         if (action === 'delete') {
           await api('/api/characters/delete', {id: chosen.id});
-          selectedPresets[i] = ''; presetLabels[i] = '';
+          selectedPresets[i] = ''; presetLabels[i] = ''; slotFrom[i] = '';
           card.querySelector('[data-preset-label]').value = '';
           presetMessage(i, '프리셋 삭제됨');
         } else {
           const body = {label: presetLabels[i], slot: slots[i]};
           if (action === 'update') body.id = chosen.id;
           const result = await api('/api/characters', body);
-          selectedPresets[i] = result.preset.id; presetLabels[i] = result.preset.label;
+          selectedPresets[i] = result.preset.id; presetLabels[i] = result.preset.label; slotFrom[i] = result.preset.id;
           card.querySelector('[data-preset-label]').value = result.preset.label;
           presetMessage(i, action === 'update' ? '프리셋 수정 저장됨' : '새 프리셋 저장됨');
         }
@@ -615,7 +624,7 @@ $('bNext').onclick = async () => {
   $('err').textContent = '';
   if (partyMode === 'custom') {
     try {
-      const res = await api('/api/party', { slots });
+      const res = await api('/api/party', { slots, preset_ids: slotFrom });   // D78 칸의 출처(저장 id) 동봉 — 서버는 이 저장소의 id 만 받는다
       $('err').style.color = '#6fe3b0';
       $('err').textContent = '저장됨: ' + res.party.map(p => `${p.name}(${p.job}: ${p.traits.join('·')})`).join(' / ');
     } catch (e) { $('err').style.color = '#ff8b7a'; $('err').textContent = e.message; return; }

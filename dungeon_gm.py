@@ -5526,6 +5526,7 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'job': sheet['job'], 'sex': sheet['sex'], 'persona': sheet['persona'],
             # ↓ 선택 4필드 = 프롬프트 전용(성격 연기·관계) — 엔진 판정은 절대 안 읽는다
             'name': sheet.get('name'), 'speech': sheet.get('speech'),
+            'id': sheet.get('id'),          # D78(09-16) 저장 캐릭터 id(없으면 None) — run_meta 기록용, 판정·프롬프트 무접촉
             'goal': sheet.get('goal'),
             'background': sheet.get('background'),   # D31(09-05) 배경(자유 입력 — load_party 가 정제) — 프롬프트 전용
             'traits': list(sheet.get('traits') or []),   # 성격 키워드 원본 — run_meta 기록용(프롬프트 미노출)

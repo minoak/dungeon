@@ -329,6 +329,11 @@ def load_party(path):
             lk = s.get("look")                  # D37(09-06) 외형 — 뷰어 전용(엔진·프롬프트 무접촉).
             if lk is not None:                  #   미등재 파츠·hex 아님 = ValueError = 폴백 경로 그대로
                 out["look"] = sheetkit.sanitize_look(lk)
+            pid = s.get("id")                   # D78(09-16) 저장 캐릭터 id(론처 프리셋) — 판 기록·캠페인·도감 원장의 키.
+            if pid is not None:                 #   없으면 1회용 캐릭터(기록이 안 남는다). 엔진·프롬프트 무접촉.
+                if not (isinstance(pid, str) and 0 < len(pid) <= 64 and all(ch.isalnum() or ch in "-_" for ch in pid)):
+                    raise ValueError("봇%s id 는 영숫자·-_ 64자 이내여야 함: %r" % (char, pid))
+                out["id"] = pid
             if SKILLS_ON and 'skills' in s:
                 ids = s['skills']
                 if (not isinstance(ids, list) or len(ids) > 3 or
@@ -1093,8 +1098,11 @@ def main():
                 random.Random("look:%d:%s" % (DUNGEON_SEED, c)), sheets[c]["sex"])}   # 로 따로(dungeon.rng 무접촉)
     chars = sorted(sheets)
     names = {c: (sheets[c].get("name") or "봇%s" % c) for c in chars}
+    ledger_keys = {c: (sheets[c].get("id") or names[c]) for c in chars}   # D78(09-16) 원장 키 = 저장 캐릭터 id, 없으면 이름(옛 규칙 그대로)
     lore = G.ENT.lore()                                   # 지식 '본문'(D9) — 엔티티 저장소(D50), 판정 무접촉, obs 전용
-    iss = bestiary.Issuer(names)                          # 도감 발급기 = 스트림 소비자(D9 '획득')
+    iss = bestiary.Issuer(ledger_keys)                    # 도감 발급기 = 스트림 소비자(D9 '획득')
+    if os.environ.get("DUNGEON_LEDGER_IDS_ONLY", "0") != "0":   # D78 계정 원장: 저장한 캐릭터만 이어진다 — 1회용 캐릭터는 파일에 안 남긴다
+        iss.skip_keys = {names[c] for c in chars if not sheets[c].get("id")}
     if BESTIARY_FILE:
         iss.load(BESTIARY_FILE)                           # 지난 원정의 지식 이월 — 죽어도 남는 재산(D4)
     for p in glob.glob(os.path.join(STATE, "bot*.log")):  # 이전 판 잔재(다른 인원수) 제거
@@ -1144,8 +1152,8 @@ def main():
                 d.visited.discard((b['x'], b['y']))
                 b['x'], b['y'] = spots[len(bots)]
                 d.visited.add((b['x'], b['y']))
-        b['known'] = iss.known(names[c])   # 도감 주입 켬 — 발급기의 set 과 *같은 객체*(획득 즉시 다음 obs 반영)
-        b['book'] = iss.record(names[c])   # D53 진행도(조우 수·심층 여부)도 같은 객체 — 해금 즉시 다음 obs 에 본문
+        b['known'] = iss.known(ledger_keys[c])   # 도감 주입 켬 — 발급기의 set 과 *같은 객체*(획득 즉시 다음 obs 반영) · D78 키=id|이름
+        b['book'] = iss.record(ledger_keys[c])   # D53 진행도(조우 수·심층 여부)도 같은 객체 — 해금 즉시 다음 obs 에 본문
         if LEDGER_ON:
             b['ledger'] = G.new_ledger()   # 공간 장부(D17) 켬 — 이 층에서 본 것의 원장
         bots.append(b)
@@ -1262,6 +1270,7 @@ def main():
             party=[{**G.SK.snapshot(b), **{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
                                          "wdmg", "stealth", "search_r", "persona")},
                     **({"name": b["name"]} if b.get("name") else {}),   # additive: 보고서·웹의 호칭
+                    **({"id": b["id"]} if b.get("id") else {}),         # D78(09-16) additive: 저장 캐릭터 id — 캠페인·원장 키
                     **{k: b[k] for k in ("speech", "goal", "background")   # D31(09-05) additive —
                        if b.get(k)},                                       #   커스텀 시트 원문(있을 때만)
                     **({"traits": list(b["traits"])} if b.get("traits") else {}),   # 키워드 원본

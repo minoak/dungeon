@@ -116,6 +116,7 @@ class Issuer:
         self._idkind = {}                # 이번 층 몹 id(int) -> kind
         self._aware = {}                 # char -> 직전 스냅샷 aware_of set
         self.depth = 1
+        self.skip_keys = set()           # D78(09-16): 1회용 캐릭터(저장 id 없음)의 키 — save 가 파일에 안 쓴다(계정 원장은 저장 캐릭터만)
 
     def known(self, name):
         """이 캐릭터의 지식 set — 없으면 빈 set 생성. 반환 객체를 bot['known']에 그대로 꽂는다."""
@@ -179,6 +180,8 @@ class Issuer:
                            'note={text, turn, depth, n}=캐릭터가 남긴 인식 한 줄(D55, 내용은 기계가 안 읽는다), asked_n=마지막 초대 시점의 조우 수, '
                            'due=대기 중 초대(deep|review).'}
         for name in sorted(self.meta):
+            if name in self.skip_keys:
+                continue                          # D78: 1회용 캐릭터는 판 안에서만 배우고 파일엔 안 남는다
             body[name] = {k: self.meta[name][k] for k in sorted(self.meta[name])}
         tmp = path + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
@@ -260,8 +263,8 @@ class Issuer:
         out = []
         if kind == 'run_meta':
             for p in rec.get('party') or []:           # 오프라인 이름 유도 — 라이브가 준 names 우선.
-                self.names.setdefault(p.get('char'),   # 폴백은 러너(show_runner)와 같은 규칙('봇N') —
-                                      p.get('name') or ('봇%s' % p.get('char')))  # 투영 일치 조건
+                self.names.setdefault(p.get('char'),   # 폴백은 러너(show_runner)와 같은 규칙(D78 id → 이름 → '봇N') —
+                                      p.get('id') or p.get('name') or ('봇%s' % p.get('char')))  # 투영 일치 조건
             prog = rec.get('bestiary_progress') or {}  # D53: 시작 진행도(조우 수·심층 여부)도 시드 — 없으면(옛 판) 조우 1
             for name, keys in (rec.get('bestiary') or {}).items():
                 self.known(name).update(keys)          # 판 시작 지식 시드(리뷰 3렌즈 합치 픽스) —

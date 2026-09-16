@@ -47,7 +47,14 @@ def _atomic_write(path, text):
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
-        os.replace(tmp, path)
+        for i in range(20):                           # Windows: 방금 쓴 파일을 색인기·백신이 잠깐 잡으면 replace 가 WinError 5 — 재시도(bestiary.save 선례)
+            try:
+                os.replace(tmp, path)
+                break
+            except PermissionError:
+                if i == 19:
+                    raise
+                time.sleep(0.05 * (i + 1))
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)

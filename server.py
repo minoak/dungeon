@@ -460,8 +460,13 @@ class PublicHandler(Handler):
                     return self._json(429, {"error": "이 주소에서 시작한 판이 너무 많다 — 한 시간에 %d판까지"
                                             % self.sessions.starts_per_hour})
                 body["brain"] = self.sessions.brain      # 공개 서버의 두뇌는 하나(BYOK Gemini) — 화면의 선택은 무시
-                body["bestiary"] = False                 # D64 — 원장 이월 없음(판 안 학습만)
                 extra = {"GEMINI_API_KEY": key, "ANTHROPIC_API_KEY": "", "DUNGEON_BRAIN_FALLBACK": ""}
+                if getattr(self.ctx, "aid", None):        # D78(09-16) 계정 판: 도감 원장은 계정 폴더에, 저장한 캐릭터(id)만 남는다
+                    body["bestiary"] = True
+                    extra["DUNGEON_BESTIARY_FILE"] = os.path.join(self.ctx.dir, "bestiary.json")
+                    extra["DUNGEON_LEDGER_IDS_ONLY"] = "1"
+                else:
+                    body["bestiary"] = False             # D64 — 익명 세션은 원장 이월 없음(판 안 학습만)
                 return self._json(200, self.ctx.runner.start(body, self.ctx.party_path, self.sessions.brain,
                                                              extra_env=extra))
         except BadRequest as e:

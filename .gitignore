@@ -19,6 +19,7 @@ claude-memory/
 # 론처(D31, 2026-09-05)가 만드는 사용자 파일·러너 콘솔 덤프 — 개인 저작물이라 커밋 안 함
 party_custom.json
 character_presets.json
+campaign.json
 state/runner.out
 state/brain_pause.json
 state/brain_retry.json

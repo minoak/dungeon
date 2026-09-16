@@ -56,3 +56,17 @@ Node와 Playwright가 필요하며 `WL_NODE`로 Node 실행 파일을 지정할 
 브라우저 재접속, 다른 칸 복원, 성격·헤어 유지, 모바일 폭, 실제 파티 저장을 확인한다.
 
 ![프리셋을 다른 파티 칸에 불러온 검증 화면](character-presets-preview.png)
+
+## 판 기록과 캠페인(D78, 2026-09-16)
+
+파티를 확정할 때 론처는 `POST /api/party` 에 `{slots, preset_ids}` 를 보낸다. `preset_ids` 는 슬롯과 같은 순서의 저장 캐릭터 `id`(불러오기·저장한
+칸만, 아니면 빈 문자열)다. 서버는 **이 저장소에 있는 id 만** 시트에 붙이고(`party_custom.json` 의 `id`), 러너가 그것을 `run_meta.party[].id` 로 남긴다.
+그 id 가 캠페인(`campaign.json`, 같은 폴더)과 도감 원장(`bestiary.json`)의 키다. 저장하지 않은 즉석 캐릭터와 기본 파티는 1회용이라 기록이 남지 않는다.
+
+| API | 요청 / 응답 |
+| --- | --- |
+| `GET /api/characters` | 응답에 `campaign{id: 요약}` 가 additive 로 붙는다(기록 있는 저장 캐릭터만, 항목 자체는 그대로): 요약 = `{runs, running, stopped, by_outcome{}, deaths, depth_max, last{started, status, outcome, depth_last, turn_last, label}}` |
+| `GET /api/characters/log?id=<id>` | `{id, runs:[{run_id, seed, started, status(running|stopped|ended), outcome, depth_last, depth_max, turn_last, alive_last, died_turn, quests_done[], party[], pages[{turn, depth, text}], book_lines[{turn, key, text}]}]}` 최근 것부터 |
+
+캠페인은 판 기록을 **마지막 줄까지** 읽어 접는다(끊긴 판도 끊긴 자리까지, 진행 중인 판은 running). 러너는 이 파일을 모르고, `python campaign.py` 없이도
+`launcher.Ctx.campaign_refresh()` 가 `/api/characters` 때 갱신한다. 검증: `python verify_campaign.py`.

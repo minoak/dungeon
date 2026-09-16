@@ -48,6 +48,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import sheetkit                                   # noqa: E402
+import campaign                                   # noqa: E402  # D78 캠페인 = 판 기록의 0콜 투영(저장 캐릭터별 원정 기록)
 import skill_schema                              # noqa: E402
 import run_control                               # noqa: E402
 from character_presets import PresetStore         # noqa: E402
@@ -286,6 +287,16 @@ class Ctx:
         # 커스텀 파티와 같은 위치에 보관한다. 임시 검토·검증 서버의 저장소도 함께 격리된다.
         self.characters = PresetStore(os.path.join(os.path.dirname(os.path.abspath(party_path)),
                                                   "character_presets.json"), self.presets)
+        self.campaign = campaign.Book(os.path.join(os.path.dirname(os.path.abspath(party_path)),
+                                                 "campaign.json"))          # D78 저장 캐릭터별 원정 기록(같은 폴더)
+
+    def campaign_refresh(self):
+        """현재 판(state)과 runs/ 아카이브를 캠페인에 접는다(마지막 줄까지 · 아카이브는 한 번씩). 실패해도 목록은 산다."""
+        try:
+            self.campaign.refresh(os.path.join(self.state_dir, "stream.jsonl"), self.runs_dir, self.runner.running())
+            return self.campaign
+        except (OSError, ValueError):
+            return None
 
 
 def default_party_preview(root):
@@ -321,12 +332,23 @@ def presets_payload(ctx):
             "status": ctx.runner.status()}
 
 
-def save_party(ctx, slots):
-    """슬롯 → sheetkit 조립 → 파일 → 러너의 load_party 로 재검증(이중 검증). 실패는 BadRequest 한 줄."""
+def save_party(ctx, slots, preset_ids=None):
+    """슬롯 → sheetkit 조립 → 파일 → 러너의 load_party 로 재검증(이중 검증). 실패는 BadRequest 한 줄.
+    preset_ids(D78): 슬롯과 같은 순서의 저장 캐릭터 id — **이 저장소에 있는 id 만** 시트에 붙는다(남의 id·지어낸 id 는 1회용으로)."""
     try:
         sheets = sheetkit.build_party(slots, data=ctx.presets)
     except ValueError as e:
         raise BadRequest(str(e))
+    ids = list(preset_ids) if isinstance(preset_ids, (list, tuple)) else []
+    if any(isinstance(x, str) and x for x in ids):
+        try:
+            saved = {p["id"] for p in ctx.characters.list()}
+        except (OSError, ValueError):
+            saved = set()
+        for i, char in enumerate(sorted(sheets, key=int)):
+            pid = ids[i] if i < len(ids) else None
+            if isinstance(pid, str) and pid in saved:
+                sheets[char] = {**sheets[char], "id": pid}
     sheetkit.write_party(sheets, ctx.party_path)
     import show_runner                                # 지연 import — 러너 모듈의 검증기를 그대로 쓴다
     with io.StringIO() as err:
@@ -421,9 +443,18 @@ class Handler(SimpleHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/characters":
             try:
-                return self._json(200, {"presets": self.ctx.characters.list()})
+                presets = self.ctx.characters.list()
+                book = self.ctx.campaign_refresh()            # D78 저장 캐릭터별 원정 기록 요약 — 항목은 그대로 두고 별도 키(additive)
+                camp = {p["id"]: book.summary(p["id"]) for p in presets} if book else {}
+                camp = {k: v for k, v in camp.items() if v}
+                return self._json(200, {"presets": presets, **({"campaign": camp} if camp else {})})   # 기록 있을 때만 붙는다(옛 응답 모양 유지)
             except (OSError, ValueError) as e:
                 return self._json(500, {"error": str(e)})
+        if path == "/api/characters/log":               # D78 한 캐릭터의 원정 기록(수첩 장·도감평·함께 간 동료)
+            from urllib.parse import parse_qs
+            pid = parse_qs(urlparse(self.path).query).get("id", [""])[0]
+            book = self.ctx.campaign_refresh()
+            return self._json(200, {"id": pid, "runs": book.runs(pid) if book else []})
         if path == "/api/presets":
             return self._json(200, presets_payload(self.ctx))
         if path == "/api/oracle":                        # D61 신탁 소켓 — 현재 요청
@@ -465,7 +496,7 @@ class Handler(SimpleHTTPRequestHandler):
                     raise BadRequest(str(e)) from e
                 return self._json(200, {"ok": True})
             if path == "/api/party":
-                return self._json(200, save_party(self.ctx, body.get("slots") or []))
+                return self._json(200, save_party(self.ctx, body.get("slots") or [], body.get("preset_ids")))
             if path == "/api/start":
                 return self._json(200, self.ctx.runner.start(body, self.ctx.party_path, self.ctx.default_brain))
             if path == "/api/retry":
