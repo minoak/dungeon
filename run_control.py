@@ -9,6 +9,11 @@ import uuid
 POLICY = "retry-pause-v1"
 PAUSE_FILE = "brain_pause.json"
 RETRY_FILE = "brain_retry.json"
+STOP_FILE = "stop.json"          # D79(09-16) 곱게 멈춤 요청 — 론처가 두고 러너가 다음 틱 머리에서 읽는다
+
+
+class StopRequested(Exception):
+    """정지 요청(D79) — 판단 정지(brain_pause) 대기 중에 사용자가 멈추면 대기 루프가 이걸 던진다(러너가 받아 조용히 닫는다)."""
 
 
 def read_json(path):
@@ -33,7 +38,7 @@ def write_json(path, value):
 
 
 def reset(state):
-    for name in (PAUSE_FILE, RETRY_FILE):
+    for name in (PAUSE_FILE, RETRY_FILE, STOP_FILE):
         (Path(state) / name).unlink(missing_ok=True)
 
 
@@ -43,6 +48,20 @@ def request_retry(state, pause_id, pid=None):
             or (pid is not None and paused.get("pid") != pid) or paused.get("retrying")):
         raise ValueError("지금 재시도할 수 있는 판단 정지가 아니다. 상태를 새로 확인해 주세요.")
     write_json(Path(state) / RETRY_FILE, {"id": pause_id})
+
+
+def request_stop(state, pages=True):
+    """D79 곱게 멈추기 — 러너가 다음 틱 머리에서 읽는다: 수첩 한 장(pages=True, 살아 있는 캐릭터당 1콜)을 쓰고 stopped 줄·스냅샷을 남긴 뒤 스스로 끝난다."""
+    write_json(Path(state) / STOP_FILE, {"id": uuid.uuid4().hex, "pages": bool(pages), "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+
+
+def stop_requested(state):
+    """멈춤 요청이 있으면 그 dict, 없으면 None."""
+    return read_json(Path(state) / STOP_FILE) or None
+
+
+def clear_stop(state):
+    (Path(state) / STOP_FILE).unlink(missing_ok=True)
 
 
 class BrainPause:
@@ -62,6 +81,8 @@ class BrainPause:
                     % (turn, ", ".join(e["name"] for e in entries)))
         self.report('콘솔 재시도: python run_control.py --state "%s" retry' % self.state)
         while True:
+            if stop_requested(self.state):        # D79: 판단 정지 중 사용자가 멈춤 — 재시도 없이 조용히 닫는다(루프 머리 스냅샷이 진실)
+                raise StopRequested()
             request = read_json(self.state / RETRY_FILE)
             if request.get("id") == paused["id"]:
                 (self.state / RETRY_FILE).unlink(missing_ok=True)

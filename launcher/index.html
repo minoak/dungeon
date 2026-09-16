@@ -22,6 +22,7 @@
   .title .logo { font-size: 44px; color: #e8c268; letter-spacing: 8px; margin-bottom: 8px; }
   .title .tag { color: #8a8f9c; margin-bottom: 34px; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row[hidden] { display: none; }   /* D79(09-16): flex 가 hidden 속성을 이겨 타이틀의 실행 줄·이어가기 줄이 상태와 무관하게 보이던 결함 */
   .center { justify-content: center; }
   button {
     background: #1d2029; color: #d8dbe2; border: 1px solid #2c303c; border-radius: 6px;
@@ -109,6 +110,19 @@
       <span class="muted" style="margin-left:10px">신탁(D61):</span>
       <input id="oracleIn" maxlength="200" placeholder="신의 요청 한 줄 — 어디에 있든 캐릭터들의 관측에 들어간다(요청이지 명령이 아니다)" style="width:34ch">
       <button id="bOracle">보내기</button> <button id="bOracleClear" title="걸어 둔 요청을 거둔다">거둠</button>
+    </div>
+    <div class="row center" id="tResumeRow" hidden style="margin-top:10px"><!-- D79 이어가기 — 멈춘 판이 있을 때만 -->
+      <span class="muted" id="tResumeText"></span>
+      <input type="password" id="resumeKey" autocomplete="off" spellcheck="false" placeholder="Gemini API 키 — 이어가는 판에만 쓰인다" style="width:30ch" hidden>
+      <button class="primary" id="bResume">이어가기</button>
+    </div>
+    <div class="card" id="stopPanel" hidden style="max-width:860px;margin:10px auto 0;text-align:left"><!-- D79 종료 전 알림 ⚠️문구 임시 -->
+      <div id="stopText"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="primary" id="bStopPages">수첩 쓰고 멈춤</button>
+        <button id="bStopNow">바로 멈춤</button>
+        <button id="bStopCancel">계속 진행</button>
+      </div>
     </div>
   </div>
   <div class="card" id="acctCard" hidden style="max-width:860px;margin:0 auto 14px">
@@ -359,13 +373,24 @@ async function refreshStatus() {
     const st = await api('/api/status');
     pausePanel.update(st);
     if (st.running) {
-      $('tStatus').innerHTML = `${modeName(st.mode)} <b>${st.brain_pause ? '판단 대기 · 일시정지' : '진행 중'}</b> — seed ${esc(st.seed ?? '…')}, t=${esc(st.turn ?? 0)}` +
-        (st.party?.length ? ` · ${st.party.map(p => esc(p.name)).join('·')}` : '');
+      $('tStatus').innerHTML = `${modeName(st.mode)} <b>${st.stopping ? '멈추는 중 — 캐릭터들이 수첩을 쓰고 있다…' : st.brain_pause ? '판단 대기 · 일시정지' : '진행 중'}</b> — seed ${esc(st.seed ?? '…')}, t=${esc(st.turn ?? 0)}` +
+        (st.party?.length ? ` · ${st.party.map(p => esc(p.name)).join('·')}` : '');   // stopping=D79 곱게 멈추는 중
       $('tRunRow').hidden = false;
+      $('tResumeRow').hidden = true;
     } else {
       $('tStatus').textContent = st.seed != null
         ? `지난 ${modeName(st.mode)}: seed ${st.seed}, ${st.turn ?? 0}틱, 결말 ${st.outcome ?? '(중단)'}` : '아직 돈 판이 없다';
       $('tRunRow').hidden = true;
+      $('stopPanel').hidden = true;
+      const rs = st.resume;                                                 // D79 이어갈 몸이 있다(멈춘 판의 요약)
+      $('tResumeRow').hidden = !rs;
+      if (rs) {
+        const how = rs.stopped === 'user' ? `수첩 쓰고 멈춤${rs.pages?.length ? ' · 수첩 ' + rs.pages.length + '장' : ''}` : rs.stopped === 'user_paused' ? '판단 정지 중 멈춤' : '끊김(마지막 기록까지)';
+        $('tResumeText').textContent = `멈춘 원정: seed ${rs.seed} · ${rs.depth === 0 ? '마을' : '지하 ' + rs.depth + '층'} t=${rs.turn_last}` +
+          (rs.party?.length ? ` · ${rs.party.filter(p => p.alive).map(p => p.name).join('·')}` : '') + ` · ${how}` + (rs.segment ? ` · 이어가기 ${rs.segment}번째` : '');
+        $('resumeKey').hidden = !isPublic;
+        if (isPublic && !$('resumeKey').value) $('resumeKey').value = $('apiKey').value;   // 계정 키 자동 채움(페이지 메모리)과 같은 칸
+      }
     }
   } catch (e) { $('tStatus').textContent = '서버 연결 실패 — launcher.py 가 떠 있나? (' + e.message + ')'; }
 }
@@ -377,7 +402,42 @@ function modeName(mode) { return mode === 'alpha' ? '스킬 알파' : mode === '
 $('bReplays').onclick = () => { location.href = '/game/'; };                       // 게임 클라이언트가 기본(2026-09-09 파트너 결정) — 판 목록은 화면 안 드롭다운
 $('bWatch').onclick = () => { location.href = '/game/?run=state/stream.jsonl'; };    // 기본 = 게임 클라이언트(2026-09-09 파트너 결정 "계속 새 뷰어로 보려면 불편")
 $('bGame').onclick = () => { location.href = '/viewer/?run=state/stream.jsonl'; };   // 옛 HTML 뷰어 — 은퇴 전까지 보조 진입
-$('bStop').onclick = async () => { await api('/api/stop', {}); refreshStatus(); };
+$('bStop').onclick = async () => {                          // D79 종료 전 알림 — 멈추면 어떻게 되는지 먼저 말한다(⚠️문구 임시)
+  let st = {}; try { st = await api('/api/status'); } catch (e) { /* 아래 문장은 그대로 */ }
+  $('stopText').innerHTML = `지금 멈추면 <b>마지막 기록(t=${esc(st.turn ?? 0)})</b>에서 이어갈 수 있다 — 몸·짐·기억은 그대로, 던전 안에서 이어진다.<br>` +
+    `<b>수첩 쓰고 멈춤</b>: 캐릭터들이 지금까지의 이야기를 수첩에 한 장씩 적고 멈춘다(두뇌 콜 ${st.party?.length ?? 3}, 몇 초). <b>바로 멈춤</b>: 적지 않고 즉시 멈춘다.`;
+  $('stopPanel').hidden = false;
+};
+$('bStopCancel').onclick = () => { $('stopPanel').hidden = true; };
+async function stopRun(pages) {                             // D79: pages=true 는 곱게(러너가 다음 틱 머리에서 수첩 쓰고 닫음), false 는 즉시 종료
+  $('stopPanel').hidden = true;
+  $('tStatus').textContent = pages ? '멈추는 중 — 캐릭터들이 수첩을 쓰고 있다…' : '멈추는 중…';
+  try { await api('/api/stop', { graceful: pages, pages }); } catch (e) { $('tStatus').textContent = e.message; }
+  refreshStatus();
+}
+$('bStopPages').onclick = () => stopRun(true);
+$('bStopNow').onclick = () => stopRun(false);
+$('bResume').onclick = async () => {                        // D79 이어가기 — 멈춘 판의 스냅샷에서, 같은 기록 파일에 이어 쓴다
+  const body = { resume: true };
+  if (isPublic) {
+    body.key = $('resumeKey').value.trim();
+    if (!body.key) { $('tStatus').textContent = 'Gemini API 키를 넣어 줘 — 이어가는 판에만 쓰이고 서버에 남지 않아.'; return; }
+  }
+  $('bResume').disabled = true;
+  try {
+    await api('/api/start', body);
+    $('tStatus').textContent = '멈춘 자리에서 몸을 되살리는 중…';
+    const t0 = Date.now();
+    while (Date.now() - t0 < 60000) {
+      await new Promise(r => setTimeout(r, 700));
+      const st = await api('/api/status');
+      if (st.running) { location.href = st.game || st.viewer; return; }
+      if (!st.running && !st.resume) break;                  // 러너가 바로 끝났다(되살리기 실패 폴백 등) — 상태 줄로
+    }
+    await refreshStatus();
+  } catch (e) { $('tStatus').textContent = e.message; }
+  $('bResume').disabled = false;
+};
 $('bOracle').onclick = async () => {                       // D61 신탁 소켓 — 서버가 state/oracle.json 에 두고 러너가 틱마다 읽는다
   const r = await api('/api/oracle', { text: $('oracleIn').value });
   $('err').textContent = r.oracle ? ('신탁 걸어 둠: ' + r.oracle.text) : '신탁 거둠';

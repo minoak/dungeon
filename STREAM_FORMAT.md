@@ -29,6 +29,24 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 제어 파일 `state/brain_pause.json`, `state/brain_retry.json`은 임시 통신용이며 리플레이 원장은 스트림이다.
 명시적인 `backend:dummy` 테스트와 과거 기록의 `src:fallback`은 호환을 위해 유지한다.
 
+## 이어가기 — 2026-09-16 D79 additive
+
+러너는 **틱마다 루프 머리에서**(그 틱의 기록을 쓰기 전에) 판의 몸 전체를 `state/snapshot.pkl`(+요약 `snapshot.json`)에 얼린다. 론처 중지·서버 재시작·크래시
+어느 경우든 "마지막으로 스트림에 남은 틱"과 같은 몸이 남고, `POST /api/start {resume:true}` 가 그 몸을 되살려 **같은 파일에** 이어 쓴다(같은 run_id — 캠페인(D78)은 한 항목).
+
+- `stopped {turn, reason:"user", depth, pages?:{char: 수첩 한 장}}`: 사람이 '수첩 쓰고 멈춤'을 눌렀다. 러너가 다음 틱 머리에서 살아 있는 캐릭터마다 수첩 한 장(1콜,
+  `stop_page`)을 쓰고 이 줄과 스냅샷을 남긴 뒤 스스로 끝난다 — `end` 없음(끊긴 판 = 이어갈 판). '바로 멈춤'·재시작·크래시는 이 줄 없이 끊긴다(마지막 틱까지가 기록).
+- `resume {turn, started, segment, backend, depth, stopped:"user"|"user_paused"|null, pages?:{char: 장}, party:[{char,hp,alive}]}`: 이어가기 시작. `turn` 은 마지막으로
+  기록된 틱, 다음 `tick.turn` 은 그 +1(틱 번호 연속). `pages` 는 멈출 때 쓴 장 — 이어가는 몸이 '기억해두기로 한 것'(notes)에 들고 가고 첫 관측에 `floor_notice` 로
+  "원정을 이어간다" 한 줄이 한 번 들어간다. `backend` 는 이 조각의 두뇌(앞 조각과 다를 수 있다 — 같은 시드라도 다른 판). `segment` 는 몇 번째 이어가기인가.
+- `run_meta.resume_failed {path, reason, run_id, pages, kept}`(additive): 이어가기를 청했지만 몸을 되살리지 못했다(엔진이 바뀜·설정이 다름·기록 파일이 다른 판) →
+  옛 기록을 `runs/` 로 대피(`kept`)하고 **새 판**을 열되 멈출 때 쓴 수첩 장(`pages`)은 새 몸의 notes 에 들고 간다(정직 폴백 — "마을에서 새 몸 + 요약 유지").
+- 되살리기 전에 러너는 파일을 스냅샷 자리(`stream_pos`)까지 자른다 — 그 뒤의 반 줄·`brain_pause` 줄(판단 정지 중 멈춤)은 버려진다(스냅샷이 진실).
+  `stopped` 줄은 스냅샷 **앞**이라 남는다. 판이 `end` 로 끝나면 스냅샷은 지워진다.
+
+이 두 종류는 게임 프레임이 아니다(기존 소비자는 무시). 현재 이어갈 몸은 `/api/status.resume`(요약 json — 피클을 열지 않는다)으로 읽고, 곱게 멈추는 중은 `.stopping`.
+제어 파일 `state/stop.json` 은 임시 통신용. 스냅샷은 러너가 자기 폴더에 쓰고 되읽는 피클이다(사용자 입력 경로 없음 — `snapshot.py` 머리글).
+
 ## 스킬 원정 — 2026-09-10 additive, 2026-09-11 기본 채택
 
 모든 스킬 플래그가 OFF이면 기존 스트림과 동일하다. 활성 판은 `run_meta.alpha`로 식별한다.
@@ -106,7 +124,8 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 - 수치와 과거 like/dislike는 관전 전용이다. 봇의 intent·history·notes·relations·floor 관측에 자동 주입하거나 호감 점수로 환산하지 않는다. 기존 `replies`(말/행동/없음)와 관계 장부는 별개로 유지한다.
 
 ## 파일 규칙
-- 위치: `state/stream.jsonl`. **실행 시작 때 truncate**(이전 판 기록은 사라진다 — 보존하려면 실행 후 복사).
+- 위치: `state/stream.jsonl`. **실행 시작 때 truncate**(이전 판 기록은 사라진다 — 보존하려면 실행 후 복사). 예외 = 이어가기(D79, 2026-09-16):
+  러너가 스냅샷 자리(마지막으로 얼린 틱의 끝)까지 자른 뒤 **append** 한다 — 한 판 = 한 파일 그대로, `resume` 줄이 이음매.
 - **단일 writer 가정**: 러너를 동시에 2개 띄우면 같은 파일을 서로 덮어써 계약이 깨진다(락 없음 — 로컬 관전 도구).
 - 인코딩: UTF-8, `ensure_ascii=False`(한글 그대로), compact separators, 라인 종결 = `\n` 고정.
 - 라인 = JSON 객체 1개, 공통 필드 **`kind`**(항상 첫 키). 라인마다 flush.

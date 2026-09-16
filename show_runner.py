@@ -57,6 +57,7 @@ import os
 import sys
 import glob
 import json
+import shutil                   # D79 폴백 때 옛 기록 대피(runs/)
 import time
 import queue
 import random                   # D37(09-06) 외형 랜덤 — seed·char 로 따로 만든 Random(던전 난수 무접촉)
@@ -67,6 +68,7 @@ sys.path.insert(0, HERE)
 import dungeon_gm as G
 import brains
 import run_control
+import snapshot                 # D79(09-16) 이어가기 — 판의 몸을 틱마다 얼려 둔다(마지막 기록에서 이어간다)
 import gm
 import stream
 import run_summary                 # D58 판 결산 — 스트림 소비자(Tap 으로 모든 레코드를 흘려 세고, end.summary + events.log 표)
@@ -242,6 +244,10 @@ BOND_ON = os.environ.get("DUNGEON_BOND", "1") != "0"         # 친목(D47 ②, 0
                                                              #   자유 문구) — 물리 없음, 기록·목격·뼈. 반응은 상대의 다음 결정
 # 지식 본문(옛 lore.json)은 엔티티 저장소(entities/, D50)의 knowledge.deep — G.ENT.lore()
 STEP_DELAY = float(os.environ.get("DUNGEON_STEP_DELAY", "0.5"))   # 한 수 적용 후 맵이 보이게(헤들리스=0)
+RESUME_PATH = os.environ.get("DUNGEON_RESUME", "")   # D79(09-16) 이어가기 — 스냅샷(state/snapshot.pkl) 경로. 있으면 그 몸에서 같은 기록 파일에 이어 쓴다
+RUNS_DIR = os.environ.get("DUNGEON_RUNS_DIR", "")    #   되살리기 실패 폴백 때 옛 기록을 대피시킬 폴더(론처가 준다 — 없으면 STATE 옆 runs/)
+RESUME_NOTICE = "원정을 이어간다 — 지난번에는 여기(%s, t%d)서 멈췄다. 몸·짐·기억은 그대로다.%s"   # D79 첫 관측 한 번(floor_notice 자리) ⚠️문구 임시
+RESUME_NOTICE_PAGE = " 멈추기 전에 쓴 수첩 한 장이 '기억해두기로 한 것'에 있다."                    # ⚠️문구 임시
 
 # 캐릭터 시트 계약(party.json): 필수 9필드(수치형/문자형) + 선택 4필드(프롬프트 전용)
 SHEET_REQ = {"job": str, "sex": str, "hp": int, "str": int, "dex": int,
@@ -1084,14 +1090,108 @@ def npc_facts(d, npc_name, bots, fallen, quests):
     return facts
 
 
+def _world_fingerprint():
+    """D79 이어가기 전제 — 판의 모양을 정하는 상수들. 스냅샷과 지금 러너가 다르면 그 몸을 이 세계에 놓지 않는다(폴백)."""
+    return {"w": DUNGEON_W, "h": DUNGEON_H, "depths": DEPTHS, "max_turns": MAX_TURNS, "town": TOWN_ON, "boss": BOSS_ON,
+            "start_boss": START_BOSS, "skills": SKILLS_ON, "trpg": TRPG_COMBAT_ON, "random_skill": RANDOM_SKILL_ON,
+            "solo": SOLO_ON, "monsters": N_MON, "traps": N_TRAP, "lurkers": N_LURK, "potions": N_POTION, "gear": N_GEAR,
+            "compose": bool(brains.COMPOSE), "scan": SCAN_ON, "loops": LOOPS_ON, "town_apart": TOWN_APART_ON,
+            "town_hear": TOWN_HEAR, "quests": bool(QUESTS_ON and NOTICES_ON), "plan": PLAN_ON}
+
+
+def _preserve_stream(src):
+    """폴백(되살리기 실패) 때 옛 기록을 runs/ 로 대피 — 론처 preserve_previous 와 같은 규칙(mtime 이름·있으면 안 덮음)."""
+    if not (os.path.exists(src) and os.path.getsize(src) > 0):
+        return None
+    runs = RUNS_DIR or os.path.join(os.path.dirname(os.path.abspath(STATE)), "runs")
+    os.makedirs(runs, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(os.path.getmtime(src)))
+    dst = os.path.join(runs, "stream-%s.jsonl" % stamp)
+    if not os.path.exists(dst):
+        shutil.copy2(src, dst)
+    return dst
+
+
+def _load_resume():
+    """DUNGEON_RESUME 처리 → (snap, meta, fail). fail = 이어가기를 청했는데 못 한 사유(새 판을 열되 run_meta.resume_failed 에 남긴다).
+    순서: 피클 되살림 → 세계 지문 대조 → 기록 파일(state/stream.jsonl)의 run_meta 가 같은 판인지 → 스냅샷 자리(stream_pos)로 자른다(그 뒤의
+    반 줄·판단 정지 줄은 버린다 — 스냅샷이 진실). 어느 단계든 실패면 파일은 건드리지 않은 채 사유만 돌려준다."""
+    if not RESUME_PATH:
+        return None, None, None
+    sp = os.path.join(STATE, "stream.jsonl")
+    try:
+        snap, meta = snapshot.load(RESUME_PATH)
+        fp = _world_fingerprint()
+        old = snap.get("world") or {}
+        if old != fp:
+            diff = sorted(k for k in set(fp) | set(old) if fp.get(k) != old.get(k))
+            raise snapshot.SnapshotError("판의 설정이 다르다: %s" % ", ".join(diff))
+        with open(sp, "rb") as f:
+            head = f.readline()
+        m = json.loads(head.decode("utf-8"))
+        if m.get("kind") != "run_meta" or m.get("seed") != snap["seed"] or m.get("started") != snap["started"]:
+            raise snapshot.SnapshotError("기록 파일이 다른 판이다")
+        pos = int(snap["stream_pos"])
+        if pos > os.path.getsize(sp) or pos < len(head):
+            raise snapshot.SnapshotError("기록이 스냅샷 자리보다 짧다")
+        with open(sp, "r+b") as f:
+            f.seek(pos - 1)
+            if f.read(1) != b"\n":
+                raise snapshot.SnapshotError("스냅샷 자리가 줄 끝이 아니다")
+            f.truncate(pos)
+        return snap, meta, None
+    except (snapshot.SnapshotError, OSError, ValueError, KeyError, TypeError) as e:
+        meta0 = snapshot.read_meta(os.path.dirname(os.path.abspath(RESUME_PATH))) or {}
+        return None, None, {"path": os.path.basename(RESUME_PATH), "reason": str(e)[:200], "run_id": meta0.get("run_id"),
+                            "pages": dict((meta0.get("stop") or {}).get("pages") or {})}
+
+
+def _take_snapshot(sw, core, meta):
+    """루프 머리마다 — 몸 전체를 얼린다(D79, ~100KB·1ms). 실패해도 판은 계속(스냅샷은 보험이지 판정이 아니다)."""
+    try:
+        return snapshot.write(STATE, {**core, "stream_pos": sw.tell()}, meta)
+    except Exception as e:
+        event("   \u26a0 스냅샷 실패: %s: %s" % (type(e).__name__, str(e)[:80]))
+        return 0
+
+
+def stop_pages(d, bots, names, turn, req):
+    """D79 곱게 멈춤의 수첩 — 살아 있는(아직 계단을 안 탄) 캐릭터마다 한 장(1콜, 동시에). 더미 두뇌·수첩 끔·요청 pages=false 면 0콜."""
+    if not (req.get("pages", True) and FLOOR_ON and brains.NOTEBOOK_ON and brains.backend_name() != "dummy"):
+        return {}
+    live = [b for b in bots if b["alive"] and not b["won"]]
+    if not live:
+        return {}
+
+    def one(b):
+        entry = G.floor_freeze(b, d.depth, turn)[-1]      # 지금 층의 집계 그대로(얼리지 않는다 — 봇 dict 무접촉)
+        return b["char"], brains.stop_page(b, entry, names, bots)
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=len(live)) as ex:
+        out = dict(ex.map(one, live))
+    for c in sorted(out):
+        if out[c]:
+            event('   \U0001f4d3 %s — 멈추며 수첩 한 장: "%s"' % (names[c], out[c]))
+        else:
+            event('   \U0001f4d3 %s — 수첩 없음(두뇌 응답 없음)' % names[c])
+    return {c: p for c, p in out.items() if p}
+
+
 def main():
+    global DUNGEON_SEED, MAX_TURNS               # D79 이어가기: 스냅샷의 시드·틱 상한으로 되묶는다(새 층 생성·루프 끝이 읽는다)
     run_control.reset(STATE)
     if SKILLS_ON and not brains.COMPOSE:
         raise SystemExit('스킬 알파는 DUNGEON_ACTION_MODE=compose에서 실행한다')
     if TOWN_ON and SOLO_ON:
         raise SystemExit("솔로+마을(D29 v0)은 아직 함께 못 쓴다 — 행선(위/아래)이 갈리면 "
                          "러너의 현재 층이 하나뿐이라 두 무리를 동시에 못 좇는다(서랍: 다중 층 동시 진행)")
-    sheets = load_party(PARTY_FILE)                       # 시트 외부화 — 파티 구성=이 파일이 결정
+    snap, snap_meta, resume_fail = _load_resume()          # D79 이어가기 — 스냅샷이 있으면 그 몸·그 기록 파일에서 이어 쓴다
+    if snap is not None:
+        DUNGEON_SEED, MAX_TURNS = int(snap["seed"]), int(snap["max_turns"])
+        sheets = snap["sheets"]                            #   시트도 그때 것(파티 파일이 바뀌었어도 이 판의 사람들은 그대로)
+    else:
+        sheets = load_party(PARTY_FILE)                   # 시트 외부화 — 파티 구성=이 파일이 결정
     for c in sorted(sheets):                              # D37(09-06): 외형이 없는 시트는 여기서 뽑아 run_meta 에
         if not sheets[c].get("look"):                     #   적는다(파트너 확정 "기본 파티는 랜덤") — 뷰어가 뽑으면
             sheets[c] = {**sheets[c], "look": sheetkit.random_look(    # 리플레이마다 얼굴이 바뀐다. 난수는 seed·char
@@ -1100,65 +1200,87 @@ def main():
     names = {c: (sheets[c].get("name") or "봇%s" % c) for c in chars}
     ledger_keys = {c: (sheets[c].get("id") or names[c]) for c in chars}   # D78(09-16) 원장 키 = 저장 캐릭터 id, 없으면 이름(옛 규칙 그대로)
     lore = G.ENT.lore()                                   # 지식 '본문'(D9) — 엔티티 저장소(D50), 판정 무접촉, obs 전용
-    iss = bestiary.Issuer(ledger_keys)                    # 도감 발급기 = 스트림 소비자(D9 '획득')
-    if os.environ.get("DUNGEON_LEDGER_IDS_ONLY", "0") != "0":   # D78 계정 원장: 저장한 캐릭터만 이어진다 — 1회용 캐릭터는 파일에 안 남긴다
-        iss.skip_keys = {names[c] for c in chars if not sheets[c].get("id")}
-    if BESTIARY_FILE:
-        iss.load(BESTIARY_FILE)                           # 지난 원정의 지식 이월 — 죽어도 남는 재산(D4)
-    for p in glob.glob(os.path.join(STATE, "bot*.log")):  # 이전 판 잔재(다른 인원수) 제거
-        os.remove(p)
-    for n in ["events.log", "gm.log"] + ["bot%s.log" % c for c in chars]:
-        open(os.path.join(STATE, n), "w", encoding="utf-8").close()
-    rs = run_summary.Collector()                                    # D58 판 결산(기계가 센 숫자 — 판정은 사람이)
-    sw = run_summary.Tap(stream.StreamWriter(os.path.join(STATE, "stream.jsonl")), rs)   # 실행당 truncate · 모든 emit 이 결산에도
+    if snap is not None:                                   # D79: 발급기·결산은 얼린 그대로(known/book 은 봇과 같은 객체 — 피클이 공유를 보존) · 로그는 이어 쓴다
+        iss, rs = snap["iss"], snap["rs"]
+    else:
+        iss = bestiary.Issuer(ledger_keys)                # 도감 발급기 = 스트림 소비자(D9 '획득')
+        if os.environ.get("DUNGEON_LEDGER_IDS_ONLY", "0") != "0":   # D78 계정 원장: 저장한 캐릭터만 이어진다 — 1회용 캐릭터는 파일에 안 남긴다
+            iss.skip_keys = {names[c] for c in chars if not sheets[c].get("id")}
+        if BESTIARY_FILE:
+            iss.load(BESTIARY_FILE)                       # 지난 원정의 지식 이월 — 죽어도 남는 재산(D4)
+        for p in glob.glob(os.path.join(STATE, "bot*.log")):  # 이전 판 잔재(다른 인원수) 제거
+            os.remove(p)
+        for n in ["events.log", "gm.log"] + ["bot%s.log" % c for c in chars]:
+            open(os.path.join(STATE, n), "w", encoding="utf-8").close()
+        rs = run_summary.Collector()                                # D58 판 결산(기계가 센 숫자 — 판정은 사람이)
+    if resume_fail:                                        # 이어가기를 청했는데 못 했다 — 옛 기록은 runs/ 로 대피시키고 새 판을 연다(정직 폴백)
+        kept = _preserve_stream(os.path.join(STATE, "stream.jsonl"))
+        resume_fail["kept"] = os.path.basename(kept) if kept else None
+    sw = run_summary.Tap(stream.StreamWriter(os.path.join(STATE, "stream.jsonl"), append=snap is not None), rs)   # 실행당 truncate(이어가기는 스냅샷 자리 뒤에 append) · 모든 emit 이 결산에도
     brain_pause = run_control.BrainPause(STATE, sw, names, event)
     returned, returned_party = False, []   # D65 워프게이트 귀환으로 끝난 판의 표식(outcome 'returned')·귀환한 사람들
     last_oracle_id = None                  # D61 개정: 마지막으로 스트림에 남긴 신의 요청 id(새 요청·거둠을 한 번만 적는다)
     quests = G.new_quests() if (QUESTS_ON and NOTICES_ON) else None   # D69 의뢰 장부(파티 단위·판 전체) — 층마다 같은 객체를 건다
+    if snap is not None:                   # D79: 장부·표식도 얼린 그대로
+        returned, returned_party = bool(snap["returned"]), list(snap["returned_party"])
+        last_oracle_id, quests = snap["last_oracle_id"], snap["quests"]
     npc_brain = NPC_BRAIN_ON and brains.backend_name() != "dummy"       # D69 마을 NPC 두뇌 — 더미 판은 콜 0 유지
 
-    if TOWN_ON:                            # 마을 판(D29): 원정은 고향에서 시작한다
-        d, tstarts = town_for_run(TOWN_APART_ON, quests, TOWN_WALKERS_ON)   # D69 흩어진 출발·의뢰 장부 · D73 행인(게이트 스텁 허용)
-        d.lore = lore
-        if npc_brain or NPC_HAIL_ON:       # D69·D71 주점 소문 재료 — 지하 1층의 실제 배치(같은 시드=같은 층, 0콜): NPC 답·인사의 숫자
-            d.rumor = floor_rumor(new_floor(1, lore))
-    else:
-        d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION, depth=START_DEPTH,   # D67: 프리셋이면 최심층
-                      n_monsters=N_MON + START_DEPTH - 1, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,   #   (층 전이와 같은 몹 수 규칙)
-                      loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
-                      dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON, ally_doing=ALLY_DOING_ON,
-                      ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
-                      status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON,
-                      auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE,
-                      skills=SKILLS_ON, trpg_combat=TRPG_COMBAT_ON, random_skill=RANDOM_SKILL_ON,
-                      boss=BOSS_ON and START_DEPTH >= DEPTHS,   # D65: 첫 층이 곧 최심층이면 여기가 보스층(D67 프리셋 포함)
-                      plan_max=G.PLAN_MAX if PLAN_ON else 0)   # D66: 작정 스위치(러너 기본 0)
-        d.lore = lore
-        d.quests = quests                  # D69 던전 시작 판(보스 프리셋 등)도 장부를 든다 — 워프 귀환 뒤 마을에서 보고
-    d.plan_max = G.PLAN_MAX if PLAN_ON else 0    # 마을(from_layout)도 같은 스위치
-    bots = []
-    for c in chars:
-        b = G.spawn(d, c, bots, sheet=sheets[c], apart=SOLO_ON)
-        if TOWN_ON:                        # 출발 자리=맵 숫자 표기(광장). 표기 밖 인원은 1번 곁
-            spot = tstarts.get(c) or (arrive_cells(d, *tstarts[min(tstarts)], 9)[len(bots)]
-                                      if tstarts else (b['x'], b['y']))
-            d.visited.discard((b['x'], b['y']))
-            b['x'], b['y'] = spot
-            d.visited.add(spot)
-        elif START_BOSS:                   # D67 프리셋 — 보스룸 앞 칸 곁(도착 칸 BFS, 결정론). 앞 칸이 없으면 기본 스폰
-            front = d.boss_front()
-            spots = arrive_cells(d, *front, 9) if front else []
-            if len(bots) < len(spots):
+    if snap is None:                       # ── 새 판: 세계를 짓고 파티를 놓는다 ──
+        if TOWN_ON:                            # 마을 판(D29): 원정은 고향에서 시작한다
+            d, tstarts = town_for_run(TOWN_APART_ON, quests, TOWN_WALKERS_ON)   # D69 흩어진 출발·의뢰 장부 · D73 행인(게이트 스텁 허용)
+            d.lore = lore
+            if npc_brain or NPC_HAIL_ON:       # D69·D71 주점 소문 재료 — 지하 1층의 실제 배치(같은 시드=같은 층, 0콜): NPC 답·인사의 숫자
+                d.rumor = floor_rumor(new_floor(1, lore))
+        else:
+            d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION, depth=START_DEPTH,   # D67: 프리셋이면 최심층
+                          n_monsters=N_MON + START_DEPTH - 1, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,   #   (층 전이와 같은 몹 수 규칙)
+                          loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
+                          dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON, ally_doing=ALLY_DOING_ON,
+                          ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
+                          status=STATUS_ON, rest_verb=REST_ON, relations=RELATIONS_ON, trail=TRAIL_ON, objtags=OBJTAGS_ON, floor=FLOOR_ON, explore_dirs=EXPLORE_DIRS_ON, give_verb=GIVE_ON, bond_verb=BOND_ON,
+                          auto_approach=brains.COMPOSE, composed_actions=brains.COMPOSE,
+                          skills=SKILLS_ON, trpg_combat=TRPG_COMBAT_ON, random_skill=RANDOM_SKILL_ON,
+                          boss=BOSS_ON and START_DEPTH >= DEPTHS,   # D65: 첫 층이 곧 최심층이면 여기가 보스층(D67 프리셋 포함)
+                          plan_max=G.PLAN_MAX if PLAN_ON else 0)   # D66: 작정 스위치(러너 기본 0)
+            d.lore = lore
+            d.quests = quests                  # D69 던전 시작 판(보스 프리셋 등)도 장부를 든다 — 워프 귀환 뒤 마을에서 보고
+        d.plan_max = G.PLAN_MAX if PLAN_ON else 0    # 마을(from_layout)도 같은 스위치
+        bots = []
+        for c in chars:
+            b = G.spawn(d, c, bots, sheet=sheets[c], apart=SOLO_ON)
+            if TOWN_ON:                        # 출발 자리=맵 숫자 표기(광장). 표기 밖 인원은 1번 곁
+                spot = tstarts.get(c) or (arrive_cells(d, *tstarts[min(tstarts)], 9)[len(bots)]
+                                          if tstarts else (b['x'], b['y']))
                 d.visited.discard((b['x'], b['y']))
-                b['x'], b['y'] = spots[len(bots)]
-                d.visited.add((b['x'], b['y']))
-        b['known'] = iss.known(ledger_keys[c])   # 도감 주입 켬 — 발급기의 set 과 *같은 객체*(획득 즉시 다음 obs 반영) · D78 키=id|이름
-        b['book'] = iss.record(ledger_keys[c])   # D53 진행도(조우 수·심층 여부)도 같은 객체 — 해금 즉시 다음 obs 에 본문
-        if LEDGER_ON:
-            b['ledger'] = G.new_ledger()   # 공간 장부(D17) 켬 — 이 층에서 본 것의 원장
-        bots.append(b)
-    saved = {}                             # 마을 판(D29): 층 보존 — depth → {'d': 던전, 'mem': 봇별
-                                           #   층-로컬 기억}. "재입장=같은 1층"(파트너 확정 07-30)
+                b['x'], b['y'] = spot
+                d.visited.add(spot)
+            elif START_BOSS:                   # D67 프리셋 — 보스룸 앞 칸 곁(도착 칸 BFS, 결정론). 앞 칸이 없으면 기본 스폰
+                front = d.boss_front()
+                spots = arrive_cells(d, *front, 9) if front else []
+                if len(bots) < len(spots):
+                    d.visited.discard((b['x'], b['y']))
+                    b['x'], b['y'] = spots[len(bots)]
+                    d.visited.add((b['x'], b['y']))
+            b['known'] = iss.known(ledger_keys[c])   # 도감 주입 켬 — 발급기의 set 과 *같은 객체*(획득 즉시 다음 obs 반영) · D78 키=id|이름
+            b['book'] = iss.record(ledger_keys[c])   # D53 진행도(조우 수·심층 여부)도 같은 객체 — 해금 즉시 다음 obs 에 본문
+            if LEDGER_ON:
+                b['ledger'] = G.new_ledger()   # 공간 장부(D17) 켬 — 이 층에서 본 것의 원장
+            bots.append(b)
+        saved = {}                             # 마을 판(D29): 층 보존 — depth → {'d': 던전, 'mem': 봇별
+                                               #   층-로컬 기억}. "재입장=같은 1층"(파트너 확정 07-30)
+    else:                                  # D79 이어가기 — 세계·파티·보존 층을 얼린 그대로(같은 객체 그래프: quests·reaction_book·known 공유 유지)
+        d, bots, saved = snap["d"], snap["bots"], snap["saved"]
+        d.lore = lore                      #   지식 본문은 지금 정의로(피클에 든 옛 사본 대신 — 판정 무접촉)
+        for sv in saved.values():
+            sv["d"].lore = lore
+    if resume_fail and resume_fail.get("pages"):   # 되살리기 실패 폴백 — 몸은 새로, 멈출 때 쓴 수첩 장은 유지(파트너 "요약해서 들고 있게")
+        for b in bots:
+            pg = resume_fail["pages"].get(b["char"])
+            if pg:
+                ns = b.setdefault("notes", [])
+                ns.append(pg)
+                del ns[:-brains.NOTE_MAX]
     botlog = {c: "bot%s.log" % c for c in chars}
     gm_q = gm_thread = None
     if GM_ON:
@@ -1183,104 +1305,127 @@ def main():
 
         gm_thread = threading.Thread(target=_gm_worker, daemon=True)
         gm_thread.start()
-    fallen = []         # 이전 층에서 쓰러진 영웅(층 전이 때 bots 에서 빠짐 — 기록만 남긴다)
+    fallen = list(snap["fallen"]) if snap is not None else []   # 이전 층에서 쓰러진 영웅(층 전이 때 bots 에서 빠짐 — 기록만 남긴다) · D79 얼린 그대로
 
-    # 스트림 머리: run_meta(1회 — started 가 유일한 비결정 필드) + 첫 level
-    reaction_book = G.SR.book(d)
-    sw.emit("run_meta", v=1, started=time.strftime("%Y-%m-%dT%H:%M:%S"),
-            **alpha_metadata(),
-            **({'reaction': True, 'reaction_schema': 'social-v0.4'} if reaction_book is not None else {}),
-            seed=DUNGEON_SEED, w=DUNGEON_W, h=DUNGEON_H, depths=DEPTHS,
-            monsters=N_MON, traps=N_TRAP, lurkers=N_LURK,
-            potions=N_POTION,          # 층당 회복 물약(07-17 additive) — 배치를 바꾸는 판 파라미터
-            gear=N_GEAR,               # 층당 장비(07-30 additive) — 같은 급(배치 파라미터)
-            town=TOWN_ON,              # 마을 판(D29 additive) — 판 모양 자체가 다름(0층·왕복·클리어)
-            start=("boss" if START_BOSS else ("town" if TOWN_ON else "dungeon")),   # D67(09-13 additive) 시작 지점 프리셋 — boss=최심층 보스룸 앞
-            sight=G.SIGHT,             # 시야 반경(DUNGEON_SIGHT) — 굴림 수를 바꾸는 세계 물리
-                                       #   (리플레이·판 비교의 전제, seed 와 같은 급)
-            max_turns=MAX_TURNS, gm=GM_ON,
-            stream_obs=os.environ.get("DUNGEON_STREAM_OBS") == "1",   # decisions 에 obs 동봉 여부(스키마 판별용)
-            menu=brains.MENU,          # 리모컨(번호 선택) 여부 — decisions 에 choice 가 실리는지 판별용
-            **brains.action_metadata(),  # compose 선행 프로브 / 기존 menu·free 구분
-            ledger=LEDGER_ON,          # 공간 장부(D17) 여부 — obs(known·돌아가기)를 바꾸는 실행모드 메타
-            scan=SCAN_ON,              # 스캐너(D19) 여부 — obs(구조)·정지 물리를 바꾸는 실행모드 메타
-                                       #   (걸음 정지 규칙이 달라지므로 리플레이·판 비교의 전제)
-            selfstop=SELF_ON,          # 자기 관찰 정지(D21) 여부 — 정지 물리 메타(scan 과 같은 급)
-            dry_signal=DRY_ON,         # 무발견 신호(07-24) 여부 — obs 한 줄이 늘어나는 실행모드 메타
-            hail=HAIL_ON,              # 말 걸림 정지(D24) 여부 — 정지 물리 메타(selfstop 과 같은 급)
-            wait=WAIT_ON,              # wait 동사(D25) 여부 — 메뉴·정지 물리 메타
-            plan=PLAN_ON,              # 작정(D16 then) 여부 — D66(09-13 additive) 러너 기본 0: false 면 then 을 받아도 작정 없음(콜 수·관측 접점 메타)
-            motion=MOTION_ON,          # 이동중 표시(D27) 여부 — obs 동료 항목 메타
-            ally_doing=ALLY_DOING_ON,  # 동료 행동 표시(D27 개정 09-12) 여부 — obs 동료 항목(doing) 표현층 메타
-            social=SOCIAL_ON,          # 채널 분리(07-26) 여부 — 말 걸림이 작정을 부수는지
-                                       #   여부가 달라진다(정지 물리 + 콜 구조 메타)
-            ally_sight=ALLY_SIGHT_ON,  # 동료 시야 면제(07-26) 여부 — **시야 물리 메타**(scan 과 같은 급).
-                                       #   켠 판은 동료가 벽·문을 통과해 보이므로 obs·결정이 근본적으로
-                                       #   달라진다. A/B 비교의 전제라 리플레이·판 대조 시 필수 대조 필드.
-            solo=SOLO_ON,              # 솔로 판(07-29) 여부 — **판의 종류가 다른 메타**. 배치(흩어짐)·
-                                       #   obs(party 명단 부재)·승리 조건(혼자 하강)이 전부 달라지므로
-                                       #   파티 판과는 애초에 비교 대상이 아니다. 대조군 고를 때 필수 필드.
-            graves=GRAVES_ON,          # 묘(D22) 여부 — 피처가 늘어나는 세계 물리 메타
-            events=EVENTS_ON,          # 사건층(D22) 여부 — obs(목격·기억)를 바꾸는 실행모드 메타
-            status=STATUS_ON,          # 상태 태그(D34) 여부 — 몸 물리(걸음·굴림)와 obs 를 바꾸는 메타
-            rest=REST_ON,              # 휴식(D35) 여부 — 메뉴·회복 물리 메타(wait 와 같은 급)
-            relations=RELATIONS_ON,    # 관계 장부(D36) 여부 — obs(뼈·초대)와 시트(살)를 바꾸는 메타
-            trail=TRAIL_ON,            # 자기 행동 궤적(D38) 여부 — obs(trail·intent turn)를 바꾸는 표현층 메타
-            objtags=OBJTAGS_ON,        # 오브젝트 태그(D39) 여부 — obs(sights.features[].tag)·라벨을 바꾸는 표현층 메타
-            floor=FLOOR_ON,            # 층 집계·결산(D40 ②) 여부 — obs(floor·floors)·decisions.floor_line 표현층 메타
-            explore_dirs=EXPLORE_DIRS_ON,   # 방향 탐색 열거(D19 개정 4) 여부 — 메뉴(options)를 바꾸는 표현층 메타(rest 와 같은 급)
-            sayto=SAYTO_ON,            # 지목(D41) 여부 — 말 걸림 정지·대화 뼈가 `to` 지목만 세는 사회층 물리 메타
-                                       #   (정지 물리를 바꾸므로 리플레이·판 비교의 전제 — hail 과 같은 급)
-            say_kind=SAYKIND_ON,       # 말의 종류(D47) 여부 — 정지는 제안만·회의·반복 방지·반응 뼈(정지 물리 메타, sayto 와 같은 급)
-            pending=PENDING_ON,        # 들은 말 보관(D47 배관) 여부 — inbox 에 보관된 옛 말(turn 스탬프)이 섞이는 표현층 메타
-            give=GIVE_ON,              # 건네기(D47 ②, 09-09) 여부 — 메뉴(options give)·소지품 이동 물리 메타(rest 와 같은 급)
-            bond=BOND_ON,              # 친목(D47 ②) 여부 — 메뉴(options bond)·관계 뼈·tick.replies 를 바꾸는 사회층 메타
-            town_buildings=TOWN_BUILDINGS_ON,   # 마을 관측(D60, 09-12) 여부 — 마을 level.features 에 building 피처·obs.town_zone 표현층 메타
-            notices=NOTICES_ON,        # 건물 역할 부품(D61, 09-12) 여부 — obs.notices(게시판·신의 요청)·decisions.oracle_reply 표현층 메타
-            quests=quests is not None, # D69(09-14 additive) 길드 척추 여부 — 의뢰 맡기(use q<n>)·완료 판정·워프 귀환 뒤 마을 계속·보고=종료.
-                                       #   판 모양(종료 조건)을 바꾸는 실행모드 메타(boss 급)
-            town_apart=bool(TOWN_ON and TOWN_APART_ON),   # D69 additive 흩어진 출발(마을 판만) — 배치 메타(solo 급)
-            town_hear=(TOWN_HEAR if TOWN_HEAR == "zone" else "all"),   # D70 additive 마을 사람 지각 — 'zone'(같은 구역·곁)|'all'(옛 전체). 배달·가시·목격 물리 메타(ally_sight 급)
-            npc_brain=bool(npc_brain), # D69 additive 마을 NPC 두뇌 여부 — 이벤트 line 이 LLM 문장(line_src 'brain')일 수 있다는 표현층 메타
-            npc_hail_stop=bool(NPC_HAIL_ON and NPC_HAIL_STOP_ON),   # D76 additive NPC 인사에 걸음을 멈추는 판(0콜)
-            npc_hail=bool(NPC_HAIL_ON),   # D71 additive NPC 가 먼저 거는 인사 여부 — tick.npc_hails·inbox 'npc:' 잡담(마을만). 표현층 메타(콜 0)
-            town_walkers=bool(TOWN_ON and TOWN_WALKERS_ON),   # D73 additive 마을 행인 여부 — level/tick features 의 npc 가 걷는다(walker 표식). 배치 메타
-            obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
-            obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
-            notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
-            history=brains.HISTORY_ON,    # D38 개정 2 최근 판단 장부 여부 — 표현층 메타(notes 와 같은 급)
-            dialogue=brains.DIALOGUE_ON,  # D43 대화 기억 여부 — 표현층 메타(notes 와 같은 급)
-            notebook=brains.NOTEBOOK_ON,  # D59 수첩 여부 — 층 전이 descend/ascend.pages·floors[].page·notes 층에서 닫힘
-            prompt_context=brains.PROMPT_CONTEXT_ON,   # D54(09-12 additive) 판단 요청 맨 앞 맥락 한 줄 여부 — 같은 급
-            block_degrade=brains.BLOCK_DEGRADE_ON,     # D62(09-13 additive) 안전 차단 때 몸짓 서술 줄만 접고 재요청(지문 고정) 여부 — 같은 급
-            backend=brains.backend_name(),   # 두뇌 백엔드(2026-07-25 additive) — claude_cli/
-                                       #   anthropic_api/gemini_api/dummy. gm·menu 와 같은 급의
-                                       #   실행모드 메타: 같은 시드라도 백엔드가 다르면 다른 판이다
-                                       #   (모델 접점이 다르다 = A/B 비교의 전제).
-                                       #   ⚠️ 지연·토큰·요청id 는 여기 넣지 않는다 — 실행마다 변하면
-                                       #   verify_stream 결정론(라인 바이트 동일)이 즉시 깨진다.
-            bestiary=iss.snapshot(),   # 판 시작 시점 지식(additive) — 도감이 obs 를 바꾸므로 리플레이·비교의 전제
-            bestiary_progress=iss.progress(),   # D53(09-12 additive): 시작 진행도 {이름:{종키:{n, deep?}}} — 심층 해금
-                                       #   시점이 obs 를 바꾸므로 이것도 전제. 오프라인 소급(bestiary.replay)의 시드
-            boss=BOSS_ON,              # D65(09-13 additive): 보스층·워프게이트 여부 — 최심층 판 모양(보스·봉인 출구·귀환 종료)을 바꾸는 실행모드 메타(town 급)
-            bestiary_defs=lore,        # D63(09-13 additive): 지식 본문 정의 {종키:{name, lore, brief?, unlock?, review?}} — 도감·수첩 창이
-                                       #   캐릭터 상태(모름·등재·심층)만큼 본문을 보여 주는 데 쓴다. 판정 무접촉·정의가 뒤에 바뀌어도 그 판이 알던 본문
-            brain_failure_policy=run_control.POLICY,
-            bestiary_file=bool(BESTIARY_FILE),   # 영속 여부(실행모드 메타 — gm/menu 와 같은 급)
-            party=[{**G.SK.snapshot(b), **{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
-                                         "wdmg", "stealth", "search_r", "persona")},
-                    **({"name": b["name"]} if b.get("name") else {}),   # additive: 보고서·웹의 호칭
-                    **({"id": b["id"]} if b.get("id") else {}),         # D78(09-16) additive: 저장 캐릭터 id — 캠페인·원장 키
-                    **{k: b[k] for k in ("speech", "goal", "background")   # D31(09-05) additive —
-                       if b.get(k)},                                       #   커스텀 시트 원문(있을 때만)
-                    **({"traits": list(b["traits"])} if b.get("traits") else {}),   # 키워드 원본
-                    **({"look": b["look"]} if b.get("look") else {})}   # D37(09-06) 외형 — 뷰어 전용
-                   for b in bots])
-    lvl = {"turn": 0, **d.level_snapshot(),
-           **({'reaction_stats': reaction_book.snapshot()} if reaction_book is not None else {}),
-           "party": [G.bot_snapshot(b) for b in bots]}
-    sw.emit("level", **lvl)
-    iss.consume("level", lvl)          # 발급기도 같은 원장을 본다 — 층의 몹 id→종 지도 구축
+    if snap is None:                       # ── 새 판: 스트림 머리 ──
+        # 스트림 머리: run_meta(1회 — started 가 유일한 비결정 필드) + 첫 level
+        reaction_book = G.SR.book(d)
+        run_started = time.strftime("%Y-%m-%dT%H:%M:%S")
+        sw.emit("run_meta", v=1, started=run_started,
+                **alpha_metadata(),
+                **({"resume_failed": resume_fail} if resume_fail else {}),   # D79(09-16 additive) 이어가기를 청했으나 못 함 — 새 판을 열었다(사유·대피한 옛 기록·들고 온 수첩)
+                **({'reaction': True, 'reaction_schema': 'social-v0.4'} if reaction_book is not None else {}),
+                seed=DUNGEON_SEED, w=DUNGEON_W, h=DUNGEON_H, depths=DEPTHS,
+                monsters=N_MON, traps=N_TRAP, lurkers=N_LURK,
+                potions=N_POTION,          # 층당 회복 물약(07-17 additive) — 배치를 바꾸는 판 파라미터
+                gear=N_GEAR,               # 층당 장비(07-30 additive) — 같은 급(배치 파라미터)
+                town=TOWN_ON,              # 마을 판(D29 additive) — 판 모양 자체가 다름(0층·왕복·클리어)
+                start=("boss" if START_BOSS else ("town" if TOWN_ON else "dungeon")),   # D67(09-13 additive) 시작 지점 프리셋 — boss=최심층 보스룸 앞
+                sight=G.SIGHT,             # 시야 반경(DUNGEON_SIGHT) — 굴림 수를 바꾸는 세계 물리
+                                           #   (리플레이·판 비교의 전제, seed 와 같은 급)
+                max_turns=MAX_TURNS, gm=GM_ON,
+                stream_obs=os.environ.get("DUNGEON_STREAM_OBS") == "1",   # decisions 에 obs 동봉 여부(스키마 판별용)
+                menu=brains.MENU,          # 리모컨(번호 선택) 여부 — decisions 에 choice 가 실리는지 판별용
+                **brains.action_metadata(),  # compose 선행 프로브 / 기존 menu·free 구분
+                ledger=LEDGER_ON,          # 공간 장부(D17) 여부 — obs(known·돌아가기)를 바꾸는 실행모드 메타
+                scan=SCAN_ON,              # 스캐너(D19) 여부 — obs(구조)·정지 물리를 바꾸는 실행모드 메타
+                                           #   (걸음 정지 규칙이 달라지므로 리플레이·판 비교의 전제)
+                selfstop=SELF_ON,          # 자기 관찰 정지(D21) 여부 — 정지 물리 메타(scan 과 같은 급)
+                dry_signal=DRY_ON,         # 무발견 신호(07-24) 여부 — obs 한 줄이 늘어나는 실행모드 메타
+                hail=HAIL_ON,              # 말 걸림 정지(D24) 여부 — 정지 물리 메타(selfstop 과 같은 급)
+                wait=WAIT_ON,              # wait 동사(D25) 여부 — 메뉴·정지 물리 메타
+                plan=PLAN_ON,              # 작정(D16 then) 여부 — D66(09-13 additive) 러너 기본 0: false 면 then 을 받아도 작정 없음(콜 수·관측 접점 메타)
+                motion=MOTION_ON,          # 이동중 표시(D27) 여부 — obs 동료 항목 메타
+                ally_doing=ALLY_DOING_ON,  # 동료 행동 표시(D27 개정 09-12) 여부 — obs 동료 항목(doing) 표현층 메타
+                social=SOCIAL_ON,          # 채널 분리(07-26) 여부 — 말 걸림이 작정을 부수는지
+                                           #   여부가 달라진다(정지 물리 + 콜 구조 메타)
+                ally_sight=ALLY_SIGHT_ON,  # 동료 시야 면제(07-26) 여부 — **시야 물리 메타**(scan 과 같은 급).
+                                           #   켠 판은 동료가 벽·문을 통과해 보이므로 obs·결정이 근본적으로
+                                           #   달라진다. A/B 비교의 전제라 리플레이·판 대조 시 필수 대조 필드.
+                solo=SOLO_ON,              # 솔로 판(07-29) 여부 — **판의 종류가 다른 메타**. 배치(흩어짐)·
+                                           #   obs(party 명단 부재)·승리 조건(혼자 하강)이 전부 달라지므로
+                                           #   파티 판과는 애초에 비교 대상이 아니다. 대조군 고를 때 필수 필드.
+                graves=GRAVES_ON,          # 묘(D22) 여부 — 피처가 늘어나는 세계 물리 메타
+                events=EVENTS_ON,          # 사건층(D22) 여부 — obs(목격·기억)를 바꾸는 실행모드 메타
+                status=STATUS_ON,          # 상태 태그(D34) 여부 — 몸 물리(걸음·굴림)와 obs 를 바꾸는 메타
+                rest=REST_ON,              # 휴식(D35) 여부 — 메뉴·회복 물리 메타(wait 와 같은 급)
+                relations=RELATIONS_ON,    # 관계 장부(D36) 여부 — obs(뼈·초대)와 시트(살)를 바꾸는 메타
+                trail=TRAIL_ON,            # 자기 행동 궤적(D38) 여부 — obs(trail·intent turn)를 바꾸는 표현층 메타
+                objtags=OBJTAGS_ON,        # 오브젝트 태그(D39) 여부 — obs(sights.features[].tag)·라벨을 바꾸는 표현층 메타
+                floor=FLOOR_ON,            # 층 집계·결산(D40 ②) 여부 — obs(floor·floors)·decisions.floor_line 표현층 메타
+                explore_dirs=EXPLORE_DIRS_ON,   # 방향 탐색 열거(D19 개정 4) 여부 — 메뉴(options)를 바꾸는 표현층 메타(rest 와 같은 급)
+                sayto=SAYTO_ON,            # 지목(D41) 여부 — 말 걸림 정지·대화 뼈가 `to` 지목만 세는 사회층 물리 메타
+                                           #   (정지 물리를 바꾸므로 리플레이·판 비교의 전제 — hail 과 같은 급)
+                say_kind=SAYKIND_ON,       # 말의 종류(D47) 여부 — 정지는 제안만·회의·반복 방지·반응 뼈(정지 물리 메타, sayto 와 같은 급)
+                pending=PENDING_ON,        # 들은 말 보관(D47 배관) 여부 — inbox 에 보관된 옛 말(turn 스탬프)이 섞이는 표현층 메타
+                give=GIVE_ON,              # 건네기(D47 ②, 09-09) 여부 — 메뉴(options give)·소지품 이동 물리 메타(rest 와 같은 급)
+                bond=BOND_ON,              # 친목(D47 ②) 여부 — 메뉴(options bond)·관계 뼈·tick.replies 를 바꾸는 사회층 메타
+                town_buildings=TOWN_BUILDINGS_ON,   # 마을 관측(D60, 09-12) 여부 — 마을 level.features 에 building 피처·obs.town_zone 표현층 메타
+                notices=NOTICES_ON,        # 건물 역할 부품(D61, 09-12) 여부 — obs.notices(게시판·신의 요청)·decisions.oracle_reply 표현층 메타
+                quests=quests is not None, # D69(09-14 additive) 길드 척추 여부 — 의뢰 맡기(use q<n>)·완료 판정·워프 귀환 뒤 마을 계속·보고=종료.
+                                           #   판 모양(종료 조건)을 바꾸는 실행모드 메타(boss 급)
+                town_apart=bool(TOWN_ON and TOWN_APART_ON),   # D69 additive 흩어진 출발(마을 판만) — 배치 메타(solo 급)
+                town_hear=(TOWN_HEAR if TOWN_HEAR == "zone" else "all"),   # D70 additive 마을 사람 지각 — 'zone'(같은 구역·곁)|'all'(옛 전체). 배달·가시·목격 물리 메타(ally_sight 급)
+                npc_brain=bool(npc_brain), # D69 additive 마을 NPC 두뇌 여부 — 이벤트 line 이 LLM 문장(line_src 'brain')일 수 있다는 표현층 메타
+                npc_hail_stop=bool(NPC_HAIL_ON and NPC_HAIL_STOP_ON),   # D76 additive NPC 인사에 걸음을 멈추는 판(0콜)
+                npc_hail=bool(NPC_HAIL_ON),   # D71 additive NPC 가 먼저 거는 인사 여부 — tick.npc_hails·inbox 'npc:' 잡담(마을만). 표현층 메타(콜 0)
+                town_walkers=bool(TOWN_ON and TOWN_WALKERS_ON),   # D73 additive 마을 행인 여부 — level/tick features 의 npc 가 걷는다(walker 표식). 배치 메타
+                obs_ascii=brains.OBS_ASCII,   # wire 직렬화 스위치(D17-4) — LLM 프롬프트 표현 메타
+                obs_pos=brains.OBS_POS,       #   (obs dict 는 불변 — 판독·재현 시 어느 wire 였는지 식별용)
+                notes=brains.NOTES_ON,        # D26 의미 기억(남길 한 줄) 여부 — 표현층 메타(menu 와 같은 급)
+                history=brains.HISTORY_ON,    # D38 개정 2 최근 판단 장부 여부 — 표현층 메타(notes 와 같은 급)
+                dialogue=brains.DIALOGUE_ON,  # D43 대화 기억 여부 — 표현층 메타(notes 와 같은 급)
+                notebook=brains.NOTEBOOK_ON,  # D59 수첩 여부 — 층 전이 descend/ascend.pages·floors[].page·notes 층에서 닫힘
+                prompt_context=brains.PROMPT_CONTEXT_ON,   # D54(09-12 additive) 판단 요청 맨 앞 맥락 한 줄 여부 — 같은 급
+                block_degrade=brains.BLOCK_DEGRADE_ON,     # D62(09-13 additive) 안전 차단 때 몸짓 서술 줄만 접고 재요청(지문 고정) 여부 — 같은 급
+                backend=brains.backend_name(),   # 두뇌 백엔드(2026-07-25 additive) — claude_cli/
+                                           #   anthropic_api/gemini_api/dummy. gm·menu 와 같은 급의
+                                           #   실행모드 메타: 같은 시드라도 백엔드가 다르면 다른 판이다
+                                           #   (모델 접점이 다르다 = A/B 비교의 전제).
+                                           #   ⚠️ 지연·토큰·요청id 는 여기 넣지 않는다 — 실행마다 변하면
+                                           #   verify_stream 결정론(라인 바이트 동일)이 즉시 깨진다.
+                bestiary=iss.snapshot(),   # 판 시작 시점 지식(additive) — 도감이 obs 를 바꾸므로 리플레이·비교의 전제
+                bestiary_progress=iss.progress(),   # D53(09-12 additive): 시작 진행도 {이름:{종키:{n, deep?}}} — 심층 해금
+                                           #   시점이 obs 를 바꾸므로 이것도 전제. 오프라인 소급(bestiary.replay)의 시드
+                boss=BOSS_ON,              # D65(09-13 additive): 보스층·워프게이트 여부 — 최심층 판 모양(보스·봉인 출구·귀환 종료)을 바꾸는 실행모드 메타(town 급)
+                bestiary_defs=lore,        # D63(09-13 additive): 지식 본문 정의 {종키:{name, lore, brief?, unlock?, review?}} — 도감·수첩 창이
+                                           #   캐릭터 상태(모름·등재·심층)만큼 본문을 보여 주는 데 쓴다. 판정 무접촉·정의가 뒤에 바뀌어도 그 판이 알던 본문
+                brain_failure_policy=run_control.POLICY,
+                bestiary_file=bool(BESTIARY_FILE),   # 영속 여부(실행모드 메타 — gm/menu 와 같은 급)
+                party=[{**G.SK.snapshot(b), **{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
+                                             "wdmg", "stealth", "search_r", "persona")},
+                        **({"name": b["name"]} if b.get("name") else {}),   # additive: 보고서·웹의 호칭
+                        **({"id": b["id"]} if b.get("id") else {}),         # D78(09-16) additive: 저장 캐릭터 id — 캠페인·원장 키
+                        **{k: b[k] for k in ("speech", "goal", "background")   # D31(09-05) additive —
+                           if b.get(k)},                                       #   커스텀 시트 원문(있을 때만)
+                        **({"traits": list(b["traits"])} if b.get("traits") else {}),   # 키워드 원본
+                        **({"look": b["look"]} if b.get("look") else {})}   # D37(09-06) 외형 — 뷰어 전용
+                       for b in bots])
+        lvl = {"turn": 0, **d.level_snapshot(),
+               **({'reaction_stats': reaction_book.snapshot()} if reaction_book is not None else {}),
+               "party": [G.bot_snapshot(b) for b in bots]}
+        sw.emit("level", **lvl)
+        iss.consume("level", lvl)          # 발급기도 같은 원장을 본다 — 층의 몹 id→종 지도 구축
+    else:                                  # D79 이어가기 — 같은 기록 파일에 resume 줄(additive)을 붙이고 몸에 요약을 쥐여 준다
+        reaction_book = snap["reaction_book"]
+        run_started = snap["started"]
+        segment = int(snap.get("segment") or 0) + 1
+        stop_info = (snap_meta or {}).get("stop") or snap.get("stop") or {}
+        pages_prev = dict(stop_info.get("pages") or {})
+        for b in bots:                     # 요약을 들고 간다: 멈추기 전에 쓴 수첩 장은 '기억해두기로 한 것'에, 이어간다는 사실은 첫 관측에 한 번
+            pg = pages_prev.get(b["char"])
+            if pg:
+                ns = b.setdefault("notes", [])
+                ns.append(pg)
+                del ns[:-brains.NOTE_MAX]
+            b["floor_notice"] = RESUME_NOTICE % (brains._floor_name(d.depth), int(snap["next_turn"]) - 1,
+                                                RESUME_NOTICE_PAGE if pg else "")
+        sw.emit("resume", turn=int(snap["next_turn"]) - 1, started=time.strftime("%Y-%m-%dT%H:%M:%S"), segment=segment,
+                backend=brains.backend_name(), depth=d.depth,
+                stopped=(stop_info.get("reason") or None),          # 앞 조각이 어떻게 끝났나: user(수첩 쓰고 멈춤)·user_paused(판단 정지 중 멈춤)·None(끊김·크래시)
+                **({"pages": pages_prev} if pages_prev else {}),   # 멈출 때 쓴 수첩 장(캐릭터별) — 이어가는 몸이 들고 간다
+                party=[{"char": b["char"], "hp": b["hp"], "alive": b["alive"]} for b in bots])
+    run_id = "%s@%s" % (DUNGEON_SEED, run_started)   # 캠페인(D78)의 판 식별자 — 이어가도 같은 판
 
     gmtag = "Sonnet GM" if GM_ON else "GM 없음"
     roster = "·".join((b.get("name") or b["job"]) for b in bots)
@@ -1288,17 +1433,53 @@ def main():
           % (roster, gmtag, DUNGEON_W, DUNGEON_H, DEPTHS, N_MON, N_TRAP, N_LURK, DUNGEON_SEED))
     if START_BOSS:                          # D67 프리셋 — 관전·로그에 시작 조건을 남긴다
         event("=== 프리셋(D67): 최심층 지하 %d층 보스룸 앞에서 시작 — 보스와 봉인된 워프게이트가 문 너머에 있다 ===" % d.depth)
+    if snap is not None:
+        event("=== 원정을 이어간다 — 지난번 t%d(%s)에서 멈춘 몸 그대로 (이어가기 %d번째%s) ==="
+              % (int(snap["next_turn"]) - 1, brains._floor_name(d.depth), segment,
+                 ", 수첩 %d장 들고" % len(pages_prev) if pages_prev else ""))
     inbox = {b["char"]: [] for b in bots}   # 봇별 받은편지함 (동료가 지난 턴 한 say).
                                             # 빈 dict 아닌 전 봇 키 — 스트림 tick.inbox 형태 고정(소비자 인덱싱)
     pending = {b["char"]: [] for b in bots}   # D47 배관 — 걷는 동안 들린 말의 보관함(결정 때 함께 읽힘)
     open_props = {}                         # D47 제안 장부 {받은 봇: {한 봇: turn}} — 상대의 다음 결정까지 열려 있다
     open_acts = {}                          # D47 ② 친목·건네기 장부 {받은 봇: {한 봇: 종류}} — 반응은 상대의 다음 결정에서 형태로
+    if snap is not None:                    # D79: 편지함·보관함·장부도 얼린 그대로
+        inbox, pending = snap["inbox"], snap["pending"]
+        open_props, open_acts = snap["open_props"], snap["open_acts"]
     write_map(d, bots, 0)
     time.sleep(1.0)
 
     turn = 0
     says = {}
-    for turn in range(1, MAX_TURNS + 1):
+    first_turn = int(snap["next_turn"]) if snap is not None else 1   # D79: 이어가기는 멈춘 다음 틱부터(틱 번호 연속 — 같은 판)
+    segment = segment if snap is not None else 0
+    stopped_now = None                       # D79 곱게 멈춤이 이 판을 닫았나(루프 뒤 end 를 쓰지 않는다 — 끊긴 판 = 이어갈 판)
+
+    def _snap_core():                        # D79 스냅샷 몸 — 루프 머리의 지역 상태 전부(같은 객체 그래프로 한 번에 피클: known·quests·reaction_book 공유 보존)
+        return {"run_id": run_id, "seed": DUNGEON_SEED, "started": run_started, "max_turns": MAX_TURNS, "world": _world_fingerprint(),
+                "sheets": sheets, "d": d, "bots": bots, "saved": saved, "fallen": fallen, "inbox": inbox, "pending": pending,
+                "open_props": open_props, "open_acts": open_acts, "quests": quests, "iss": iss, "rs": rs,
+                "reaction_book": reaction_book, "last_oracle_id": last_oracle_id, "returned": returned,
+                "returned_party": returned_party, "segment": segment}
+
+    def _snap_meta(next_turn, stop=None):    # 론처가 읽는 요약(json) — 피클을 열지 않고도 '지하 3층 t158 에서 멈춤'을 안다
+        return {"run_id": run_id, "seed": DUNGEON_SEED, "started": run_started, "next_turn": next_turn, "turn_last": next_turn - 1,
+                "depth": d.depth, "segment": segment, "backend": brains.backend_name(),
+                "party": [{"char": b["char"], "name": b.get("name") or b["job"], "id": b.get("id"), "job": b["job"],
+                           "hp": b["hp"], "alive": b["alive"]} for b in bots],
+                "fallen": list(fallen), "stop": stop}
+
+    for turn in range(first_turn, MAX_TURNS + 1):
+        req = run_control.stop_requested(STATE)   # D79 곱게 멈춤(론처 '수첩 쓰고 멈춤') — 이 틱을 시작하기 전에, 지난 틱까지의 기록이 진실
+        if req:
+            pages = stop_pages(d, bots, names, turn - 1, req)
+            sw.emit("stopped", turn=turn - 1, reason="user", depth=d.depth, **({"pages": pages} if pages else {}))   # D79 additive
+            stop_rec = {"reason": "user", "pages": pages}
+            _take_snapshot(sw, {**_snap_core(), "next_turn": turn, "stop": stop_rec}, _snap_meta(turn, stop_rec))
+            event("=== 원정을 멈춘다(t%d, %s) — 마지막 기록에서 이어갈 수 있다%s ==="
+                  % (turn - 1, brains._floor_name(d.depth), " · 수첩 %d장" % len(pages) if pages else ""))
+            stopped_now = "user"
+            break
+        _take_snapshot(sw, {**_snap_core(), "next_turn": turn, "stop": None}, _snap_meta(turn))   # 틱마다 — 끊겨도 여기서 이어간다
         d.turn = turn       # 장부(D17) 목격 스탬프 — 판정 무관여, "언제 봤나"의 단일 원천
         if PENDING_ON:                        # D47 배관: 걷는 동안 들은(안 세운) 말을 이번 결정에 함께 읽힌다
             inbox = merge_inbox(pending, inbox)
@@ -1333,7 +1514,13 @@ def main():
             elif last_oracle_id:
                 event("🔮 신의 요청이 거두어졌다")
             last_oracle_id = oracle_now
-        decisions = brains.think_all(d, bots, inbox, on_error=lambda errors: brain_pause.wait(turn, errors))
+        try:
+            decisions = brains.think_all(d, bots, inbox, on_error=lambda errors: brain_pause.wait(turn, errors))
+        except run_control.StopRequested:          # D79: 판단 정지 대기 중 사용자가 멈춤 — 루프 머리 스냅샷(이 틱 전)이 진실. 조용히 닫는다
+            snapshot.write_meta(STATE, _snap_meta(turn, {"reason": "user_paused", "pages": {}}))
+            event("=== 판단 정지 중에 원정을 멈춘다(t%d 전) — 마지막 기록에서 이어갈 수 있다 ===" % turn)
+            stopped_now = "user_paused"
+            break
         brain_pause.resolved(turn)
         for c_, dec_ in (decisions or {}).items():   # D61 신탁 응답 — 캐릭터 장부(요청 id 별 한 번)·events.log. 판정 없음
             orp = dec_.get("oracle_reply") if isinstance(dec_, dict) else None
@@ -1660,6 +1847,13 @@ def main():
                     returned, returned_party = True, [b["char"] for b in survivors]
                     break
 
+    if stopped_now:                                  # D79 곱게 멈춤 — end 없이 닫는다(끊긴 판 = 이어갈 판). stopped 줄·스냅샷이 남았다
+        sw.close()
+        if GM_ON:
+            gm_q.put(None)
+            gm_thread.join(timeout=gm.TIMEOUT + 10)
+        write_map(d, bots, turn)
+        return
     won = [b["char"] for b in bots if b["won"]]
     dead = fallen + [b["char"] for b in bots if not b["alive"] and b["char"] not in fallen]
     left = [b["char"] for b in bots if b["alive"] and not b["won"]]
@@ -1699,6 +1893,7 @@ def main():
             **({"warped": True} if (quests is not None and quests.get("returned") is not None) else {}),   # D69 additive — 워프로 돌아온 판
             summary=summary)                          # D58 additive — 오프라인 `python run_summary.py` 와 같은 계산
     sw.close()
+    snapshot.remove(STATE)                        # D79 끝난 판은 이어갈 몸이 없다(스냅샷 삭제)
     for ln in run_summary.render(summary, names):    # 1차 부검은 여기서(파트너 "이러려고 결산 기능을 만든 거잖아")
         event(ln)
     if GM_ON:                                     # 마지막 연출은 기다려 준다(최대 타임아웃+여유)

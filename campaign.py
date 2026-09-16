@@ -10,6 +10,7 @@
     시작 때 runs/ 로 복사돼도 같은 run_id 라 두 번 세지 않는다.
   · status: `end` 있음 = ended(outcome) · 없고 러너가 살아 있음 = running · 없고 러너 없음 = stopped(끊긴 원정, ②-b 이어가기의 대상).
   · 저장한 캐릭터만 이어진다: run_meta.party[].id 가 없는 캐릭터(즉석 슬롯·기본 파티)는 캠페인에 안 실린다(1회용).
+  · 이어간 판(D79): 같은 파일에 `stopped`(멈추며 쓴 수첩 장)·`resume` 줄이 붙고 틱이 이어진다 — run_id 그대로 한 항목(segments = 이어간 횟수).
   · 파일 = <파티 폴더>/campaign.json {version, characters{pid: {name, runs{run_id: 항목}}}, sources{키: "크기:mtime"}} — 아카이브는
     한 번만 읽고(서명 같으면 건너뜀), 현재 판(state)은 러너가 살아 있는 동안 부를 때마다 다시 읽는다.
 LLM 0콜 · 엔진·러너 무접촉 · 순수 파일. 론처(launcher.Ctx.campaign)가 /api/characters 때 refresh 한다.
@@ -41,10 +42,11 @@ def _iter(path):
 
 def project(path, running=False):
     """스트림 하나 → 판 투영(마지막 줄까지). run_meta 가 없으면 None.
-    {run_id, seed, started, status, outcome, warped, turn_last, depth_last, depth_max, quests_accepted[], quests_done[],
+    {run_id, seed, started, status, outcome, warped, turn_last, depth_last, depth_max, segments, stops, quests_accepted[], quests_done[],
      party[{char, name, id?, job}], chars{char: {name, id, job, alive, hp, died_turn, pages[], book_lines[]}}}"""
     meta = None
     depth = depth_max = turn_last = 0
+    segments = stops = 0                      # D79 이어간 횟수·수첩 쓰고 멈춘 횟수
     end = None
     chars = {}
     for rec in _iter(path):
@@ -79,6 +81,14 @@ def project(path, running=False):
             for ch, page in (rec.get("pages") or {}).items():
                 if str(ch) in chars and page:
                     chars[str(ch)]["pages"].append({"turn": turn_last, "depth": depth, "text": page})
+        elif k == "stopped":                       # D79 수첩 쓰고 멈춤 — 멈추기 전에 쓴 수첩 장(캐릭터별, stop 표식)
+            turn_last = int(rec.get("turn") or turn_last)
+            stops += 1
+            for ch, page in (rec.get("pages") or {}).items():
+                if str(ch) in chars and page:
+                    chars[str(ch)]["pages"].append({"turn": turn_last, "depth": depth, "text": page, "stop": True})
+        elif k == "resume":                        # D79 이어가기 — 같은 판이 이어진다(run_id 그대로)
+            segments += 1
         elif k == "end":
             end = rec
             turn_last = int(rec.get("turn") or turn_last)
@@ -89,7 +99,7 @@ def project(path, running=False):
             "seed": meta.get("seed"), "started": meta.get("started"),
             "status": "ended" if end else ("running" if running else "stopped"),
             "outcome": (end or {}).get("outcome"), "warped": bool((end or {}).get("warped")),
-            "turn_last": turn_last, "depth_last": depth, "depth_max": depth_max,
+            "turn_last": turn_last, "depth_last": depth, "depth_max": depth_max, "segments": segments, "stops": stops,
             "quests_accepted": [q.get("id") for q in (quests.get("accepted") or []) if isinstance(q, dict)],
             "quests_done": sorted((quests.get("done") or {}).keys()),
             "party": [{"char": c, "name": v["name"], "id": v.get("id"), "job": v.get("job")} for c, v in sorted(chars.items())],
@@ -174,7 +184,7 @@ class Book:
             ch["name"] = v["name"]
             entry = {"run_id": proj["run_id"], "seed": proj["seed"], "started": proj["started"], "status": proj["status"],
                      "outcome": proj["outcome"], "warped": proj["warped"], "turn_last": proj["turn_last"],
-                     "depth_last": proj["depth_last"], "depth_max": proj["depth_max"],
+                     "depth_last": proj["depth_last"], "depth_max": proj["depth_max"], "segments": proj.get("segments", 0),
                      "alive_last": v["alive"], "hp_last": v["hp"], "died_turn": v["died_turn"],
                      "quests_accepted": proj["quests_accepted"], "quests_done": proj["quests_done"],
                      "party": [{"char": oc, "name": nm, "id": proj["chars"][oc].get("id")} for oc, nm in sorted(others.items()) if oc != c],
@@ -219,5 +229,5 @@ class Book:
                 "deaths": sum(1 for e in rs if e.get("died_turn") is not None),
                 "depth_max": max((e.get("depth_max") or 0) for e in rs),
                 "last": {"started": last.get("started"), "status": last.get("status"), "outcome": last.get("outcome"),
-                         "depth_last": last.get("depth_last"), "turn_last": last.get("turn_last"),
+                         "depth_last": last.get("depth_last"), "turn_last": last.get("turn_last"), "segments": last.get("segments", 0),
                          "label": "%s층 %s" % (last.get("depth_last"), outcome_kr(last))}}

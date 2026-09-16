@@ -91,6 +91,7 @@ launcher.py (웹 론처 :8000, 판마다 서브프로세스) ─→ show_runner.
 심사용 공개 서버(`server.py` — 심사위원별 세션, 자기 키로 판 시작): <https://botpicdun.duckdns.org/>.
 계정은 **키의 지문**이다(D77): 가입·비밀번호 없이 자기 Gemini 키로 들어오면 캐릭터와 판 기록이 계정 폴더에 남고, 키 자체는 저장되지 않는다.
 저장한 캐릭터는 원정을 넘어 기억한다(D78): 원정 이력·수첩 장·도감과 인식이 캐릭터별로 쌓인다(끊긴 판도 끊긴 자리까지). 몸은 매 원정 새로 태어난다.
+멈춘 판은 마지막 기록에서 이어간다(D79): 러너가 틱마다 몸을 얼려 두고(스냅샷), 론처의 '이어가기'가 그 자리에서 같은 판을 계속 쓴다 — 멈출 때 캐릭터들이 수첩 한 장씩 적어 들고 간다.
 첫 실판은 27턴 귀환·API 전송 50회로 검증했다. 현재 판당 API 전송 50회 시험 제한은 유지 중이다. [배포·검증 상태](scripts/vm/README.md).
 
 **1. 준비물**
@@ -141,7 +142,7 @@ wonderland.bat              ← 더블클릭 → [L] LAUNCHER      (또는  pyth
 ## 검증과 데이터
 
 ```bash
-bash _run_gates.sh                                     # 결정론 게이트 66종 일괄 (Git Bash, LLM 0콜, 라이브 데이터와 격리)
+bash _run_gates.sh                                     # 결정론 게이트 67종 일괄 (Git Bash, LLM 0콜, 라이브 데이터와 격리)
 cd game && npm run smoke                               # 관전 클라이언트 헤드리스 스모크
 python tools/analyze_run.py runs/stream-XXXX.jsonl     # 지난 판 0콜 부검(이동·전투·대화 통계)
 python tools/run_notes.py   runs/stream-XXXX.jsonl     # 도감평·수첩 텍스트 덤프
@@ -149,8 +150,8 @@ python tools/unheard_audit.py runs/stream-XXXX.jsonl   # 동료를 지목한 말
 python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer.html   # 단일 HTML 리플레이
 ```
 
-- 게이트 `verify_*.py` **66종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
-  도감·수첩·결산·보스층·차단 접기·공개 서버·계정(키 지문)·캠페인(저장 캐릭터의 원정 기록)·API 호출 상한·길드 척추(의뢰·보고·NPC 두뇌)를 LLM 0콜로 검사한다.
+- 게이트 `verify_*.py` **67종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
+  도감·수첩·결산·보스층·차단 접기·공개 서버·계정(키 지문)·캠페인(저장 캐릭터의 원정 기록)·이어가기(스냅샷=끊기지 않은 판)·API 호출 상한·길드 척추(의뢰·보고·NPC 두뇌)를 LLM 0콜로 검사한다.
 - `runs/`의 판 기록은 실LLM으로 얻은 원본 데이터라 저장소에 보존한다. 전부 리플레이 가능하다.
 - 관측 표현 A/B 실험(사전등록): [docs/D19_experiment_summary.md](docs/D19_experiment_summary.md).
 
@@ -158,7 +159,7 @@ python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer
 
 엔진·러너·론처는 루트, 프롬프트는 `prompts/`, 정의는 `entities/`, 도구는 `tools/`, 관전 클라이언트는 `game/`, 판 기록은 `runs/`,
 그림 원본은 `art/`. 코드와 파일명에 남아 있는 `wonderland`(원더랜드)는 내부 코드명이다. 전체 지도와 정리 기준은 [docs/repo-map.md](docs/repo-map.md).
-설계 정본은 [`design/HARNESS_DESIGN.md`](design/HARNESS_DESIGN.md)(D1~D67), 변경 기록은 [docs/CHANGELOG.md](docs/CHANGELOG.md),
+설계 정본은 [`design/HARNESS_DESIGN.md`](design/HARNESS_DESIGN.md)(D1~D79), 변경 기록은 [docs/CHANGELOG.md](docs/CHANGELOG.md),
 판 하나를 이야기로 쓴 [연대기](docs/chronicles)와 [개발일지](docs/devlog)도 있다.
 
 ## 상태 (2026-09-14)

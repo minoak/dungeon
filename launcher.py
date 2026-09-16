@@ -17,11 +17,12 @@ API(JSON):
   POST /api/characters/delete  {id} → 해당 프리셋 삭제 → {ok:true}
   POST /api/party    {"slots":[{job,traits[],name,sex,background?,persona?,look?}, ...]} → sheetkit 조립 →
                      러너의 load_party 로 재검증 → party_custom.json 저장 (실패 400 + 이유 한 줄)
-  POST /api/start    {"map":"normal|big","town":bool,"brain":"gemini_api|claude_cli|anthropic_api|dummy",
+  POST /api/start    {"resume":true, "brain"?, "key"?} → 멈춘 판 이어가기(D79 — 스냅샷+그 판을 시작한 옵션, 같은 기록 파일에 append) 또는
+                     {"map":"normal|big","town":bool,"brain":"gemini_api|claude_cli|anthropic_api|dummy",
                       "seed":int|null|"random","party":"custom|default","mode":"standard|classic"} → 이전 판 보존(live.bat 규칙)
                      → 러너 subprocess. 동시 1판(실행 중이면 409)
-  GET  /api/status   {running,pid,started,seed,party,turn,outcome,viewer,game}
-  POST /api/stop     러너 종료
+  GET  /api/status   {running,pid,started,seed,party,turn,outcome,viewer,game, stopping, resume:{run_id,seed,turn_last,depth,party,stopped,pages}|null}
+  POST /api/stop     {graceful?:bool, pages?:bool} — graceful 이면 러너가 다음 틱 머리에서 (수첩 한 장씩 쓰고) 스스로 닫는다(D79), 아니면 즉시 종료
   POST /api/retry    {pause_id} → 판단 정지 중인 같은 러너에서 모델 재시도
   GET  /game/        게임 클라이언트(game/dist/ 빌드 산출물 — 초점 캐릭터 카메라 뷰어, 2026-09-09 M3/B5).
                      /game → 302 /game/ · /game/… 은 game/dist/… 서빙 · 빌드가 없으면 503 한 장(빌드 명령 안내)
@@ -51,6 +52,7 @@ import sheetkit                                   # noqa: E402
 import campaign                                   # noqa: E402  # D78 캠페인 = 판 기록의 0콜 투영(저장 캐릭터별 원정 기록)
 import skill_schema                              # noqa: E402
 import run_control                               # noqa: E402
+import snapshot                                  # noqa: E402  # D79 이어가기 — 멈춘 판의 요약(snapshot.json)만 읽는다(피클은 러너 몫)
 from character_presets import PresetStore         # noqa: E402
 
 MAPS = {                                          # 시작 옵션 → 러너 환경변수(wonderland.bat 메뉴 값 그대로)
@@ -105,11 +107,46 @@ class Runner:
             shutil.copy2(src, dst)
         return dst
 
+    RUN_OPTS = "run_opts.json"                   # D79: 이 판을 시작한 옵션 — 이어가기가 같은 세계 설정으로 러너를 띄우는 데 쓴다
+
+    def _write_run_opts(self, opts):
+        clean = {k: v for k, v in opts.items() if k not in ("key", "resume")}   # 키는 절대 안 남긴다(BYOK 는 프로세스 env 만)
+        run_control.write_json(os.path.join(self.state_dir, self.RUN_OPTS), {"opts": clean, "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+
+    def _read_run_opts(self):
+        doc = run_control.read_json(os.path.join(self.state_dir, self.RUN_OPTS))
+        return doc if isinstance(doc.get("opts"), dict) else None
+
+    def resumable(self, status=None):
+        """D79 이어갈 몸이 있나 — 러너가 없고 snapshot.json 이 있고 그 판이 state/stream.jsonl 의 판과 같고 끝나지 않았을 때 요약 dict, 아니면 None."""
+        if self.running():
+            return None
+        meta = snapshot.read_meta(self.state_dir)
+        if not meta:
+            return None
+        st = status or {}
+        if st.get("outcome") or (st.get("seed") is not None and st.get("seed") != meta.get("seed")):
+            return None                           # 끝난 판·다른 판의 스냅샷(러너가 시작·끝에 지우지만 한 번 더 본다)
+        stop = meta.get("stop") or {}
+        return {k: meta.get(k) for k in ("run_id", "seed", "started", "turn_last", "depth", "segment", "party", "saved_at", "backend")} | {
+            "stopped": stop.get("reason"), "pages": sorted(stop.get("pages") or {})}
+
     def start(self, opts, party_path, default_brain=None, extra_env=None):
-        """extra_env: 이 판의 러너에만 주는 환경변수(공개 서버 server.py 의 BYOK 키 — 부모 환경에 안 남고 프로세스에만)."""
+        """extra_env: 이 판의 러너에만 주는 환경변수(공개 서버 server.py 의 BYOK 키 — 부모 환경에 안 남고 프로세스에만).
+        opts.resume(D79): 멈춘 판을 이어간다 — 화면의 옵션은 두뇌만 받고 나머지는 그 판을 시작한 옵션(run_opts.json)·스냅샷의 시드로."""
         with self.lock:
             if self.running():
                 raise Conflict("이미 판이 진행 중이다 — 중지하거나 끝나길 기다려라")
+            resume = bool(opts.get("resume"))
+            meta = None
+            if resume:
+                meta = self.resumable(self.status())
+                if not meta:
+                    raise BadRequest("이어갈 원정이 없다 — 멈춘 판의 스냅샷이 없거나 그 판은 이미 끝났다")
+                saved = self._read_run_opts()
+                if not saved:
+                    raise BadRequest("이어갈 판의 시작 옵션이 없다 — 새 원정으로 시작하라")
+                opts = {**saved["opts"], "seed": meta.get("seed"), **({"brain": opts["brain"]} if opts.get("brain") else {})}
             env = dict(os.environ)
             if extra_env:
                 env.update({k: str(v) for k, v in extra_env.items()})
@@ -149,7 +186,7 @@ class Runner:
             if which == "default":
                 env["DUNGEON_PARTY_FILE"] = os.path.join(self.root, "party.json")
             else:
-                if not os.path.exists(party_path):
+                if not os.path.exists(party_path) and not resume:   # 이어가기는 스냅샷의 시트를 쓴다(파티 파일이 없어도 된다)
                     raise BadRequest("저장된 커스텀 파티가 없다 — 먼저 파티를 저장하라(또는 기본 파티 선택)")
                 env["DUNGEON_PARTY_FILE"] = party_path
             m = str(opts.get("map") or "normal")
@@ -179,7 +216,13 @@ class Runner:
             elif not env.get("DUNGEON_BESTIARY_FILE"):         #   옵션 '도감 이월'(bestiary=true)을 켠 판만 로컬 원장에 읽고 쓴다
                 env["DUNGEON_BESTIARY_FILE"] = os.path.join(self.root, "bestiary.json")
             os.makedirs(self.state_dir, exist_ok=True)
-            self.preserve_previous()
+            if resume:                                   # D79: 같은 기록 파일에 이어 쓴다(보존 복사 없음) — 러너가 스냅샷 자리까지 자르고 append
+                env["DUNGEON_RESUME"] = os.path.join(self.state_dir, snapshot.PKL)
+                env["DUNGEON_RUNS_DIR"] = self.runs_dir
+            else:
+                self.preserve_previous()
+                snapshot.remove(self.state_dir)          # D79: 새 원정 = 멈춘 판을 놓아 준다(그 기록은 방금 runs/ 로 복사됐다)
+                self._write_run_opts(opts)
             run_control.reset(self.state_dir)
             with io.open(os.path.join(self.state_dir, "runner.out"), "w", encoding="utf-8") as out:
                 self.proc = subprocess.Popen([sys.executable, os.path.join(self.root, "show_runner.py")],
@@ -188,18 +231,32 @@ class Runner:
             self.seed_requested = env["DUNGEON_SEED"]
             return {"ok": True, "pid": self.proc.pid, "seed": self.seed_requested, "brain": brain,
                     "party": which, "map": m, "town": bool(opts.get("town")),
-                    "action_mode": action_mode, "mode": mode}
+                    "action_mode": action_mode, "mode": mode,
+                    "resumed": resume, **({"from_turn": meta.get("turn_last")} if meta else {})}   # D79 additive
 
-    def stop(self):
+    def stop(self, graceful=False, pages=True, wait=45.0):
+        """러너 종료. graceful(D79 '수첩 쓰고 멈춤'): state/stop.json 을 두고 러너가 다음 틱 머리에서 스스로 닫기를 기다린다(수첩 캐릭터당 1콜 → 몇 초 ~
+        한 틱) — 기다림이 끝나면 terminate(루프 머리 스냅샷이 진실이라 잃는 건 수첩뿐). graceful 이 아니면 즉시 terminate(= 끊김. 역시 이어갈 수 있다)."""
         with self.lock:
             if not self.running():
+                run_control.clear_stop(self.state_dir)
                 return {"ok": True, "stopped": False}
-            self.proc.terminate()
-            try:
-                self.proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.proc.kill()
-            return {"ok": True, "stopped": True}
+            done = False
+            if graceful:
+                run_control.request_stop(self.state_dir, pages=pages)
+                try:
+                    self.proc.wait(timeout=max(1.0, float(wait)))
+                    done = True
+                except subprocess.TimeoutExpired:
+                    done = False
+            if not done:
+                self.proc.terminate()
+                try:
+                    self.proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.proc.kill()
+            run_control.clear_stop(self.state_dir)
+            return {"ok": True, "stopped": True, "graceful": bool(graceful and done)}
 
     def oracle_set(self, text):
         """D61 신탁 소켓(2026-09-12) — 사용자 한 줄을 state/oracle.json 에 둔다(러너가 틱마다 읽어 신전 문턱 근처 캐릭터의
@@ -264,6 +321,8 @@ class Runner:
                         break
         paused = run_control.read_json(os.path.join(self.state_dir, run_control.PAUSE_FILE))
         out["brain_pause"] = paused if out["running"] and paused.get("pid") == out["pid"] else None
+        out["stopping"] = bool(out["running"] and run_control.stop_requested(self.state_dir))   # D79 곱게 멈추는 중(수첩을 쓰는 중) — additive
+        out["resume"] = self.resumable(out)                                                     # D79 이어갈 몸(멈춘 판 요약) — additive
         return out
 
     def retry(self, pause_id):
@@ -504,7 +563,8 @@ class Handler(SimpleHTTPRequestHandler):
             if path == "/api/oracle":                    # D61 신탁 소켓 — {"text": "…"} (빈 문자열 = 거둠)
                 return self._json(200, self.ctx.runner.oracle_set(body.get("text") or ""))
             if path == "/api/stop":
-                return self._json(200, self.ctx.runner.stop())
+                return self._json(200, self.ctx.runner.stop(graceful=bool(body.get("graceful")),   # D79 {graceful, pages}
+                                                            pages=body.get("pages", True) is not False))
             return self._json(404, {"error": "없는 API"})
         except BadRequest as e:
             return self._json(400, {"error": str(e)})

@@ -232,12 +232,21 @@ def notebook_page(bot, entry, names, roster=None, up=False):
     엔진·러너는 내용을 읽지 않는다(엔진 불가침 — floor_line·relation_line 과 같은 살)."""
     if not NOTEBOOK_ON:
         return None
-    nm = lambda c: names.get(str(c), "봇%s" % c)
     fname = _floor_name(entry.get("depth"))
     L = [NOTEBOOK_MARK, "",
          "%s을(를) 떠난다. 아래는 이 층에서 세계가 센 횟수와 네가 남긴 기록이다. 이 층에서 무슨 일이 있었고 너는 어땠는지, "
          "네 문장으로 수첩 한 장을 쓴다(%d자 안). 상대 하나하나의 평가는 도감 한줄평이 따로 맡으니, 여기엔 이 층의 이야기와 "
          "네 마음을 적는다. 다음 층에서도 이 장을 다시 읽는다." % (fname, NOTEBOOK_LEN), ""]
+    L += _page_material(bot, entry, names)
+    L += ["", '응답은 JSON 한 줄: {"page": "수첩 한 장"}']
+    prompt = _with_context(_sheet(bot, roster) + "\n" + "\n".join(L))
+    return _ask_page(prompt, bot, "notebook", entry.get("depth"))
+
+
+def _page_material(bot, entry, names):
+    """수첩 재료(D59) — 층 결산 뼈 + 남긴 한 줄 + 최근 대화 + 판단 장부 + 지난 장. notebook_page(층을 떠날 때)·stop_page(D79 멈출 때) 공용."""
+    nm = lambda c: names.get(str(c), "봇%s" % c)
+    L = []
     L.append("## 세계가 센 횟수 (t%d~t%d, %d틱)" % (int(entry.get("t0") or 0), int(entry.get("t1") or 0),
                                                  int(entry.get("t1") or 0) - int(entry.get("t0") or 0)))
     L.append("- " + (_floor_counts(entry.get("n") or {}) or "특별한 일 없음"))
@@ -257,12 +266,15 @@ def notebook_page(bot, entry, names, roster=None, up=False):
     prev = [f for f in (bot.get("floors") or []) if f.get("page")][-NOTEBOOK_PREV:]
     if prev:
         L += ["", "## 지난 층들의 수첩 (이미 쓴 것)"] + ['- %s: "%s"' % (_floor_name(f.get("depth")), f["page"]) for f in prev]
-    L += ["", '응답은 JSON 한 줄: {"page": "수첩 한 장"}']
-    prompt = _with_context(_sheet(bot, roster) + "\n" + "\n".join(L))
+    return L
+
+
+def _ask_page(prompt, bot, kind, depth):
+    """수첩 한 장 요청(1콜, 재시도 0) — 실패·차단·예외는 None(판을 세우지 않는다 — 살은 없으면 뼈만 남는다)."""
     try:
         res = _call_claude(prompt, "haiku")
     except Exception as e:                            # 두뇌 예외도 판을 세우지 않는다(수첩은 살 — 없으면 뼈만 남는다)
-        _brainlog(kind="notebook", char=bot.get("char"), error=_head(e))
+        _brainlog(kind=kind, char=bot.get("char"), error=_head(e))
         return None
     raw, why = res if isinstance(res, tuple) else (res, None)
     obj, _ = _extract(raw)
@@ -270,8 +282,28 @@ def notebook_page(bot, entry, names, roster=None, up=False):
     if not page and raw and not str(raw).lstrip().startswith("{"):
         page = str(raw).strip()                       # JSON 없이 문장만 돌아오면 그대로 받는다(관대 — 살은 내용을 안 읽는다)
     page = page[:NOTEBOOK_LEN]
-    _brainlog(kind="notebook", char=bot.get("char"), depth=entry.get("depth"), ok=bool(page), why=why)
+    _brainlog(kind=kind, char=bot.get("char"), depth=depth, ok=bool(page), why=why)
     return page or None
+
+
+STOP_MARK = "# 수첩 — 원정이 여기서 잠시 멈춘다"   # D79(09-16) ⚠️문구 임시(파트너 문장 대기)
+
+
+def stop_page(bot, entry, names, roster=None):
+    """D79 이어가기(09-16 파트너 "던전 내의 기록을 요약해서 들고 있게"): 사람이 원정을 멈출 때 캐릭터가 쓰는 수첩 한 장(캐릭터당 1콜, 재시도 0).
+    층을 떠나는 장(notebook_page)과 재료는 같고 물음이 다르다 — "지금까지 무슨 일이 있었고 무엇을 하려던 참이었나". 이어갈 때 이 장은
+    '기억해두기로 한 것'(notes)에 실려 첫 결정부터 읽힌다. 엔진·러너는 내용을 읽지 않는다(수첩과 같은 살)."""
+    if not NOTEBOOK_ON:
+        return None
+    fname = _floor_name(entry.get("depth"))
+    L = [STOP_MARK, "",
+         "원정이 여기(%s, t%d)서 잠시 멈춘다 — 세계가 멈추는 것이지 네가 떠나는 게 아니다. 다음에 이어갈 때 너는 이 장을 먼저 읽는다. "
+         "지금까지 이 층에서 무슨 일이 있었고 너는 어땠는지, 그리고 무엇을 하려던 참이었는지 네 문장으로 한 장을 쓴다(%d자 안)."
+         % (fname, int(entry.get("t1") or 0), NOTEBOOK_LEN), ""]   # ⚠️문구 임시(파트너 문장 대기)
+    L += _page_material(bot, entry, names)
+    L += ["", '응답은 JSON 한 줄: {"page": "수첩 한 장"}']
+    prompt = _with_context(_sheet(bot, roster) + "\n" + "\n".join(L))
+    return _ask_page(prompt, bot, "stop_page", entry.get("depth"))
 
 
 # ── D69 마을 NPC 두뇌(2026-09-14 파트너 "마을에서만 호출을 통한 npc 를 몇 명만 더 만들어 둬서 내용을 보려고") ──

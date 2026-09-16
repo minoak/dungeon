@@ -325,6 +325,9 @@ class Tap:
         self.collector.consume(kind, fields)
         self.writer.emit(kind, **fields)
 
+    def tell(self):
+        return self.writer.tell()          # D79 스냅샷 자리(바이트)
+
     def close(self):
         self.writer.close()
 

@@ -44,6 +44,9 @@
 4. **상한**: 서버 전체 동시 `BOTPIKDUN_MAX_RUNS`(기본 3)판 → 429 · 세션당 1판 → 409 · IP 당 시간당 시작 `BOTPIKDUN_START_PER_HOUR`(기본 12) → 429 · 메모리 세션 500 · 판당 600틱(러너 기본).
 5. **계정**(D77, 09-16): 키의 지문(HMAC-SHA256, 서버 비밀 섞음)이 계정이다. `POST /api/login` 이 구글에 키 생존을 묻고(모델 목록 1회, 과금 없음) 지문으로 계정을 찾거나 만든 뒤 번호표를 묶는다 — 그 뒤 그 번호표의 `state/`·`runs/`·캐릭터는 `<BOTPIKDUN_DATA>/accounts/<id>/`. 키는 저장·기록되지 않는다(지문·별명만). 열쇠 여러 개(키 교체는 로그인 상태에서 새 키 연결), 마지막 열쇠 해제 불가, 로그인 IP 시간당 `BOTPIKDUN_LOGIN_PER_HOUR`(기본 30) → 429. **서버 비밀**은 `BOTPIKDUN_SECRET` 환경변수, 없으면 `<BOTPIKDUN_DATA>/secret` 을 첫 기동 때 만든다(0600) — 이 파일이 바뀌면 지문이 전부 바뀌어 모든 계정이 고아가 되므로 데이터 폴더와 함께 백업한다. 계정 판의 도감 원장(`accounts/<id>/bestiary.json`, 저장 캐릭터만)과 원정 기록(`campaign.json`, D78)도 같은 폴더에 쌓인다.
 5. `/` → 론처 화면 · `/healthz` → `{running, max_runs}` · `--host 127.0.0.1` 고정(외부에서는 Caddy 를 거쳐서만) · `.jsonl` 은 `text/plain`(Caddy 압축 매치).
+6. **이어가기**(D79, 09-16): 러너가 틱마다 `state/snapshot.pkl`(+`snapshot.json`)에 판의 몸을 얼린다. `systemctl restart`·배포로 러너가 죽어도 그 번호표(계정이면 `accounts/<id>/state/`)의
+   론처 타이틀에 '이어가기'가 뜨고, 같은 판을 마지막 기록에서 계속 쓴다(키는 다시 넣는다 — 저장 안 함). 엔진이 바뀌어 피클이 안 맞으면 러너가 옛 기록을 `runs/` 로 대피시키고
+   새 판을 연다(`run_meta.resume_failed`). 익명 번호표는 TTL 뒤 폴더가 지워지므로 스냅샷도 함께 사라진다(계정은 남는다).
 
 로컬 확인: `BOTPIKDUN_BRAIN=dummy python server.py --port 8031` 로 띄우면 LLM 0콜로 화면·세션·키 칸을 볼 수 있다(키 칸엔 아무 20자 이상).
 
