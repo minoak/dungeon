@@ -43,7 +43,6 @@ reports/
 # 2026-09-16 파트너 "깃허브에 너무 사적인 내용까지 올라가는 것 같다": 판 기록은 로컬 보존(개인 플레이 기록) —
 # 저장소엔 정적 관전(Pages)용 데모 판만 남긴다(game/static-runs.json 목록). 새 판은 자동으로 안 올라간다.
 runs/*.jsonl
-!_readme
 # 코드·문서(devlog·README)가 이름으로 가리키는 판도 유지
 !runs/stream-20260909-202333.jsonl
 !runs/stream-20260909-203709.jsonl
