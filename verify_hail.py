@@ -11,6 +11,8 @@
   ④ 쿨다운: 성사 직후 같은 발화자 = 무정지(HAIL_CD 턴), 경과 후 재정지, 다른 발화자는 즉시
   ⑤ 죽은/탈출 봇 = 무정지(엔진 자체 가드)
   ⑥ 문장: last=hailed 렌더 — 발화자 이름 실림 + 물음표 0(관찰 사실만)
+  ⑦ D24 개정(2026-09-16, 파트너 "결함에 대해서는 동의"): 걷는 중인 접근은 그대로 세우지만, 곁에 닿아 다음 틱에 원래 행동을
+     실행할 참인 접근(arrived/ready)은 세우지 않는다([]·order/approach 유지·쿨다운 미소모) → 다음 틱 원래 행동 완료
 (기존 verify 21종은 별도 실행.)
 """
 import brains
@@ -97,6 +99,58 @@ check("⑤ 탈출 봇 = 무정지", d5b.hail_stop(b5b, ['2']) == [])
 print("── ⑥ 문장")
 p = brains._last_prose({'type': 'hail', 'result': 'hailed', 'froms': ['2']}, {'2': '카야'})
 check("⑥ 발화자 이름 렌더 + 물음표 0(관찰 사실만)", '카야' in p and '?' not in p)
+
+print("── ⑦ 곁에 닿은 몸은 세우지 않는다(D24 개정 09-16, 파트너 '결함에 대해서는 동의')")
+
+
+def scene7():
+    d, st = Dungeon.from_ascii(["##########", "#1....2.>#", "#........#", "##########"], seed=7, scan=False)   # scan=False: 계단이 시야에 드는 sighted 정지가 접근을 끊지 않게(verify_approach 와 같은 장면)
+    d.hail = d.auto_approach = d.bond_verb = d.relations = True
+    d.turn = 10
+    bots = []
+    for c, xy in sorted(st.items()):
+        b_ = G.spawn(d, c, bots, sheet=G.HEROES.get(c, G.HEROES['1']))
+        b_['x'], b_['y'] = xy
+        bots.append(b_)
+    for b_ in bots:
+        d.view(b_, bots)
+    return d, bots
+
+
+d7, bots7 = scene7()
+a7 = bots7[0]
+r7 = d7.act(a7, {'type': 'bond', 'target': 'b2', 'form': '어깨를 가볍게 두드린다'}, bots7)
+mid7 = d7.hail_stop(a7, ['2'])                       # 아직 걷는 중(path 남음)
+check("⑦ 걷는 중인 접근은 그대로 세운다(['2'] · order/approach 파기 · last=hailed+interrupted_action_id)",
+      r7['result'] == 'approaching' and mid7 == ['2'] and a7['order'] is None and not a7.get('approach')
+      and a7['last']['result'] == 'hailed' and bool(a7['last'].get('interrupted_action_id')))
+d8, bots8 = scene7()
+a8 = bots8[0]
+r8 = d8.act(a8, {'type': 'bond', 'target': 'b2', 'form': '어깨를 가볍게 두드린다'}, bots8)
+ev8 = None
+for _ in range(10):
+    d8.turn += 1
+    ev8 = d8.step_order(a8, bots8)
+    if ev8.get('approach_status') == 'ready':
+        break
+st8 = d8.hail_stop(a8, ['2'])
+check("⑦ 곁에 닿은 접근(arrived/ready) — hail_stop 은 [] · order/approach 유지 · 쿨다운 미소모",
+      r8['result'] == 'approaching' and ev8 and ev8.get('result') == 'arrived' and ev8.get('approach_status') == 'ready'
+      and st8 == [] and a8.get('order') and a8.get('approach') and not a8.get('hail_cd'))
+d8.turn += 1
+fin8 = d8.step_order(a8, bots8)
+check("⑦ 다음 틱에 원래 행동이 완료된다(bond done · approach_status completed) — 그 뒤 order 없음 = 그때 편지함의 말을 읽고 결정",
+      fin8.get('result') == 'done' and fin8.get('approach_status') == 'completed' and not a8.get('order'))
+d9, bots9 = scene7()
+d9.social = True
+a9 = bots9[0]
+d9.act(a9, {'type': 'bond', 'target': 'b2', 'form': '어깨를 가볍게 두드린다'}, bots9)
+for _ in range(10):
+    d9.turn += 1
+    if d9.step_order(a9, bots9).get('approach_status') == 'ready':
+        break
+check("⑦ 사교 채널 판(social)은 원래 order 를 안 부수므로 ready 여도 그대로(hailed 표시·froms 반환)",
+      d9.hail_stop(a9, ['2']) == ['2'] and a9.get('order') and a9.get('approach') and a9.get('hailed') == ['2'])
 
 print()
 if C.failed:

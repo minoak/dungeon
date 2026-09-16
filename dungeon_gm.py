@@ -4062,6 +4062,14 @@ class Dungeon:
             run = bot['wander'] = {'cells': set(), 'n': 0}
         run['n'] += 1
 
+    def _approach_ready(self, bot):
+        """곁에 닿아 다음 틱에 원래 행동(말 걸기·줍기·공격…)을 실행할 참인 접근 = _order_done 의 arrived/ready
+        (approach·order 는 남고 path 만 비었다). D24·D76 개정(2026-09-16, 파트너 "결함에 대해서는 동의"): 이 몸은
+        걷는 중이 아니라 말 걸림이 세울 걸음이 없다 — 09-15 판 741197 부검: 접수원 곁에 닿은 수나를 동료의 말이
+        세워 물품 거래가 사라지고("걷던 길이었다"도 거짓) "방금 물약 챙겼어"라는 거짓 믿음이 남았다(최근 마을 판 4 중 3).
+        말은 편지함에 남아(D47 보관) 거래가 끝난 다음 첫 결정에서 읽힌다 — 콜 0, 답이 한 틱 늦을 뿐."""
+        return bool(bot.get('approach') and bot.get('order') and not bot.get('path'))
+
     def hail_stop(self, bot, froms):
         """말 걸림 정지(07-24 파트너 확정 — 여섯 번째 정지 신호, D24): 시야 안 동료의 말이
         들리면 걷던 작정을 멈추고 결정권을 받는다 — 걷다가 누가 부르면 멈춰 돌아보는 것.
@@ -4072,6 +4080,8 @@ class Dungeon:
         기존대로 배달된다. 반환 = 정지 성사 시 froms(계측·관전), 아니면 []."""
         if not (self.hail and bot.get('order') and bot['alive'] and not bot['won']):
             return []
+        if not self.social and self._approach_ready(bot):
+            return []                      # D24 개정(09-16): 곁에 닿은 몸은 세우지 않는다 — 쿨다운도 안 쓴다
         cd = bot.setdefault('hail_cd', {})
         fresh = [c for c in froms if self.turn >= cd.get(c, 0)]
         if not fresh:
@@ -4098,9 +4108,12 @@ class Dungeon:
         """D76(2026-09-15 파트너 "npc가 캐릭터에게 말을 걸릴 때도 멈추게 하자"): NPC 가 먼저 건 인사(D71)는 걷던·기다리던·쉬던 몸을
         **실제로 세운다** — 동료 말 걸림(D24)이 사교 채널 판에서 작정을 안 부수고 사교 콜만 여는 것과 다르다: NPC 는 파티가 아니라
         사교 콜이 없고, 요점은 '노점에 가 볼까'를 고를 결정권이다(09-14 판 685433 부검: 수나가 자동보행 28틱 동안 인사 둘을 지나침).
-        order 가 없으면(이미 결정 차례) 할 일이 없다(False). 쿨다운 없음 — 인사는 NPC 당 방문당 한 번(npc_greetings). 판정 무접촉."""
+        order 가 없으면(이미 결정 차례) 할 일이 없다(False). 쿨다운 없음 — 인사는 NPC 당 방문당 한 번(npc_greetings). 판정 무접촉.
+        D76 개정(2026-09-16): 곁에 닿아 거래 직전인 접근(_approach_ready)도 세우지 않는다 — 인사는 편지함에 남는다."""
         if not (bot.get('order') and bot['alive'] and not bot['won']):
             return False
+        if self._approach_ready(bot):
+            return False                   # D76 개정(09-16): 곁에 닿은 몸은 세우지 않는다
         bot['order'], bot['path'], bot['plan'] = None, [], []   # 인터럽트 문법(D16) — 작정 파기(대기·휴식도 order 라 함께 깬다: D25 "말을 걸어오면 깬다")
         bot['last'] = {'type': 'hail', 'result': 'hailed', 'froms': ['npc:' + npc_name], **self._cancel_approach(bot)}
         self._trail_add(bot, bot['last'])       # D38 궤적 — 말 걸림도 자기 경험

@@ -18,6 +18,7 @@
   ⑩ D71 NPC 가 먼저 말을 건다(09-14 파트너 "npc 가 먼저 말을 걸게 하면 어때?"): 상황별 인사 6종·한 번만·구역/범위/이미 말한 NPC 제외 ·
      러너 풀런에서 tick.npc_hails·inbox 'npc:'·귀환 뒤 hail_return · npc_reply 의 npc_hail 장면(두뇌 옵션)
      · D76(09-15 파트너 "npc가 캐릭터에게 말을 걸릴 떄도 멈추게 하자") 인사에 걸음을 멈춘다(npc_hail_stop · tick.npc_hails[].stopped · DUNGEON_NPC_HAIL_STOP)
+     · D76 개정(09-16 파트너 "결함에 대해서는 동의") 곁에 닿아 거래 직전(arrived/ready)인 봇은 세우지 않는다 → 다음 틱 거래 완료
   ⑬ D74 기도의 답 = 축복의 물약(09-15 파트너 "기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자"): 성직자 gift.boon → npc_gift ·
      관측(obs.boons·[i4]·effect 사실) · 조합형 use self i4 → drink_boon(공격 능력치 +1, 목격) · 메뉴형 drink item=boon(궁수=민첩) ·
      빈 손 no_boon · 건네기 · 계단 줄 정합(09-15 수선) · 러너 이월 배선(boons·str/dex) · 문서·클라이언트 배선
@@ -436,6 +437,24 @@ check("⑩ D76 NPC 인사에 걸음을 멈춘다(09-15 파트너 'npc가 캐릭�
       and "성직자의 말에 걸음을 멈췄다" in brains._last_prose(wk10["last"], {"1": "두란"})
       and any(t_[0] == "hail" and "성직자의 말에 멈춤" in t_[2] for t_ in G.event_tags(wk10["last"], {"1": "두란"}))
       and d10s.npc_hail_stop(mkbot("2", pr10.x + 2, pr10.y, job="도적"), "성직자") is False)
+d10r, _ = show_runner.build_town(apart=True)
+pr10r = by_name(d10r, "npc", "성직자")
+rd10 = mkbot("1", pr10r.x + 2, pr10r.y)
+d10r.view(rd10, [rd10])
+ap10 = d10r.act(rd10, {"type": "use", "target": "f%s" % pr10r.id}, [rd10])
+ev10 = None
+for _ in range(10):
+    d10r.turn += 1
+    ev10 = d10r.step_order(rd10, [rd10])
+    if ev10.get("approach_status") == "ready":
+        break
+st10r = d10r.npc_hail_stop(rd10, "성직자")
+kept10 = bool(rd10.get("order") and rd10.get("approach"))   # 정지 직후(거래 전) order·approach 유지 여부 — 거래가 끝나면 order 는 비는 게 정상
+d10r.turn += 1
+fin10 = d10r.step_order(rd10, [rd10])
+check("⑩ D76 개정(09-16 파트너 '결함에 대해서는 동의'): 성직자 곁에 닿아 거래 직전(arrived/ready)인 봇은 인사에 서지 않는다(False · order 유지) → 다음 틱 npc_gift 축복 완료(approach_status completed · boons 1)",
+      ap10.get("result") == "approaching" and ev10 and ev10.get("approach_status") == "ready" and st10r is False and kept10
+      and fin10.get("result") == "npc_gift" and fin10.get("approach_status") == "completed" and rd10.get("boons") == 1)
 check("⑩ D76 배선: 러너 스위치 DUNGEON_NPC_HAIL_STOP(기본 1) · run_meta npc_hail_stop · tick.npc_hails[].stopped · STREAM·HARNESS D76·CHANGELOG·README",
       "DUNGEON_NPC_HAIL_STOP" in src("show_runner.py") and "npc_hail_stop=" in src("show_runner.py") and '"stopped": True' in src("show_runner.py")
       and "| `npc_hail_stop` |" in src("STREAM_FORMAT.md") and "stopped?" in src("STREAM_FORMAT.md")
