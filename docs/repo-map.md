@@ -43,7 +43,7 @@ game/        관전 클라이언트(Phaser+Vite) · verify/smoke.mjs
 viewer/      옛 HTML 뷰어 + 공용 에셋(타일·스프라이트)
 launcher/    론처 화면(index.html)
 scenarios/   프로브 장면
-runs/        판 기록(스트림 jsonl, 원본 데이터)   art/  그림 원본·습작(82MB)
+runs/        판 기록(스트림 jsonl — 로컬 보존, 저장소엔 데모·문서 참조 판 9개만: 2026-09-16)   art/  그림 원본·습작(82MB)
 state/       실행 폴더(.gitkeep 만 추적 — 로그·스트림은 실행 흔적이라 미추적)
 ```
 
@@ -77,5 +77,5 @@ git checkout <해시>^ -- risu/                            # 폴더 통째로 �
 ## 다음 단계(파트너 결정)
 
 - **2단계**: `verify_*.py` 62개 + `verify_character_presets_browser.mjs` → `verify/`, `_run_gates.sh` 도 함께. 각 게이트의 `HERE` 를 리포 루트로 재정의하고 sys.path 를 넣는 일괄 치환 — 게이트 62종 통과가 곧 검증.
-- **3단계**: `art/` 82MB(그림 원본·습작 — 런타임은 `viewer/assets`·`game/src/assets` 만 읽는다) → Git LFS 또는 릴리스 첨부 · `runs/` 48MB(판 107개) → 대표 판 유지, 스모크·중단 판 정리 여부.
+- **3단계**: `runs/` → **2026-09-16 완료**(파트너 "깃허브에 너무 사적인 내용까지"): `runs/*.jsonl` 은 .gitignore, 트리엔 정적 관전 데모 7 + 문서 참조 2 = 9개만(나머지 101개는 로컬 보존, 트리에서만 뺐고 **히스토리엔 남아 있다**) · `art/` 77MB(850 PNG — 원본·도구; 런타임 사본은 `game/src/assets`, 론처 갤러리 링크 `/art/sprites-v4/` 가 서빙) → **미완**: 클론 크기(팩 110MB)는 히스토리 재작성 없이는 안 줄고(트리에서 빼도 같다), LFS 이전도 재작성이라 해시가 전부 바뀐다(08-10 선례) — 파트너가 있는 세션에서 force-push·VM 클론 초기화까지 한 번에.
 - ~~README 첫 화면 재편(외부 이름 확정 뒤)~~ → 09-13 완료(봇픽던, 스크린샷 5장, 날짜별 문단은 `docs/CHANGELOG.md` 로).

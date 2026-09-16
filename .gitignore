@@ -44,9 +44,20 @@ reports/
 # 저장소엔 정적 관전(Pages)용 데모 판만 남긴다(game/static-runs.json 목록). 새 판은 자동으로 안 올라간다.
 runs/*.jsonl
 !_readme
-!runs
+# 코드·문서(devlog·README)가 이름으로 가리키는 판도 유지
+!runs/stream-20260909-202333.jsonl
+!runs/stream-20260909-203709.jsonl
+!runs/stream-20260910-213929.jsonl
+!runs/stream-20260912-164413.jsonl
+!runs/stream-20260912-213044.jsonl
+!runs/stream-20260913-154158.jsonl
+!runs/stream-20260913-160759.jsonl
+!runs/stream-20260913-172310.jsonl
+!runs/stream-20260913-192230.jsonl
 # 다른 에이전트의 분석·작업 메모·미게시 원고·세션용 작업 지시서 — 로컬 전용
 analysis/
 WONDERLAND_CHANGES_*.md
 docs/TASK_*.md
 docs/devlog/2026-09-12-yuna/
+# 7월 관전 덤프 폴더(로컬)
+runs/watch-*/
