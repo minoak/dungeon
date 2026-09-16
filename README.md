@@ -89,6 +89,7 @@ launcher.py (웹 론처 :8000, 판마다 서브프로세스) ─→ show_runner.
 
 서버 배포 없이 **내 PC에서 판을 돌리고 브라우저로 관전**한다. LLM 호출은 실행자 본인의 키로 나가고, 저장소는 키를 모른다.
 심사용 공개 서버(`server.py` — 심사위원별 세션, 자기 키로 판 시작): <https://botpicdun.duckdns.org/>.
+계정은 **키의 지문**이다(D77): 가입·비밀번호 없이 자기 Gemini 키로 들어오면 캐릭터와 판 기록이 계정 폴더에 남고, 키 자체는 저장되지 않는다.
 첫 실판은 27턴 귀환·API 전송 50회로 검증했다. 현재 판당 API 전송 50회 시험 제한은 유지 중이다. [배포·검증 상태](scripts/vm/README.md).
 
 **1. 준비물**
@@ -139,7 +140,7 @@ wonderland.bat              ← 더블클릭 → [L] LAUNCHER      (또는  pyth
 ## 검증과 데이터
 
 ```bash
-bash _run_gates.sh                                     # 결정론 게이트 64종 일괄 (Git Bash, LLM 0콜, 라이브 데이터와 격리)
+bash _run_gates.sh                                     # 결정론 게이트 65종 일괄 (Git Bash, LLM 0콜, 라이브 데이터와 격리)
 cd game && npm run smoke                               # 관전 클라이언트 헤드리스 스모크
 python tools/analyze_run.py runs/stream-XXXX.jsonl     # 지난 판 0콜 부검(이동·전투·대화 통계)
 python tools/run_notes.py   runs/stream-XXXX.jsonl     # 도감평·수첩 텍스트 덤프
@@ -147,8 +148,8 @@ python tools/unheard_audit.py runs/stream-XXXX.jsonl   # 동료를 지목한 말
 python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer.html   # 단일 HTML 리플레이
 ```
 
-- 게이트 `verify_*.py` **64종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
-  도감·수첩·결산·보스층·차단 접기·공개 서버·API 호출 상한·길드 척추(의뢰·보고·NPC 두뇌)를 LLM 0콜로 검사한다.
+- 게이트 `verify_*.py` **65종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
+  도감·수첩·결산·보스층·차단 접기·공개 서버·계정(키 지문)·API 호출 상한·길드 척추(의뢰·보고·NPC 두뇌)를 LLM 0콜로 검사한다.
 - `runs/`의 판 기록은 실LLM으로 얻은 원본 데이터라 저장소에 보존한다. 전부 리플레이 가능하다.
 - 관측 표현 A/B 실험(사전등록): [docs/D19_experiment_summary.md](docs/D19_experiment_summary.md).
 

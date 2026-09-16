@@ -39,7 +39,7 @@
   .card h3 { font-size: 13px; color: #8a8f9c; margin-bottom: 10px; letter-spacing: 1px; }
   .card h3 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
   label.f { display: block; font-size: 12px; color: #8a8f9c; margin: 8px 0 3px; }
-  input[type=text], textarea, select {
+  input[type=text], input[type=password], textarea, select {
     width: 100%; background: #1d2029; color: #d8dbe2; border: 1px solid #2c303c; border-radius: 5px;
     padding: 7px 9px; font-size: 13.5px; font-family: inherit;
   }
@@ -111,6 +111,30 @@
       <button id="bOracle">보내기</button> <button id="bOracleClear" title="걸어 둔 요청을 거둔다">거둠</button>
     </div>
   </div>
+  <div class="card" id="acctCard" hidden style="max-width:860px;margin:0 auto 14px">
+    <h3>계정 — 열쇠는 Gemini 키</h3>
+    <div id="acctOut">
+      <div class="row">
+        <input type="password" id="loginKey" autocomplete="off" spellcheck="false" placeholder="AIza… — 이 키의 지문이 계정이 된다" style="flex:2;min-width:220px">
+        <input type="text" id="loginNick" maxlength="20" placeholder="별명 (선택, 20자)" style="flex:1;min-width:120px">
+        <button class="primary" id="bLogin">이 키로 들어오기</button>
+      </div>
+      <div class="hint">가입도 비밀번호도 없다. 키는 저장되지 않고 지문만 남는다. 살아 있는 키만 문이 열리니 키를 폐기하면 그 키를 쥔 누구도 못 들어온다.
+        들어오기 전에 만든 캐릭터는 들어올 때 계정으로 옮겨진다.</div>
+    </div>
+    <div id="acctIn" hidden>
+      <div class="row"><span id="acctWho"></span>
+        <input type="text" id="nickIn" maxlength="20" placeholder="별명" style="width:160px"><button class="small" id="bNick">별명 저장</button>
+        <button class="small" id="bLogout">나가기</button></div>
+      <div id="acctKeys" class="hint" style="margin-top:6px"></div>
+      <div class="row" style="margin-top:6px">
+        <input type="password" id="linkKey" autocomplete="off" spellcheck="false" placeholder="새 키 — 새로 발급한 키를 이 계정에 연결" style="flex:1;min-width:220px">
+        <button class="small" id="bLink">새 키 연결</button>
+      </div>
+      <div class="hint">키를 새로 발급하면 <b>옛 키가 살아 있을 때</b> 들어와 새 키를 연결하고, 그 뒤에 옛 키를 폐기하라. 열쇠를 전부 잃으면 이 계정은 복구할 수 없다(패스키는 준비 중).</div>
+    </div>
+    <div id="acctErr" style="color:#ff8b7a;font-size:13px;min-height:16px"></div>
+  </div>
 </section>
 
 <!-- ═══ 2. 파티 ═══ -->
@@ -176,7 +200,7 @@
     <div class="card" id="keyCard" hidden>
       <h3>Gemini API 키 (이 판에만)</h3>
       <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="AIza… — Google AI Studio 에서 만든 키">
-      <div class="hint">키는 이 판을 도는 러너 프로세스에만 전달되고 서버의 디스크·로그에 남지 않는다(BYOK, D68). 판이 끝나면 사라진다. 비용은 키 주인에게.</div>
+      <div class="hint">키는 이 판을 도는 러너 프로세스에만 전달되고 서버의 디스크·로그에 남지 않는다(BYOK, D68). 판이 끝나면 사라진다. 비용은 키 주인에게. 계정에 들어온 키는 이 칸에 자동으로 채워진다.</div>
     </div>
     <div class="card">
       <h3>시드</h3>
@@ -280,6 +304,52 @@ async function api(path, body) {
   return j;
 }
 function show(id) { for (const s of ['sTitle', 'sParty', 'sOpts']) $(s).hidden = (s !== id); }
+
+/* ═══ 계정(D77) — 공개 서버(server.py)에서만. 키는 이 페이지 메모리에만: 들어온 키를 원정 키 칸에 채워 준다 ═══ */
+let account = null, isPublic = false;
+function renderAccount() {
+  $('acctCard').hidden = !isPublic;
+  if (!isPublic) return;
+  $('acctOut').hidden = !!account; $('acctIn').hidden = !account;
+  if (!account) return;
+  $('acctWho').innerHTML = '<b>' + esc(account.nick || '이름 없는 신') + '</b> <span class="muted">· 계정 ' + esc(account.id) + '</span>';
+  $('nickIn').value = account.nick || '';
+  $('acctKeys').innerHTML = '열쇠 ' + account.keys.length + '개: ' + account.keys.map(k =>
+    '<span style="margin-right:10px">' + esc(k.tag) + '… <span class="muted">(' + new Date(k.added * 1000).toLocaleDateString() + ')</span> ' +
+    (account.keys.length > 1 ? '<button class="small" data-unlink="' + esc(k.tag) + '">해제</button>' : '') + '</span>').join('');
+  for (const b of $('acctKeys').querySelectorAll('[data-unlink]')) b.onclick = () => acctCall('/api/keys/unlink', { tag: b.dataset.unlink });
+}
+async function refreshAccount() {
+  try { const me = await api('/api/me'); isPublic = !!me.public; account = me.account || null; }
+  catch (e) { isPublic = false; account = null; }                    // 로컬 론처(launcher.py)엔 /api/me 가 없다 → 카드 숨김
+  renderAccount();
+}
+async function acctCall(path, body) {
+  $('acctErr').textContent = '';
+  try {
+    const j = await api(path, body);
+    account = j.account || null;
+    renderAccount();
+    characterPresets = [];                                            // 저장소가 바뀌었다(익명 ↔ 계정) — 파티 화면이 다시 읽는다
+    if (presets) await refreshCharacters();
+    return j;
+  } catch (e) { $('acctErr').textContent = e.message; return null; }
+}
+$('bLogin').onclick = async () => {
+  const key = $('loginKey').value.trim();
+  if (!key) { $('acctErr').textContent = '키를 넣어 줘.'; return; }
+  $('bLogin').disabled = true;
+  const j = await acctCall('/api/login', { key, nick: $('loginNick').value.trim() });
+  $('bLogin').disabled = false;
+  if (j) { $('apiKey').value = key; $('loginKey').value = ''; }     // 원정 키 칸에 채워 둔다(페이지 메모리) — 서버엔 안 남는다
+};
+$('bLogout').onclick = () => acctCall('/api/logout', {});
+$('bNick').onclick = () => acctCall('/api/nick', { nick: $('nickIn').value.trim() });
+$('bLink').onclick = async () => {
+  const key = $('linkKey').value.trim();
+  if (!key) { $('acctErr').textContent = '연결할 키를 넣어 줘.'; return; }
+  if (await acctCall('/api/keys/link', { key })) $('linkKey').value = '';
+};
 
 /* ═══ 타이틀 — 상태 ═══ */
 async function refreshStatus() {
@@ -617,6 +687,7 @@ $('bStart').onclick = async () => {
 };
 
 refreshStatus();
+refreshAccount();                                                    // D77 계정 카드(공개 서버에서만 보인다)
 setInterval(refreshStatus, 3000);
 </script>
 </body>

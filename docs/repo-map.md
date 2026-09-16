@@ -21,6 +21,7 @@ README.md · LICENSE(MIT) · .env.example · wonderland.bat · live.bat · _run_
 엔진·러너·론처(루트, import 이름 그대로):
   dungeon_gm.py brains.py show_runner.py launcher.py entities.py bestiary.py sheetkit.py scenario.py
   server.py — 공개(심사용) 서버: launcher 를 심사위원(쿠키 세션)별로 감싼다(D68, 09-13)
+  accounts.py — 계정 = 키 지문(D77, 09-16): 지문(HMAC)·계정 폴더·열쇠 연결·로그인 묶음. 파일 저장소, 네트워크 없음(생존 확인은 server.py)
   run_control.py run_summary.py movement_summary.py composed_actions.py skill_core.py skill_combat.py skill_schema.py
   social_reactions.py town_layout.py town_spaces.py stream.py tags.py gm.py envload.py character_presets.py
 데이터(루트, 참조 60곳이라 유지): party.json party_solo.json party_crossed.json traits.json looks.json town.json town-v0.json
@@ -31,7 +32,7 @@ tools/       analyze_run.py analyze_skills.py analyze_social.py report.py make_r
              unheard_audit.py(D72 — 던전에서 지목한 말 중 상대가 못 들은 비율, 0콜)
 scripts/     start.sh live.sh verify.sh watch_map.sh (Linux/WSL 시대 — 전부 `~/dungeon` 을 가정, VPS 서빙 때 손볼 것)
              vm/ setup.sh deploy.sh botpikdun.service Caddyfile README.md (심사용 서버 GCP 서울 VM 배포, 09-13)
-verify_*.py  게이트 64종(루트 — 2단계에서 verify/ 로 이동 예정; verify_public 은 server.py 게이트, verify_guild 는 D69 길드 척추)
+verify_*.py  게이트 65종(루트 — 2단계에서 verify/ 로 이동 예정; verify_public 은 server.py 게이트, verify_account 는 D77 계정, verify_guild 는 D69 길드 척추)
 entities/    몬스터·함정·오브젝트·NPC·맵·건물·의뢰 정의(D50)
 design/      HARNESS_DESIGN.md(D1~D69) · drafts/
 docs/        문서·연대기·데브로그·스크린샷 · PIXEL_DUNGEON_REFERENCE.md(참고 게임 메모)
