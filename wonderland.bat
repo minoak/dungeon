@@ -19,6 +19,7 @@ echo   [9] BIG verdict: map + Gemini + ally-sight + social  (~25min, ~500 KRW)
 echo   [T] TOWN run (D29): village 0F + dungeon 1F, round trip  (Gemini - COSTS MONEY)
 echo   [A] SKILL RUN: now the default expedition (same launcher as L)
 echo   [L] LAUNCHER (web): party + skills + dice combat + 5 floors
+echo   [S] ONLINE SERVER: account login + saved characters
 echo   [Q] Quit
 echo  ==========================================
 set "pick="
@@ -34,7 +35,12 @@ if /i "%pick%"=="9" goto bigally
 if /i "%pick%"=="T" goto town
 if /i "%pick%"=="A" goto alpha
 if /i "%pick%"=="L" goto launcher
+if /i "%pick%"=="S" goto online
 if /i "%pick%"=="Q" exit /b 0
+goto menu
+
+:online
+start "" "https://botpicdun.duckdns.org/"
 goto menu
 
 :live
