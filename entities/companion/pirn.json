@@ -1,0 +1,43 @@
+{
+  "id": "pirn",
+  "name": "피른",
+  "kind": "companion",
+  "tags": [
+    "companion",
+    "adventurer"
+  ],
+  "note": "동료 프리셋(D81, 2026-09-17) — comps.sheet 의 성격·말투·목표는 기본 파티(party.json)의 문장 그대로. comps.npc(line·hail)·comps.story(trait·history)는 SilenceBreaker 임시 문장(2단계 '안 뽑힌 프리셋 = 마을 주민' 재료) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). 능력치는 적지 않는다 — 직업(traits.json jobs)에서 온다. look 은 그림에만 닿는다(엔진·프롬프트 무접촉).",
+  "comps": {
+    "sheet": {
+      "job": "궁수",
+      "sex": "여",
+      "traits": [],
+      "persona": "호기심이 많고 발이 가볍다. 궁금한 건 일단 봐야 직성이 풀려 앞으로 나서다가도, 활을 들 때만은 한 발 물러나 거리를 잰다.",
+      "speech": "밝고 빠르게. 감탄이 잦고 '저건 뭐지?', '어떻게 생각해?'처럼 묻는 말이 많다.",
+      "goal": "아직 안 본 게 너무 많다 — 이 아래에 뭐가 있는지 다 보고 나간다.",
+      "look": {
+        "head": "F6",
+        "body": "B2",
+        "colors": {
+          "hair": "#945c37",
+          "skin": "#eabb8c",
+          "top": "#42738b",
+          "bottom": "#d7c599"
+        },
+        "sprite": "sd-archer"
+      }
+    },
+    "npc": {
+      "line": "아래에 뭐가 있는지 궁금하지 않아? 난 궁금해 죽겠는데!",
+      "hail": "{name}! 어디 가? 던전이야? 나도 데려가!",
+      "walk": {
+        "region": "main_street",
+        "rate": 0.4
+      }
+    },
+    "story": {
+      "trait": "호기심 많은 궁수. 번화가를 돌아다닌다",
+      "history": "안 본 것을 그냥 지나치지 못한다. 묻는 말이 많아 성가시다는 소리를 듣지만, 그 질문 덕에 일행이 두 번 생각하게 된다."
+    }
+  }
+}

@@ -250,9 +250,42 @@ def build_sheet(job, traits, name, sex, background=None, data=None, persona_text
     return sheet
 
 
-def build_party(slots, data=None):
+COMPANION_TEXT_MAX = 300   # 동료 프리셋의 말투·목표 상한 — 러너 load_party 의 FREETEXT_MAX 와 같은 값
+COMPANION_SHEET_KEYS = ("job", "sex", "traits", "persona", "speech", "goal", "background", "look")
+
+
+def build_companion_sheet(defn, data=None):
+    """동료 프리셋 정의(entities/companion/<id>.json, D81) → party 시트.
+    정의의 comps.sheet 는 '파티 시트 칸'만 든다(job·sex·traits·persona·speech·goal·background·look) — 능력치는 적지 않고
+    직업에서 온다(build_sheet 그대로). 말투·목표는 손 시트(party.json)처럼 그대로 싣는다(같은 정제·상한).
+    이름은 정의의 name — 정제 뒤에 달라지는 이름은 거부한다(화면에 보인 이름 = 판에 선 이름)."""
+    if not isinstance(defn, dict) or not isinstance((defn.get("comps") or {}).get("sheet"), dict):
+        raise ValueError("동료 프리셋에 sheet 부품이 없다")
+    comp = defn["comps"]["sheet"]
+    extra = sorted(set(comp) - set(COMPANION_SHEET_KEYS))
+    if extra:
+        raise ValueError("sheet 부품이 모르는 칸: %s" % ", ".join(extra))
+    sheet = build_sheet(comp.get("job"), comp.get("traits") or [], defn.get("name", ""), comp.get("sex"),
+                        comp.get("background"), data=data, persona_text=comp.get("persona"), look=comp.get("look"))
+    if sheet["name"] != defn.get("name"):
+        raise ValueError("이름이 정제 뒤 달라진다: %r → %r" % (defn.get("name"), sheet["name"]))
+    for k in ("speech", "goal"):
+        v = comp.get(k)
+        if v is None:
+            continue
+        if not isinstance(v, str):
+            raise ValueError("%s 는 문자열이어야 한다" % k)
+        v = sanitize_freetext(v, COMPANION_TEXT_MAX)
+        if v:
+            sheet[k] = v
+    return sheet
+
+
+def build_party(slots, data=None, companions=None):
     """슬롯 목록(1~3, 각 {job, traits, name, sex, background?}) → party.json 형태 {'1':..,'2':..}.
-    이름 중복은 load_party 가 거부하지만(도감 원장 키) 여기서도 먼저 잡아 이유를 사람말로 돌려준다."""
+    이름 중복은 load_party 가 거부하지만(도감 원장 키) 여기서도 먼저 잡아 이유를 사람말로 돌려준다.
+    D81: 슬롯이 {"companion": "<id>"} 면 동료 프리셋이다 — companions({id: 정의})에서 찾아 build_companion_sheet 로.
+    사전을 안 넘기면(None) 동료 칸은 거부한다(옛 호출부는 그대로)."""
     data = data or load_traits()
     if not isinstance(slots, (list, tuple)) or not (1 <= len(slots) <= 3):
         raise ValueError("파티는 1~3인")
@@ -260,6 +293,16 @@ def build_party(slots, data=None):
     for i, s in enumerate(slots, start=1):
         if not isinstance(s, dict):
             raise ValueError("슬롯 %d 형식 오류" % i)
+        if s.get("companion") is not None:
+            cid = s.get("companion")
+            if not isinstance(cid, str) or cid not in (companions or {}):
+                raise ValueError("슬롯 %d: 없는 동료 프리셋 %r" % (i, cid))
+            sheet = build_companion_sheet(companions[cid], data=data)
+            if sheet["name"] in names:
+                raise ValueError("이름 중복: %s" % sheet["name"])
+            names.add(sheet["name"])
+            out[str(i)] = sheet
+            continue
         sheet = build_sheet(s.get("job"), s.get("traits") or [], s.get("name", ""),
                             s.get("sex"), s.get("background"), data=data,
                             persona_text=s.get("persona"), look=s.get("look"))

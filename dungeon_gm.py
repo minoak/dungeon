@@ -2399,6 +2399,7 @@ class Dungeon:
                 **({'witnessed': wit} if wit else {}),   # 목격(A-3) — 있을 때만 실림(intent 선례)
                 **({'dry': dry_out} if dry_out else {}),   # 무발견 신호(07-24) — 도달 시점 1회
                 **({'floor_notice': fn_} if (fn_ := bot.pop('floor_notice', None)) else {}),   # D65 개정: 층에 들어서며 한 번(스폰이 심는다)
+                **({'town_guide': tg_} if (tg_ := self._town_guide_once(bot, bots)) else {}),   # D81 마을 안내: 시작 마을의 첫 관측에 한 번(스폰이 심는다)
                 **({'memories': mem} if mem else {}),    # 기억(D22 fallen) — 휘발 0, 있을 때만 실림
                 **({'status': [{'tag': t, **e} for t, e in sorted(bot['status'].items())]}
                    if ((self.status or self.skills) and bot.get('status')) else {}),   # 상태 태그(D34) — 자기 몸의 사실
@@ -3134,6 +3135,19 @@ class Dungeon:
         line = (line.replace('{name}', name).replace('{quests}', str(n_open)).replace('{monsters}', mons)
                 .replace('{traps}', str(r.get('traps', 0))).replace('{treasure}', str(fe.get('treasure', 0))))
         return key, line.strip()
+
+    def _town_guide_once(self, bot, bots):
+        """D81(2026-09-17) 마을 안내 — 원정을 시작한 마을의 첫 관측에 한 번. 장소 줄은 러너가 정의에서 뽑아 둔 것(self.town_guide =
+        [{name, zone, about}] — 정의의 특징 문장 그대로), 동료 줄은 **지금 실제로 서 있는 구역**(흩어진 출발이면 서로 다르다).
+        세계의 사실이지 지시가 아니다. 표식(bot['town_guide'])은 스폰이 심고 여기서 지운다. 러너가 안 켰으면(town_guide 없음) 아무것도 없다."""
+        if not bot.pop('town_guide', None):
+            return None
+        places = getattr(self, 'town_guide', None)
+        if not places:
+            return None
+        allies = [{'char': o['char'], 'zone': z_} for o in bots
+                  if o is not bot and o.get('alive') and (z_ := self._town_zone(o['x'], o['y']))]
+        return {'places': [dict(p) for p in places], 'allies': allies}
 
     def _town_zone(self, x, y):
         """마을 관측(D60, 2026-09-12 파트너 "마을에서는 시야나 관측 정보를 느슨하게 줘도 될 것 같다"):
@@ -5533,6 +5547,7 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'look': sheet.get('look'),      # D37(09-06) 외형 — run_meta 기록용·뷰어 전용. 엔진·프롬프트 무접촉
             'relationships': dict(sheet.get('relationships') or {}),
             'bag': 0, 'alive': True, 'won': False,
+            **({'town_guide': True} if (getattr(dungeon, 'town', False) and getattr(dungeon, 'town_guide', None)) else {}),   # D81 마을 안내 표식(첫 관측 1회, view 가 지운다) — 러너가 켠 마을에서만 생긴다
             'floor_notice': (getattr(dungeon, 'town_notice', None) if getattr(dungeon, 'town', False)   # D75(09-15) 마을 진입 한마디(마을 정의 story.history, 첫 관측 1회)
                              else (BOSS_FLOOR_NOTICE if getattr(dungeon, 'boss_on', False) else None)),   # D65 개정: 보스층 진입 한마디(첫 관측 1회, view 가 지운다)
             'potions': 0,                   # 소지 회복 물약(07-17) — 첫 소비 아이템. 층 이월은

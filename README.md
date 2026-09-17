@@ -134,7 +134,7 @@ wonderland.bat              ← 더블클릭 → [L] LAUNCHER      (또는  pyth
 
 ![론처 첫 화면 — 새 원정·지난 판 보기·신탁 입력](docs/screenshot-launcher.png)
 
-브라우저(http://127.0.0.1:8000/launcher/)에서 파티 3인을 꾸민다 — 이름·성별·직업 · 외형(SD 도트 또는 파츠 조합) · 성격 키워드 · 자유 서술.
+브라우저(http://127.0.0.1:8000/launcher/)에서 **내 캐릭터** 하나를 꾸민다 — 이름·성별·직업 · 외형(SD 도트 또는 파츠 조합) · 성격 키워드 · 자유 서술. 2·3번 칸에는 함께 갈 **동료**를 고른다(준비된 동료 `entities/companion/` 또는 내가 저장해 둔 다른 캐릭터). **[마을로 출발]**을 누르면 마을에서 시작한다 — 기본 파티(두란·카야·피른)·맵·시드 같은 나머지 선택은 '고급 설정'에 접혀 있다(D81).
 꾸민 캐릭터는 **프리셋**으로 저장해 재사용할 수 있다(`character_presets.json`, Git 제외 — [저장 규격](docs/character-presets.md)).
 던전 옵션은 마을 시작 · 보스층과 귀환(기본 켬) · 보스방 앞에서 시작(짧게 보고 싶을 때) · 도감 이월(기본 끔) · 두뇌 · 시드(기본 랜덤).
 **원정 시작** → 관전 화면(`/game/`)으로 이어진다. 뽑힌 시드는 판 기록(`runs/*.jsonl`)에 남아 같은 판을 바이트 단위로 재현할 수 있다.
@@ -149,7 +149,7 @@ wonderland.bat              ← 더블클릭 → [L] LAUNCHER      (또는  pyth
 ## 검증과 데이터
 
 ```bash
-bash _run_gates.sh                                     # 결정론 게이트 68종 일괄 (Git Bash, LLM 0콜, 라이브 데이터와 격리)
+bash _run_gates.sh                                     # 결정론 게이트 69종 일괄 (Git Bash, LLM 0콜, 라이브 데이터와 격리)
 cd game && npm run smoke                               # 관전 클라이언트 헤드리스 스모크
 python tools/analyze_run.py runs/stream-XXXX.jsonl     # 지난 판 0콜 부검(이동·전투·대화 통계)
 python tools/run_notes.py   runs/stream-XXXX.jsonl     # 도감평·수첩 텍스트 덤프
@@ -157,7 +157,7 @@ python tools/unheard_audit.py runs/stream-XXXX.jsonl   # 동료를 지목한 말
 python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer.html   # 단일 HTML 리플레이
 ```
 
-- 게이트 `verify_*.py` **68종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
+- 게이트 `verify_*.py` **69종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
   도감·수첩·결산·보스층·차단 접기·공개 서버·계정(키 지문)·캠페인(저장 캐릭터의 원정 기록)·이어가기(스냅샷=끊기지 않은 판)·API 호출 상한·길드 척추(의뢰·보고·NPC 두뇌)를 LLM 0콜로 검사한다.
 - `runs/`의 판 기록은 실LLM으로 얻은 원본 데이터지만 **개인 플레이 기록이라 로컬에만 보존한다**(`.gitignore`, 2026-09-16). 저장소엔 정적 관전용 데모 판(`game/static-runs.json`)만 남는다. 전부 리플레이 가능하다.
 - 관측 표현 A/B 실험(사전등록): [docs/D19_experiment_summary.md](docs/D19_experiment_summary.md).

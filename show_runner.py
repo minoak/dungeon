@@ -201,6 +201,9 @@ NPC_HAIL_STOP_ON = os.environ.get("DUNGEON_NPC_HAIL_STOP", "1") != "0"   # D76(0
 TOWN_WALKERS_ON = os.environ.get("DUNGEON_TOWN_WALKERS", "1") != "0"   # D73(09-14 파트너 "마을에 돌아다니는 일반 캐릭터들 … 플레이어블 캐릭터의
                                                              #   반응을 확인") 마을 행인 — 정의(npc.walk)가 있는 NPC 가 제 구역을 걷는다(0콜,
                                                              #   말 걸면 대답·인사도 D69·D71 그대로). 러너 기본 1(마을 판만), build_town 직접 호출은 끔
+TOWN_GUIDE_ON = os.environ.get("DUNGEON_TOWN_GUIDE", "1") != "0"   # D81(09-17 파트너 "마을 첫 관측에 튜토리얼 문단") 마을 안내 — 원정을 시작한 마을의
+                                                             #   첫 관측에 한 번: 장소마다 정의의 특징 한 줄(새 문장 없음) + 동료가 지금 선 구역. 0콜.
+                                                             #   러너 기본 1(마을 판만), build_town 직접 호출은 끔(행인 D73 과 같은 관례)
 NPC_BRAIN_ON = os.environ.get("DUNGEON_NPC_BRAIN", "1") != "0"   # D69 마을 NPC 두뇌 — 캐릭터가 말을 걸면 NPC 한마디를 LLM 이 쓴다(1콜,
                                                              #   먼저 말하지 않음·잡담 배달·판정은 엔진·고정 대사=폴백). 러너 기본 1,
                                                              #   더미 두뇌(dummy) 판에선 저절로 꺼진다(콜 0 유지)
@@ -688,7 +691,7 @@ def _story_of(eid):
         return None
 
 
-def build_town(path=None, apart=False, quests=None, walkers=False):
+def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
     """town.json(손그림 고정 맵 — 고향은 랜덤이 아니다) → 마을 Dungeon.
     NPC 는 좌표로 심는다(맵의 '&'는 그림 표기 — from_ascii 는 바닥으로 읽음).
     town.json 이 {"layout": "<상대경로>"} 면(09-11, 맵 트랙 저작 원본 참조 — 상대 경로는 town 파일 위치 기준) 그 layout 을
@@ -775,6 +778,10 @@ def build_town(path=None, apart=False, quests=None, walkers=False):
             if r_.get("name") and _story_of(r_.get("entity")):
                 d.zone_story[r_["name"]] = dict(_story_of(r_.get("entity")))
         d.town_notice = (_story_of("town_wonderland") or {}).get("history") or None
+        if guide:                                  # D81 마을 안내의 장소 줄 — 건물과 던전 입구의 특징(정의 story.trait 그대로)을 구역 이름과 함께. 입구는 맨 끝
+            d.town_guide = [{"name": d.features[fid_].name, "zone": d._town_zone(d.features[fid_].x, d.features[fid_].y), "about": st_["trait"]}
+                            for fid_, st_ in sorted(d.place_story.items(), key=lambda kv: (d.features[kv[0]].type == "exit", kv[0]))
+                            if st_.get("trait") and d.features[fid_].type in ("building", "exit")] or None
     if walkers and res.get("spaces"):              # D73 마을 행인 — 정의(npc.walk)가 있는 NPC 를 제 구역의 빈 칸에(시드 파생 RNG, 결정론)
         rname = {r["id"]: r.get("name") for r in res["spaces"]["regions"]}
         avoid = {tuple(v) for v in starts.values()}
@@ -1006,12 +1013,13 @@ def arrive_cells(d, ax, ay, k):
     return out[:k]
 
 
-def town_for_run(apart, quests, walkers=False):
+def town_for_run(apart, quests, walkers=False, guide=False):
     """build_town 호출 자리(D69) — 게이트 둘(verify_approach·verify_reactions)이 build_town 을 **인자 없는 스텁**으로 갈아 끼우므로,
     시그니처에 apart 가 없으면 옛 방식으로 부르고 의뢰 장부만 건다(스텁 마을에도 보고·맡기 배관이 죽지 않게)."""
     import inspect
     if 'apart' in inspect.signature(build_town).parameters:
-        return build_town(apart=apart, quests=quests, walkers=walkers)
+        extra = {"guide": guide} if 'guide' in inspect.signature(build_town).parameters else {}   # D81 — 옛 시그니처 스텁도 그대로 산다
+        return build_town(apart=apart, quests=quests, walkers=walkers, **extra)
     d, starts = build_town()
     if quests is not None and getattr(d, 'quests', None) is None:
         d.quests = quests
@@ -1228,7 +1236,7 @@ def main():
 
     if snap is None:                       # ── 새 판: 세계를 짓고 파티를 놓는다 ──
         if TOWN_ON:                            # 마을 판(D29): 원정은 고향에서 시작한다
-            d, tstarts = town_for_run(TOWN_APART_ON, quests, TOWN_WALKERS_ON)   # D69 흩어진 출발·의뢰 장부 · D73 행인(게이트 스텁 허용)
+            d, tstarts = town_for_run(TOWN_APART_ON, quests, TOWN_WALKERS_ON, TOWN_GUIDE_ON)   # D69 흩어진 출발·의뢰 장부 · D73 행인 · D81 마을 안내(게이트 스텁 허용)
             d.lore = lore
             if npc_brain or NPC_HAIL_ON:       # D69·D71 주점 소문 재료 — 지하 1층의 실제 배치(같은 시드=같은 층, 0콜): NPC 답·인사의 숫자
                 d.rumor = floor_rumor(new_floor(1, lore))
@@ -1365,6 +1373,7 @@ def main():
                 quests=quests is not None, # D69(09-14 additive) 길드 척추 여부 — 의뢰 맡기(use q<n>)·완료 판정·워프 귀환 뒤 마을 계속·보고=종료.
                                            #   판 모양(종료 조건)을 바꾸는 실행모드 메타(boss 급)
                 town_apart=bool(TOWN_ON and TOWN_APART_ON),   # D69 additive 흩어진 출발(마을 판만) — 배치 메타(solo 급)
+                town_guide=bool(TOWN_ON and TOWN_GUIDE_ON),   # D81 additive 마을 안내(마을 판만) — 시작 마을의 첫 관측에 장소·동료 위치 문단이 한 번 실린다는 표현층 메타
                 town_hear=(TOWN_HEAR if TOWN_HEAR == "zone" else "all"),   # D70 additive 마을 사람 지각 — 'zone'(같은 구역·곁)|'all'(옛 전체). 배달·가시·목격 물리 메타(ally_sight 급)
                 npc_brain=bool(npc_brain), # D69 additive 마을 NPC 두뇌 여부 — 이벤트 line 이 LLM 문장(line_src 'brain')일 수 있다는 표현층 메타
                 npc_hail_stop=bool(NPC_HAIL_ON and NPC_HAIL_STOP_ON),   # D76 additive NPC 인사에 걸음을 멈추는 판(0콜)

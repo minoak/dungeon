@@ -35,8 +35,8 @@ tools/       analyze_run.py analyze_skills.py analyze_social.py report.py make_r
              unheard_audit.py(D72 — 던전에서 지목한 말 중 상대가 못 들은 비율, 0콜)
 scripts/     start.sh live.sh verify.sh watch_map.sh (Linux/WSL 시대 — 전부 `~/dungeon` 을 가정, VPS 서빙 때 손볼 것)
              vm/ setup.sh deploy.sh botpikdun.service Caddyfile README.md (심사용 서버 GCP 서울 VM 배포, 09-13)
-verify_*.py  게이트 68종(루트 — 2단계에서 verify/ 로 이동 예정; verify_public 은 server.py 게이트, verify_account 는 D77 계정, verify_campaign 은 D78 캠페인, verify_resume 은 D79 이어가기, verify_model_wiring 은 D80 다회사 배선, verify_guild 는 D69 길드 척추)
-entities/    몬스터·함정·오브젝트·NPC·맵·건물·의뢰 정의(D50)
+verify_*.py  게이트 69종(루트 — 2단계에서 verify/ 로 이동 예정; verify_companion 은 D81 동료 프리셋·론처 동료 칸·마을 안내, verify_public 은 server.py 게이트, verify_account 는 D77 계정, verify_campaign 은 D78 캠페인, verify_resume 은 D79 이어가기, verify_model_wiring 은 D80 다회사 배선, verify_guild 는 D69 길드 척추)
+entities/    몬스터·함정·오브젝트·NPC·맵·건물·의뢰·동료 프리셋 정의(D50 · companion/ 은 D81 — 파일을 넣으면 론처 동료 칸에 나온다)
 design/      HARNESS_DESIGN.md(D1~D79) · drafts/
 docs/        문서·연대기·데브로그·스크린샷 · PIXEL_DUNGEON_REFERENCE.md(참고 게임 메모)
 game/        관전 클라이언트(Phaser+Vite) · verify/smoke.mjs

@@ -1,0 +1,43 @@
+{
+  "id": "kaya",
+  "name": "카야",
+  "kind": "companion",
+  "tags": [
+    "companion",
+    "adventurer"
+  ],
+  "note": "동료 프리셋(D81, 2026-09-17) — comps.sheet 의 성격·말투·목표는 기본 파티(party.json)의 문장 그대로. comps.npc(line·hail)·comps.story(trait·history)는 SilenceBreaker 임시 문장(2단계 '안 뽑힌 프리셋 = 마을 주민' 재료) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). 능력치는 적지 않는다 — 직업(traits.json jobs)에서 온다. look 은 그림에만 닿는다(엔진·프롬프트 무접촉).",
+  "comps": {
+    "sheet": {
+      "job": "도적",
+      "sex": "여",
+      "traits": [],
+      "persona": "신중하고 함정·기습에 능하다. 위험을 먼저 재고 약은 수를 쓴다.",
+      "speech": "낮고 간결하게. 확신 없는 말은 하지 않고, 경고는 반드시 한 번 더 한다.",
+      "goal": "보물을 최대한 챙겨 나간다 — 단, 죽은 자에게 금화는 소용없다.",
+      "look": {
+        "head": "F2",
+        "body": "B2",
+        "colors": {
+          "hair": "#945c37",
+          "skin": "#eabb8c",
+          "top": "#42738b",
+          "bottom": "#d7c599"
+        },
+        "sprite": "sd-rogue"
+      }
+    },
+    "npc": {
+      "line": "함정은 내가 본다. 대신 내가 멈추라고 하면 멈춰.",
+      "hail": "{name}, 잠깐. 내려가기 전에 물약은 챙겼어?",
+      "walk": {
+        "region": "tavern",
+        "rate": 0.4
+      }
+    },
+    "story": {
+      "trait": "신중한 도적. 주점 근처에서 사람을 살핀다",
+      "history": "위험을 먼저 재는 버릇으로 여태 살아남았다. 보물을 좋아하지만, 죽은 자에게 금화는 소용없다는 말을 입에 달고 산다."
+    }
+  }
+}

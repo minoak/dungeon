@@ -12,10 +12,11 @@
 
 API(JSON):
   GET  /api/presets  traits.json(키워드·직업) + looks(외형 사전, D37) + 기본 파티(party.json) 미리보기 + 상태
+                     + companions(D81 동료 프리셋 목록 — entities/companion/*.json: id·이름·직업·성격·말투·목표·소개 한 줄·외형)
   GET  /api/characters  저장한 캐릭터 목록 {presets:[{id,label,slot}]} — 규격은 docs/character-presets.md
   POST /api/characters  {slot,label?,id?} → id 생략 시 새 저장, 있으면 해당 프리셋 덮어쓰기 → {preset}
   POST /api/characters/delete  {id} → 해당 프리셋 삭제 → {ok:true}
-  POST /api/party    {"slots":[{job,traits[],name,sex,background?,persona?,look?}, ...]} → sheetkit 조립 →
+  POST /api/party    {"slots":[{job,traits[],name,sex,background?,persona?,look?} | {"companion":"<동료 프리셋 id>"}, ...]} → sheetkit 조립 →
                      러너의 load_party 로 재검증 → party_custom.json 저장 (실패 400 + 이유 한 줄)
   POST /api/start    {"resume":true, "brain"?, "key"?} → 멈춘 판 이어가기(D79 — 스냅샷+그 판을 시작한 옵션, 같은 기록 파일에 append) 또는
                      {"map":"normal|big","town":bool,"brain":"gemini_api|claude_cli|anthropic_api|dummy",
@@ -49,6 +50,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import sheetkit                                   # noqa: E402
+import entities                                   # noqa: E402  # D81 동료 프리셋 저장소(entities/companion) — 정의만 읽는다(엔진 무접촉)
 import campaign                                   # noqa: E402  # D78 캠페인 = 판 기록의 0콜 투영(저장 캐릭터별 원정 기록)
 import skill_schema                              # noqa: E402
 import run_control                               # noqa: E402
@@ -409,17 +411,36 @@ def default_party_preview(root):
     return out
 
 
+def companions_payload(data=None):
+    """D81 동료 프리셋 목록 — 화면의 동료 칸이 읽는다. 시트 조립을 거친 값만 싣는다(화면에 보인 것 = 판에 서는 것).
+    about = 정의의 소개 한 줄(story.trait). 정의가 깨졌으면 빈 목록(론처는 산다 — 이유는 엔티티 게이트가 말한다)."""
+    try:
+        defs = entities.companions()
+    except (entities.EntityError, OSError, ValueError):
+        return []
+    out = []
+    for cid, d in defs.items():
+        s = sheetkit.build_companion_sheet(d, data=data)
+        out.append({"id": cid, "name": s["name"], "job": s["job"], "sex": s["sex"], "persona": s["persona"],
+                    "speech": s.get("speech"), "goal": s.get("goal"), "background": s.get("background"),
+                    "about": (d["comps"].get("story") or {}).get("trait"), "look": s.get("look"),
+                    "prompt_chars": sum(len(str(s.get(k) or "")) for k in ("persona", "background", "speech", "goal"))})
+    return out
+
+
 def presets_payload(ctx):
     """GET /api/presets 본문 — 론처 화면이 처음 읽는 것(키워드·직업·외형·기본 파티·모드·상한·상태). server.py 가 재사용."""
     p = ctx.presets
     return {"traits": p["traits"], "max_traits": p["max_traits"], "jobs": p["jobs"],
             "looks": sheetkit.load_looks(),   # D37(09-06) 외형 사전 — 파츠·스와치·기본색
             "default_party": default_party_preview(ctx.root),
+            "companions": companions_payload(p),   # D81 동료 프리셋(파티 2·3번 칸의 선택지) — additive
             "skill_alpha": {"presets": skill_schema.PRESETS,
                             "default_sets": skill_schema.DEFAULT_SETS},
             "default_mode": "standard", "ruleset": "skills-v1",
             "brain_failure_policy": run_control.POLICY,
             "model_ui_version": 2,
+            "party_ui_version": 1,                 # D81 한 장 화면(내 캐릭터 + 동료 칸)이 기대는 서버 — 화면은 이 값이 없으면 '이전 런처' 안내를 띄운다
             "text_limits": TEXT_LIMITS,
             "custom_saved": os.path.exists(ctx.party_path),
             "default_brain": ctx.default_brain or "gemini_api",
@@ -432,8 +453,10 @@ def save_party(ctx, slots, preset_ids=None):
     """슬롯 → sheetkit 조립 → 파일 → 러너의 load_party 로 재검증(이중 검증). 실패는 BadRequest 한 줄.
     preset_ids(D78): 슬롯과 같은 순서의 저장 캐릭터 id — **이 저장소에 있는 id 만** 시트에 붙는다(남의 id·지어낸 id 는 1회용으로)."""
     try:
-        sheets = sheetkit.build_party(slots, data=ctx.presets)
-    except ValueError as e:
+        comps = (entities.companions() if isinstance(slots, (list, tuple)) and
+                 any(isinstance(s, dict) and s.get("companion") is not None for s in slots) else None)
+        sheets = sheetkit.build_party(slots, data=ctx.presets, companions=comps)   # D81 동료 칸({"companion": id})은 저장소 정의에서 조립
+    except (ValueError, entities.EntityError) as e:
         raise BadRequest(str(e))
     ids = list(preset_ids) if isinstance(preset_ids, (list, tuple)) else []
     if any(isinstance(x, str) and x for x in ids):

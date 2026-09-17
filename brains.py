@@ -1363,6 +1363,18 @@ _WIRE_KEYS = frozenset((
                #   '그 밖의 정보' JSON 덤프로 매턴 새 나간다(화이트리스트 폴백)
 
 
+def _town_guide_lines(tg, names):
+    """D81(2026-09-17) 마을 안내 문단 — 시작 마을의 첫 관측에 한 번. 장소 줄은 정의의 특징 문장 그대로(obs.town_guide.places),
+    동료 줄은 그 순간 서 있는 구역(allies). 세계의 사실만 적는다 — 어디로 가라는 말은 없다. ⚠️머리말·'동료의 위치' 문구 임시(검토표)."""
+    L = ["", "## 마을 안내 (처음 한 번만 들린다)"]
+    for p in tg.get("places") or []:
+        L.append("- %s%s — %s" % (p.get("name"), (" (%s)" % p["zone"]) if p.get("zone") else "", p.get("about")))
+    al = ["%s — %s" % (names[str(a["char"])], a["zone"]) for a in (tg.get("allies") or []) if names.get(str(a.get("char")))]
+    if al:
+        L.append("- 동료의 위치: " + ", ".join(al))
+    return L
+
+
 def _wire(obs, names=None, compose=False):
     """obs(dict 계약) → 자기설명 한국어 사실 문장(D17-3). LLM 두뇌 전용 표현 층 —
     dict 계약(스트림·BYO·검증)은 무변경, 여기는 '보여주는 방법'만 소유한다.
@@ -1476,6 +1488,8 @@ def _wire(obs, names=None, compose=False):
         # 정정(07-15): "짜임은 확실히"는 과독이었다 — 네 눈이 본 만큼이 네가 아는 만큼이다.
         if obs.get("floor_notice"):            # D65 개정(09-13): 보스층에 들어서며 한 번 — 세계의 사실(지시 아님)
             L += ["", "## %s (세계의 사실 — 한 번만 들린다)" % ("마을에 들어서며" if obs.get("town") else "이 층에 들어서며"), "- " + str(obs["floor_notice"])]
+        if obs.get("town_guide"):              # D81 마을 안내(시작 마을의 첫 관측 한 번) — 장소마다 특징 한 줄 + 동료의 위치
+            L += _town_guide_lines(obs["town_guide"], names)
         L += ["", "## 장소 (네 눈이 본 만큼이 네가 아는 만큼이다)"]
         head = ("던전 %d층 > %s %s" % (obs.get("depth", 1), z.get("kind", "?"),
                                        z.get("id", "") or "")).rstrip()
@@ -1580,6 +1594,8 @@ def _wire(obs, names=None, compose=False):
     else:
         if obs.get("floor_notice"):            # D65 개정(09-13): 보스층 진입 한마디(옛 관측 모드도 같은 자리)
             L += ["", "## %s (세계의 사실 — 한 번만 들린다)" % ("마을에 들어서며" if obs.get("town") else "이 층에 들어서며"), "- " + str(obs["floor_notice"])]
+        if obs.get("town_guide"):              # D81 마을 안내 — 옛 관측 모드도 같은 자리
+            L += _town_guide_lines(obs["town_guide"], names)
         L += ["", "## 지금 보이는 것"]
         n0 = len(L)
         ex = s.get("exit")

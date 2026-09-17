@@ -91,6 +91,19 @@
   .presetMessage { min-height: 18px; margin-top: 5px; font-size: 12px; color: #6fe3b0; overflow-wrap: anywhere; }
   .presetMessage.error { color: #ff8b7a; }
   button:disabled { opacity: .45; cursor: default; }
+  /* D81 내 캐릭터 + 동료 칸 — 왼쪽은 편집 카드 하나, 오른쪽은 고르기만 하는 동료 둘. 좁은 화면은 한 줄로 */
+  .partyGrid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  .partyGrid[hidden] { display: none; }
+  .partyGrid #cards { grid-template-columns: minmax(0, 1fr); }
+  #mates { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .mate .mateInfo { margin-top: 10px; font-size: 12.5px; color: #b9bec9; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+  .mate .lookPrev { width: 64px; height: 64px; }
+  .histBox { margin: -4px 0 10px; }
+  .histList { font-size: 12.5px; color: #b9bec9; margin-top: 6px; display: flex; flex-direction: column; gap: 8px; }
+  .histList .page { color: #8a8f9c; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 90px; overflow: auto; }
+  details.advanced { margin-top: 14px; border-top: 1px solid #23262f; padding-top: 8px; }
+  details.advanced > summary { font-size: 13px; color: #b9bec9; }
+  @media (max-width: 760px) { .partyGrid { grid-template-columns: minmax(0, 1fr); } }
 </style>
 <link rel="stylesheet" href="/viewer/assets/skills.css">
 </head>
@@ -162,57 +175,19 @@
   </div>
 </section>
 
-<!-- ═══ 2. 파티 ═══ -->
+<!-- ═══ 2. 내 캐릭터와 동료(D81, 2026-09-17) — 옵션 화면 없이 바로 마을로. 나머지 선택은 '고급 설정' 접이식 ═══ -->
 <section id="sParty" hidden>
-  <h2>1 / 2 · 파티</h2>
-  <div class="row" style="margin-bottom:12px">
-    <div class="radios" id="partyMode">
-      <label class="on"><input type="radio" name="pm" value="custom" checked>커스텀 파티</label>
-      <label><input type="radio" name="pm" value="default">기본 파티 (두란·카야·피른)</label>
-    </div>
-    <span class="muted">성격은 키워드(최대 3개)로 고르거나 직접 쓴다 — 키워드는 문장으로 바뀌지 않고 그대로 시트에 들어간다. 배경은 자유롭게.</span>
+  <h2>내 캐릭터와 동료</h2><!-- D81 ⚠️ 문구 임시: 검토표 149~ -->
+  <div class="muted" style="margin-bottom:12px">1번 칸은 네 캐릭터다. 2·3번 칸에는 함께 갈 동료를 고른다 — 준비된 동료이거나, 네가 저장해 둔 다른 캐릭터다. 출발하면 마을에서 시작한다.<br>
+    성격은 키워드(최대 3개)로 고르거나 직접 쓴다 — 키워드는 문장으로 바뀌지 않고 그대로 시트에 들어간다. 배경은 자유롭게.</div>
+  <div class="partyGrid" id="partyGrid">
+    <div class="cards" id="cards"></div>
+    <div id="mates"></div>
   </div>
-  <div class="cards" id="cards"></div>
   <div id="presetStatus" class="hint" role="status"></div>
   <div class="preview" id="defaultPreview" hidden></div>
   <div id="err"></div>
-  <div class="foot">
-    <button id="bBack1">← 타이틀</button>
-    <button class="primary" id="bNext">다음: 던전 옵션 →</button>
-  </div>
-</section>
-
-<!-- ═══ 3. 옵션 → 시작 ═══ -->
-<section id="sOpts" hidden>
-  <h2>2 / 2 · 던전</h2>
-  <div class="wl-alpha-panel">
-    <label for="runMode"><b>원정 모드</b></label>
-    <select id="runMode"><option value="standard">기본 원정 · 스킬과 주사위 전투</option><option value="classic">이전 규칙 · 비교용</option></select>
-    <div id="alphaInfo" hidden>
-      <h3 style="margin-top:14px">스킬을 고르고, 주사위로 겨룬다</h3>
-      <p>각 모험가는 스킬 2개로 시작해. 명중·피해를 주사위로 정하고, <b>3층에 도착하면 랜덤 스킬을 하나씩</b> 얻어.<br>
-        던전 1~5층 · 최대 600틱 · 마을에서 시작하려면 아래 체크(0층 마을 → 던전 입구)</p>
-      <p class="wl-skill-note">예: 1d6은 6면 주사위 하나, 피해 1~6을 뜻해. 스킬은 모험가가 직접 선택해 사용해.<br>
-        사용 후 재사용 대기는 다른 행동을 완료할 때 줄어들어. 관전 화면에서 설명과 남은 대기를 볼 수 있어.</p>
-      <div id="alphaPreview" class="wl-alpha-preview"></div>
-      <p id="alphaBrainHint" class="hint"></p>
-    </div>
-    <p id="standardInfo" class="hint">스킬을 적용하기 전의 규칙으로 비교하는 원정이야. 스킬·주사위 피해·랜덤 스킬 획득은 꺼져 있어.</p>
-  </div>
-  <div class="opts">
-    <div class="card">
-      <h3>맵</h3>
-      <div class="radios" id="mapMode">
-        <label class="on"><input type="radio" name="map" value="normal" checked>보통 (56×20)</label>
-        <label><input type="radio" name="map" value="big">큰 판 (80×30, 몹 7)</label>
-      </div>
-      <label class="f"><input type="checkbox" id="town"> 마을에서 시작 (0층 → 던전 입구, D29)</label>
-      <label class="f" title="마을 시작 때 셋이 광장에 붙어 서는 대신 각자 건물(길드·주점·신전) 문턱 곁에서 시작한다 — 각자 볼일을 보다가 만나는 그림(D69, 2026-09-14)"><input type="checkbox" id="townApart" checked> 흩어진 출발 (마을에서 각자 다른 건물 앞에서 시작, D69)</label>
-      <label class="f" title="캐릭터가 마을 NPC(접수원·주점 주인·성직자)에게 말을 걸면 NPC 의 한마디를 LLM 이 쓴다(말 걸 때만 1콜, NPC 는 먼저 말하지 않음, 물품·보고 판정은 엔진). 끄면 정해진 대사(D69)"><input type="checkbox" id="npcBrain" checked> 마을 NPC 두뇌 (말을 걸면 NPC 가 LLM 문장으로 답한다 · 1콜, D69)</label>
-      <label class="f" title="캐릭터 영속은 서빙 단계의 기능 — 지금은 판마다 별개(2026-09-13). 켜면 이 판이 로컬 bestiary.json 을 읽고 쓴다"><input type="checkbox" id="bestiary"> 도감 이월 (캐릭터 영속 — 서빙 전까지 기본 끔, D64)</label>
-      <label class="f" title="최심층(설정한 깊이의 마지막 층)에 보스가 서고 출구는 봉인된 워프게이트가 된다. 보스가 쓰러지면 열리고, 게이트를 쓰면 마을로 돌아와 판이 끝난다(2026-09-13 관찰용 첫 판)"><input type="checkbox" id="boss" checked> 보스층·귀환 (최심층 보스를 잡으면 워프게이트로 마을 귀환, D65)</label>
-      <label class="f" title="관찰용 프리셋: 판을 최심층에서 바로 시작하고 파티를 보스룸 문 앞에 세운다(마을 없음·보스 켬). 보스전까지 가는 콜을 아낀다"><input type="checkbox" id="startBoss"> 보스방 앞에서 시작 (프리셋 — 최심층·보스 켬·마을 없음, D67)</label>
-    </div>
+  <div class="opts" style="margin-top:14px">
     <div class="card">
       <h3>두뇌</h3>
       <select id="brain">
@@ -231,6 +206,43 @@
       <h3 id="keyTitle">선택한 회사의 API 키 (이 판에만)</h3>
       <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="선택한 회사에서 발급한 API 키">
       <div class="hint" id="keyHint">입력한 키는 이 원정에만 사용하며 파일이나 브라우저 저장소에 저장하지 않는다. 비용은 키 주인에게 청구된다.</div>
+    </div>
+  </div>
+  <details id="advanced" class="advanced">
+    <summary>고급 설정 — 파티 방식 · 원정 규칙 · 맵과 마을 · 시드 · 예상 비용</summary>
+    <div class="row" style="margin:12px 0">
+    <div class="radios" id="partyMode">
+      <label class="on"><input type="radio" name="pm" value="custom" checked>커스텀 파티</label>
+      <label><input type="radio" name="pm" value="default">기본 파티 (두란·카야·피른)</label>
+    </div>
+    </div>
+  <div class="wl-alpha-panel">
+    <label for="runMode"><b>원정 모드</b></label>
+    <select id="runMode"><option value="standard">기본 원정 · 스킬과 주사위 전투</option><option value="classic">이전 규칙 · 비교용</option></select>
+    <div id="alphaInfo" hidden>
+      <h3 style="margin-top:14px">스킬을 고르고, 주사위로 겨룬다</h3>
+      <p>각 모험가는 스킬 2개로 시작해. 명중·피해를 주사위로 정하고, <b>3층에 도착하면 랜덤 스킬을 하나씩</b> 얻어.<br>
+        던전 1~5층 · 최대 600틱 · 기본은 마을(0층)에서 시작해 던전 입구로 간다 — 아래 '마을에서 시작'을 끄면 던전 1층에서 시작</p>
+      <p class="wl-skill-note">예: 1d6은 6면 주사위 하나, 피해 1~6을 뜻해. 스킬은 모험가가 직접 선택해 사용해.<br>
+        사용 후 재사용 대기는 다른 행동을 완료할 때 줄어들어. 관전 화면에서 설명과 남은 대기를 볼 수 있어.</p>
+      <div id="alphaPreview" class="wl-alpha-preview"></div>
+      <p id="alphaBrainHint" class="hint"></p>
+    </div>
+    <p id="standardInfo" class="hint">스킬을 적용하기 전의 규칙으로 비교하는 원정이야. 스킬·주사위 피해·랜덤 스킬 획득은 꺼져 있어.</p>
+  </div>
+  <div class="opts">
+    <div class="card">
+      <h3>맵</h3>
+      <div class="radios" id="mapMode">
+        <label class="on"><input type="radio" name="map" value="normal" checked>보통 (56×20)</label>
+        <label><input type="radio" name="map" value="big">큰 판 (80×30, 몹 7)</label>
+      </div>
+      <label class="f"><input type="checkbox" id="town" checked> 마을에서 시작 (0층 → 던전 입구, D29)</label>
+      <label class="f" title="마을 시작 때 셋이 광장에 붙어 서는 대신 각자 건물(길드·주점·신전) 문턱 곁에서 시작한다 — 각자 볼일을 보다가 만나는 그림(D69, 2026-09-14)"><input type="checkbox" id="townApart" checked> 흩어진 출발 (마을에서 각자 다른 건물 앞에서 시작, D69)</label>
+      <label class="f" title="캐릭터가 마을 NPC(접수원·주점 주인·성직자)에게 말을 걸면 NPC 의 한마디를 LLM 이 쓴다(말 걸 때만 1콜, NPC 는 먼저 말하지 않음, 물품·보고 판정은 엔진). 끄면 정해진 대사(D69)"><input type="checkbox" id="npcBrain" checked> 마을 NPC 두뇌 (말을 걸면 NPC 가 LLM 문장으로 답한다 · 1콜, D69)</label>
+      <label class="f" title="캐릭터 영속은 서빙 단계의 기능 — 지금은 판마다 별개(2026-09-13). 켜면 이 판이 로컬 bestiary.json 을 읽고 쓴다"><input type="checkbox" id="bestiary"> 도감 이월 (캐릭터 영속 — 서빙 전까지 기본 끔, D64)</label>
+      <label class="f" title="최심층(설정한 깊이의 마지막 층)에 보스가 서고 출구는 봉인된 워프게이트가 된다. 보스가 쓰러지면 열리고, 게이트를 쓰면 마을로 돌아와 판이 끝난다(2026-09-13 관찰용 첫 판)"><input type="checkbox" id="boss" checked> 보스층·귀환 (최심층 보스를 잡으면 워프게이트로 마을 귀환, D65)</label>
+      <label class="f" title="관찰용 프리셋: 판을 최심층에서 바로 시작하고 파티를 보스룸 문 앞에 세운다(마을 없음·보스 켬). 보스전까지 가는 콜을 아낀다"><input type="checkbox" id="startBoss"> 보스방 앞에서 시작 (프리셋 — 최심층·보스 켬·마을 없음, D67)</label>
     </div>
     <div class="card" id="priceCard" style="grid-column:1 / -1;min-width:0"><!-- D80 비용 표시 ⚠️ 임시 -->
       <h3>판단 가격표 · 예상 비용 (USD)</h3>
@@ -267,10 +279,11 @@
       <div class="hint">모험가는 대상과 행동을 자유롭게 조합한다. 멀리 있는 대상에게 행동하면 필요한 거리까지 먼저 다가간다.</div>
     </div>
   </div>
+  </details>
   <div id="err2" style="color:#ff8b7a;font-size:13px;min-height:18px;margin-top:10px"></div>
   <div class="foot">
-    <button id="bBack2">← 파티</button>
-    <button class="primary" id="bStart">원정 시작</button>
+    <button id="bBack1">← 타이틀</button>
+    <button class="primary" id="bStart">마을로 출발</button>
   </div>
 </section>
 
@@ -358,7 +371,7 @@ async function api(path, body) {
   if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
   return j;
 }
-function show(id) { for (const s of ['sTitle', 'sParty', 'sOpts']) $(s).hidden = (s !== id); }
+function show(id) { for (const s of ['sTitle', 'sParty']) $(s).hidden = (s !== id); }   // D81: 옵션 화면(sOpts)은 파티 화면의 '고급 설정' 접이식으로 들어갔다
 
 /* ═══ 계정(D77) — 공개 서버(server.py)에서만. 키는 이 페이지 메모리에만: 들어온 키를 원정 키 칸에 채워 준다 ═══ */
 let account = null, isPublic = false;
@@ -396,7 +409,7 @@ for (const id of ['brainModel', 'resumeModel']) $(id).onchange = () => toggleCus
 $('brainModelCustom').oninput = () => renderPrices();
 function partyPromptSizes() {
   return partyMode === 'default' ? (presets?.default_party || []).map(p => p.prompt_chars || 0)
-    : slots.map(s => [...personaOf(s), ...s.background].length);
+    : [[...personaOf(slots[0]), ...slots[0].background].length, ...mates.map(mateOf).filter(Boolean).map(m => m.chars)];   // D81 내 캐릭터 + 고른 동료
 }
 const dollars = n => '$' + n.toFixed(n < 1 ? 5 : 2);
 function renderPrices() {
@@ -557,7 +570,7 @@ async function refreshStatus() {
   } catch (e) { $('tStatus').textContent = '서버 연결 실패 — launcher.py 가 떠 있나? (' + e.message + ')'; }
 }
 $('bNew').onclick = async () => {
-  try { await loadPresets(); show('sParty'); }
+  try { await loadPresets(); updateMode(); renderPrices(); show('sParty'); }   // D81: 옵션이 같은 장에 있다 — 들어설 때 한 번 그린다
   catch (e) { $('tStatus').textContent = e.message; }
 };
 function modeName(mode) { return mode === 'alpha' ? '스킬 알파' : mode === 'classic' ? '이전 규칙 원정' : '기본 원정'; }
@@ -612,7 +625,8 @@ $('bOracleClear').onclick = async () => { await api('/api/oracle', { text: '' })
 async function loadPresets() {
   if (presets) { await refreshCharacters(); return; }
   presets = await api('/api/presets');
-  if (!presets.text_limits || presets.ruleset !== 'skills-v1' || presets.brain_failure_policy !== 'retry-pause-v1' || presets.model_ui_version !== 2) {
+  if (!presets.text_limits || presets.ruleset !== 'skills-v1' || presets.brain_failure_policy !== 'retry-pause-v1' || presets.model_ui_version !== 2
+      || presets.party_ui_version !== 1) {                              // D81: 동료 목록(companions)을 모르는 옛 서버면 빈 동료 칸 대신 재시작 안내
     presets = null;
     throw new Error(modelUpgradeMessage);
   }
@@ -626,6 +640,7 @@ async function loadPresets() {
     const art = window.WLSprites && WLSprites.illustrations().find(p => p.job === s.job);
     if (s.look && art) s.look.sprite = art.id;
   }
+  if (!matesTouched) mates = defaultMates();                           // D81 첫 화면의 동료 칸은 채워서 시작한다(바로 출발할 수 있게)
   renderCards();
   await refreshCharacters();
   $('defaultPreview').innerHTML = presets.default_party.map(p =>
@@ -635,9 +650,9 @@ async function loadPresets() {
 function renderCards() {
   const jobs = Object.keys(presets.jobs);
   const traits = Array.isArray(presets.traits) ? presets.traits : Object.keys(presets.traits);   // 09-12: 키워드 목록(옛 사전 형식도 키만)
-  $('cards').innerHTML = slots.map((s, i) => `
+  $('cards').innerHTML = slots.slice(0, 1).map((s, i) => `
     <div class="card" data-i="${i}">
-      <h3><span class="dot" style="background:${COLORS[i]}"></span>모험가 ${i + 1}</h3>
+      <h3><span class="dot" style="background:${COLORS[i]}"></span>내 캐릭터</h3>
       <div class="presetBox">
         <label class="f" for="preset-${i}">캐릭터 프리셋</label>
         <select id="preset-${i}" data-preset-select><option value="">저장된 캐릭터 선택</option></select>
@@ -647,6 +662,7 @@ function renderCards() {
         <div class="row"><button class="small" data-preset-save>새로 저장</button><button class="small" data-preset-update disabled>덮어쓰기</button></div>
         <div class="presetMessage" data-preset-message role="status"></div>
       </div>
+      <div class="histBox" data-hist></div>
       <label class="f">이름</label>
       <input type="text" maxlength="20" data-k="name" value="${esc(s.name)}" placeholder="한 줄, 20자 이내">
       <label class="f">성별</label>
@@ -667,6 +683,100 @@ function renderCards() {
     </div>`).join('');
   for (const card of $('cards').querySelectorAll('.card')) bindCard(card, +card.dataset.i);
   paintPresetControls();
+  renderMates();                                                       // D81 내 캐릭터가 바뀌면 동료 목록(내 저장 캐릭터에서 나를 뺀 것)도 바뀐다
+  paintHistory();
+}
+
+/* ═══ 동료 칸(D81) — 2·3번 칸은 고르기만 한다: 동료 프리셋(entities/companion) 또는 내가 저장한 다른 캐릭터 ═══ */
+let mates = ['', ''];                            // 'c:<동료 프리셋 id>' | 'p:<저장 캐릭터 id>' | ''(비움)
+let matesTouched = false;                        // 한 번이라도 직접 고르면 기본 채움을 다시 하지 않는다
+const companionList = () => (presets && presets.companions) || [];
+function mateOf(v) {                             // 선택값 → 화면·요청에 쓸 한 사람(없는 id 면 null)
+  if (!v) return null;
+  const id = v.slice(2);
+  if (v.startsWith('c:')) {
+    const c = companionList().find(x => x.id === id);
+    return c ? { kind: 'c', ...c, chars: c.prompt_chars || 0 } : null;
+  }
+  const p = characterPresets.find(x => x.id === id && x.id !== slotFrom[0]);   // 1번 칸에 선 저장본은 동료로 못 고른다(같은 사람 둘)
+  return p ? { kind: 'p', id, name: p.slot.name, job: p.slot.job, sex: p.slot.sex, persona: personaOf(p.slot), about: p.label,
+               look: p.slot.look, chars: [...personaOf(p.slot), ...(p.slot.background || '')].length, slot: p.slot, preset: p } : null;
+}
+function defaultMates() {                        // 첫 화면의 기본 동료 — 내 직업과 다른 직업의 프리셋을 앞에서부터 둘(⚠️임시 가정)
+  const list = companionList();
+  const order = [...list.filter(c => c.job !== slots[0].job), ...list.filter(c => c.job === slots[0].job)];
+  return [0, 1].map(i => order[i] ? 'c:' + order[i].id : '');
+}
+function mateInfo(m) {
+  const row = (k, t) => t ? `<div><span class="muted">${k}</span> ${esc(t)}</div>` : '';
+  return `<div class="look"><canvas class="lookPrev" width="16" height="16"></canvas><div class="lookBody">
+      <div><b>${esc(m.name)}</b> — ${esc(m.job)}(${esc(m.sex)})${m.kind === 'p' ? ' · 내가 저장한 캐릭터' + esc(campaignLine(m.preset)) : ''}</div>
+      ${m.kind === 'c' && m.about ? `<div class="hint">${esc(m.about)}</div>` : ''}
+    </div></div>` + row('성격', m.persona) + row('말투', m.speech) + row('목표', m.goal);
+}
+function renderMates() {
+  if (!presets) return;
+  mates = mates.map(v => mateOf(v) ? v : '');                          // 지워진 저장본·1번 칸으로 옮겨 간 저장본은 칸을 비운다
+  const options = v => {
+    const sel = x => (v === x ? ' selected' : '');
+    const comp = companionList().map(c => `<option value="c:${esc(c.id)}"${sel('c:' + c.id)}>${esc(c.name)} · ${esc(c.job)}</option>`).join('');
+    const mine = characterPresets.filter(p => p.id !== slotFrom[0]).map(p =>
+      `<option value="p:${esc(p.id)}"${sel('p:' + p.id)}>${esc(p.label)} · ${esc(p.slot.job)}</option>`).join('');
+    return `<option value="">비움 — 이 칸 없이 간다</option>` + (comp ? `<optgroup label="준비된 동료">${comp}</optgroup>` : '') +
+      (mine ? `<optgroup label="내가 저장한 캐릭터">${mine}</optgroup>` : '');
+  };
+  $('mates').innerHTML = mates.map((v, i) => {
+    const m = mateOf(v);
+    return `<div class="card mate" data-mate="${i}">
+      <h3><span class="dot" style="background:${COLORS[i + 1]}"></span>동료 ${i + 1}</h3>
+      <select data-mate-select aria-label="동료 ${i + 1}">${options(v)}</select>
+      <div class="mateInfo">${m ? mateInfo(m) : '<span class="muted">이 칸은 비워 두고 간다.</span>'}</div>
+    </div>`;
+  }).join('');
+  for (const card of $('mates').querySelectorAll('[data-mate]')) {
+    const i = +card.dataset.mate, m = mateOf(mates[i]);
+    if (m && card.querySelector('canvas')) drawLook(card.querySelector('canvas'), m.look);
+    card.querySelector('[data-mate-select]').onchange = e => {
+      mates[i] = e.target.value; matesTouched = true;
+      renderMates(); updateMode(); renderPrices();
+    };
+  }
+}
+function partyPayload() {                        // /api/party 본문 — 1번=내 캐릭터, 그 뒤로 고른 동료(비운 칸은 빠진다). 저장본이면 id 동봉(D78)
+  const out = [slots[0]], ids = [slotFrom[0]];
+  for (const m of mates.map(mateOf)) {
+    if (!m) continue;
+    if (m.kind === 'c') { out.push({ companion: m.id }); ids.push(''); }
+    else { out.push(JSON.parse(JSON.stringify(m.slot))); ids.push(m.id); }
+  }
+  return { slots: out, preset_ids: ids };
+}
+
+/* ═══ 이력(D81 최소) — 1번 칸이 저장한 캐릭터면 그 캐릭터의 원정 기록(D78 캠페인)을 카드 안에서 본다 ═══ */
+const OUTCOME_KR = { returned: '귀환', escaped: '탈출', wiped: '전멸', timeout: '시간 초과' };
+const STATUS_KR = { running: '진행 중', stopped: '중단', ended: '끝남' };
+const floorKr = d => (d === 0 ? '마을' : `${d}층`);             // 0층 = 마을(D29) — 기록에서는 이름으로 읽는다
+const howKr = r => (r.status === 'ended' ? (OUTCOME_KR[r.outcome] || r.outcome || '끝남') : (STATUS_KR[r.status] || r.status || ''));
+function paintHistory() {
+  const box = $('cards').querySelector('[data-hist]');
+  if (!box) return;
+  const pid = slotFrom[0], c = campaignById[pid];
+  if (!c) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="hint">이 캐릭터의 기록 — 원정 ${c.runs}회 · ${c.depth_max > 0 ? `가장 깊이 ${esc(c.depth_max)}층` : '아직 던전에 내려가지 않음'}${c.deaths ? ` · 쓰러짐 ${c.deaths}` : ''} · 마지막 ${esc(floorKr(c.last.depth_last))} ${esc(howKr(c.last))}</div>
+    <details data-hist-log><summary>원정 기록 보기</summary><div class="histList" data-hist-list>불러오는 중…</div></details>`;
+  box.querySelector('[data-hist-log]').ontoggle = async e => {
+    if (!e.target.open) return;
+    const list = box.querySelector('[data-hist-list]');
+    try {
+      const j = await api('/api/characters/log?id=' + encodeURIComponent(pid));
+      list.innerHTML = (j.runs || []).slice(0, 10).map(r => {
+        const page = (r.pages || []).slice(-1)[0];
+        return `<div><div>${esc(String(r.started || '').replace('T', ' ').slice(0, 16))} · ${esc(floorKr(r.depth_last))} ${esc(howKr(r))} · ${esc(r.turn_last)}틱` +
+          (r.died_turn != null ? ' · 쓰러짐' : '') + ((r.party || []).length ? ` · 함께: ${r.party.map(p => esc(p.name)).join('·')}` : '') + `</div>` +
+          (page ? `<div class="page">수첩(${esc(floorKr(page.depth))}): ${esc(page.text)}</div>` : '') + `</div>`;
+      }).join('') || '기록이 없다.';
+    } catch (err) { list.textContent = err.message; }
+  };
 }
 
 async function refreshCharacters() {
@@ -675,9 +785,11 @@ async function refreshCharacters() {
     characterPresets = result.presets;
     campaignById = result.campaign || {};                              // D78 기록 요약(없으면 빈 객체 — 옛 론처 응답도 산다)
     $('presetStatus').textContent = characterPresets.length
-      ? `저장된 캐릭터 ${characterPresets.length}명 · 어느 파티 칸에도 불러올 수 있어요.`
+      ? `저장된 캐릭터 ${characterPresets.length}명 · 내 캐릭터로 불러오거나 동료 칸에서 고를 수 있어요.`
       : '마음에 드는 캐릭터를 저장해 두고 다음 원정에서 다시 불러오세요.';
     paintPresetControls();
+    renderMates();                                                     // D81 저장 목록이 바뀌면 동료 칸의 '내가 저장한 캐릭터'도 바뀐다
+    paintHistory();
   } catch (e) {
     $('presetStatus').textContent = '프리셋을 불러오지 못했어요. 론처가 최신 버전인지 확인해 주세요. ' + e.message;
   }
@@ -695,7 +807,7 @@ function paintPresetControls() {
 function campaignLine(p) {                       // D78 저장 캐릭터의 기록 한 줄(없으면 빈 문자열)
   const c = p && campaignById[p.id];
   if (!c) return '';
-  return ` — 원정 ${c.runs}회${c.deaths ? `, 쓰러짐 ${c.deaths}` : ''}, 마지막 ${c.last.label}`;
+  return ` — 원정 ${c.runs}회${c.deaths ? `, 쓰러짐 ${c.deaths}` : ''}, 마지막 ${floorKr(c.last.depth_last)} ${howKr(c.last)}`;   // D81: 0층은 '마을'로 읽는다(이력 칸과 같은 말)
 }
 function presetMessage(i, text, error=false) {
   const el = $('cards').querySelector(`[data-i="${i}"] [data-preset-message]`);
@@ -836,24 +948,12 @@ for (const lab of $('partyMode').querySelectorAll('label')) {
     e.preventDefault();
     partyMode = lab.querySelector('input').value;
     $('partyMode').querySelectorAll('label').forEach(l => l.classList.toggle('on', l === lab));
-    $('cards').hidden = partyMode !== 'custom';
+    $('partyGrid').hidden = partyMode !== 'custom';                    // D81 내 캐릭터 카드 + 동료 칸을 함께
     $('defaultPreview').hidden = partyMode !== 'default';
+    updateMode(); renderPrices();
   };
 }
 $('bBack1').onclick = () => show('sTitle');
-$('bNext').onclick = async () => {
-  $('err').textContent = '';
-  if (partyMode === 'custom') {
-    try {
-      const res = await api('/api/party', { slots, preset_ids: slotFrom });   // D78 칸의 출처(저장 id) 동봉 — 서버는 이 저장소의 id 만 받는다
-      $('err').style.color = '#6fe3b0';
-      $('err').textContent = '저장됨: ' + res.party.map(p => `${p.name}(${p.job}: ${p.traits.join('·')})`).join(' / ');
-    } catch (e) { $('err').style.color = '#ff8b7a'; $('err').textContent = e.message; return; }
-  }
-  updateMode();
-  renderPrices();
-  show('sOpts');
-};
 
 /* ═══ 옵션 → 시작 ═══ */
 function updateMode() {
@@ -861,26 +961,27 @@ function updateMode() {
   $('alphaInfo').hidden = !alpha;
   $('standardInfo').hidden = alpha;
   $('town').disabled = false;                 // 마을 시작은 두 모드 다 된다(09-11 마을 v1 — 파트너 "스킬 원정에서 마을 시작이 안 돼")
-  $('bStart').textContent = alpha ? '원정 시작 → 관전' : '이전 규칙으로 시작';
+  const toTown = $('town').checked && !$('startBoss').checked;       // D81 마을이 출발의 기본 — 버튼이 어디로 가는지 말한다
+  $('bStart').textContent = (toTown ? '마을로 출발' : '던전으로 출발') + (alpha ? '' : ' (이전 규칙)');
   $('alphaBrainHint').textContent = $('brain').value === 'dummy'
     ? '규칙 두뇌는 스킬을 선택하지 않아. 스킬을 쓰는 모습을 보려면 Gemini나 Claude를 선택해.'
     : '원정의 소요 시간과 API 비용은 모험가들의 행동에 따라 달라져.';
   if (!presets?.skill_alpha) return;
   const a = { ...presets.skill_alpha, skills: true, trpg_combat: true };
-  const members = partyMode === 'custom' ? slots : presets.default_party;
+  const members = partyMode === 'custom' ? [slots[0], ...mates.map(mateOf).filter(Boolean)] : presets.default_party;   // D81 내 캐릭터 + 고른 동료
   $('alphaPreview').innerHTML = members.map((s, i) => `<div><b>${esc(s.name || `${i + 1}번 모험가`)} · 시작 스킬</b>` +
     skillsHtml(a, { skills: a.default_sets[i % a.default_sets.length], alive: true, hp: 99 }) + '</div>').join('');
 }
 $('runMode').onchange = updateMode;
+$('town').onchange = updateMode; $('startBoss').onchange = updateMode;   // D81 출발 버튼의 말(마을로/던전으로)
 $('brain').onchange = changeBrain;
 $('runMode').value = new URLSearchParams(location.search).get('mode') === 'classic' ? 'classic' : 'standard';
 updateMode();
 for (const lab of $('mapMode').querySelectorAll('label')) {
   lab.onclick = (e) => { e.preventDefault(); $('mapMode').querySelectorAll('label').forEach(l => l.classList.toggle('on', l === lab)); };
 }
-$('bBack2').onclick = () => show('sParty');
 $('bStart').onclick = async () => {
-  $('err2').textContent = '';
+  $('err2').textContent = ''; $('err2').style.color = '#ff8b7a';
   if (modelUiVersion !== 2) { $('err2').textContent = modelUpgradeMessage; return; }
   const body = {
     map: $('mapMode').querySelector('label.on input').value,
@@ -905,6 +1006,7 @@ $('bStart').onclick = async () => {
   }
   $('bStart').disabled = true;
   try {
+    if (partyMode === 'custom') await api('/api/party', partyPayload());   // D81 '다음' 없이 출발 버튼이 파티를 저장하고 연다(D78 칸의 출처 id 동봉 — 서버는 이 저장소의 id 만 받는다)
     await api('/api/start', body);
     $('err2').style.color = '#8a8f9c';
     $('err2').textContent = '러너를 띄우는 중… 던전이 생성되면 관전 뷰어로 넘어간다.';

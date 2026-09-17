@@ -23,13 +23,15 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, 'entities')
 SPRITE_DIR = os.path.join(HERE, 'game', 'src', 'assets', 'world')
-KINDS = ('monster', 'trap', 'object', 'npc', 'map', 'building', 'quest')   # quest(D61, 09-12): 길드 게시판의 의뢰 — 정보만
+KINDS = ('monster', 'trap', 'object', 'npc', 'map', 'building', 'quest', 'companion')   # quest(D61, 09-12): 길드 게시판의 의뢰 — 정보만
+#   companion(D81, 09-17): 동료 프리셋 — 파티에 뽑히면 동료 칸의 시트(sheet), 안 뽑히면 마을 주민(npc·story, 2단계)
 COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
          'trap': {'trap', 'knowledge'},
          'object': {'equipment', 'consumable', 'loot', 'container', 'heal', 'exit', 'knowledge'},
          'npc': {'npc', 'knowledge', 'story'},   # story=D75(09-15) 장소·사람 소개(trait 한 줄·history 본문) — 도감 지식과 다른 층(해금 없음)
          'map': {'space', 'story'}, 'building': {'building', 'board', 'oracle', 'story'},   # D61 건물 역할 부품(메모 §4-4 [제안]): 게시판·신탁 · story=D75
-         'quest': {'quest'}}
+         'quest': {'quest'},
+         'companion': {'sheet', 'npc', 'story'}}   # D81: sheet=파티 시트 칸(능력치 없음 — 직업에서) · npc/story=마을 주민일 때의 말·걸음·소개(NPC 와 같은 꼴)
 UNLOCK_EVENTS = {'encounter', 'kill', 'search_first', 'trap_avoid', 'trap_disarm', 'visit', 'talk'}   # 메모 §2-5 어휘.
 #   코드가 세는 건 encounter 뿐(bestiary.Issuer, D53) — 나머지는 검증기만 아는 예약어(정의에 적어도 아직 안 센다).
 BASELINE_MONSTER = '고블린'   # 모르는 종(장면 저작의 임의 이름)은 기준선 몹의 몸 — 낯선 짐승도 몸은 있다
@@ -46,6 +48,7 @@ def _problems(pairs, root):
     out, ids = [], {}
     boards, kinds_by_id = [], {}                     # D61 2차 검사 재료
     quest_mons = []                                  # D69 2차 검사 재료(처치형 의뢰의 몬스터 id)
+    companion_names = []                             # D81 2차 검사 재료(동료 이름 — 파티 안에서 이름이 곧 열쇠라 서로 달라야 한다)
     for path, d in pairs:
         rel = os.path.relpath(path, root)
         stem = os.path.splitext(os.path.basename(path))[0]
@@ -117,7 +120,16 @@ def _problems(pairs, root):
                     out.append('%s: trap.%s 정수 필요' % (rel, k))
         if kind == 'npc' and not (comps.get('npc') or {}).get('line'):
             out.append('%s: npc.line 필요' % rel)
-        if kind == 'npc' and (comps.get('npc') or {}).get('walk') is not None:   # D73 행인 — 구역 id 문자열 + 걸음 확률 0~1
+        if kind == 'companion':                              # D81 동료 프리셋 — 시트 칸은 시트 조립기가 그대로 검증한다(직업·키워드·상한·외형)
+            import sheetkit                                  # 지연 import — 엔진 import 경로에 시트 도구를 끌어들이지 않는다(표준 라이브러리만 쓰는 모듈)
+            try:
+                sheetkit.build_companion_sheet(d)
+            except (ValueError, OSError) as e:
+                out.append('%s: sheet — %s' % (rel, e))
+            if comps.get('npc') is not None and not (comps.get('npc') or {}).get('line'):
+                out.append('%s: npc 부품이 있으면 npc.line 필요' % rel)
+            companion_names.append((rel, d.get('name')))
+        if kind in ('npc', 'companion') and (comps.get('npc') or {}).get('walk') is not None:   # D73 행인 — 구역 id 문자열 + 걸음 확률 0~1
             wk = (comps.get('npc') or {}).get('walk')
             if not isinstance(wk, dict) or not isinstance(wk.get('region'), str) or not wk['region']:
                 out.append('%s: npc.walk 는 {region(layout 구역 id), rate} 객체' % rel)
@@ -176,6 +188,11 @@ def _problems(pairs, root):
     for rel, mid in quest_mons:                      # 2차(D69): 처치형 의뢰의 몬스터가 실제 monster 정의인가
         if kinds_by_id.get(mid) != 'monster':
             out.append('%s: quest.req.monster %r 는 monster 정의가 아니다' % (rel, mid))
+    seen_names = {}
+    for rel, nm in companion_names:                  # 2차(D81): 동료 이름은 서로 달라야 한다(둘을 같이 뽑으면 파티 이름 중복)
+        if nm in seen_names:
+            out.append('%s: 동료 이름 %r 중복(%s)' % (rel, nm, seen_names[nm]))
+        seen_names[nm] = rel
     return out
 
 
@@ -292,6 +309,11 @@ def npc(eid):
             # D71(09-14): NPC 가 먼저 거는 인사 — hail(기본)·hail_no_potion·hail_board·hail_return·hail_rumor·hail_oracle(전부 선택, 상황별)
             **{k: c.get(k) for k in ('hail', 'hail_no_potion', 'hail_board', 'hail_return', 'hail_rumor', 'hail_oracle')},
             'walk': (dict(c['walk']) if isinstance(c.get('walk'), dict) else None)}   # D73(09-14) 행인: {region: layout 구역 id, rate}
+
+
+def companions():
+    """동료 프리셋 {id: 정의} — 파일 이름(id) 순(D81). 시트는 sheetkit.build_companion_sheet(정의)로 조립한다."""
+    return {d['id']: d for d in sorted(by_kind('companion'), key=lambda d: d['id'])}
 
 
 def lore():

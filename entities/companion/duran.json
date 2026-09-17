@@ -1,0 +1,43 @@
+{
+  "id": "duran",
+  "name": "두란",
+  "kind": "companion",
+  "tags": [
+    "companion",
+    "adventurer"
+  ],
+  "note": "동료 프리셋(D81, 2026-09-17) — comps.sheet 의 성격·말투·목표는 기본 파티(party.json)의 문장 그대로. comps.npc(line·hail)·comps.story(trait·history)는 SilenceBreaker 임시 문장(2단계 '안 뽑힌 프리셋 = 마을 주민' 재료) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). 능력치는 적지 않는다 — 직업(traits.json jobs)에서 온다. look 은 그림에만 닿는다(엔진·프롬프트 무접촉).",
+  "comps": {
+    "sheet": {
+      "job": "전사",
+      "sex": "남",
+      "traits": [],
+      "persona": "용맹하고 정면돌파를 즐긴다. 동료를 지키려 앞장서지만 다소 무모하다.",
+      "speech": "짧고 굵은 단언. 호령과 감탄이 많고 빙빙 돌려 말하지 않는다.",
+      "goal": "아무도 잃지 않고 최심층을 돌파한다 — 방패는 나다.",
+      "look": {
+        "head": "M4",
+        "body": "B1",
+        "colors": {
+          "hair": "#945c37",
+          "skin": "#eabb8c",
+          "top": "#42738b",
+          "bottom": "#d7c599"
+        },
+        "sprite": "sd-warrior"
+      }
+    },
+    "npc": {
+      "line": "내려갈 거면 앞은 내가 선다. 뒤만 잘 봐 줘.",
+      "hail": "{name}! 파티는 구했나? 방패가 필요하면 말해.",
+      "walk": {
+        "region": "guild",
+        "rate": 0.4
+      }
+    },
+    "story": {
+      "trait": "앞장서는 전사. 길드 앞을 지킨다",
+      "history": "정면으로 부딪쳐서 안 뚫린 적이 별로 없다는 게 자랑이다. 아무도 잃지 않는다는 것이 그가 세운 하나뿐인 원칙이다."
+    }
+  }
+}

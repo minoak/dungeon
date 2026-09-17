@@ -55,8 +55,8 @@ try {
   await Promise.all([page.waitForResponse(r => r.url().endsWith('/api/start')), page.locator('#bResume').click()]);
   assert.equal(starts.pop().model, 'resume-model');
   await page.locator('#bNew').click();
+  await page.locator('#advanced > summary').click(); // D81: 옵션 화면이 없어졌다 — 파티 방식·가격표는 같은 장의 '고급 설정' 접이식 안
   await page.locator('#partyMode label').filter({has: page.locator('input[value="default"]')}).click();
-  await page.locator('#bNext').click();
   await page.locator('#brain').selectOption('openai_api');
   assert.equal(await page.locator('#apiKey').inputValue(), '');
   assert.equal(await page.locator('#brainModel').inputValue(), 'gpt-5.6-terra');
@@ -114,8 +114,8 @@ try {
     await Promise.all([local.waitForResponse(r => r.url().endsWith('/api/start')), local.locator('#bResume').click()]);
     assert.equal(localStarts.pop().key, 'fake-local-resume-key');
     await local.locator('#bNew').click();
+    await local.locator('#advanced > summary').click(); // D81: '고급 설정' 접이식
     await local.locator('#partyMode label').filter({has: local.locator('input[value="default"]')}).click();
-    await local.locator('#bNext').click();
     await local.locator('#brain').selectOption('anthropic_api');
     assert(await local.locator('#apiKey').isVisible());
     await local.locator('#apiKey').fill('fake-local-start-key');
