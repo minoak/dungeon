@@ -53,7 +53,7 @@ import campaign                                   # noqa: E402  # D78 캠페인 
 import skill_schema                              # noqa: E402
 import run_control                               # noqa: E402
 import snapshot                                  # noqa: E402  # D79 이어가기 — 멈춘 판의 요약(snapshot.json)만 읽는다(피클은 러너 몫)
-from brain_config import BACKENDS, HTTP_BACKENDS, MODEL_ENV, clean_model, model_id, provider_catalog
+from brain_config import BACKENDS, HTTP_BACKENDS, KEY_ENV, MODEL_ENV, clean_model, model_id, provider_catalog
 from character_presets import PresetStore         # noqa: E402
 
 MAPS = {                                          # 시작 옵션 → 러너 환경변수(wonderland.bat 메뉴 값 그대로)
@@ -140,6 +140,14 @@ class Runner:
         with self.lock:
             if self.running():
                 raise Conflict("이미 판이 진행 중이다 — 중지하거나 끝나길 기다려라")
+            # 로컬 화면 BYOK도 키를 옵션에서 즉시 분리한다. 재개 옵션·파일로 합치지 않는다.
+            supplied_key = opts.get("key", "")
+            opts = {k: v for k, v in opts.items() if k != "key"}
+            if not isinstance(supplied_key, str) or len(supplied_key) > 1024:
+                raise BadRequest("API 키는 1,024자 이내의 문자열이어야 한다")
+            supplied_key = supplied_key.strip()
+            if any(c.isspace() for c in supplied_key):
+                raise BadRequest("API 키에 공백을 넣을 수 없다")
             if opts.get("provider") and not opts.get("brain"):
                 opts = {**opts, "brain": opts["provider"]}
             resume = bool(opts.get("resume"))
@@ -168,6 +176,12 @@ class Runner:
             brain = str(opts.get("brain") or opts.get("provider") or default_brain or "gemini_api")
             if brain not in BRAINS:
                 raise BadRequest("두뇌는 %s 중 하나" % "/".join(BRAINS))
+            if supplied_key:
+                if brain not in HTTP_BACKENDS:
+                    raise BadRequest("API 키는 API 두뇌를 선택했을 때만 넣을 수 있다")
+                env.update({name: "" for name in KEY_ENV.values()})
+                env[KEY_ENV[brain]] = supplied_key
+                env["DUNGEON_BRAIN_FALLBACK"] = ""
             env["DUNGEON_BRAIN_BACKEND"] = brain
             opts = {**opts, "brain": brain}
             if brain in HTTP_BACKENDS:
@@ -390,7 +404,8 @@ def default_party_preview(root):
         if isinstance(s, dict):
             out.append({"char": c, "name": s.get("name") or ("모험가 %s" % c), "job": s.get("job"),
                         "sex": s.get("sex"), "persona": s.get("persona"), "speech": s.get("speech"),
-                        "goal": s.get("goal")})
+                        "goal": s.get("goal"),
+                        "prompt_chars": sum(len(str(s.get(k) or "")) for k in ("persona", "background", "speech", "goal"))})
     return out
 
 
@@ -404,6 +419,7 @@ def presets_payload(ctx):
                             "default_sets": skill_schema.DEFAULT_SETS},
             "default_mode": "standard", "ruleset": "skills-v1",
             "brain_failure_policy": run_control.POLICY,
+            "model_ui_version": 2,
             "text_limits": TEXT_LIMITS,
             "custom_saved": os.path.exists(ctx.party_path),
             "default_brain": ctx.default_brain or "gemini_api",

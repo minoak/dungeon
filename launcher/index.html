@@ -40,11 +40,16 @@
   .card h3 { font-size: 13px; color: #8a8f9c; margin-bottom: 10px; letter-spacing: 1px; }
   .card h3 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
   label.f { display: block; font-size: 12px; color: #8a8f9c; margin: 8px 0 3px; }
-  input[type=text], input[type=password], textarea, select {
+  input[type=text], input[type=password], input[type=number], textarea, select {
     width: 100%; background: #1d2029; color: #d8dbe2; border: 1px solid #2c303c; border-radius: 5px;
     padding: 7px 9px; font-size: 13.5px; font-family: inherit;
   }
   textarea { min-height: 78px; resize: vertical; }
+  .priceGrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:8px; margin:8px 0; }
+  .priceTable { width:100%; border-collapse:collapse; font-size:12px; }
+  .priceTable th,.priceTable td { padding:6px; text-align:left; border-bottom:1px solid #2c303c; }
+  .priceTable tr.selected { color:#e8c268; }
+  #priceCard a { color:#e8c268; }
   textarea[data-k=persona] { min-height: 150px; line-height: 1.65; }
   textarea[data-k=background] { min-height: 200px; line-height: 1.65; }
   [data-persona] { max-height: 100px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -225,7 +230,30 @@
     <div class="card" id="keyCard" hidden>
       <h3 id="keyTitle">선택한 회사의 API 키 (이 판에만)</h3>
       <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="선택한 회사에서 발급한 API 키">
-      <div class="hint">키는 이 판을 도는 러너 프로세스에만 전달되고 서버의 디스크·로그에 남지 않는다(BYOK, D68). 판이 끝나면 사라진다. 비용은 키 주인에게. 계정에 들어온 키는 이 칸에 자동으로 채워진다.</div>
+      <div class="hint" id="keyHint">입력한 키는 이 원정에만 사용하며 파일이나 브라우저 저장소에 저장하지 않는다. 비용은 키 주인에게 청구된다.</div>
+    </div>
+    <div class="card" id="priceCard" style="grid-column:1 / -1;min-width:0"><!-- D80 비용 표시 ⚠️ 임시 -->
+      <h3>판단 가격표 · 예상 비용 (USD)</h3>
+      <div id="partyPromptSize" class="hint"></div>
+      <div class="priceGrid">
+        <label>캐릭터 설정 (글자)<input type="number" id="costChars" min="0" max="1000000" step="1" value="10000"></label>
+        <label>규칙·장면·기억 (글자)<input type="number" id="costContext" min="0" max="1000000" step="1" value="4000"></label>
+      </div>
+      <button type="button" class="small" id="usePartySize">현재 파티의 가장 긴 설정 적용</button>
+      <details style="margin:10px 0"><summary>계산 가정 바꾸기</summary>
+        <div class="priceGrid">
+          <label>글자당 토큰 가정<input type="number" id="costRatio" min="0.1" max="10" step="0.1" value="1"></label>
+          <label>출력 토큰 (사고 포함)<input type="number" id="costOutput" min="0" max="1000000" step="1" value="500"></label>
+          <label>전체 판단 횟수<input type="number" id="costCalls" min="1" max="1000000" step="1" value="100"></label>
+        </div>
+      </details>
+      <div id="costEstimate" aria-live="polite"></div>
+      <div id="costRate" class="hint"></div>
+      <div class="hint">토큰은 모델이 글을 나누는 단위다. 기본 계산은 1글자=1토큰이라는 가정이며, 한국어·모델에 따라 실제 수는 달라진다. 캐릭터 설정도 판단마다 입력 비용에 포함된다.</div>
+      <div class="hint">판단 1회는 캐릭터 한 명의 API 요청 1회다. 횟수는 파티 전체 합계이며 턴 수와 다르다. NPC·수첩·재시도는 별도다. 무료 할당·캐시 할인·세금 제외, 실제 청구액이나 한 판 총액이 아니다.</div>
+      <details style="margin-top:8px"><summary>같은 길이로 모델 가격 비교</summary>
+        <div style="overflow-x:auto"><table class="priceTable"><thead><tr><th>모델</th><th>입력 / 출력<br>100만 토큰당 USD</th><th>판단 1회</th></tr></thead><tbody id="costRows"></tbody></table></div>
+      </details>
     </div>
     <div class="card">
       <h3>시드</h3>
@@ -336,9 +364,12 @@ function show(id) { for (const s of ['sTitle', 'sParty', 'sOpts']) $(s).hidden =
 let account = null, isPublic = false;
 const providerLabels = { gemini_api: 'Google Gemini', anthropic_api: 'Anthropic Claude', openai_api: 'OpenAI 호환', claude_cli: 'Claude CLI', dummy: '규칙 두뇌' };
 let modelDefaults = {}, modelCatalog = {}, providerReady = false, resumeRun = null;
+let modelUiVersion = 0;
+const modelUpgradeMessage = '이전 런처가 실행 중이야. 진행 중인 원정이 끝난 뒤 런처 창을 닫고 wonderland.bat으로 다시 열어 줘.';
 const CUSTOM_MODEL = '__custom__';
 function toggleCustomModel(id) {
   $(id + 'Custom').hidden = $(id).disabled || $(id).value !== CUSTOM_MODEL;
+  if (id === 'brainModel') renderPrices();
 }
 function setModel(provider, id, savedModel) {
   const select = $(id), custom = $(id + 'Custom');
@@ -362,15 +393,64 @@ function chosenModel(id) {
   return ($(id).value === CUSTOM_MODEL ? $(id + 'Custom').value : $(id).value).trim();
 }
 for (const id of ['brainModel', 'resumeModel']) $(id).onchange = () => toggleCustomModel(id);
+$('brainModelCustom').oninput = () => renderPrices();
+function partyPromptSizes() {
+  return partyMode === 'default' ? (presets?.default_party || []).map(p => p.prompt_chars || 0)
+    : slots.map(s => [...personaOf(s), ...s.background].length);
+}
+const dollars = n => '$' + n.toFixed(n < 1 ? 5 : 2);
+function renderPrices() {
+  const sizes = partyPromptSizes();
+  $('partyPromptSize').textContent = sizes.length ? '현재 파티 설정: ' + sizes.map((n,i) => (i+1) + '번 ' + n.toLocaleString() + '자').join(' · ') : '';
+  const ids = ['costChars','costContext','costRatio','costOutput','costCalls'];
+  const values = ids.map(id => $(id).valueAsNumber);
+  if (ids.some((id,i) => !Number.isFinite(values[i]) || !$(id).checkValidity())) {
+    $('costEstimate').textContent = '계산 가정에 범위 안의 숫자를 넣어 줘.';
+    $('costRate').textContent = ''; $('costRows').replaceChildren(); return;
+  }
+  const [chars, context, ratio, output, calls] = values;
+  const input = Math.ceil((chars + context) * ratio), mid = chosenModel('brainModel');
+  const provider = $('brain').value;
+  const effectiveRate = p => p?.long && input > p.long.above ? p.long : p;
+  const cost = p => { const r = effectiveRate(p); return (input * r.input + output * r.output) / 1000000; };
+  const price = modelCatalog[provider]?.choices?.find(c => c.id === mid)?.price;
+  $('priceCard').hidden = !(provider in modelDefaults);
+  if (price) {
+    const rate = effectiveRate(price), total = cost(price);
+    $('costEstimate').textContent = `입력 약 ${input.toLocaleString()}토큰 + 출력 ${output.toLocaleString()}토큰 가정 → 판단 1회 ${dollars(total)} · ${calls.toLocaleString()}회 ${dollars(total*calls)}`;
+    $('costRate').textContent = `100만 토큰당 입력 $${rate.input} / 출력 $${rate.output} · 확인 ${price.checked}${price.note ? ' · '+price.note : ''} · `;
+    const link = document.createElement('a'); link.textContent = '공식 가격'; link.href = price.source; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    $('costRate').append(link);
+  } else {
+    $('costEstimate').textContent = '이 모델·호환 서비스의 단가는 미확인이다. 제공 회사의 가격표를 확인해 줘.';
+    $('costRate').textContent = '';
+  }
+  $('costRows').replaceChildren();
+  for (const [p, data] of Object.entries(modelCatalog)) for (const m of data.choices || []) {
+    const row = document.createElement('tr');
+    if (p === provider && m.id === mid) row.className = 'selected';
+    const r = effectiveRate(m.price);
+    for (const text of [m.label, r ? `$${r.input} / $${r.output}` : '미확인', r ? dollars(cost(m.price)) : '—']) {
+      const cell = document.createElement('td'); cell.textContent = text; row.append(cell);
+    }
+    $('costRows').append(row);
+  }
+}
+for (const id of ['costChars','costContext','costRatio','costOutput','costCalls']) $(id).oninput = renderPrices;
+$('usePartySize').onclick = () => { $('costChars').value = Math.max(0, ...partyPromptSizes()); renderPrices(); };
 function changeBrain() {
   const provider = $('brain').value;
   setModel(provider, 'brainModel');
   $('apiKey').value = '';                      // 다른 회사에 이전 키를 보내지 않는다
   $('keyTitle').textContent = (providerLabels[provider] || provider) + ' API 키 (이 판에만)';
+  $('keyCard').hidden = !(provider in modelDefaults);
+  $('keyHint').textContent = '입력한 키는 이 원정에만 사용하며 파일이나 브라우저 저장소에 저장하지 않는다. ' +
+    (isPublic ? '공개 서버에서는 키 입력이 필요하다.' : '비워 두면 로컬 .env에 설정된 해당 회사 키를 사용한다.');
   updateMode();
 }
 async function initProviders() {
   const config = await api('/api/presets');
+  modelUiVersion = config.model_ui_version || 0;
   isPublic = !!config.byok;
   modelDefaults = config.model_defaults || {};
   modelCatalog = config.providers || {};
@@ -392,6 +472,7 @@ $('loginProvider').onchange = () => { $('loginKey').value = ''; };
 $('linkProvider').onchange = () => { $('linkKey').value = ''; };
 $('resumeProvider').onchange = () => {
   setModel($('resumeProvider').value, 'resumeModel');
+  $('resumeKey').hidden = !($('resumeProvider').value in modelDefaults);
   $('resumeKey').value = '';
 };
 function renderAccount() {
@@ -463,14 +544,14 @@ async function refreshStatus() {
         const how = rs.stopped === 'user' ? `수첩 쓰고 멈춤${rs.pages?.length ? ' · 수첩 ' + rs.pages.length + '장' : ''}` : rs.stopped === 'user_paused' ? '판단 정지 중 멈춤' : '끊김(마지막 기록까지)';
         $('tResumeText').textContent = `멈춘 원정: seed ${rs.seed} · ${rs.depth === 0 ? '마을' : '지하 ' + rs.depth + '층'} t=${rs.turn_last}` +
           (rs.party?.length ? ` · ${rs.party.filter(p => p.alive).map(p => p.name).join('·')}` : '') + ` · ${how}` + (rs.segment ? ` · 이어가기 ${rs.segment}번째` : '');
-        $('resumeKey').hidden = !isPublic;
         if (providerReady && resumeRun !== st.resume.run_id) {
           resumeRun = st.resume.run_id;
           $('resumeProvider').value = st.resume.provider || st.resume.backend || 'gemini_api';
           setModel($('resumeProvider').value, 'resumeModel', st.resume.model);
           $('resumeKey').value = '';
         }
-        if (isPublic && !$('resumeKey').value && $('resumeProvider').value === $('brain').value) $('resumeKey').value = $('apiKey').value;
+        $('resumeKey').hidden = !($('resumeProvider').value in modelDefaults);
+        if (!$('resumeKey').value && $('resumeProvider').value === $('brain').value) $('resumeKey').value = $('apiKey').value;
       }
     }
   } catch (e) { $('tStatus').textContent = '서버 연결 실패 — launcher.py 가 떠 있나? (' + e.message + ')'; }
@@ -499,11 +580,12 @@ async function stopRun(pages) {                             // D79: pages=true �
 $('bStopPages').onclick = () => stopRun(true);
 $('bStopNow').onclick = () => stopRun(false);
 $('bResume').onclick = async () => {                        // D79 이어가기 — 멈춘 판의 스냅샷에서, 같은 기록 파일에 이어 쓴다
+  if (modelUiVersion !== 2) { $('tStatus').textContent = modelUpgradeMessage; return; }
   const body = { resume: true, provider: $('resumeProvider').value, brain: $('resumeProvider').value, model: chosenModel('resumeModel') };
   if ($('resumeModel').value === CUSTOM_MODEL && !body.model) { $('tStatus').textContent = '직접 사용할 모델 ID를 넣어 줘.'; return; }
-  if (isPublic) {
+  if ($('resumeProvider').value in modelDefaults) {
     body.key = $('resumeKey').value.trim();
-    if (!body.key) { $('tStatus').textContent = '선택한 회사의 API 키를 넣어 줘 — 이어가는 판에만 쓰인다.'; return; }
+    if (isPublic && !body.key) { $('tStatus').textContent = '선택한 회사의 API 키를 넣어 줘 — 이어가는 판에만 쓰인다.'; return; }
   }
   $('bResume').disabled = true;
   try {
@@ -530,13 +612,12 @@ $('bOracleClear').onclick = async () => { await api('/api/oracle', { text: '' })
 async function loadPresets() {
   if (presets) { await refreshCharacters(); return; }
   presets = await api('/api/presets');
-  if (!presets.text_limits || presets.ruleset !== 'skills-v1' || presets.brain_failure_policy !== 'retry-pause-v1') {
+  if (!presets.text_limits || presets.ruleset !== 'skills-v1' || presets.brain_failure_policy !== 'retry-pause-v1' || presets.model_ui_version !== 2) {
     presets = null;
-    throw new Error('이전 런처가 실행 중이야. 진행 중인 원정이 끝난 뒤 런처 창을 닫고 wonderland.bat으로 다시 열어 줘.');
+    throw new Error(modelUpgradeMessage);
   }
   textLimits = presets.text_limits;
   if (presets.byok) {                                                  // 공개(심사용) 서버 server.py — 키는 심사위원이 판마다 가져온다(D68)
-    $('keyCard').hidden = false;
     $('bestiary').checked = !!presets.account; $('bestiary').disabled = true;    // D64/D78 — 익명은 이월 없음, 계정에 들어오면 저장 캐릭터의 도감이 계정에 남는다(서버가 정한다)
   }
   await loadSprites();                                                 // D37 미리보기 합성기
@@ -770,6 +851,7 @@ $('bNext').onclick = async () => {
     } catch (e) { $('err').style.color = '#ff8b7a'; $('err').textContent = e.message; return; }
   }
   updateMode();
+  renderPrices();
   show('sOpts');
 };
 
@@ -799,6 +881,7 @@ for (const lab of $('mapMode').querySelectorAll('label')) {
 $('bBack2').onclick = () => show('sParty');
 $('bStart').onclick = async () => {
   $('err2').textContent = '';
+  if (modelUiVersion !== 2) { $('err2').textContent = modelUpgradeMessage; return; }
   const body = {
     map: $('mapMode').querySelector('label.on input').value,
     town: $('town').checked,
@@ -816,9 +899,9 @@ $('bStart').onclick = async () => {
     party: partyMode,
   };
   if ($('brainModel').value === CUSTOM_MODEL && !body.model) { $('err2').textContent = '직접 사용할 모델 ID를 넣어 줘.'; return; }
-  if (presets?.byok) {                                                 // 공개 서버(D68): 키 없이는 시작 요청을 보내지 않는다
+  if ($('brain').value in modelDefaults) {
     body.key = $('apiKey').value.trim();
-    if (!body.key) { $('err2').style.color = '#ff8b7a'; $('err2').textContent = '선택한 회사의 API 키를 넣어 줘 — 이 판에만 쓰이고 서버에 남지 않아.'; return; }
+    if (isPublic && !body.key) { $('err2').style.color = '#ff8b7a'; $('err2').textContent = '선택한 회사의 API 키를 넣어 줘 — 이 판에만 쓰이고 서버에 남지 않아.'; return; }
   }
   $('bStart').disabled = true;
   try {

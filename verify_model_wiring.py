@@ -17,6 +17,8 @@ import brains as B
 import launcher as L
 import server as S
 import accounts as A
+from datetime import date
+from model_pricing import price_info
 
 
 class Response:
@@ -41,6 +43,15 @@ def run():
 
     clean = {k: v for k, v in os.environ.items() if not k.startswith(("DUNGEON_", "OPENAI_", "ANTHROPIC_", "GEMINI_"))}
     with patch.dict(os.environ, clean, clear=True), patch.object(requests, "post", post), patch.object(requests, "get", get):
+        for provider, choices in C.MODEL_CHOICES.items():
+            for mid, _ in choices:
+                price = price_info(provider, mid, date(2026, 9, 17))
+                assert price["input"] > 0 and price["output"] > 0 and price["source"].startswith("https://")
+        assert price_info("gemini_api", "gemini-3.8-flash", date(2026, 12, 31))["input"] == 0.75
+        assert price_info("gemini_api", "gemini-3.8-flash", date(2027, 1, 1))["input"] == 1.5
+        assert price_info("openai_api", "gpt-5.6-sol", date(2026, 11, 22)) is None
+        assert price_info("openai_api", "custom") is None
+        print("PASS 가격 17종·할인 기한·미확인 가격")
         assert list(inspect.signature(B._call_claude).parameters) == ["prompt", "model"]
         for provider in C.HTTP_BACKENDS:
             os.environ["DUNGEON_BRAIN_BACKEND"] = provider
@@ -195,6 +206,32 @@ def run():
         with tempfile.TemporaryDirectory(prefix="wl_model_local_") as tmp, patch.object(L.subprocess, "Popen", popen):
             runner = L.Runner(L.HERE, os.path.join(tmp, "state"), os.path.join(tmp, "runs"))
             party = os.path.join(L.HERE, "party.json")
+            parent = {k: "local-parent-secret" for k in C.KEY_ENV.values()}
+            with patch.dict(os.environ, parent):
+                for provider in C.HTTP_BACKENDS:
+                    key = "fake-local-screen-" + provider
+                    opts = {"provider": provider, "key": key, "party": "default"}
+                    runner.start(opts, party)
+                    assert opts["key"] == key  # 호출자의 입력을 변경하지 않는다.
+                    assert all(captured[-1][name] == (key if p == provider else "") for p, name in C.KEY_ENV.items())
+                    assert captured[-1]["DUNGEON_BRAIN_FALLBACK"] == ""
+                    assert all(os.environ[k] == v for k, v in parent.items())
+                    meta = {"seed": 42, "turn_last": 5, "backend": provider}
+                    with patch.object(L.Runner, "resumable", return_value=meta):
+                        runner.start({"resume": True, "key": key + "-resume"}, party)
+                        assert captured[-1][C.KEY_ENV[provider]] == key + "-resume"
+                    assert "key" not in runner._read_run_opts()["opts"]
+                    for path in Path(tmp).rglob("*"):
+                        if path.is_file():
+                            assert key.encode() not in path.read_bytes()
+                runner.start({"provider": "gemini_api", "key": "", "party": "default"}, party)
+                assert captured[-1]["GEMINI_API_KEY"] == parent["GEMINI_API_KEY"]
+            for bad in (None, [], "with space", "x" * 1025):
+                try:
+                    runner.start({"provider": "gemini_api", "key": bad, "party": "default"}, party)
+                    raise AssertionError("bad local key accepted")
+                except L.BadRequest:
+                    pass
             result = runner.start({"provider": "gemini_api", "model": "first-model", "party": "default"}, party)
             assert result["brain"] == "gemini_api"
             meta = {"seed": 42, "turn_last": 5, "backend": "gemini_api"}

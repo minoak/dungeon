@@ -83,3 +83,5 @@ git checkout <해시>^ -- risu/                            # 폴더 통째로 �
 ## D80 모델 배선(2026-09-17)
 
 `brain_config.py`가 기본 모델·별칭 번역·회사 키 변수·호환 주소를 공유한다. `brains.py`는 HTTP 호출, `server.py`는 BYOK 키 격리와 회사별 생존 확인, `accounts.py`는 열쇠의 provider 태그, `launcher.py`와 `launcher/index.html`은 새 판·이어가기 모델 선택을 담당한다. 검증과 출처: `docs/model_wiring_2026-09-17.md`.
+
+`model_pricing.py`는 17종 일반 텍스트 API 단가·확인일·출처·긴 입력 단가·할인 기한을 제공한다. 화면의 판단 가격표는 사용자가 조절하는 글자/토큰/횟수 가정으로만 계산한다(API 0콜). 로컬 론처의 입력 키도 `Runner.start`에서 옵션과 분리해 자식 환경에만 전달한다.

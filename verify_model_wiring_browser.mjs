@@ -61,6 +61,17 @@ try {
   assert.equal(await page.locator('#apiKey').inputValue(), '');
   assert.equal(await page.locator('#brainModel').inputValue(), 'gpt-5.6-terra');
   await page.locator('#brainModel').selectOption('gpt-5.6-luna');
+  assert.equal(await page.locator('#costRows tr').count(), 17);
+  assert((await page.locator('#costEstimate').textContent()).includes('$0.00340'));
+  await page.locator('#costChars').fill('20000');
+  assert((await page.locator('#costEstimate').textContent()).includes('$0.00540'));
+  await page.locator('#costChars').fill('10000');
+  await page.locator('#brain').selectOption('anthropic_api');
+  await page.locator('#brainModel').selectOption('claude-fable-5-1');
+  assert((await page.locator('#costEstimate').textContent()).includes('$0.16500'));
+  assert((await page.locator('#costEstimate').textContent()).includes('$16.50'));
+  await page.locator('#brain').selectOption('openai_api');
+  await page.locator('#brainModel').selectOption('gpt-5.6-luna');
   await page.locator('#apiKey').fill(key + '-start');
   await page.locator('#bStart').click();
   await page.waitForFunction(() => document.querySelector('#err2').textContent.includes('검증용 중단'));
@@ -73,6 +84,7 @@ try {
   await page.locator('#bStart').click();
   assert.equal(starts.length, 0); // 비어 있는 직접 입력은 기본 모델로 몰래 실행하지 않는다.
   await page.locator('#brainModelCustom').fill('org/my-model');
+  assert((await page.locator('#costEstimate').textContent()).includes('미확인'));
   await Promise.all([page.waitForResponse(r => r.url().endsWith('/api/start')), page.locator('#bStart').click()]);
   assert.equal(starts.pop().model, 'org/my-model');
   await page.locator('#brain').selectOption('gemini_api');
@@ -80,10 +92,66 @@ try {
   assert.equal(await page.locator('#brainModelCustom').isVisible(), false);
   await page.locator('#brainModel').selectOption('gemini-3.1-pro-preview');
   await page.setViewportSize({width: 390, height: 844});
+  await page.locator('#priceCard summary').filter({hasText:'같은 길이로 모델 가격 비교'}).click();
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   assert.equal(await page.evaluate(() => localStorage.length + sessionStorage.length), 0);
   assert.deepEqual(errors, []);
-  if (process.argv[3]) await page.screenshot({path: process.argv[3], fullPage: true});
+  if (process.argv[3]) await page.locator('#priceCard').screenshot({path: process.argv[3]});
+  if (process.argv[4]) {
+    const local = await browser.newPage({viewport: {width: 1280, height: 1000}});
+    const localStarts = [];
+    local.on('pageerror', e => errors.push(e.message));
+    await local.route('**/api/status', route => route.fulfill({json: {running: false, resume: {
+      run_id: 'local-resume', seed: 1, turn_last: 2, depth: 0, party: [], provider: 'gemini_api', model: 'gemini-3.8-flash'
+    }}}));
+    await local.route('**/api/start', route => {
+      localStarts.push(route.request().postDataJSON());
+      return route.fulfill({status: 400, json: {error: '검증용 중단(API 0콜)'}});
+    });
+    await local.goto(process.argv[4] + '/launcher/');
+    await local.locator('#resumeKey').waitFor({state: 'visible'});
+    await local.locator('#resumeKey').fill('fake-local-resume-key');
+    await Promise.all([local.waitForResponse(r => r.url().endsWith('/api/start')), local.locator('#bResume').click()]);
+    assert.equal(localStarts.pop().key, 'fake-local-resume-key');
+    await local.locator('#bNew').click();
+    await local.locator('#partyMode label').filter({has: local.locator('input[value="default"]')}).click();
+    await local.locator('#bNext').click();
+    await local.locator('#brain').selectOption('anthropic_api');
+    assert(await local.locator('#apiKey').isVisible());
+    await local.locator('#apiKey').fill('fake-local-start-key');
+    await Promise.all([local.waitForResponse(r => r.url().endsWith('/api/start')), local.locator('#bStart').click()]);
+    assert.equal(localStarts.pop().key, 'fake-local-start-key');
+    await local.locator('#brain').selectOption('openai_api');
+    assert.equal(await local.locator('#apiKey').inputValue(), '');
+    await Promise.all([local.waitForResponse(r => r.url().endsWith('/api/start')), local.locator('#bStart').click()]);
+    assert.equal(localStarts.pop().key, ''); // 로컬 빈 키는 기존 .env를 사용한다.
+    await local.locator('#brain').selectOption('dummy');
+    assert.equal(await local.locator('#keyCard').isVisible(), false);
+    assert.equal(await local.locator('#priceCard').isVisible(), false);
+    await local.locator('#brain').selectOption('gemini_api');
+    await local.locator('#usePartySize').click();
+    const config = await (await local.request.get(process.argv[4] + '/api/presets')).json();
+    assert.equal(Number(await local.locator('#costChars').inputValue()), Math.max(...config.default_party.map(p => p.prompt_chars)));
+    await local.setViewportSize({width:390,height:844});
+    assert(await local.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    assert.equal(await local.evaluate(() => localStorage.length + sessionStorage.length), 0);
+    assert.deepEqual(errors, []);
+    // 새 화면을 읽었지만 Python 서버가 구버전이면 키를 보내지 않고 재시작을 안내한다.
+    await local.route('**/api/presets', async route => {
+      const response = await route.fetch(), json = await response.json();
+      json.model_ui_version = 1;
+      await route.fulfill({json});
+    });
+    await local.reload();
+    await local.locator('#resumeKey').waitFor({state:'visible'});
+    await local.locator('#resumeKey').fill('fake-old-server-key');
+    await local.locator('#bResume').click();
+    assert.equal(localStarts.length, 0);
+    assert((await local.locator('#tStatus').textContent()).includes('이전 런처'));
+    await local.locator('#bNew').click();
+    assert((await local.locator('#tStatus').textContent()).includes('이전 런처'));
+    console.log('ALL PASS local key entry: new/resume, blank env fallback, provider key clearing, no storage; prices: 17 rows, length scaling, Fable, unknown, party length, mobile');
+  }
   console.log('ALL PASS browser model wiring: 17 choices, custom/saved models, preset/custom start/resume, empty guard, key isolation, mobile, no page errors');
 } finally {
   await browser.close();

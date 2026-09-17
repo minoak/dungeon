@@ -3,6 +3,7 @@
 import os
 import re
 from urllib.parse import urlsplit
+from model_pricing import price_info
 
 HTTP_BACKENDS = ("gemini_api", "anthropic_api", "openai_api")
 BACKENDS = ("claude_cli", "anthropic_api", "gemini_api", "openai_api", "dummy")
@@ -78,6 +79,6 @@ def openai_base_url():
 def provider_catalog():
     """비밀값 없이 선택 목록을 전달. 호환 서버에 공식 OpenAI 목록을 강요하지 않는다."""
     return {p: {"models": dict(MODEL_IDS[p]), "choices": [
-        {"id": mid, "label": label} for mid, label in MODEL_CHOICES[p]
+        {"id": mid, "label": label, "price": price_info(p, mid)} for mid, label in MODEL_CHOICES[p]
         if p != "openai_api" or openai_base_url() == OPENAI_DEFAULT_BASE
     ]} for p in HTTP_BACKENDS}
