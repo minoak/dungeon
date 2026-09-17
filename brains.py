@@ -578,9 +578,12 @@ def _call_anthropic(prompt, model):
         "anthropic-version": "2023-06-01",
         "content-type": "application/json"}, {
         "model": mid,
-        "max_tokens": int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "1024")),
+        "max_tokens": int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "4096" if mid == "claude-fable-5-1" else "1024")),
         "messages": [{"role": "user", "content": prompt}],
-        **({"thinking": {"type": "disabled"}} if mid == "claude-sonnet-5" else {})})
+        **({"thinking": {"type": "disabled"}} if mid in ("claude-sonnet-5", "claude-opus-5") else {}),
+        # Fable은 사고를 끌 수 없어 low + 넉넉한 기본 출력 예산으로 보낸다.
+        **({"thinking": {"type": "adaptive"}, "output_config": {"effort": "low"}}
+           if mid == "claude-fable-5-1" else {})})
     if why:
         return "", why
     if st != 200:
@@ -682,9 +685,12 @@ def _call_openai(prompt, model):
         return "", "호출 실패 InvalidBaseURL"
     body = {"model": mid, "messages": [{"role": "user", "content": prompt}]}
     official_reasoning = base == OPENAI_DEFAULT_BASE and mid.startswith(("gpt-5", "gpt-6", "o1", "o3", "o4"))
-    body["max_completion_tokens" if official_reasoning else "max_tokens"] = int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "1024"))
-    if base == OPENAI_DEFAULT_BASE and mid in ("gpt-5.6-terra", "gpt-5.6-sol"):
+    astra = base == OPENAI_DEFAULT_BASE and mid == "gpt-6-astra"
+    body["max_completion_tokens" if official_reasoning else "max_tokens"] = int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "4096" if astra else "1024"))
+    if base == OPENAI_DEFAULT_BASE and mid in ("gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna"):
         body["reasoning_effort"] = "none"     # 짧은 행동 JSON의 출력 예산을 사고에 다 쓰지 않게
+    elif astra:
+        body["reasoning_effort"] = "low"      # Astra는 none을 지원하지 않는다.
     st, obj, why = _http_post(base + "/chat/completions", {
         "Authorization": "Bearer " + key, "content-type": "application/json"}, body)
     if why:

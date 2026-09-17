@@ -14,6 +14,32 @@ MODEL_IDS = {
     "gemini_api": {"haiku": "gemini-3.8-flash", "sonnet": "gemini-3.1-pro-preview"},
     "openai_api": {"haiku": "gpt-5.6-terra", "sonnet": "gpt-5.6-sol"},
 }
+# 선택 목록은 허용 목록이 아니다. 목록 밖의 모델도 clean_model을 거쳐 직접 지정한다.
+MODEL_CHOICES = {
+    "gemini_api": (
+        ("gemini-3.8-flash", "Gemini 3.8 Flash"),
+        ("gemini-3.7-flash", "Gemini 3.7 Flash"),
+        ("gemini-3.6-flash", "Gemini 3.6 Flash"),
+        ("gemini-3.5-flash", "Gemini 3.5 Flash"),
+        ("gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite"),
+        ("gemini-3.1-flash-lite", "Gemini 3.1 Flash-Lite"),
+        ("gemini-3.1-pro-preview", "Gemini 3.1 Pro (Preview)"),
+        ("gemini-3-flash-preview", "Gemini 3 Flash (Preview)"),
+        ("gemini-2.5-flash", "Gemini 2.5 Flash"),
+    ),
+    "anthropic_api": (
+        ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+        ("claude-sonnet-5", "Claude Sonnet 5"),
+        ("claude-opus-5", "Claude Opus 5"),
+        ("claude-fable-5-1", "Claude Fable 5.1"),
+    ),
+    "openai_api": (
+        ("gpt-5.6-terra", "GPT-5.6 Terra"),
+        ("gpt-5.6-luna", "GPT-5.6 Luna"),
+        ("gpt-5.6-sol", "GPT-5.6 Sol"),
+        ("gpt-6-astra", "GPT-6 Astra"),
+    ),
+}
 OPENAI_DEFAULT_BASE = "https://api.openai.com/v1"
 MODEL_ENV = ("DUNGEON_MODEL_HAIKU", "DUNGEON_MODEL_SONNET")
 LEGACY_MODEL_ENV = {"gemini_api": "DUNGEON_GEMINI_MODEL", "anthropic_api": "DUNGEON_ANTHROPIC_MODEL"}
@@ -50,5 +76,8 @@ def openai_base_url():
 
 
 def provider_catalog():
-    """비밀값 없이 화면에 기본 모델과 공개 API 목적지만 알린다."""
-    return {p: {"models": dict(MODEL_IDS[p])} for p in HTTP_BACKENDS}
+    """비밀값 없이 선택 목록을 전달. 호환 서버에 공식 OpenAI 목록을 강요하지 않는다."""
+    return {p: {"models": dict(MODEL_IDS[p]), "choices": [
+        {"id": mid, "label": label} for mid, label in MODEL_CHOICES[p]
+        if p != "openai_api" or openai_base_url() == OPENAI_DEFAULT_BASE
+    ]} for p in HTTP_BACKENDS}

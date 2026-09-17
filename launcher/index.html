@@ -115,7 +115,8 @@
       <span class="muted" id="tResumeText"></span>
       <!-- D80 ⚠️ 문구 임시: 검토표 131~138 -->
       <select id="resumeProvider" aria-label="이어갈 회사" style="width:auto"></select>
-      <input type="text" id="resumeModel" aria-label="이어갈 모델" maxlength="200" placeholder="모델 ID" style="width:27ch">
+      <select id="resumeModel" aria-label="이어갈 모델" style="width:auto;max-width:100%"></select><!-- D80 확장 ⚠️ 임시 -->
+      <input type="text" id="resumeModelCustom" aria-label="이어갈 모델 ID 직접 입력" maxlength="200" placeholder="모델 ID 직접 입력" style="width:27ch;max-width:100%" hidden>
       <input type="password" id="resumeKey" autocomplete="off" spellcheck="false" placeholder="선택한 회사의 API 키 — 이어가는 판에만 쓰인다" style="width:30ch" hidden>
       <button class="primary" id="bResume">이어가기</button>
     </div>
@@ -216,7 +217,9 @@
         <option value="claude_cli">Claude CLI (구독 · 느림)</option>
         <option value="dummy">규칙 두뇌 (LLM 0콜 — 배관 점검)</option>
       </select>
-      <label>모델 ID <input type="text" id="brainModel" maxlength="200" placeholder="회사 기본 모델"></label><!-- D80 ⚠️ 임시 -->
+      <label>모델 <select id="brainModel"></select></label><!-- D80 확장 ⚠️ 임시: 검토표 139~142 -->
+      <input type="text" id="brainModelCustom" aria-label="모델 ID 직접 입력" maxlength="200" placeholder="모델 ID 직접 입력" hidden>
+      <div class="muted" style="font-size:12px;margin-top:6px">목록에서 고르거나 직접 입력할 수 있다. 사용 가능 여부는 API 키의 권한에 따른다.</div>
       <div class="hint" id="brainHint">API 키는 .env 에서 읽는다(launcher.py 가 띄운 러너에 그대로 전달).</div>
     </div>
     <div class="card" id="keyCard" hidden>
@@ -332,11 +335,33 @@ function show(id) { for (const s of ['sTitle', 'sParty', 'sOpts']) $(s).hidden =
 /* ═══ 계정(D77) — 공개 서버(server.py)에서만. 키는 이 페이지 메모리에만: 들어온 키를 원정 키 칸에 채워 준다 ═══ */
 let account = null, isPublic = false;
 const providerLabels = { gemini_api: 'Google Gemini', anthropic_api: 'Anthropic Claude', openai_api: 'OpenAI 호환', claude_cli: 'Claude CLI', dummy: '규칙 두뇌' };
-let modelDefaults = {}, providerReady = false, resumeRun = null;
-function setModel(provider, modelInput) {
-  $(modelInput).value = modelDefaults[provider] || '';
-  $(modelInput).disabled = !(provider in modelDefaults);
+let modelDefaults = {}, modelCatalog = {}, providerReady = false, resumeRun = null;
+const CUSTOM_MODEL = '__custom__';
+function toggleCustomModel(id) {
+  $(id + 'Custom').hidden = $(id).disabled || $(id).value !== CUSTOM_MODEL;
 }
+function setModel(provider, id, savedModel) {
+  const select = $(id), custom = $(id + 'Custom');
+  const selected = savedModel || modelDefaults[provider] || '';
+  const choices = modelCatalog[provider]?.choices || [];
+  select.disabled = !(provider in modelDefaults);
+  select.replaceChildren(...choices.map(m => new Option(
+    m.label + (m.id === modelDefaults[provider] ? ' · 기본' : ''), m.id)));
+  custom.value = '';
+  if (select.disabled) {
+    select.add(new Option('모델 선택 없음', ''));
+  } else {
+    select.add(new Option('직접 입력…', CUSTOM_MODEL));
+    const known = choices.some(m => m.id === selected);
+    select.value = known ? selected : CUSTOM_MODEL;
+    if (!known) custom.value = selected; // 목록 밖의 환경 설정·저장 모델도 그대로 복원
+  }
+  toggleCustomModel(id);
+}
+function chosenModel(id) {
+  return ($(id).value === CUSTOM_MODEL ? $(id + 'Custom').value : $(id).value).trim();
+}
+for (const id of ['brainModel', 'resumeModel']) $(id).onchange = () => toggleCustomModel(id);
 function changeBrain() {
   const provider = $('brain').value;
   setModel(provider, 'brainModel');
@@ -348,6 +373,7 @@ async function initProviders() {
   const config = await api('/api/presets');
   isPublic = !!config.byok;
   modelDefaults = config.model_defaults || {};
+  modelCatalog = config.providers || {};
   const http = Object.keys(config.providers || {});
   for (const id of ['loginProvider', 'linkProvider', 'resumeProvider']) {
     const names = id === 'resumeProvider' && !isPublic ? Object.keys(providerLabels) : http;
@@ -441,8 +467,7 @@ async function refreshStatus() {
         if (providerReady && resumeRun !== st.resume.run_id) {
           resumeRun = st.resume.run_id;
           $('resumeProvider').value = st.resume.provider || st.resume.backend || 'gemini_api';
-          setModel($('resumeProvider').value, 'resumeModel');
-          if (st.resume.model) $('resumeModel').value = st.resume.model;
+          setModel($('resumeProvider').value, 'resumeModel', st.resume.model);
           $('resumeKey').value = '';
         }
         if (isPublic && !$('resumeKey').value && $('resumeProvider').value === $('brain').value) $('resumeKey').value = $('apiKey').value;
@@ -474,7 +499,8 @@ async function stopRun(pages) {                             // D79: pages=true �
 $('bStopPages').onclick = () => stopRun(true);
 $('bStopNow').onclick = () => stopRun(false);
 $('bResume').onclick = async () => {                        // D79 이어가기 — 멈춘 판의 스냅샷에서, 같은 기록 파일에 이어 쓴다
-  const body = { resume: true, provider: $('resumeProvider').value, brain: $('resumeProvider').value, model: $('resumeModel').value.trim() };
+  const body = { resume: true, provider: $('resumeProvider').value, brain: $('resumeProvider').value, model: chosenModel('resumeModel') };
+  if ($('resumeModel').value === CUSTOM_MODEL && !body.model) { $('tStatus').textContent = '직접 사용할 모델 ID를 넣어 줘.'; return; }
   if (isPublic) {
     body.key = $('resumeKey').value.trim();
     if (!body.key) { $('tStatus').textContent = '선택한 회사의 API 키를 넣어 줘 — 이어가는 판에만 쓰인다.'; return; }
@@ -783,12 +809,13 @@ $('bStart').onclick = async () => {
     start: $('startBoss').checked ? 'boss' : '',   // D67 프리셋 — 보스방 앞에서 시작(마을 없음·보스 켬)
     brain: $('brain').value,
     provider: $('brain').value,
-    model: $('brainModel').value.trim(),
+    model: chosenModel('brainModel'),
     action_mode: 'compose',
     mode: $('runMode').value,
     seed: $('seed').value.trim() || null,
     party: partyMode,
   };
+  if ($('brainModel').value === CUSTOM_MODEL && !body.model) { $('err2').textContent = '직접 사용할 모델 ID를 넣어 줘.'; return; }
   if (presets?.byok) {                                                 // 공개 서버(D68): 키 없이는 시작 요청을 보내지 않는다
     body.key = $('apiKey').value.trim();
     if (!body.key) { $('err2').style.color = '#ff8b7a'; $('err2').textContent = '선택한 회사의 API 키를 넣어 줘 — 이 판에만 쓰이고 서버에 남지 않아.'; return; }

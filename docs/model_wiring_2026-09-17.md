@@ -1,7 +1,7 @@
 # D80 모델 배선 — 2026-09-17
 
 범위: 사용자가 회사·모델·자기 API 키를 선택해 로그인하고 새 판/이어가기를 실행한다.
-모델의 역할극 품질 비교는 이번 배선 검증과 별개다. 화면·오류 문구는 ⚠️ 임시(검토표 131~138).
+모델의 역할극 품질 비교는 이번 배선 검증과 별개다. 화면·오류 문구는 ⚠️ 임시(검토표 131~142).
 
 ## 기본 모델 표
 
@@ -14,12 +14,30 @@
 | Google | `gemini-3.8-flash` | `gemini-3.1-pro-preview` | [모델 목록](https://ai.google.dev/gemini-api/docs/models), [3.8 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash) |
 | OpenAI | `gpt-5.6-terra` | `gpt-5.6-sol` | [Terra](https://developers.openai.com/api/docs/models/gpt-5.6-terra), [Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol) |
 
-최상위 모델을 자동 선택하는 표가 아니다. OpenAI의 [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra)도 공식 문서에 있지만, 이번 기본값은 짧은 행동 응답용 Terra/Sol로 두고 Astra 실측은 하지 않았다. 공식 목록의 Claude Fable 5.1·Opus 5 등은 모델 칸에서 직접 지정할 수 있다.
+최상위 모델을 자동 선택하는 표가 아니다. OpenAI의 [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra)도 선택 목록에 있지만, 기본값은 짧은 행동 응답용 Terra/Sol로 두고 Astra 실측은 하지 않았다. Claude Fable 5.1·Opus 5도 선택 목록에서 고를 수 있다.
 OpenAI 기본 모델은 공식 문서에서 Chat Completions와 `none` 사고 설정을 지원하는 모델로 골랐다.
 Gemini 신형 Flash·Pro 기본 사고는 `low`; 기존 3 Flash는 `minimal`이다. [사고 설정 문서](https://ai.google.dev/gemini-api/docs/thinking).
 3.5/3.6은 작업 지시서와 공식 문서의 minimal 설명이 달라 지원되는 `low`를 보수적으로 사용한다. 명시한 `DUNGEON_GEMINI_THINK`는 보존한다.
 
-Sonnet 5는 사고가 기본으로 켜진다. 기존 1,024 토큰 출력 예산에서 답변을 보존하도록 이 모델에만 `thinking.type=disabled`를 명시한다. [Sonnet 5 변경점](https://platform.claude.com/docs/en/models/sonnet-5/whats-new-sonnet-5).
+Sonnet 5는 사고가 기본으로 켜진다. 기존 1,024 토큰 출력 예산에서 답변을 보존하도록 `thinking.type=disabled`를 명시한다. 후속 확장에서는 Opus 5에도 같은 설정을 적용했다. [Sonnet 5 변경점](https://platform.claude.com/docs/en/models/sonnet-5/whats-new-sonnet-5), [Opus 5](https://platform.claude.com/docs/en/models/opus-5/overview).
+
+## 사람이 고르는 모델 목록 (09-17 후속 요청)
+
+`brain_config.MODEL_CHOICES`를 `/api/presets`의 `providers[회사].choices`로 전달한다. 새 원정과 이어가기 모두 **회사 → 모델 선택 → 키 입력** 순서이며, 기존 기본값은 그대로다.
+
+| 회사 | 선택 목록 | 공식 출처 |
+|---|---|---|
+| Gemini (9종) | 3.8 Flash, 3.7 Flash, 3.6 Flash, 3.5 Flash, 3.5 Flash-Lite, 3.1 Flash-Lite, 3.1 Pro Preview, 3 Flash Preview, 2.5 Flash | [모델 ID 목록](https://ai.google.dev/gemini-api/docs/models) |
+| Claude (4종) | Haiku 4.5, Sonnet 5, Opus 5, Fable 5.1 | [모델 표](https://platform.claude.com/docs/en/models/overview) |
+| OpenAI (4종) | GPT-5.6 Terra, GPT-5.6 Luna, GPT-5.6 Sol, GPT-6 Astra | [Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna), [Astra](https://developers.openai.com/api/docs/models/gpt-6-astra), 기본 표의 Terra/Sol 출처 |
+
+- `직접 입력…`을 고르면 모델 ID 칸이 열린다. 목록에 없는 로컬 기본값·저장 모델도 이 칸으로 정확히 복원한다. 빈 직접 입력으로 시작/이어가기는 막는다. 상태 갱신이 사용자의 선택을 덮지 않는다.
+- 목록은 공식 문서의 정적 목록이며 계정별 권한 조회 결과가 아니다. 키마다 사용 가능 모델이 다를 수 있다. Preview를 표시하며, 목록 밖 모델도 기존 검증을 거쳐 지정할 수 있다.
+- `OPENAI_BASE_URL`이 공식 주소와 다르면 OpenAI 목록을 비우고 직접 입력을 사용한다. 운영자 설정 모델은 로컬 론처에서 보존한다. 호환 서버에 OpenAI 전용 사고 파라미터를 보내지 않는다.
+- Luna도 `reasoning_effort=none`. Astra는 `none`을 지원하지 않아 `low`, 기본 출력 상한 4,096을 사용한다. [모델별 지원값](https://developers.openai.com/api/docs/models/gpt-6-astra).
+- Fable 5.1은 사고가 항상 켜져 `thinking.type=adaptive`, `output_config.effort=low`, 기본 출력 상한 4,096을 사용한다. [Fable](https://platform.claude.com/docs/en/models/fable-5-1/overview), [effort](https://platform.claude.com/docs/en/build-with-claude/effort).
+- `DUNGEON_BRAIN_MAXTOK`을 명시하면 모든 모델에서 그 값을 우선한다. 4,096은 짧은 행동 응답을 위한 초기 설정이며 출력 완결성·속도·비용을 실측한 값은 아니다. 새 모델 실호출은 이번 확장에서 하지 않았다.
+- 문구 ⚠️ 임시: 검토표 139~142.
 
 ## 설정과 계약
 
@@ -58,3 +76,11 @@ Sonnet 5는 사고가 기본으로 켜진다. 기존 1,024 토큰 출력 예산�
 
 미검증: Anthropic/OpenAI 실호출, 세 회사 로그인 모델 목록의 실제 계정 권한, Gemini Pro와 상위 슬롯 실호출, 호환 서비스별 endpoint/모델 동작, 장기 원정의 역할극 질감·비용·거부율. 공식 ID 확인과 단일 프로브는 이 항목들의 품질 보증이 아니다.
 검토표 추가 번호: **131~138**. 키·프로브 원문·판 기록은 커밋하지 않는다.
+
+### 모델 선택 확장 검증 (후속 작업)
+
+- 17종 모두 요청 모델 ID·사고 옵션·출력 상한·명시한 상한 우선 처리를 대역으로 검사. 호환 주소에서는 공식 목록과 OpenAI 전용 사고 옵션이 빠지는 것을 확인했다.
+- 헤들리스 Edge: 목록에서 고른 새 판/이어가기 모델 전달, 직접 입력 전달, 목록 밖 저장 모델 복원, 빈 직접 입력 차단, 상태 갱신 후 선택 보존, 회사 변경 시 키 비움, 모바일 390px 가로 넘침 없음, 페이지 오류 0. 기존 캐릭터 저장 브라우저 검사도 통과했다.
+- 변경된 최종 코드로 **68/68 ALL PASS, 모든 프로세스 exit 0**. 4개 독립 임시 복사본, 기존 게이트 목록·환경 그대로. 실행 소스 SHA-256이 현재 코드와 일치함을 확인했다. `git diff --check` 통과.
+- 이 확장의 실 API 호출은 **0회**. 앞 절 Gemini 1회는 이전 배선 작업의 결과이며 새 모델의 실호출 검증으로 취급하지 않는다. 실행 중인 사용자 판과 서버는 재시작하지 않았다.
+- 코드 변경 후 켜져 있던 론처/공개 서버는 다음 재시작 때 새 모델 카탈로그를 읽는다. 모델별 계정 권한·응답 품질·속도·비용은 실호출 미검증이다.

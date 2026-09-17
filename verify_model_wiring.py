@@ -78,6 +78,33 @@ def run():
             if provider == "anthropic_api":
                 assert B._call_claude("p", "sonnet") == ("ok", None)
                 assert calls[-1][2]["thinking"] == {"type": "disabled"}
+            choices = C.provider_catalog()[provider]["choices"]
+            assert len({c["id"] for c in choices}) == len(choices)
+            assert all(mid in [c["id"] for c in choices] for mid in C.MODEL_IDS[provider].values())
+            for choice in choices:
+                mid = choice["id"]
+                assert C.clean_model(mid) == mid and choice["label"]
+                with patch.dict(os.environ, {"DUNGEON_MODEL_HAIKU": mid}):
+                    assert B._call_claude("p", "haiku") == ("ok", None)
+                    url, _, body = calls[-1]
+                    assert mid in url if provider == "gemini_api" else body["model"] == mid
+                    if provider == "gemini_api":
+                        think = body["generationConfig"]["thinkingConfig"]
+                        assert think == ({"thinkingBudget": 0} if mid == "gemini-2.5-flash" else
+                                         {"thinkingLevel": "minimal" if mid in ("gemini-3-flash-preview", "gemini-3.1-flash-lite") else "low"})
+                    elif mid == "claude-fable-5-1":
+                        assert body["thinking"] == {"type": "adaptive"}
+                        assert body["output_config"] == {"effort": "low"} and body["max_tokens"] == 4096
+                    elif mid == "claude-opus-5":
+                        assert body["thinking"] == {"type": "disabled"}
+                    elif provider == "openai_api":
+                        assert body["reasoning_effort"] == ("low" if mid == "gpt-6-astra" else "none")
+                        assert body["max_completion_tokens"] == (4096 if mid == "gpt-6-astra" else 1024)
+                    with patch.dict(os.environ, {"DUNGEON_BRAIN_MAXTOK": "2048"}):
+                        B._call_claude("p", "haiku")
+                        body = calls[-1][2]
+                        budget = body["generationConfig"]["maxOutputTokens"] if provider == "gemini_api" else body.get("max_completion_tokens", body.get("max_tokens"))
+                        assert budget == 2048
             with patch.dict(os.environ, {"DUNGEON_MODEL_HAIKU": "my-model", "DUNGEON_MODEL_SONNET": "large-model"}):
                 B._call_claude("p", "sonnet")
                 url, kw, body = calls[-1]
@@ -112,10 +139,14 @@ def run():
             os.environ.pop(C.KEY_ENV[provider])
         print("PASS HTTP 3회사 요청·파싱·빈 응답·4xx·타임아웃·인증 리다이렉트 차단")
         with patch.dict(os.environ, {"DUNGEON_BRAIN_BACKEND": "openai_api", "OPENAI_API_KEY": "local", "OPENAI_BASE_URL": "http://localhost:11434/v1/", "DUNGEON_MODEL_HAIKU": "org/model:tag"}):
+            assert C.provider_catalog()["openai_api"]["choices"] == []
             reply[:] = [200, {"choices": [{"message": {"content": "yes"}}]}]
             assert B._call_claude("p", "haiku") == ("yes", None)
             assert calls[-1][0] == "http://localhost:11434/v1/chat/completions"
             assert calls[-1][2]["model"] == "org/model:tag" and "max_tokens" in calls[-1][2]
+            with patch.dict(os.environ, {"DUNGEON_MODEL_HAIKU": "gpt-6-astra"}):
+                B._call_claude("p", "haiku")
+                assert "reasoning_effort" not in calls[-1][2] and calls[-1][2]["max_tokens"] == 1024
             for malformed in (None, [], {"choices": "bad"}, {"choices": [None]}, {"choices": [{"message": {"content": []}}]}):
                 reply[1] = malformed
                 assert B._call_claude("p", "haiku")[1].startswith("빈 응답 rc=200")
@@ -196,6 +227,7 @@ def run():
             try:
                 _, presets = request("/api/presets")
                 assert set(presets["providers"]) == set(C.HTTP_BACKENDS)
+                assert sum(len(p["choices"]) for p in presets["providers"].values()) == 17
                 parent = {k: "parent-secret" for k in C.KEY_ENV.values()}
                 parent.update({k: "parent-model" for k in (*C.MODEL_ENV, *C.LEGACY_MODEL_ENV.values())})
                 parent["DUNGEON_BRAIN_FALLBACK"] = "anthropic_api"
