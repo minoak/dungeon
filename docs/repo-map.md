@@ -33,6 +33,7 @@ prompts/     adventurer_prompt.md(조합형 지침) context_prompt.md(D54 앞머
 tools/       analyze_run.py analyze_skills.py analyze_social.py report.py make_replay_viewer.py replay_viewer.html
              maze_metrics.py check_town.py run_skill_alpha.py ab_menu.py(verify_plan 이 파서로 import) ab_persona.py run_notes.py
              unheard_audit.py(D72 — 던전에서 지목한 말 중 상대가 못 들은 비율, 0콜)
+             town_stay_audit.py(09-17 — 마을 체류 틱·마을 판단 이유에 던전 준비 말이 든 비율, 0콜 · 기준선과 논의는 docs/town_plaza_2026-09-17.md)
 scripts/     start.sh live.sh verify.sh watch_map.sh (Linux/WSL 시대 — 전부 `~/dungeon` 을 가정, VPS 서빙 때 손볼 것)
              vm/ setup.sh deploy.sh botpikdun.service Caddyfile README.md (심사용 서버 GCP 서울 VM 배포, 09-13)
 verify_*.py  게이트 69종(루트 — 2단계에서 verify/ 로 이동 예정; verify_companion 은 D81 동료 프리셋·론처 동료 칸·마을 안내, verify_public 은 server.py 게이트, verify_account 는 D77 계정, verify_campaign 은 D78 캠페인, verify_resume 은 D79 이어가기, verify_model_wiring 은 D80 다회사 배선, verify_guild 는 D69 길드 척추)
