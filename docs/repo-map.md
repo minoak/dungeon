@@ -35,7 +35,7 @@ tools/       analyze_run.py analyze_skills.py analyze_social.py report.py make_r
              unheard_audit.py(D72 — 던전에서 지목한 말 중 상대가 못 들은 비율, 0콜)
 scripts/     start.sh live.sh verify.sh watch_map.sh (Linux/WSL 시대 — 전부 `~/dungeon` 을 가정, VPS 서빙 때 손볼 것)
              vm/ setup.sh deploy.sh botpikdun.service Caddyfile README.md (심사용 서버 GCP 서울 VM 배포, 09-13)
-verify_*.py  게이트 67종(루트 — 2단계에서 verify/ 로 이동 예정; verify_public 은 server.py 게이트, verify_account 는 D77 계정, verify_campaign 은 D78 캠페인, verify_resume 은 D79 이어가기, verify_guild 는 D69 길드 척추)
+verify_*.py  게이트 68종(루트 — 2단계에서 verify/ 로 이동 예정; verify_public 은 server.py 게이트, verify_account 는 D77 계정, verify_campaign 은 D78 캠페인, verify_resume 은 D79 이어가기, verify_model_wiring 은 D80 다회사 배선, verify_guild 는 D69 길드 척추)
 entities/    몬스터·함정·오브젝트·NPC·맵·건물·의뢰 정의(D50)
 design/      HARNESS_DESIGN.md(D1~D79) · drafts/
 docs/        문서·연대기·데브로그·스크린샷 · PIXEL_DUNGEON_REFERENCE.md(참고 게임 메모)
@@ -79,3 +79,7 @@ git checkout <해시>^ -- risu/                            # 폴더 통째로 �
 - **2단계**: `verify_*.py` 62개 + `verify_character_presets_browser.mjs` → `verify/`, `_run_gates.sh` 도 함께. 각 게이트의 `HERE` 를 리포 루트로 재정의하고 sys.path 를 넣는 일괄 치환 — 게이트 62종 통과가 곧 검증.
 - **3단계**: `runs/` → **2026-09-16 완료**(파트너 "깃허브에 너무 사적인 내용까지"): `runs/*.jsonl` 은 .gitignore, 트리엔 정적 관전 데모 7 + 문서 참조 2 = 9개만(나머지 101개는 로컬 보존, 트리에서만 뺐고 **히스토리엔 남아 있다**) · `art/` 77MB(850 PNG — 원본·도구; 런타임 사본은 `game/src/assets`, 론처 갤러리 링크 `/art/sprites-v4/` 가 서빙) → **미완**: 클론 크기(팩 110MB)는 히스토리 재작성 없이는 안 줄고(트리에서 빼도 같다), LFS 이전도 재작성이라 해시가 전부 바뀐다(08-10 선례) — 파트너가 있는 세션에서 force-push·VM 클론 초기화까지 한 번에.
 - ~~README 첫 화면 재편(외부 이름 확정 뒤)~~ → 09-13 완료(봇픽던, 스크린샷 5장, 날짜별 문단은 `docs/CHANGELOG.md` 로).
+
+## D80 모델 배선(2026-09-17)
+
+`brain_config.py`가 기본 모델·별칭 번역·회사 키 변수·호환 주소를 공유한다. `brains.py`는 HTTP 호출, `server.py`는 BYOK 키 격리와 회사별 생존 확인, `accounts.py`는 열쇠의 provider 태그, `launcher.py`와 `launcher/index.html`은 새 판·이어가기 모델 선택을 담당한다. 검증과 출처: `docs/model_wiring_2026-09-17.md`.

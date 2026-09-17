@@ -35,7 +35,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # start.sh 의 DUNGEON_STATE_DIR unset 두 번, verify.sh 의 BESTIARY unset).
 os.environ.pop("DUNGEON_BRAIN_BACKEND", None)
 os.environ.pop("DUNGEON_BRAIN_LOG", None)
-_LEAKED = [k for k in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY") if os.environ.get(k)]
+_LEAKED = [k for k in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY") if os.environ.get(k)]
 for _k in _LEAKED:
     os.environ.pop(_k)          # 이 프로세스에서 지운다 — 게이트가 실 API 를 때릴 물리적
                                 #   수단 자체를 없앤다(⑥의 안전핀을 게이트에도 적용)
@@ -85,7 +85,7 @@ _ORIG_CALL = brains._call_claude
 _ORIG_POST = brains._http_post
 _ORIG_BE = {n: getattr(brains, "_call_" + n.split("_")[0]) for n in ()}   # 자리표시(아래서 채움)
 _BACKEND_FNS = {"claude_cli": "_call_cli", "anthropic_api": "_call_anthropic",
-                "gemini_api": "_call_gemini", "dummy": "_call_dummy"}
+                "gemini_api": "_call_gemini", "openai_api": "_call_openai", "dummy": "_call_dummy"}
 _ORIG_BE = {k: getattr(brains, v) for k, v in _BACKEND_FNS.items()}
 
 
@@ -223,7 +223,7 @@ restore()
 
 # ───────────────────────── ⑨ 별칭 매핑 ─────────────────────────
 check("⑨ 'haiku' 별칭이 백엔드별로 갈린다(CLI 어휘 ≠ API 모델 id)",
-      brains._MODEL_ID["anthropic_api"]["haiku"] == "claude-haiku-4-5"
+      brains._MODEL_ID["anthropic_api"]["haiku"] == "claude-haiku-4-5-20251001"
       and brains._MODEL_ID["gemini_api"]["haiku"].startswith("gemini"))
 
 os.environ["DUNGEON_BRAIN_BACKEND"] = "anthropic_api"
@@ -232,8 +232,8 @@ _sent = {}
 brains._http_post = lambda u, h, j: (_sent.update(url=u, hdr=h, body=j), (200, {
     "content": [{"type": "text", "text": '{"choice": 1}'}]}, None))[1]
 _ORIG_CALL("프롬프트", "haiku")
-check("⑨ 요청 바디의 model = claude-haiku-4-5 (별칭이 그대로 새어나가지 않는다)",
-      _sent["body"]["model"] == "claude-haiku-4-5")
+check("⑨ 요청 바디의 model = claude-haiku-4-5-20251001 (별칭이 그대로 새어나가지 않는다)",
+      _sent["body"]["model"] == "claude-haiku-4-5-20251001")
 check("⑨ 프롬프트는 user 메시지 하나로 통째 전송(claude.exe stdin 과 같은 바이트)",
       len(_sent["body"]["messages"]) == 1
       and _sent["body"]["messages"][0]["content"] == "프롬프트"
@@ -253,14 +253,14 @@ brains._http_post = lambda u, h, j: (_sent.update(url=u, hdr=h, body=j), (200, {
     "candidates": [{"finishReason": "STOP",
                     "content": {"parts": [{"text": '{"choice": 1}'}]}}]}, None))[1]
 _ORIG_CALL("프롬프트", "haiku")
-check("⑨ Gemini 3.x 요청엔 thinkingLevel=minimal (3 Flash 기본이 high — 안 낮추면"
+check("⑨ Gemini 3.8 요청엔 thinkingLevel=low (minimal 미지원 — 안 낮추면"
       " JSON 한 줄 받자고 최대 깊이로 사고한다)",
-      _sent["body"]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "minimal"})
+      _sent["body"]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "low"})
 check("⑨ 세대별 사고 파라미터 분기 — 2.5 는 thinkingBudget 정수(0=끔),"
       " 3.x 는 thinkingLevel 문자열(budget 은 폐기)",
       brains._gemini_think("gemini-2.5-flash") == {"thinkingBudget": 0}
       and brains._gemini_think("gemini-3-flash-preview") == {"thinkingLevel": "minimal"}
-      and brains._gemini_think("gemini-3.5-flash") == {"thinkingLevel": "minimal"})
+      and brains._gemini_think("gemini-3.5-flash") == {"thinkingLevel": "low"})
 check("⑨ Gemini 인증은 x-goog-api-key 헤더(쿼리스트링 아님 — URL 에 키가 실리면"
       " 라벨·로그로 샐 표면이 생긴다)",
       _sent["hdr"].get("x-goog-api-key") == FAKE_KEY and "key=" not in _sent["url"])

@@ -142,19 +142,19 @@ class Accounts:
         except OSError:
             pass
 
-    def create(self, fp, nick=""):
+    def create(self, fp, nick="", provider="gemini_api"):
         """첫 열쇠의 지문이 곧 계정 id. 이미 묶인 지문이면 KeyTaken."""
         with self.lock:
             if self.lookup(fp):
                 raise KeyTaken(fp)
             now = int(time.time())
             data = {"id": fp, "nick": clean_nick(nick), "created": now,
-                    "keys": [{"fp": fp, "tag": fp[:TAG_LEN], "added": now}]}
+                    "keys": [{"fp": fp, "tag": fp[:TAG_LEN], "added": now, "provider": provider}]}
             self._save(data)
             self._index(fp, fp)
             return data
 
-    def link(self, aid, fp):
+    def link(self, aid, fp, provider="gemini_api"):
         """로그인한 계정에 새 열쇠. 같은 계정이면 그대로(멱등), 다른 계정 것이면 KeyTaken."""
         with self.lock:
             owner = self.lookup(fp)
@@ -165,7 +165,7 @@ class Accounts:
                 return data
             if owner:
                 raise KeyTaken(fp)
-            data["keys"].append({"fp": fp, "tag": fp[:TAG_LEN], "added": int(time.time())})
+            data["keys"].append({"fp": fp, "tag": fp[:TAG_LEN], "added": int(time.time()), "provider": provider})
             self._save(data)
             self._index(fp, aid)
             return data
@@ -198,7 +198,8 @@ class Accounts:
     def public(data):
         """화면에 주는 모양 — 지문 전체도 안 준다(계정 표식 8자·열쇠 표식 8자·날짜)."""
         return {"id": data["id"][:TAG_LEN], "nick": data.get("nick", ""), "created": data.get("created"),
-                "keys": [{"tag": k["tag"], "added": k.get("added")} for k in data.get("keys", [])]}
+                "keys": [{"tag": k["tag"], "added": k.get("added"), "provider": k.get("provider", "gemini_api")}
+                         for k in data.get("keys", [])]}
 
     # ── 로그인(번호표 ↔ 계정) ──
     def bind(self, sid, aid):

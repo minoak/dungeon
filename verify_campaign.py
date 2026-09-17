@@ -151,7 +151,7 @@ book = ctx.campaign_refresh()
 check("④ 판 기록이 없으면 campaign_refresh 는 빈 책(오류 없음) · summary None", book is not None and book.summary(saved["id"]) is None)
 
 print("── ⑤ 공개 서버(dummy) — 계정 판의 원장·캠페인")
-server.KEY_CHECK = lambda key: True
+server.KEY_CHECK = lambda key, provider="gemini_api": True
 KEY = "AIzaSyCAMP1-0123456789abcdefghijklmnopq"
 LOG = io.StringIO()
 old_err = sys.stderr

@@ -42,7 +42,7 @@ LOG = io.StringIO()
 fails = []
 
 
-def fake_alive(key):                                 # 생존 확인 대역 — 네트워크 0
+def fake_alive(key, provider="gemini_api"):           # 생존 확인 대역 — 네트워크 0
     if BOOM["on"]:
         raise server.KeyCheckUnavailable("test")
     return key != KD
@@ -159,6 +159,7 @@ try:
     check("① 구글 불통 503 · 계정 안 생김", st == 503 and not os.listdir(ACC.dir), str(obj))
     st, obj, _ = A.login(K1, "두란의 신\n**굵게**")
     acct = (obj or {}).get("account") or {}
+    check("① 옛 요청(provider 생략)은 Gemini 태그", acct.get("keys", [{}])[0].get("provider") == "gemini_api")
     check("① 산 키 → 200 created · 별명 정제(개행 없음·20자 안) · 열쇠 1(표식 8자) · 계정 표식 8자 · 옮긴 캐릭터 1",
           st == 200 and obj["created"] is True and obj["moved"] == 1 and acct.get("nick", "").startswith("두란의 신")
           and "\n" not in acct["nick"] and len(acct["nick"]) <= 20 and len(acct["keys"]) == 1

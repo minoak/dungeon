@@ -53,6 +53,7 @@ import campaign                                   # noqa: E402  # D78 캠페인 
 import skill_schema                              # noqa: E402
 import run_control                               # noqa: E402
 import snapshot                                  # noqa: E402  # D79 이어가기 — 멈춘 판의 요약(snapshot.json)만 읽는다(피클은 러너 몫)
+from brain_config import BACKENDS, HTTP_BACKENDS, MODEL_ENV, clean_model, model_id, provider_catalog
 from character_presets import PresetStore         # noqa: E402
 
 MAPS = {                                          # 시작 옵션 → 러너 환경변수(wonderland.bat 메뉴 값 그대로)
@@ -60,7 +61,7 @@ MAPS = {                                          # 시작 옵션 → 러너 환
     "big": {"DUNGEON_W": "80", "DUNGEON_H": "30", "DUNGEON_MONSTERS": "7", "DUNGEON_TRAPS": "4",
             "DUNGEON_LURKERS": "2", "DUNGEON_POTIONS": "1", "DUNGEON_DEPTHS": "1", "DUNGEON_TURNS": "500"},
 }
-BRAINS = ("gemini_api", "claude_cli", "anthropic_api", "dummy")
+BRAINS = BACKENDS
 TEXT_LIMITS = {"persona": sheetkit.PERSONA_MAX, "persona_total": sheetkit.PERSONA_TOTAL_MAX,
                "background": sheetkit.BACKGROUND_MAX}
 BIG_KEYS = tuple(MAPS["big"])
@@ -128,8 +129,10 @@ class Runner:
         if st.get("outcome") or (st.get("seed") is not None and st.get("seed") != meta.get("seed")):
             return None                           # 끝난 판·다른 판의 스냅샷(러너가 시작·끝에 지우지만 한 번 더 본다)
         stop = meta.get("stop") or {}
+        saved = (self._read_run_opts() or {}).get("opts", {})
         return {k: meta.get(k) for k in ("run_id", "seed", "started", "turn_last", "depth", "segment", "party", "saved_at", "backend")} | {
-            "stopped": stop.get("reason"), "pages": sorted(stop.get("pages") or {})}
+            "stopped": stop.get("reason"), "pages": sorted(stop.get("pages") or {}),
+            "provider": saved.get("provider") or saved.get("brain") or meta.get("backend"), "model": saved.get("model", "")}
 
     def start(self, opts, party_path, default_brain=None, extra_env=None):
         """extra_env: 이 판의 러너에만 주는 환경변수(공개 서버 server.py 의 BYOK 키 — 부모 환경에 안 남고 프로세스에만).
@@ -137,6 +140,8 @@ class Runner:
         with self.lock:
             if self.running():
                 raise Conflict("이미 판이 진행 중이다 — 중지하거나 끝나길 기다려라")
+            if opts.get("provider") and not opts.get("brain"):
+                opts = {**opts, "brain": opts["provider"]}
             resume = bool(opts.get("resume"))
             meta = None
             if resume:
@@ -146,7 +151,11 @@ class Runner:
                 saved = self._read_run_opts()
                 if not saved:
                     raise BadRequest("이어갈 판의 시작 옵션이 없다 — 새 원정으로 시작하라")
-                opts = {**saved["opts"], "seed": meta.get("seed"), **({"brain": opts["brain"]} if opts.get("brain") else {})}
+                changes = {k: opts[k] for k in ("brain", "provider", "model") if k in opts}
+                # 회사만 바꾸면 이전 회사 모델을 보내지 않는다. 명시한 빈 모델도 기본값 선택이다.
+                if changes.get("brain", changes.get("provider", saved["opts"].get("brain"))) != saved["opts"].get("brain"):
+                    changes.setdefault("model", "")
+                opts = {**saved["opts"], "seed": meta.get("seed"), **changes}
             env = dict(os.environ)
             if extra_env:
                 env.update({k: str(v) for k, v in extra_env.items()})
@@ -156,10 +165,20 @@ class Runner:
             env.setdefault("DUNGEON_SIGHT", "6")        # 데모 시야 6(D33 09-05, 파트너 "지금은 너무 좁다 — 1~2칸") —
                                                         #   엔진·게이트·장면 기본은 5 그대로(손그림 장면이 5 전제).
                                                         #   run_meta.sight 에 기록되므로 판 비교의 전제가 남는다.
-            brain = str(opts.get("brain") or default_brain or "gemini_api")
+            brain = str(opts.get("brain") or opts.get("provider") or default_brain or "gemini_api")
             if brain not in BRAINS:
                 raise BadRequest("두뇌는 %s 중 하나" % "/".join(BRAINS))
             env["DUNGEON_BRAIN_BACKEND"] = brain
+            opts = {**opts, "brain": brain}
+            if brain in HTTP_BACKENDS:
+                opts["provider"] = brain
+            if "model" in opts:
+                try:
+                    selected = clean_model(opts["model"])
+                except ValueError as e:
+                    raise BadRequest(str(e))
+                for k in MODEL_ENV:
+                    env[k] = selected
             action_mode = str(opts.get("action_mode", "compose"))
             if action_mode not in ("menu", "compose"):
                 raise BadRequest("행동 선택 방식은 menu/compose 중 하나")
@@ -222,7 +241,7 @@ class Runner:
             else:
                 self.preserve_previous()
                 snapshot.remove(self.state_dir)          # D79: 새 원정 = 멈춘 판을 놓아 준다(그 기록은 방금 runs/ 로 복사됐다)
-                self._write_run_opts(opts)
+            self._write_run_opts(opts)                  # 이어가기에서 바꾼 회사·모델도 다음 이어가기에 유지
             run_control.reset(self.state_dir)
             with io.open(os.path.join(self.state_dir, "runner.out"), "w", encoding="utf-8") as out:
                 self.proc = subprocess.Popen([sys.executable, os.path.join(self.root, "show_runner.py")],
@@ -388,6 +407,8 @@ def presets_payload(ctx):
             "text_limits": TEXT_LIMITS,
             "custom_saved": os.path.exists(ctx.party_path),
             "default_brain": ctx.default_brain or "gemini_api",
+            "providers": provider_catalog(),
+            "model_defaults": {p: model_id(p, "haiku") for p in HTTP_BACKENDS},
             "status": ctx.runner.status()}
 
 

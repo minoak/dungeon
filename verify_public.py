@@ -168,7 +168,7 @@ try:
     stA, _, _, oA, _ = A.call("/api/start", dict(base, key=KEY, seed=7))
     server.launcher.subprocess.Popen = real_popen
     check("④ 러너 환경변수: GEMINI_API_KEY=키 · ANTHROPIC_API_KEY 비움 · 대체 두뇌 비움 · 두뇌 dummy · 원장 없음",
-          captured.get("GEMINI_API_KEY") == KEY and captured.get("ANTHROPIC_API_KEY") == "" and captured.get("DUNGEON_BRAIN_FALLBACK") == ""
+          captured.get("GEMINI_API_KEY") == KEY and captured.get("ANTHROPIC_API_KEY") == "" and captured.get("OPENAI_API_KEY") == "" and captured.get("DUNGEON_BRAIN_FALLBACK") == ""
           and captured.get("DUNGEON_BRAIN_BACKEND") == "dummy" and captured.get("DUNGEON_BESTIARY_FILE") == "",
           str({k: captured.get(k) for k in ("DUNGEON_BRAIN_BACKEND", "DUNGEON_BESTIARY_FILE")}))
     stB, _, _, oB, _ = B.call("/api/start", dict(base, key=KEY, seed=11))

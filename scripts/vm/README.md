@@ -90,3 +90,11 @@
 ## 아직 안 된 것
 - 판 파일 폴링을 Range 요청(추가분만)으로 바꾸는 것 — 클라이언트 변경이라 뒤로. 지금은 Caddy 압축으로 버틴다.
 - 첫 실판용 50회 제한을 유지할지 다른 운영 상한을 둘지 정하고, 심사용 긴 판을 검증하는 것(짧은 첫 실판은 성공).
+
+## D80 다회사 BYOK (2026-09-17)
+
+화면에서 Gemini·Anthropic·OpenAI 호환 회사를 고르고 자기 키를 넣는다. 서버에 운영자 생성 키를 넣을 필요는 없다. 로그인/열쇠 연결도 회사 선택을 받는다. `BOTPIKDUN_BRAIN`은 provider를 생략한 이전 요청의 기본값이고, `dummy`는 0콜 검증 전용이다.
+
+OpenAI 호환 서비스 목적지를 바꾸려면 `sudo systemctl edit botpikdun`의 `[Service]` 아래 `Environment="OPENAI_BASE_URL=https://openrouter.ai/api/v1"`처럼 설정하고, 진행 중인 판이 없을 때 서비스를 재시작한다. 사용자에게 목적지 회사와 사용할 모델 ID를 알린다. 이 값은 생성 호출과 로그인 모델 목록 GET 양쪽에 쓰이며 브라우저가 임의 주소로 바꿀 수 없다. `/models` 인증을 제공하지 않는 서비스는 계정 로그인에 사용할 수 없다. 인증 없는 로컬 vLLM/Ollama는 단독 로컬 론처용이다.
+
+기본 모델은 `brain_config.py`, 문서와 한계는 `docs/model_wiring_2026-09-17.md`. 새 기본 모델로 바뀌므로 배포 전 기록을 확인한다.

@@ -24,6 +24,7 @@ import hashlib              # D62(09-13) 몸짓 접기 지문(sha1) — 표현�
 from concurrent.futures import ThreadPoolExecutor
 
 import dungeon_gm as G
+from brain_config import BACKENDS, MODEL_IDS as _MODEL_ID, model_id, openai_base_url, OPENAI_DEFAULT_BASE
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -91,15 +92,11 @@ TIMEOUT = 60   # 콜드스타트 ~8초라 넉넉
 # 모델이 아니라 프로세스 기동일 수 있다는 가설을, *같은 모델·같은 프롬프트*로 HTTP 한 방과
 # 견줘야 잰다. 그래서 1단계 목적은 질감(모델) 교체가 아니라 지연 계측뿐이다.
 # 기본값 = claude_cli: 라이브 판도 게이트도 지금 그대로 돈다(새 기능은 스위치 뒤 — gm.py 선례).
-BACKENDS = ("claude_cli", "anthropic_api", "gemini_api", "dummy")
 
 # 별칭 → 백엔드별 모델 id. 별칭("haiku")은 claude.exe 어휘 그대로 둔다 — 호출부
 # `_call_claude(prompt, "haiku")` 가 계약이라 번역은 여기 한 곳에서만 한다. 두 곳에 흩으면
 # 기본인자와 호출지점 중 한쪽만 바뀌는 사고가 난다.
-_MODEL_ID = {
-    "anthropic_api": {"haiku": "claude-haiku-4-5", "sonnet": "claude-sonnet-4-6"},
-    "gemini_api":    {"haiku": "gemini-3-flash-preview", "sonnet": "gemini-3.1-pro"},
-}
+# 기본 표는 brain_config 한 곳에서 론처와 공유한다(_MODEL_ID 공개 심볼은 보존).
 API_URL_ANTHROPIC = "https://api.anthropic.com/v1/messages"
 API_URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent"
 
@@ -472,7 +469,7 @@ def _call_claude(prompt, model="haiku"):
         '스텁 먼저 박고 러너 나중 import' 관용구 보존)."""
     be = backend_name()
     fn = {"claude_cli": _call_cli, "anthropic_api": _call_anthropic,
-          "gemini_api": _call_gemini, "dummy": _call_dummy}[be]
+          "gemini_api": _call_gemini, "openai_api": _call_openai, "dummy": _call_dummy}[be]
     t0 = time.time()
     _TLS.usage = None                    # 백엔드가 채우는 부가 계측(토큰·stop_reason)
     out, why = fn(prompt, model)
@@ -572,7 +569,7 @@ def _call_anthropic(prompt, model):
         # ⚠️ 소켓을 열기 **전에** 끊는다 — 게이트가 모킹을 빠뜨려도 키 없는 프로세스에선
         #    실 API 가 물리적으로 못 나간다(구조적 안전핀이 여기서 닫힌다).
         return "", "호출 실패 NoAPIKey"
-    mid = os.environ.get("DUNGEON_ANTHROPIC_MODEL") or _MODEL_ID["anthropic_api"].get(model)
+    mid = model_id("anthropic_api", model)
     if not mid:
         return "", "호출 실패 UnknownModel"     # 모르는 별칭이 조용히 딴 모델로 흐르지 않게
 
@@ -582,7 +579,8 @@ def _call_anthropic(prompt, model):
         "content-type": "application/json"}, {
         "model": mid,
         "max_tokens": int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "1024")),
-        "messages": [{"role": "user", "content": prompt}]})
+        "messages": [{"role": "user", "content": prompt}],
+        **({"thinking": {"type": "disabled"}} if mid == "claude-sonnet-5" else {})})
     if why:
         return "", why
     if st != 200:
@@ -616,7 +614,10 @@ def _gemini_think(mid):
     DUNGEON_GEMINI_THINK 로 덮어쓸 수 있다(3.x 는 문자열 레벨, 2.5 는 숫자)."""
     v = (os.environ.get("DUNGEON_GEMINI_THINK") or "").strip()
     if mid.startswith("gemini-3"):
-        return {"thinkingLevel": v or "minimal"}
+        # Pro와 신형 Flash는 minimal 미지원. 3.5~3.8은 보수적으로 low 사용.
+        generation = re.match(r"gemini-3\.(\d+)", mid)
+        low = "pro" in mid or (generation and int(generation.group(1)) >= 5)
+        return {"thinkingLevel": v or ("low" if low else "minimal")}
     try:
         return {"thinkingBudget": int(v)}
     except ValueError:
@@ -630,7 +631,7 @@ def _call_gemini(prompt, model):
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not key:
         return "", "호출 실패 NoAPIKey"
-    mid = os.environ.get("DUNGEON_GEMINI_MODEL") or _MODEL_ID["gemini_api"].get(model)
+    mid = model_id("gemini_api", model)
     if not mid:
         return "", "호출 실패 UnknownModel"
 
@@ -664,6 +665,45 @@ def _call_gemini(prompt, model):
     if not txt:
         # 출력 단계 안전 차단(SAFETY/RECITATION)도 여기로 — 라벨로 구분된다
         return "", "빈 응답 rc=200%s" % _errtag(fr or "empty")
+    return txt, None
+
+
+def _call_openai(prompt, model):
+    """Chat Completions 공통 배선. 공식/호환 모두 _http_post의 상한·라벨 계약을 따른다."""
+    key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not key:
+        return "", "호출 실패 NoAPIKey"
+    mid = model_id("openai_api", model)
+    if not mid:
+        return "", "호출 실패 UnknownModel"
+    try:
+        base = openai_base_url()
+    except ValueError:
+        return "", "호출 실패 InvalidBaseURL"
+    body = {"model": mid, "messages": [{"role": "user", "content": prompt}]}
+    official_reasoning = base == OPENAI_DEFAULT_BASE and mid.startswith(("gpt-5", "gpt-6", "o1", "o3", "o4"))
+    body["max_completion_tokens" if official_reasoning else "max_tokens"] = int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "1024"))
+    if base == OPENAI_DEFAULT_BASE and mid in ("gpt-5.6-terra", "gpt-5.6-sol"):
+        body["reasoning_effort"] = "none"     # 짧은 행동 JSON의 출력 예산을 사고에 다 쓰지 않게
+    st, obj, why = _http_post(base + "/chat/completions", {
+        "Authorization": "Bearer " + key, "content-type": "application/json"}, body)
+    if why:
+        return "", why
+    obj = obj if isinstance(obj, dict) else {}
+    if st != 200:
+        err = obj.get("error")
+        return "", "빈 응답 rc=%s%s" % (st, _errtag(err.get("type"), err.get("code")) if isinstance(err, dict) else "")
+    choices = obj.get("choices")
+    c = choices[0] if isinstance(choices, list) and choices and isinstance(choices[0], dict) else {}
+    u = obj.get("usage")
+    u = u if isinstance(u, dict) else {}
+    _TLS.usage = {"in_tok": u.get("prompt_tokens"), "out_tok": u.get("completion_tokens"),
+                  "stop": c.get("finish_reason") or ""}
+    msg = c.get("message")
+    txt = msg.get("content") if isinstance(msg, dict) else None
+    txt = txt.strip() if isinstance(txt, str) else ""
+    if not txt:
+        return "", "빈 응답 rc=200%s" % _errtag(c.get("finish_reason") or "empty")
     return txt, None
 
 

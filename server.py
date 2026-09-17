@@ -7,11 +7,11 @@ launcher.py 는 로컬 도구다: 리포 루트 전체를 정적으로 내주고
      <BOTPIKDUN_DATA>/sessions/<id>/ 아래. 24시간 안 오면 메모리에서 내린다(판 기록이 있는 폴더는 남기고, 쿠키가 오면 되살린다).
   2. 정적 허용 목록 — /game/(빌드)·/viewer/·/launcher/·/art/ 와 자기 세션의 /state/·/runs/ 만. 나머지는 404.
      디렉터리 목록은 자기 세션의 /runs/ 만. 점으로 시작하는 파일과 .py 는 어디서도 안 내준다.
-  3. BYOK — 판 시작 요청의 key 가 그 판 러너의 GEMINI_API_KEY 환경변수로만 들어간다(보관 없는 세션형, D10 서랍).
+  3. BYOK — 판 시작 요청의 provider 에 맞는 회사 키 환경변수 하나에만 key 가 들어간다(보관 없는 세션형, D10 서랍, D80).
      디스크·로그·응답에 남기지 않는다. 서버 자체의 키·대체 두뇌는 러너에 물려주지 않는다.
   4. 상한 — 서버 전체 동시 max_runs(기본 3)판 · 세션당 1판(Runner 그대로) · IP 당 시간당 시작 starts_per_hour(기본 12).
   5. 계정(D77, 2026-09-16 파트너 "api키 자체를 아이디로 쓸 수는 없어?") — **키의 지문이 계정**이다(accounts.py).
-     POST /api/login {key, nick?} 이 키의 생존을 구글에 묻고(key_alive — 폐기된 키는 문이 안 열린다 = 킬 스위치), 지문(HMAC)으로
+     POST /api/login {provider, key, nick?} 이 키의 생존을 해당 회사에 묻고(key_alive — 폐기된 키는 문이 안 열린다 = 킬 스위치), 지문(HMAC)으로
      계정을 찾거나 만들고 번호표를 묶는다. 그 뒤 이 번호표의 Ctx 는 <data>/accounts/<id>/ (state·runs·파티·캐릭터) — 기기가
      달라도 같은 키면 같은 계정, 같은 Ctx(러너 하나). 로그인 전 익명 세션의 저장 캐릭터는 들어올 때 계정으로 옮긴다.
      /api/me · /api/logout · /api/keys/link · /api/keys/unlink · /api/nick. 키는 여기서도 저장·기록되지 않는다(지문·별명만).
@@ -37,6 +37,7 @@ from urllib.parse import unquote, urlparse
 import launcher                                   # noqa: E402
 import accounts as ACC                            # noqa: E402  # D77 계정 = 키 지문(파일 저장소)
 from launcher import BadRequest, Conflict, Ctx, Handler, LauncherServer   # noqa: E402
+from brain_config import HTTP_BACKENDS, KEY_ENV, MODEL_ENV, LEGACY_MODEL_ENV, MODEL_IDS, openai_base_url, clean_model
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 COOKIE = "botpikdun_sid"
@@ -45,22 +46,35 @@ SESSION_OK = ("/state/", "/runs/")                           # 세션 폴더에�
 ENTRY = ("/", "/launcher/", "/launcher/index.html", "/game/", "/game/index.html")   # 여기서만 새 번호표를 준다
 SESSION_TTL = 24 * 3600
 MAX_SESSIONS = 500                                           # 메모리에 두는 세션 상한(크롤러 방어) — 넘으면 새 번호표 거부
-KEY_MIN, KEY_MAX = 20, 200
+KEY_MIN, KEY_MAX = 20, 4096
+KEY_LIMITS = {"gemini_api": (20, 512), "anthropic_api": (20, 4096), "openai_api": (1, 4096)}
 LOGIN_PER_HOUR = 30                                          # D77 로그인(=구글 생존 확인) IP 시간당 상한
 MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1"
 ACCOUNT_POSTS = ("/api/login", "/api/logout", "/api/keys/link", "/api/keys/unlink", "/api/nick")
 
 
 class KeyCheckUnavailable(Exception):
-    """구글에 닿지 못했다(네트워크·5xx) — 키의 생사를 모른다. 계정을 만들지도 열지도 않는다."""
+    """해당 회사에 닿지 못했다(네트워크·5xx) — 키의 생사를 모른다. 계정을 만들지도 열지도 않는다."""
 
 
-def key_alive(key, timeout=8):
+def key_alive(key, provider="gemini_api", timeout=8):
     """키 생존 확인(D77) — 모델 목록 한 번(생성 콜 아님·과금 없음). 200=살아 있음 · 400/401/403=폐기됐거나 잘못된 키 · 그 외=모른다.
-    키는 헤더(x-goog-api-key)로만 보낸다 — URL 에 실으면 예외 문구·로그에 남는다."""
+    키는 회사별 인증 헤더로만 보낸다 — URL 에 실으면 예외 문구·로그에 남는다."""
     import requests                       # 지연 import — 러너와 같은 이유(미설치 환경에서 import server 가 죽지 않게)
+    if provider == "gemini_api":
+        url, headers = MODELS_URL, {"x-goog-api-key": key}
+    elif provider == "anthropic_api":
+        url, headers = "https://api.anthropic.com/v1/models", {"x-api-key": key, "anthropic-version": "2023-06-01"}
+    elif provider == "openai_api":
+        try:
+            url = openai_base_url() + "/models"
+        except ValueError:
+            raise KeyCheckUnavailable("InvalidBaseURL")
+        headers = {"Authorization": "Bearer " + key}
+    else:
+        raise BadRequest("지원하지 않는 API 회사")
     try:
-        r = requests.get(MODELS_URL, headers={"x-goog-api-key": key}, timeout=timeout)
+        r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=False)
     except requests.RequestException as e:
         raise KeyCheckUnavailable(type(e).__name__)
     if r.status_code == 200:
@@ -214,28 +228,36 @@ class Sessions:
         return ctx
 
     @staticmethod
-    def key_shape(key):
+    def provider_name(provider):
+        if not isinstance(provider, str) or provider not in HTTP_BACKENDS:
+            raise BadRequest("회사는 Gemini / Anthropic / OpenAI 호환 중 하나여야 한다")
+        return provider
+
+    @staticmethod
+    def key_shape(key, provider="gemini_api"):
         """키 형태만(네트워크 없음) — 문자열·길이·공백. 정제된 키를 돌려주고 아니면 BadRequest."""
         key = key.strip() if isinstance(key, str) else ""
-        if not (KEY_MIN <= len(key) <= KEY_MAX) or any(c.isspace() for c in key):
-            raise BadRequest("Gemini API 키를 넣어야 한다 — 키는 저장되지 않고 지문만 남는다")
+        Sessions.provider_name(provider)
+        lo, hi = KEY_LIMITS[provider]
+        if not (lo <= len(key) <= hi) or any(ord(c) < 33 or ord(c) > 126 for c in key):
+            raise BadRequest("선택한 회사의 API 키를 넣어야 한다 — 키는 저장되지 않고 지문만 남는다")
         return key
 
-    def _check_alive(self, key):
-        """구글 생존 확인. 죽은 키는 BadRequest, 구글 불통은 KeyCheckUnavailable(503) — 키는 예외 문구에 안 실린다."""
-        if not (self.key_check or KEY_CHECK)(key):
-            raise BadRequest("키가 유효하지 않다 — 구글이 거부했다(폐기됐거나 잘못 적은 키)")
+    def _check_alive(self, key, provider="gemini_api"):
+        """회사별 생존 확인. 죽은 키는 BadRequest, 불통은 KeyCheckUnavailable(503) — 키는 예외 문구에 안 실린다."""
+        if not (self.key_check or KEY_CHECK)(key, provider):
+            raise BadRequest("키가 유효하지 않다 — 선택한 회사가 거부했다(폐기됐거나 잘못 적은 키)")
 
-    def login(self, sid, key, nick=""):
+    def login(self, sid, key, nick="", provider="gemini_api"):
         """키 → 생존 확인 → 지문 → 계정(없으면 생성) → 번호표 묶기 → 익명 세션의 저장 캐릭터를 계정으로 옮긴다.
         반환 (공개 모양, 새로 만들었나, 옮긴 캐릭터 수). 네트워크는 lock 밖에서."""
-        self._check_alive(key)
+        self._check_alive(key, provider)
         fp = self.accounts.fingerprint(key)
         with self.lock:
             aid = self.accounts.lookup(fp)
             created = aid is None
             if created:
-                data = self.accounts.create(fp, nick)
+                data = self.accounts.create(fp, nick, provider)
                 aid = data["id"]
             else:
                 data = self.accounts.load(aid)
@@ -268,11 +290,11 @@ class Sessions:
     def account_of(self, sid):
         return self.accounts.bound(sid) if sid else None
 
-    def link_key(self, aid, key):
-        self._check_alive(key)
+    def link_key(self, aid, key, provider="gemini_api"):
+        self._check_alive(key, provider)
         fp = self.accounts.fingerprint(key)
         try:
-            return self.accounts.public(self.accounts.link(aid, fp))
+            return self.accounts.public(self.accounts.link(aid, fp, provider))
         except ACC.KeyTaken:
             raise Conflict("이 키는 이미 다른 계정에 연결돼 있다 — 그 키로 들어가 거기서 빼야 한다")
 
@@ -378,21 +400,23 @@ class PublicHandler(Handler):
                 self.sessions.logout(self.sid)
                 return self._json(200, {"ok": True, "logged_in": False})
             if p == "/api/login":
-                key = Sessions.key_shape(body.get("key"))
+                provider = Sessions.provider_name(body.get("provider", "gemini_api"))
+                key = Sessions.key_shape(body.get("key"), provider)
                 if not self.sessions.allow_login(self._ip()):
                     return self._json(429, {"error": "이 주소에서 시도한 로그인이 너무 많다 — 한 시간에 %d번까지"
                                             % self.sessions.login_per_hour})
-                acct, created, moved = self.sessions.login(self.sid, key, body.get("nick") or "")
-                return self._json(200, {"ok": True, "logged_in": True, "created": created, "moved": moved, "account": acct})
+                acct, created, moved = self.sessions.login(self.sid, key, body.get("nick") or "", provider)
+                return self._json(200, {"ok": True, "logged_in": True, "created": created, "moved": moved, "account": acct, "provider": provider})
             aid = self.sessions.account_of(self.sid)
             if not aid:
                 return self._json(401, {"error": "먼저 키로 들어와야 한다"})
             if p == "/api/keys/link":
-                key = Sessions.key_shape(body.get("key"))
+                provider = Sessions.provider_name(body.get("provider", "gemini_api"))
+                key = Sessions.key_shape(body.get("key"), provider)
                 if not self.sessions.allow_login(self._ip()):
                     return self._json(429, {"error": "이 주소에서 시도한 로그인이 너무 많다 — 한 시간에 %d번까지"
                                             % self.sessions.login_per_hour})
-                return self._json(200, {"ok": True, "account": self.sessions.link_key(aid, key)})
+                return self._json(200, {"ok": True, "account": self.sessions.link_key(aid, key, provider)})
             if p == "/api/keys/unlink":
                 return self._json(200, {"ok": True, "account": self.sessions.unlink_key(aid, str(body.get("tag") or ""))})
             return self._json(200, {"ok": True, "account": self.sessions.set_nick(aid, body.get("nick") or "")})
@@ -401,7 +425,7 @@ class PublicHandler(Handler):
         except Conflict as e:
             return self._json(409, {"error": str(e)})
         except KeyCheckUnavailable:
-            return self._json(503, {"error": "구글에 닿지 못해 키를 확인할 수 없다 — 잠시 뒤 다시"})
+            return self._json(503, {"error": "선택한 회사에 닿지 못해 키를 확인할 수 없다 — 잠시 뒤 다시"})
         except Exception as e:                            # 이유는 예외 이름만 — 본문(키)이 섞이지 않게
             return self._json(500, {"error": type(e).__name__})
 
@@ -425,6 +449,8 @@ class PublicHandler(Handler):
             return self._json(404, {"error": "세션 없음"})
         if p == "/api/presets":
             obj = launcher.presets_payload(self.ctx)
+            obj["model_defaults"] = {p: MODEL_IDS[p]["haiku"] for p in HTTP_BACKENDS}
+            obj["openai_base_url"] = openai_base_url()
             obj.update(byok=True, public=True, max_runs=self.sessions.max_runs, running=self.sessions.running_count(),
                        account=self._me()["account"])                      # D77 화면이 계정 상태를 같이 읽는다
             return self._json(200, obj)
@@ -446,10 +472,19 @@ class PublicHandler(Handler):
             return super().do_POST()                                  # party·characters·retry·oracle·stop — 세션(또는 계정)의 Ctx 로
         try:
             body = self._body()
-            key = body.pop("key", None)
-            key = key.strip() if isinstance(key, str) else ""
-            if not (KEY_MIN <= len(key) <= KEY_MAX) or any(c.isspace() for c in key):
-                raise BadRequest("Gemini API 키를 넣어야 한다 — 이 판에만 쓰이고 서버에 남지 않는다")
+            default_provider = self.sessions.brain if self.sessions.brain in HTTP_BACKENDS else "gemini_api"
+            if body.get("resume") and "provider" not in body:
+                saved = self.ctx.runner._read_run_opts() or {}
+                default_provider = saved.get("opts", {}).get("provider", default_provider)
+            provider = Sessions.provider_name(body.get("provider", default_provider))
+            key = Sessions.key_shape(body.pop("key", None), provider)
+            if "base_url" in body or "OPENAI_BASE_URL" in body:
+                raise BadRequest("호환 API 주소는 서버 운영자 설정으로만 바꿀 수 있다")
+            if "model" in body:
+                try:
+                    body["model"] = clean_model(body["model"])
+                except ValueError as e:
+                    raise BadRequest(str(e))
             with self.sessions.start_lock:
                 if self.ctx.runner.running():
                     raise Conflict("이미 판이 진행 중이다 — 중지하거나 끝나길 기다려라")
@@ -459,8 +494,12 @@ class PublicHandler(Handler):
                 if not self.sessions.allow_start(self._ip()):
                     return self._json(429, {"error": "이 주소에서 시작한 판이 너무 많다 — 한 시간에 %d판까지"
                                             % self.sessions.starts_per_hour})
-                body["brain"] = self.sessions.brain      # 공개 서버의 두뇌는 하나(BYOK Gemini) — 화면의 선택은 무시
-                extra = {"GEMINI_API_KEY": key, "ANTHROPIC_API_KEY": "", "DUNGEON_BRAIN_FALLBACK": ""}
+                body["provider"] = provider
+                body["brain"] = "dummy" if self.sessions.brain == "dummy" else provider   # 서버 쪽 0콜 게이트만 예외
+                extra = {k: "" for k in (*KEY_ENV.values(), *MODEL_ENV, *LEGACY_MODEL_ENV.values())}
+                extra.update({KEY_ENV[provider]: key, "DUNGEON_BRAIN_BACKEND": body["brain"], "DUNGEON_BRAIN_FALLBACK": ""})
+                # 러너 __main__의 .env 로더도 목적지를 바꾸지 못하게 서버 설정을 명시한다.
+                extra["OPENAI_BASE_URL"] = openai_base_url()
                 if getattr(self.ctx, "aid", None):        # D78(09-16) 계정 판: 도감 원장은 계정 폴더에, 저장한 캐릭터(id)만 남는다
                     body["bestiary"] = True
                     extra["DUNGEON_BESTIARY_FILE"] = os.path.join(self.ctx.dir, "bestiary.json")

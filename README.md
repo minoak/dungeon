@@ -55,9 +55,15 @@ HP·좌표·인벤토리·몬스터 AI는 전부 엔진 소유라, LLM이 "HP가
 지식도 세 층이다: 시스템은 조작법을, 시트는 원래 알던 것을, 관측과 도감은 모험하며 알게 된 것을 준다.
 
 **5. 비용 구조 — 기본은 0원, API는 명시적으로만.**
-두뇌 백엔드 어댑터(`DUNGEON_BRAIN_BACKEND`): `gemini_api` / `anthropic_api`(실행자 본인 키를 `.env`에 — 저장소는 키를 모른다) /
+두뇌 백엔드 어댑터(`DUNGEON_BRAIN_BACKEND`): `gemini_api` / `anthropic_api` / `openai_api`(실행자 본인 키를 `.env`에 — 저장소는 키를 모른다) /
 `claude_cli`(구독 CLI — 추가 과금 0) / `dummy`(LLM 0콜, 배선 검증용). 검증 게이트는 일부러 `.env`를 읽지 않는다 —
 키 없는 프로세스에선 실 API가 물리적으로 못 나가는 구조적 안전핀.
+
+론처의 회사와 모델 ID를 고르면 새 원정·이어가기에 적용된다(D80). 로컬은 `.env`의 해당 회사 키,
+공개 서버는 화면에 입력한 BYOK 키를 쓴다. 로그인·새 키 연결에서도 회사를 고른다.
+OpenAI 호환 서비스는 운영자가 `OPENAI_BASE_URL`과 서비스의 모델 ID를 지정한다(예: Ollama는 `http://localhost:11434/v1`).
+모델별 슬롯 설정은 `DUNGEON_MODEL_HAIKU` / `DUNGEON_MODEL_SONNET`; 화면 모델 칸은 두 슬롯을 함께 바꾼다.
+기본 모델·공식 출처·검증 범위는 [모델 배선 기록](docs/model_wiring_2026-09-17.md), 키 변수는 [.env.example](.env.example).
 
 ## 아키텍처
 
@@ -142,7 +148,7 @@ wonderland.bat              ← 더블클릭 → [L] LAUNCHER      (또는  pyth
 ## 검증과 데이터
 
 ```bash
-bash _run_gates.sh                                     # 결정론 게이트 67종 일괄 (Git Bash, LLM 0콜, 라이브 데이터와 격리)
+bash _run_gates.sh                                     # 결정론 게이트 68종 일괄 (Git Bash, LLM 0콜, 라이브 데이터와 격리)
 cd game && npm run smoke                               # 관전 클라이언트 헤드리스 스모크
 python tools/analyze_run.py runs/stream-XXXX.jsonl     # 지난 판 0콜 부검(이동·전투·대화 통계)
 python tools/run_notes.py   runs/stream-XXXX.jsonl     # 도감평·수첩 텍스트 덤프
@@ -150,7 +156,7 @@ python tools/unheard_audit.py runs/stream-XXXX.jsonl   # 동료를 지목한 말
 python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer.html   # 단일 HTML 리플레이
 ```
 
-- 게이트 `verify_*.py` **67종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
+- 게이트 `verify_*.py` **68종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
   도감·수첩·결산·보스층·차단 접기·공개 서버·계정(키 지문)·캠페인(저장 캐릭터의 원정 기록)·이어가기(스냅샷=끊기지 않은 판)·API 호출 상한·길드 척추(의뢰·보고·NPC 두뇌)를 LLM 0콜로 검사한다.
 - `runs/`의 판 기록은 실LLM으로 얻은 원본 데이터지만 **개인 플레이 기록이라 로컬에만 보존한다**(`.gitignore`, 2026-09-16). 저장소엔 정적 관전용 데모 판(`game/static-runs.json`)만 남는다. 전부 리플레이 가능하다.
 - 관측 표현 A/B 실험(사전등록): [docs/D19_experiment_summary.md](docs/D19_experiment_summary.md).

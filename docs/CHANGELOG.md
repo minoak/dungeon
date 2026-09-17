@@ -1,7 +1,13 @@
 # 변경 기록
 
+## 2026-09-17 — D80 다회사 모델 배선
+
+- Gemini·Anthropic·OpenAI 호환 HTTP와 회사별 BYOK 로그인·열쇠 연결·새 원정·이어가기. 모델 ID 입력, 공통 슬롯 환경변수, 운영자 호환 URL 설정.
+- 기본 모델의 공식 문서 확인, Gemini 신형 사고 설정 대응. 기존 호출 시그니처·전송 상한·실패 라벨·자동 폴백 opt-in 보존. 키는 선택 회사 러너 환경에만 전달.
+- 계정 키 provider 태그 additive(이전 키=Gemini). 새 0콜 게이트 포함 68종. 모델 표·실측 한계: [배선 기록](model_wiring_2026-09-17.md). 문구 ⚠️ 임시 131~138.
+
 > README 첫 화면을 다시 쓰면서(2026-09-13, 외부 이름 **봇픽던** 확정) 본문에 쌓여 있던 날짜별 변경 문단을 여기로 옮겼다.
-> 옮긴 문단의 문장은 그대로다. 설계 결정의 정본은 [`design/HARNESS_DESIGN.md`](../design/HARNESS_DESIGN.md)(D1~D79), 커밋 단위 이력은 `git log`.
+> 옮긴 문단의 문장은 그대로다. 설계 결정의 정본은 [`design/HARNESS_DESIGN.md`](../design/HARNESS_DESIGN.md)(D1~D80), 커밋 단위 이력은 `git log`.
 
 ## 2026-09-16
 

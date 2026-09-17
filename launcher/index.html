@@ -113,7 +113,10 @@
     </div>
     <div class="row center" id="tResumeRow" hidden style="margin-top:10px"><!-- D79 이어가기 — 멈춘 판이 있을 때만 -->
       <span class="muted" id="tResumeText"></span>
-      <input type="password" id="resumeKey" autocomplete="off" spellcheck="false" placeholder="Gemini API 키 — 이어가는 판에만 쓰인다" style="width:30ch" hidden>
+      <!-- D80 ⚠️ 문구 임시: 검토표 131~138 -->
+      <select id="resumeProvider" aria-label="이어갈 회사" style="width:auto"></select>
+      <input type="text" id="resumeModel" aria-label="이어갈 모델" maxlength="200" placeholder="모델 ID" style="width:27ch">
+      <input type="password" id="resumeKey" autocomplete="off" spellcheck="false" placeholder="선택한 회사의 API 키 — 이어가는 판에만 쓰인다" style="width:30ch" hidden>
       <button class="primary" id="bResume">이어가기</button>
     </div>
     <div class="card" id="stopPanel" hidden style="max-width:860px;margin:10px auto 0;text-align:left"><!-- D79 종료 전 알림 ⚠️문구 임시 -->
@@ -126,10 +129,11 @@
     </div>
   </div>
   <div class="card" id="acctCard" hidden style="max-width:860px;margin:0 auto 14px">
-    <h3>계정 — 열쇠는 Gemini 키</h3>
+    <h3>계정 — 열쇠는 선택한 회사의 API 키</h3><!-- D80 ⚠️ 임시 -->
     <div id="acctOut">
       <div class="row">
-        <input type="password" id="loginKey" autocomplete="off" spellcheck="false" placeholder="AIza… — 이 키의 지문이 계정이 된다" style="flex:2;min-width:220px">
+        <select id="loginProvider" aria-label="로그인할 회사" style="width:auto"></select>
+        <input type="password" id="loginKey" autocomplete="off" spellcheck="false" placeholder="API 키 — 이 키의 지문이 계정이 된다" style="flex:2;min-width:220px">
         <input type="text" id="loginNick" maxlength="20" placeholder="별명 (선택, 20자)" style="flex:1;min-width:120px">
         <button class="primary" id="bLogin">이 키로 들어오기</button>
       </div>
@@ -142,6 +146,7 @@
         <button class="small" id="bLogout">나가기</button></div>
       <div id="acctKeys" class="hint" style="margin-top:6px"></div>
       <div class="row" style="margin-top:6px">
+        <select id="linkProvider" aria-label="연결할 키의 회사" style="width:auto"></select>
         <input type="password" id="linkKey" autocomplete="off" spellcheck="false" placeholder="새 키 — 새로 발급한 키를 이 계정에 연결" style="flex:1;min-width:220px">
         <button class="small" id="bLink">새 키 연결</button>
       </div>
@@ -206,14 +211,17 @@
       <h3>두뇌</h3>
       <select id="brain">
         <option value="gemini_api">Gemini API (사용량에 따라 과금)</option>
+        <option value="anthropic_api">Anthropic API (사용량에 따라 과금)</option>
+        <option value="openai_api">OpenAI 호환 API (사용량에 따라 과금)</option>
         <option value="claude_cli">Claude CLI (구독 · 느림)</option>
         <option value="dummy">규칙 두뇌 (LLM 0콜 — 배관 점검)</option>
       </select>
+      <label>모델 ID <input type="text" id="brainModel" maxlength="200" placeholder="회사 기본 모델"></label><!-- D80 ⚠️ 임시 -->
       <div class="hint" id="brainHint">API 키는 .env 에서 읽는다(launcher.py 가 띄운 러너에 그대로 전달).</div>
     </div>
     <div class="card" id="keyCard" hidden>
-      <h3>Gemini API 키 (이 판에만)</h3>
-      <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="AIza… — Google AI Studio 에서 만든 키">
+      <h3 id="keyTitle">선택한 회사의 API 키 (이 판에만)</h3>
+      <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="선택한 회사에서 발급한 API 키">
       <div class="hint">키는 이 판을 도는 러너 프로세스에만 전달되고 서버의 디스크·로그에 남지 않는다(BYOK, D68). 판이 끝나면 사라진다. 비용은 키 주인에게. 계정에 들어온 키는 이 칸에 자동으로 채워진다.</div>
     </div>
     <div class="card">
@@ -323,6 +331,43 @@ function show(id) { for (const s of ['sTitle', 'sParty', 'sOpts']) $(s).hidden =
 
 /* ═══ 계정(D77) — 공개 서버(server.py)에서만. 키는 이 페이지 메모리에만: 들어온 키를 원정 키 칸에 채워 준다 ═══ */
 let account = null, isPublic = false;
+const providerLabels = { gemini_api: 'Google Gemini', anthropic_api: 'Anthropic Claude', openai_api: 'OpenAI 호환', claude_cli: 'Claude CLI', dummy: '규칙 두뇌' };
+let modelDefaults = {}, providerReady = false, resumeRun = null;
+function setModel(provider, modelInput) {
+  $(modelInput).value = modelDefaults[provider] || '';
+  $(modelInput).disabled = !(provider in modelDefaults);
+}
+function changeBrain() {
+  const provider = $('brain').value;
+  setModel(provider, 'brainModel');
+  $('apiKey').value = '';                      // 다른 회사에 이전 키를 보내지 않는다
+  $('keyTitle').textContent = (providerLabels[provider] || provider) + ' API 키 (이 판에만)';
+  updateMode();
+}
+async function initProviders() {
+  const config = await api('/api/presets');
+  isPublic = !!config.byok;
+  modelDefaults = config.model_defaults || {};
+  const http = Object.keys(config.providers || {});
+  for (const id of ['loginProvider', 'linkProvider', 'resumeProvider']) {
+    const names = id === 'resumeProvider' && !isPublic ? Object.keys(providerLabels) : http;
+    $(id).replaceChildren(...names.map(p => new Option(providerLabels[p] || p, p)));
+  }
+  if (isPublic) {
+    for (const option of [...$('brain').options]) if (!http.includes(option.value)) option.remove();
+    $('keyCard').hidden = false;
+    $('brainHint').textContent = '선택한 회사의 키로 이 판을 실행한다. OpenAI 호환 연결 주소: ' + config.openai_base_url;
+  }
+  $('brain').value = config.default_brain in providerLabels && (!isPublic || http.includes(config.default_brain)) ? config.default_brain : 'gemini_api';
+  changeBrain();
+  providerReady = true;
+}
+$('loginProvider').onchange = () => { $('loginKey').value = ''; };
+$('linkProvider').onchange = () => { $('linkKey').value = ''; };
+$('resumeProvider').onchange = () => {
+  setModel($('resumeProvider').value, 'resumeModel');
+  $('resumeKey').value = '';
+};
 function renderAccount() {
   $('acctCard').hidden = !isPublic;
   if (!isPublic) return;
@@ -331,7 +376,7 @@ function renderAccount() {
   $('acctWho').innerHTML = '<b>' + esc(account.nick || '이름 없는 신') + '</b> <span class="muted">· 계정 ' + esc(account.id) + '</span>';
   $('nickIn').value = account.nick || '';
   $('acctKeys').innerHTML = '열쇠 ' + account.keys.length + '개: ' + account.keys.map(k =>
-    '<span style="margin-right:10px">' + esc(k.tag) + '… <span class="muted">(' + new Date(k.added * 1000).toLocaleDateString() + ')</span> ' +
+    '<span style="margin-right:10px">' + esc(providerLabels[k.provider || 'gemini_api'] || k.provider) + ' · ' + esc(k.tag) + '… <span class="muted">(' + new Date(k.added * 1000).toLocaleDateString() + ')</span> ' +
     (account.keys.length > 1 ? '<button class="small" data-unlink="' + esc(k.tag) + '">해제</button>' : '') + '</span>').join('');
   for (const b of $('acctKeys').querySelectorAll('[data-unlink]')) b.onclick = () => acctCall('/api/keys/unlink', { tag: b.dataset.unlink });
 }
@@ -355,16 +400,20 @@ $('bLogin').onclick = async () => {
   const key = $('loginKey').value.trim();
   if (!key) { $('acctErr').textContent = '키를 넣어 줘.'; return; }
   $('bLogin').disabled = true;
-  const j = await acctCall('/api/login', { key, nick: $('loginNick').value.trim() });
+  const provider = $('loginProvider').value;
+  const j = await acctCall('/api/login', { key, provider, nick: $('loginNick').value.trim() });
   $('bLogin').disabled = false;
-  if (j) { $('apiKey').value = key; $('loginKey').value = ''; }     // 원정 키 칸에 채워 둔다(페이지 메모리) — 서버엔 안 남는다
+  if (j) {
+    $('brain').value = provider; changeBrain(); $('apiKey').value = key; $('loginKey').value = '';
+    if ($('resumeProvider').value === provider) $('resumeKey').value = key;
+  }
 };
 $('bLogout').onclick = () => acctCall('/api/logout', {});
 $('bNick').onclick = () => acctCall('/api/nick', { nick: $('nickIn').value.trim() });
 $('bLink').onclick = async () => {
   const key = $('linkKey').value.trim();
   if (!key) { $('acctErr').textContent = '연결할 키를 넣어 줘.'; return; }
-  if (await acctCall('/api/keys/link', { key })) $('linkKey').value = '';
+  if (await acctCall('/api/keys/link', { key, provider: $('linkProvider').value })) $('linkKey').value = '';
 };
 
 /* ═══ 타이틀 — 상태 ═══ */
@@ -389,7 +438,14 @@ async function refreshStatus() {
         $('tResumeText').textContent = `멈춘 원정: seed ${rs.seed} · ${rs.depth === 0 ? '마을' : '지하 ' + rs.depth + '층'} t=${rs.turn_last}` +
           (rs.party?.length ? ` · ${rs.party.filter(p => p.alive).map(p => p.name).join('·')}` : '') + ` · ${how}` + (rs.segment ? ` · 이어가기 ${rs.segment}번째` : '');
         $('resumeKey').hidden = !isPublic;
-        if (isPublic && !$('resumeKey').value) $('resumeKey').value = $('apiKey').value;   // 계정 키 자동 채움(페이지 메모리)과 같은 칸
+        if (providerReady && resumeRun !== st.resume.run_id) {
+          resumeRun = st.resume.run_id;
+          $('resumeProvider').value = st.resume.provider || st.resume.backend || 'gemini_api';
+          setModel($('resumeProvider').value, 'resumeModel');
+          if (st.resume.model) $('resumeModel').value = st.resume.model;
+          $('resumeKey').value = '';
+        }
+        if (isPublic && !$('resumeKey').value && $('resumeProvider').value === $('brain').value) $('resumeKey').value = $('apiKey').value;
       }
     }
   } catch (e) { $('tStatus').textContent = '서버 연결 실패 — launcher.py 가 떠 있나? (' + e.message + ')'; }
@@ -418,10 +474,10 @@ async function stopRun(pages) {                             // D79: pages=true �
 $('bStopPages').onclick = () => stopRun(true);
 $('bStopNow').onclick = () => stopRun(false);
 $('bResume').onclick = async () => {                        // D79 이어가기 — 멈춘 판의 스냅샷에서, 같은 기록 파일에 이어 쓴다
-  const body = { resume: true };
+  const body = { resume: true, provider: $('resumeProvider').value, brain: $('resumeProvider').value, model: $('resumeModel').value.trim() };
   if (isPublic) {
     body.key = $('resumeKey').value.trim();
-    if (!body.key) { $('tStatus').textContent = 'Gemini API 키를 넣어 줘 — 이어가는 판에만 쓰이고 서버에 남지 않아.'; return; }
+    if (!body.key) { $('tStatus').textContent = '선택한 회사의 API 키를 넣어 줘 — 이어가는 판에만 쓰인다.'; return; }
   }
   $('bResume').disabled = true;
   try {
@@ -455,8 +511,6 @@ async function loadPresets() {
   textLimits = presets.text_limits;
   if (presets.byok) {                                                  // 공개(심사용) 서버 server.py — 키는 심사위원이 판마다 가져온다(D68)
     $('keyCard').hidden = false;
-    $('brain').value = 'gemini_api'; $('brain').disabled = true;
-    $('brainHint').textContent = '공개 서버는 Gemini API 로만 돈다. 아래 칸의 키가 이 판에만 쓰인다.';
     $('bestiary').checked = !!presets.account; $('bestiary').disabled = true;    // D64/D78 — 익명은 이월 없음, 계정에 들어오면 저장 캐릭터의 도감이 계정에 남는다(서버가 정한다)
   }
   await loadSprites();                                                 // D37 미리보기 합성기
@@ -710,7 +764,7 @@ function updateMode() {
     skillsHtml(a, { skills: a.default_sets[i % a.default_sets.length], alive: true, hp: 99 }) + '</div>').join('');
 }
 $('runMode').onchange = updateMode;
-$('brain').onchange = updateMode;
+$('brain').onchange = changeBrain;
 $('runMode').value = new URLSearchParams(location.search).get('mode') === 'classic' ? 'classic' : 'standard';
 updateMode();
 for (const lab of $('mapMode').querySelectorAll('label')) {
@@ -728,6 +782,8 @@ $('bStart').onclick = async () => {
     boss: $('boss').checked,           // D65 보스층·귀환(기본 켬) — 최심층 보스·봉인 워프게이트·마을 귀환 종료
     start: $('startBoss').checked ? 'boss' : '',   // D67 프리셋 — 보스방 앞에서 시작(마을 없음·보스 켬)
     brain: $('brain').value,
+    provider: $('brain').value,
+    model: $('brainModel').value.trim(),
     action_mode: 'compose',
     mode: $('runMode').value,
     seed: $('seed').value.trim() || null,
@@ -735,7 +791,7 @@ $('bStart').onclick = async () => {
   };
   if (presets?.byok) {                                                 // 공개 서버(D68): 키 없이는 시작 요청을 보내지 않는다
     body.key = $('apiKey').value.trim();
-    if (!body.key) { $('err2').style.color = '#ff8b7a'; $('err2').textContent = 'Gemini API 키를 넣어 줘 — 이 판에만 쓰이고 서버에 남지 않아.'; return; }
+    if (!body.key) { $('err2').style.color = '#ff8b7a'; $('err2').textContent = '선택한 회사의 API 키를 넣어 줘 — 이 판에만 쓰이고 서버에 남지 않아.'; return; }
   }
   $('bStart').disabled = true;
   try {
@@ -755,6 +811,7 @@ $('bStart').onclick = async () => {
   $('bStart').disabled = false;
 };
 
+try { await initProviders(); } catch (e) { $('tStatus').textContent = e.message; }
 refreshStatus();
 refreshAccount();                                                    // D77 계정 카드(공개 서버에서만 보인다)
 setInterval(refreshStatus, 3000);
