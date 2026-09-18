@@ -486,6 +486,52 @@ def new_quests():
     return {'accepted': {}, 'progress': {}, 'done': {}, 'returned': None, 'reported': None}
 
 
+def new_parties():
+    """D84(2026-09-18 파트너 "던전을 가려면 파티를 모험가 길드에서 결성할수 있게 해야해 … 파티는 함께 계단을 오르내릴수 있어")
+    파티 장부 — 판 전체(러너가 층마다 d.parties 로 건다, 의뢰 장부와 같은 규율). of{char: 파티 번호} 소속 · next 다음 번호 ·
+    asks{청한 사람: {청받은 사람: 틱}} 열린 청(맺기 = 같은 행동 맞받기). 장부가 없으면(None) 옛 판 — 이 층에 살아 있는 전원이 한 일행이다."""
+    return {'of': {}, 'next': 1, 'asks': {}}
+
+
+def party_members(parties, char):
+    """char 와 같은 파티인 사람들(자기 포함, 번호순) — 파티가 없으면 []. 순수 함수."""
+    pid = ((parties or {}).get('of') or {}).get(char)
+    if pid is None:
+        return []
+    return sorted(c for c, p in parties['of'].items() if p == pid)
+
+
+def party_join(parties, chars):
+    """chars 를 한 파티로 묶는다 — 이미 파티가 있는 사람이 끼어 있으면 그 파티에 나머지가 든다(둘 이상이면 가장 작은 번호로 합친다).
+    반환 파티 번호. 누가·어디서 맺을 수 있는지는 부르는 쪽(동사)이 본다 — 여기는 장부만."""
+    of = parties['of']
+    chars = sorted(set(chars))
+    have = sorted({of[c] for c in chars if c in of})
+    if have:
+        pid = have[0]
+        for c, p in list(of.items()):
+            if p in have:
+                of[c] = pid
+    else:
+        pid = parties['next']
+        parties['next'] = pid + 1
+    for c in chars:
+        of[c] = pid
+    for c in chars:                              # 맺어진 사람들 사이의 열린 청은 닫는다
+        for t in chars:
+            (parties['asks'].get(c) or {}).pop(t, None)
+    return pid
+
+
+def party_disband(parties, char):
+    """char 가 든 파티를 푼다 — 전원이 파티 없는 사람으로 돌아간다. 반환 풀린 사람들(번호순, 파티가 없었으면 [])."""
+    members = party_members(parties, char)
+    for c in members:
+        parties['of'].pop(c, None)
+        parties['asks'].pop(c, None)
+    return members
+
+
 def quest_def(qid):
     """의뢰 정의(entities/quest) → {id, title, goal, reward?, client?, req?} — 모르면 None."""
     try:
@@ -820,6 +866,7 @@ class Dungeon:
         self.npc_defs = {}         # D69(09-14) NPC 정의 전체(role·persona·report·보고 대사) — build_town 이 채운다(판정은 report 만 읽는다)
         self.feature_roles = {}    # D69 피처 id → 역할 한 줄(건물 role·NPC role) — 관측 한 줄(표현층, 판정 무접촉)
         self.quests = None         # D69 의뢰 장부(new_quests — 파티 단위·판 전체) — 러너가 층마다 건다. None=의뢰 없음(옛 판 비트 동일)
+        self.parties = None        # D84(09-18) 파티 장부(new_parties — 판 전체) — 러너가 층마다 건다. None=옛 판(살아 있는 전원이 한 일행, 비트 동일)
         self.quest_ids = {}        # D69 관측 id('q1'…) → 의뢰 정의 id — index_quests() 가 게시판 순서로 매긴다(마을만)
         self.quest_boards = {}     # D69 의뢰 정의 id → (게시판 건물 피처 id, range)
         self.expedition_returned = False   # D69 워프게이트로 돌아온 마을 — 원정을 마친 상태(접수원 보고로 끝난다). 러너가 켠다
@@ -975,6 +1022,7 @@ class Dungeon:
         d.npc_lines_again = {}
         d.npc_defs, d.feature_roles = {}, {}          # D69(09-14) NPC 정의·피처 역할 — __new__ 경유라 명시 초기화
         d.quests, d.quest_ids, d.quest_boards = None, {}, {}   # D69 의뢰 장부·관측 id·게시판 — 손그림 장면도 기본 없음(호출측이 건다)
+        d.parties = None                               # D84 파티 장부 — 손그림 장면도 기본 없음(호출측이 건다, __new__ 경유라 명시 초기화)
         d.expedition_returned = False                  # D69 원정 귀환 상태 — 러너가 켠다
         d.town_hear = None                             # D70 마을 사람 지각(구역) — 손그림 장면도 기본 없음(build_town 이 켠다)
         d.rumor = None                                 # D71 소문 재료 — 러너가 채운다
@@ -1924,7 +1972,7 @@ class Dungeon:
         if exit_obj is not None and bots and not getattr(self, 'solo', False):
             # D66(09-13 파트너 "팀원이 전부 모여야 계단을 내려갈 수 있다고 가르쳐줘야"): 모임 규칙(EXIT_GATHER·_gather_busy)을
             # 시도하기 전에 관측에 미리 — 09-13 판에서 떨어진 동료를 둔 채 use exit 헛시도 45회/100틱. 사실만(누가 멀고 누가 바쁜가)
-            others = [o for o in bots if o is not bot and o['alive'] and not o['won']]
+            others = self._stair_mates(bot, bots)             # D84: 파티 장부가 있으면 내 파티원만(없으면 옛 판 그대로 전원)
             far = [o for o in others if self._cheb(o['x'], o['y'], ex, ey) > EXIT_GATHER]
             busy = self._gather_busy(bot, [o for o in others if o not in far], 'exit')
             if far or busy:
@@ -4449,6 +4497,18 @@ class Dungeon:
             bot['aware_of'].add(m.id)
         return newly
 
+    def _stair_mates(self, bot, bots):
+        """계단을 함께 오르내릴 사람들(나 빼고, 이 층에 살아 있고 아직 안 떠난 사람) — D84: 파티 장부가 걸려 있으면 **나와 같은
+        파티인 사람만**이다(파티가 없는 캐릭터는 혼자 — 곁에 서 있던 남을 데려가지도, 남이 안 와서 막히지도 않는다).
+        장부가 없으면 옛 판 그대로 전원. 관측의 모임 사실(view)과 계단 판정(_interact)이 이 한 곳을 같이 본다."""
+        others = [o for o in (bots or []) if o is not bot and o['alive'] and not o['won']
+                  and o['char'] != bot['char']]
+        ps = getattr(self, 'parties', None)
+        if ps is None:
+            return others
+        mine = set(party_members(ps, bot['char']))
+        return [o for o in others if o['char'] in mine]
+
     def _gather_busy(self, leader, near, target_id):
         """모임 '동의'는 위치가 아니라 의사(08-09 왕복 셔틀 부검) — 반경 안이어도 딴 작정
         (탐색·다른 목표·대기)이 살아 있으면 안 모인 것으로 센다.
@@ -4490,8 +4550,7 @@ class Dungeon:
             what = ('던전 입구' if self.town else ('워프게이트' if gate else '계단')) + '(exit)'
             went, result = ('up', 'ascend') if gate else ('down', 'exit')
             extra = {'to_depth': 0, 'gate': True} if gate else {}
-            others = [o for o in (bots or []) if o['alive'] and not o['won']
-                      and o['char'] != bot['char']]
+            others = self._stair_mates(bot, bots)   # D84: 파티 장부가 있으면 내 파티원만(없으면 옛 판 그대로 살아 있는 전원)
             if self.solo:                        # 솔로 판: 각자 계단에 닿으면 혼자 내려간다.
                 bot['won'] = True                #   기다릴 일행이 없다 — 모임 조건을 그대로 두면
                 bot['went'] = went               #   (D29: 방향 기록 — 왕복 러너가 행선지를 읽는다)
@@ -4524,8 +4583,7 @@ class Dungeon:
         if f and f.concealed:                    # 숨은 건 아직 '없는' 것 — 드러나야 만질 수 있다
             return {**base, 'result': 'nothing'}
         if f and f.type == 'stairs_up':          # 마을 복귀(D29) — 하강과 대칭 문법(모임 규칙 동일:
-            others = [o for o in (bots or []) if o['alive'] and not o['won']   # 함께 왔으면
-                      and o['char'] != bot['char']]                            # 함께 돌아간다)
+            others = self._stair_mates(bot, bots)   # 함께 왔으면 함께 돌아간다) · D84: 파티 장부가 있으면 내 파티원만
             if self.solo:
                 bot['won'], bot['went'] = True, 'up'
                 bot['order'], bot['path'], bot['plan'] = None, [], []
