@@ -16,6 +16,11 @@ class StopRequested(Exception):
     """정지 요청(D79) — 판단 정지(brain_pause) 대기 중에 사용자가 멈추면 대기 루프가 이걸 던진다(러너가 받아 조용히 닫는다)."""
 
 
+class PauseTimeout(StopRequested):
+    """F1(09-18) 판단 정지가 제한 시간을 넘겼다 — 아무도 재시도를 누르지 않는 판이 자리를 무기한 쥐지 못하게 러너가 스스로 닫는다.
+    사용자가 멈춘 것과 같은 길(루프 머리 스냅샷이 진실 → 이어가기 가능)이라 StopRequested 의 한 갈래다."""
+
+
 def read_json(path):
     try:
         value = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -65,9 +70,10 @@ def clear_stop(state):
 
 
 class BrainPause:
-    def __init__(self, state, writer, names, report=print):
+    def __init__(self, state, writer, names, report=print, limit=0):
         self.state, self.writer, self.names, self.report = Path(state), writer, names, report
         self.active = False
+        self.limit = max(0, limit or 0)   # F1(09-18) 한 번의 판단 정지를 기다려 주는 초 — 0 = 끝없이(로컬 기본). 재시도가 또 실패하면 새로 센다
 
     def wait(self, turn, errors):
         """행동·몬스터 턴 실행 전에 호출. 여기서는 세계나 기억을 건드리지 않는다."""
@@ -80,9 +86,12 @@ class BrainPause:
         self.report("[판단 정지] t%d · %s — 게임 시간이 멈췄습니다. 관전 화면에서 판단 재시도를 누르세요."
                     % (turn, ", ".join(e["name"] for e in entries)))
         self.report('콘솔 재시도: python run_control.py --state "%s" retry' % self.state)
+        t0 = time.monotonic()
         while True:
             if stop_requested(self.state):        # D79: 판단 정지 중 사용자가 멈춤 — 재시도 없이 조용히 닫는다(루프 머리 스냅샷이 진실)
                 raise StopRequested()
+            if self.limit and time.monotonic() - t0 >= self.limit:   # F1: 제한 시간 동안 아무도 재시도를 안 눌렀다
+                raise PauseTimeout()
             request = read_json(self.state / RETRY_FILE)
             if request.get("id") == paused["id"]:
                 (self.state / RETRY_FILE).unlink(missing_ok=True)

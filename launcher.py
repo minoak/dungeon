@@ -328,7 +328,7 @@ class Runner:
         path = os.path.join(self.state_dir, "stream.jsonl")
         if os.path.exists(path):
             try:
-                with io.open(path, encoding="utf-8") as f:
+                with io.open(path, encoding="utf-8", errors="replace") as f:   # F5(09-18) 러너가 쓰는 중인 마지막 줄은 한글이 반 토막일 수 있다 — 그 줄은 아래 json 에서 걸러진다
                     lines = f.read().splitlines()
             except OSError:
                 lines = []

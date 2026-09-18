@@ -171,6 +171,8 @@ try:
           captured.get("GEMINI_API_KEY") == KEY and captured.get("ANTHROPIC_API_KEY") == "" and captured.get("OPENAI_API_KEY") == "" and captured.get("DUNGEON_BRAIN_FALLBACK") == ""
           and captured.get("DUNGEON_BRAIN_BACKEND") == "dummy" and captured.get("DUNGEON_BESTIARY_FILE") == "",
           str({k: captured.get(k) for k in ("DUNGEON_BRAIN_BACKEND", "DUNGEON_BESTIARY_FILE")}))
+    check("④ F1 러너에 판단 정지 제한 시간을 넘긴다(서버 기본값)", captured.get("DUNGEON_PAUSE_LIMIT_SEC") == str(server.PAUSE_LIMIT_SEC)
+          and server.PAUSE_LIMIT_SEC > 0, str(captured.get("DUNGEON_PAUSE_LIMIT_SEC")))
     stB, _, _, oB, _ = B.call("/api/start", dict(base, key=KEY, seed=11))
     check("④ 두 세션 시작 200 · 두뇌는 서버 것(dummy, 화면의 claude_cli 무시)", stA == 200 and stB == 200
           and oA["brain"] == "dummy" and oB["brain"] == "dummy", "%s %s" % (oA, oB))
@@ -253,6 +255,60 @@ try:
     stz = Z.call("/launcher/")[0]
     check("⑦ 엉터리 쿠키는 새 번호표", stz == 200 and Z.cookie != "zz" * 16 and len(Z.cookie) == 32)
     srv3.shutdown()
+
+    print("── ⑧ F1 시작 때 키 생존 확인(생존 확인 대역 — 네트워크 0)")
+    DEAD = "AIzaSyDEADKEY-0123456789abcdefghijklmnop"      # 형태는 맞지만 회사가 거부하는 키
+    asked, boom = [], {"on": False}
+    def fake_alive(key, provider="gemini_api"):
+        asked.append(key)
+        if boom["on"]:
+            raise server.KeyCheckUnavailable("test")
+        return key != DEAD
+    srv4, port4 = serve(os.path.join(TMP, "alive"), max_runs=3, starts_per_hour=3, key_check=fake_alive, pause_limit=77)
+    F = Judge(port4, "F")
+    F.call("/api/presets")
+    st, _, _, obj, _ = F.call("/api/start", dict(base, key=DEAD, seed=7))
+    check("⑧ 죽은 키 → 400 · 러너 안 뜸 · 응답에 키 없음", st == 400 and "유효" in (obj or {}).get("error", "")
+          and F.call("/api/status")[3]["running"] is False and DEAD not in json.dumps(obj), str(obj))
+    boom["on"] = True
+    st, _, _, obj, _ = F.call("/api/start", dict(base, key=KEY, seed=7))
+    check("⑧ 회사에 못 닿음 → 503 · 러너 안 뜸", st == 503 and F.call("/api/status")[3]["running"] is False, str(obj))
+    boom["on"] = False
+    captured4 = {}
+    def spy4(args, **kw):
+        captured4.update(kw.get("env") or {})
+        server.launcher.subprocess.Popen = real_popen
+        return real_popen(args, **kw)
+    server.launcher.subprocess.Popen = spy4
+    st, _, _, obj, _ = F.call("/api/start", dict(base, key=KEY, seed=7))
+    server.launcher.subprocess.Popen = real_popen
+    check("⑧ 산 키 → 200 · 확인은 시도마다 한 번(3) · 제한 시간은 서버 설정값(77)", st == 200 and asked == [DEAD, KEY, KEY]
+          and captured4.get("DUNGEON_PAUSE_LIMIT_SEC") == "77", "%s %s %s" % (st, len(asked), captured4.get("DUNGEON_PAUSE_LIMIT_SEC")))
+    wait_done(F)
+    st, _, _, obj, _ = F.call("/api/start", dict(base, key=DEAD, seed=8))
+    check("⑧ 죽은 키의 시도도 시작 횟수를 쓴다 — 네 번째는 확인 없이 429(키 검사기로 못 쓴다)", st == 429 and len(asked) == 3,
+          "%s %s" % (st, len(asked)))
+    sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    srv4.sessions.get(F.cookie).runner.proc = sleeper
+    st, _, _, obj, _ = F.call("/api/start", dict(base, key=DEAD, seed=9))
+    check("⑧ 이미 도는 판이면 확인 전에 409(횟수·확인 안 씀)", st == 409 and len(asked) == 3, "%s %s" % (st, len(asked)))
+    sleeper.kill(); sleeper.wait()
+
+    print("── ⑨ F5 쓰는 중인 판 파일(반 토막 한글)을 읽어도 죽지 않는다")
+    import campaign                                                      # noqa: E402
+    ctxF = srv4.sessions.get(F.cookie)
+    spath = os.path.join(ctxF.state_dir, "stream.jsonl")
+    with open(spath, "rb") as f:
+        whole = f.read()
+    n_whole = sum(1 for _ in campaign._iter(spath))
+    with open(spath, "ab") as f:
+        f.write('{"kind":"tick","turn":99,"say":"'.encode("utf-8") + "한".encode("utf-8")[:1])   # 러너가 긴 줄을 쓰는 도중의 모습
+    st, _, _, obj, _ = F.call("/api/status")
+    check("⑨ /api/status 200 · 온전한 줄까지의 사실(seed 7)", st == 200 and obj and obj.get("seed") == 7 and obj.get("turn") != 99, str(obj)[:120])
+    check("⑨ campaign._iter 도 온전한 줄까지만", sum(1 for _ in campaign._iter(spath)) == n_whole, str(n_whole))
+    with open(spath, "wb") as f:
+        f.write(whole)
+    srv4.shutdown()
 finally:
     sys.stderr = old_err
 

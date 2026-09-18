@@ -29,7 +29,7 @@ STATUS_KR = {"running": "진행 중", "stopped": "중단", "ended": "끝남"}
 
 def _iter(path):
     """스트림 줄 단위 — 쓰는 중인 마지막 반 줄은 거기서 멈춘다(그때까지가 기록)."""
-    with io.open(path, encoding="utf-8") as f:
+    with io.open(path, encoding="utf-8", errors="replace") as f:   # F5(09-18) 반 줄 끝의 반 토막 한글이 해독 오류로 터지지 않게 — 그 줄은 아래 json 에서 멈춘다
         for line in f:
             line = line.strip()
             if not line:

@@ -20,6 +20,7 @@ launcher.py 는 로컬 도구다: 리포 루트 전체를 정적으로 내주고
 실행:  python server.py --host 127.0.0.1 --port 8000     (외부는 Caddy 가 HTTPS 로 받아 넘긴다 — scripts/vm/)
 환경:  BOTPIKDUN_DATA(세션·계정 폴더 뿌리, 기본 <리포>/state/public) · BOTPIKDUN_MAX_RUNS · BOTPIKDUN_START_PER_HOUR ·
        BOTPIKDUN_LOGIN_PER_HOUR(기본 30) · BOTPIKDUN_SECRET(지문 비밀 — 없으면 <data>/secret 을 첫 기동 때 만든다, 백업 대상) ·
+       BOTPIKDUN_PAUSE_LIMIT_SEC(판단 정지를 기다려 주는 초, 0 = 끝없이) ·
        BOTPIKDUN_BRAIN(기본 gemini_api — 게이트 verify_public·verify_account 만 dummy)
 """
 import argparse
@@ -49,6 +50,7 @@ MAX_SESSIONS = 500                                           # 메모리에 두�
 KEY_MIN, KEY_MAX = 20, 4096
 KEY_LIMITS = {"gemini_api": (20, 512), "anthropic_api": (20, 4096), "openai_api": (1, 4096)}
 LOGIN_PER_HOUR = 30                                          # D77 로그인(=구글 생존 확인) IP 시간당 상한
+PAUSE_LIMIT_SEC = 600                                        # F1(09-18) 판단 정지를 기다려 주는 초 — 넘으면 러너가 스스로 닫는다(이어가기 가능). ⚠️값 임시(파트너 확인 대기)
 MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1"
 ACCOUNT_POSTS = ("/api/login", "/api/logout", "/api/keys/link", "/api/keys/unlink", "/api/nick")
 
@@ -98,10 +100,11 @@ class Sessions:
     """번호표(sid) → Ctx. 폴더 = <data>/sessions/<sid>/{state,runs,party_custom.json,character_presets.json}."""
 
     def __init__(self, root, data_dir, brain="gemini_api", max_runs=3, starts_per_hour=12, ttl=SESSION_TTL,
-                 login_per_hour=LOGIN_PER_HOUR, key_check=None):
+                 login_per_hour=LOGIN_PER_HOUR, key_check=None, pause_limit=PAUSE_LIMIT_SEC):
         self.root, self.brain = root, brain
         self.max_runs, self.starts_per_hour, self.ttl = int(max_runs), int(starts_per_hour), ttl
         self.login_per_hour, self.key_check = int(login_per_hour), key_check
+        self.pause_limit = max(0, int(pause_limit))   # F1 러너에 DUNGEON_PAUSE_LIMIT_SEC 로 넘긴다(0 = 끝없이)
         self.dir = os.path.join(data_dir, "sessions")
         os.makedirs(self.dir, exist_ok=True)
         self.accounts = ACC.Accounts(data_dir)   # D77 계정 저장소(<data>/accounts·keyindex·logins·secret)
@@ -247,6 +250,13 @@ class Sessions:
         """회사별 생존 확인. 죽은 키는 BadRequest, 불통은 KeyCheckUnavailable(503) — 키는 예외 문구에 안 실린다."""
         if not (self.key_check or KEY_CHECK)(key, provider):
             raise BadRequest("키가 유효하지 않다 — 선택한 회사가 거부했다(폐기됐거나 잘못 적은 키)")
+
+    def check_start_key(self, key, provider="gemini_api"):
+        """F1(09-18) 판을 시작할 때도 키 생존 확인 — 형태만 맞는 가짜 키로 동시 판 자리를 차지하지 못하게(로그인과 같은 확인).
+        두뇌가 dummy 인 서버(0콜 게이트·다중 접속 연습)는 키를 아예 안 쓰니 확인도 없다 — 단 key_check 를 끼운 게이트는 확인한다."""
+        if self.brain == "dummy" and self.key_check is None:
+            return
+        self._check_alive(key, provider)
 
     def login(self, sid, key, nick="", provider="gemini_api"):
         """키 → 생존 확인 → 지문 → 계정(없으면 생성) → 번호표 묶기 → 익명 세션의 저장 캐릭터를 계정으로 옮긴다.
@@ -485,21 +495,32 @@ class PublicHandler(Handler):
                     body["model"] = clean_model(body["model"])
                 except ValueError as e:
                     raise BadRequest(str(e))
-            with self.sessions.start_lock:
+            def no_room():                                # 이미 도는 판 = 409(예외) · 동시 판 상한 = 429 를 보내고 True · 자리 있으면 False
                 if self.ctx.runner.running():
                     raise Conflict("이미 판이 진행 중이다 — 중지하거나 끝나길 기다려라")
                 if self.sessions.running_count() >= self.sessions.max_runs:
-                    return self._json(429, {"error": "지금 동시에 도는 판이 %d개라 자리가 없다 — 몇 분 뒤 다시"
-                                            % self.sessions.max_runs})
-                if not self.sessions.allow_start(self._ip()):
-                    return self._json(429, {"error": "이 주소에서 시작한 판이 너무 많다 — 한 시간에 %d판까지"
-                                            % self.sessions.starts_per_hour})
+                    self._json(429, {"error": "지금 동시에 도는 판이 %d개라 자리가 없다 — 몇 분 뒤 다시"
+                                     % self.sessions.max_runs})
+                    return True
+                return False
+            # F1(09-18) 순서: 자리(네트워크 없음) → IP 시간당 상한 → 키 생존 확인(네트워크라 start_lock 밖) → 잠그고 자리를 다시 보고 시작.
+            # 생존 확인이 IP 상한 뒤인 까닭 = 로그인과 같다: 이 경로를 남의 키 검사기로 못 쓰게. 죽은 키의 시도도 시작 횟수 한 번을 쓴다.
+            if no_room():
+                return
+            if not self.sessions.allow_start(self._ip()):
+                return self._json(429, {"error": "이 주소에서 시작한 판이 너무 많다 — 한 시간에 %d판까지"
+                                        % self.sessions.starts_per_hour})
+            self.sessions.check_start_key(key, provider)
+            with self.sessions.start_lock:
+                if no_room():                             # 생존 확인(수 초)을 기다리는 사이 자리가 찼을 수 있다
+                    return
                 body["provider"] = provider
                 body["brain"] = "dummy" if self.sessions.brain == "dummy" else provider   # 서버 쪽 0콜 게이트만 예외
                 extra = {k: "" for k in (*KEY_ENV.values(), *MODEL_ENV, *LEGACY_MODEL_ENV.values())}
                 extra.update({KEY_ENV[provider]: key, "DUNGEON_BRAIN_BACKEND": body["brain"], "DUNGEON_BRAIN_FALLBACK": ""})
                 # 러너 __main__의 .env 로더도 목적지를 바꾸지 못하게 서버 설정을 명시한다.
                 extra["OPENAI_BASE_URL"] = openai_base_url()
+                extra["DUNGEON_PAUSE_LIMIT_SEC"] = self.sessions.pause_limit   # F1 재시도를 아무도 안 누르는 판이 자리를 쥐고 있지 못하게
                 if getattr(self.ctx, "aid", None):        # D78(09-16) 계정 판: 도감 원장은 계정 폴더에, 저장한 캐릭터(id)만 남는다
                     body["bestiary"] = True
                     extra["DUNGEON_BESTIARY_FILE"] = os.path.join(self.ctx.dir, "bestiary.json")
@@ -512,19 +533,22 @@ class PublicHandler(Handler):
             return self._json(400, {"error": str(e)})
         except Conflict as e:
             return self._json(409, {"error": str(e)})
+        except KeyCheckUnavailable:                       # F1: 회사에 못 닿으면 판단도 못 한다 — 자리를 주지 않는다
+            return self._json(503, {"error": "선택한 회사에 닿지 못해 키를 확인할 수 없다 — 잠시 뒤 다시"})
         except Exception as e:                            # 이유는 예외 이름만 — 본문(키)이 섞이지 않게
             return self._json(500, {"error": type(e).__name__})
 
 
 def make_public_server(host, port, root=HERE, data_dir=None, brain=None, max_runs=None, starts_per_hour=None,
-                       login_per_hour=None, key_check=None):
+                       login_per_hour=None, key_check=None, pause_limit=None):
     sessions = Sessions(root,
                         data_dir or os.environ.get("BOTPIKDUN_DATA") or os.path.join(root, "state", "public"),
                         brain or os.environ.get("BOTPIKDUN_BRAIN") or "gemini_api",
                         max_runs if max_runs is not None else _env_int("BOTPIKDUN_MAX_RUNS", 3),
                         starts_per_hour if starts_per_hour is not None else _env_int("BOTPIKDUN_START_PER_HOUR", 12),
                         login_per_hour=login_per_hour if login_per_hour is not None else _env_int("BOTPIKDUN_LOGIN_PER_HOUR", LOGIN_PER_HOUR),
-                        key_check=key_check)
+                        key_check=key_check,
+                        pause_limit=pause_limit if pause_limit is not None else _env_int("BOTPIKDUN_PAUSE_LIMIT_SEC", PAUSE_LIMIT_SEC))
     srv = LauncherServer((host, port), partial(PublicHandler, sessions=sessions))
     srv.daemon_threads = True
     srv.sessions = sessions

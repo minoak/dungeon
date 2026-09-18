@@ -205,6 +205,43 @@ class BrainPauseTests(unittest.TestCase):
         self.assertEqual(len(bots[0]['history']), 1)
         self.assertEqual(len(bots[0]['dialogue']), 1)
 
+    def test_pause_limit_raises_timeout_only_when_set(self):
+        """F1(09-18): 제한 시간이 있으면 재시도를 안 누른 판단 정지가 PauseTimeout 으로 끝난다 — 사용자 멈춤(StopRequested)과 같은 길."""
+        class Quiet:
+            def emit(self, *a, **k):
+                pass
+        self.assertTrue(issubclass(run_control.PauseTimeout, run_control.StopRequested))
+        with tempfile.TemporaryDirectory(prefix='wl_pause_limit_') as temp:
+            pause = run_control.BrainPause(temp, Quiet(), {'1': '두란'}, report=lambda *_: None, limit=0.4)
+            t0 = time.monotonic()
+            with self.assertRaises(run_control.PauseTimeout):
+                pause.wait(1, {'1': {'src': 'error'}})
+            self.assertGreaterEqual(time.monotonic() - t0, 0.4)
+            self.assertEqual(run_control.BrainPause(temp, Quiet(), {}, report=lambda *_: None).limit, 0)   # 기본 = 끝없이(로컬)
+
+    def test_pause_limit_closes_runner_and_leaves_resumable_run(self):
+        """F1(09-18): DUNGEON_PAUSE_LIMIT_SEC 를 받은 실제 러너 — 아무도 재시도를 안 누르면 스스로 닫고(exit 0·end 줄 없음) 이어갈 몸을 남긴다."""
+        with tempfile.TemporaryDirectory(prefix='wl_pause_limit_run_') as temp:
+            state = Path(temp) / 'state'
+            state.mkdir()
+            runner = launcher.Runner(str(ROOT), str(state), str(Path(temp) / 'runs'))
+            with (state / 'runner.out').open('w', encoding='utf-8') as log:
+                runner.proc = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), '--fixture', str(state)],
+                                               cwd=ROOT, env={**os.environ, 'PYTHONUTF8': '1', 'DUNGEON_PAUSE_LIMIT_SEC': '1'},
+                                               stdout=log, stderr=log)
+            try:
+                self.assertEqual(runner.proc.wait(timeout=40), 0, (state / 'runner.out').read_text(encoding='utf-8'))
+                records = [json.loads(line) for line in (state / 'stream.jsonl').read_text(encoding='utf-8').splitlines()]
+                self.assertEqual(sum(r['kind'] == 'brain_pause' for r in records), 1)
+                self.assertFalse(any(r['kind'] in ('end', 'tick') for r in records))      # 세계는 한 틱도 안 갔고 판은 안 끝났다
+                self.assertFalse((state / 'allow-brain').exists())                          # 재시도는 아무도 안 눌렀다
+                resume = runner.resumable(runner.status())
+                self.assertIsNotNone(resume)
+                self.assertEqual(resume['stopped'], 'pause_timeout')
+                self.assertIn('제한 시간(1초)', (state / 'runner.out').read_text(encoding='utf-8'))
+            finally:
+                runner.stop()
+
     def test_world_freezes_and_http_retry_resumes_same_run(self):
         with tempfile.TemporaryDirectory(prefix='wl_brain_pause_') as temp:
             state = Path(temp) / 'state'

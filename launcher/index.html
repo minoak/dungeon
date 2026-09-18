@@ -554,7 +554,7 @@ async function refreshStatus() {
       const rs = st.resume;                                                 // D79 이어갈 몸이 있다(멈춘 판의 요약)
       $('tResumeRow').hidden = !rs;
       if (rs) {
-        const how = rs.stopped === 'user' ? `수첩 쓰고 멈춤${rs.pages?.length ? ' · 수첩 ' + rs.pages.length + '장' : ''}` : rs.stopped === 'user_paused' ? '판단 정지 중 멈춤' : '끊김(마지막 기록까지)';
+        const how = rs.stopped === 'user' ? `수첩 쓰고 멈춤${rs.pages?.length ? ' · 수첩 ' + rs.pages.length + '장' : ''}` : rs.stopped === 'user_paused' ? '판단 정지 중 멈춤' : rs.stopped === 'pause_timeout' ? '판단 정지가 오래 이어져 멈춤' : '끊김(마지막 기록까지)';
         $('tResumeText').textContent = `멈춘 원정: seed ${rs.seed} · ${rs.depth === 0 ? '마을' : '지하 ' + rs.depth + '층'} t=${rs.turn_last}` +
           (rs.party?.length ? ` · ${rs.party.filter(p => p.alive).map(p => p.name).join('·')}` : '') + ` · ${how}` + (rs.segment ? ` · 이어가기 ${rs.segment}번째` : '');
         if (providerReady && resumeRun !== st.resume.run_id) {

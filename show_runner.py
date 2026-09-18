@@ -97,7 +97,8 @@ TRPG_COMBAT_ON = os.environ.get('DUNGEON_TRPG_COMBAT', '1' if brains.COMPOSE els
 RANDOM_SKILL_ON = os.environ.get('DUNGEON_RANDOM_SKILL', '1' if brains.COMPOSE else '0') == '1'
 DUNGEON_SEED = _pick_seed(os.environ.get("DUNGEON_SEED", "7"))
 MAX_TURNS = int(os.environ.get("DUNGEON_TURNS", "600" if SKILLS_ON else "250"))
-N_MON = int(os.environ.get("DUNGEON_MONSTERS", "2"))
+PAUSE_LIMIT_SEC = max(0, int(os.environ.get("DUNGEON_PAUSE_LIMIT_SEC", "0") or 0))   # F1(09-18) 판단 정지를 기다려 주는 초 — 기본 0 = 끝없이(로컬). 공개 서버(server.py)가 값을 준다
+N_MON =int(os.environ.get("DUNGEON_MONSTERS", "2"))
 N_TRAP = int(os.environ.get("DUNGEON_TRAPS", "3"))
 N_LURK = int(os.environ.get("DUNGEON_LURKERS", "1"))
 N_POTION = int(os.environ.get("DUNGEON_POTIONS", "1"))   # 층당 회복 물약(07-17) — 러너 기본 1,
@@ -1225,7 +1226,7 @@ def main():
         kept = _preserve_stream(os.path.join(STATE, "stream.jsonl"))
         resume_fail["kept"] = os.path.basename(kept) if kept else None
     sw = run_summary.Tap(stream.StreamWriter(os.path.join(STATE, "stream.jsonl"), append=snap is not None), rs)   # 실행당 truncate(이어가기는 스냅샷 자리 뒤에 append) · 모든 emit 이 결산에도
-    brain_pause = run_control.BrainPause(STATE, sw, names, event)
+    brain_pause = run_control.BrainPause(STATE, sw, names, event, limit=PAUSE_LIMIT_SEC)
     returned, returned_party = False, []   # D65 워프게이트 귀환으로 끝난 판의 표식(outcome 'returned')·귀환한 사람들
     last_oracle_id = None                  # D61 개정: 마지막으로 스트림에 남긴 신의 요청 id(새 요청·거둠을 한 번만 적는다)
     quests = G.new_quests() if (QUESTS_ON and NOTICES_ON) else None   # D69 의뢰 장부(파티 단위·판 전체) — 층마다 같은 객체를 건다
@@ -1431,7 +1432,7 @@ def main():
                                                 RESUME_NOTICE_PAGE if pg else "")
         sw.emit("resume", turn=int(snap["next_turn"]) - 1, started=time.strftime("%Y-%m-%dT%H:%M:%S"), segment=segment,
                 backend=brains.backend_name(), depth=d.depth,
-                stopped=(stop_info.get("reason") or None),          # 앞 조각이 어떻게 끝났나: user(수첩 쓰고 멈춤)·user_paused(판단 정지 중 멈춤)·None(끊김·크래시)
+                stopped=(stop_info.get("reason") or None),          # 앞 조각이 어떻게 끝났나: user(수첩 쓰고 멈춤)·user_paused(판단 정지 중 멈춤)·pause_timeout(F1 판단 정지 제한 시간)·None(끊김·크래시)
                 **({"pages": pages_prev} if pages_prev else {}),   # 멈출 때 쓴 수첩 장(캐릭터별) — 이어가는 몸이 들고 간다
                 party=[{"char": b["char"], "hp": b["hp"], "alive": b["alive"]} for b in bots])
     run_id = "%s@%s" % (DUNGEON_SEED, run_started)   # 캠페인(D78)의 판 식별자 — 이어가도 같은 판
@@ -1525,10 +1526,14 @@ def main():
             last_oracle_id = oracle_now
         try:
             decisions = brains.think_all(d, bots, inbox, on_error=lambda errors: brain_pause.wait(turn, errors))
-        except run_control.StopRequested:          # D79: 판단 정지 대기 중 사용자가 멈춤 — 루프 머리 스냅샷(이 틱 전)이 진실. 조용히 닫는다
-            snapshot.write_meta(STATE, _snap_meta(turn, {"reason": "user_paused", "pages": {}}))
-            event("=== 판단 정지 중에 원정을 멈춘다(t%d 전) — 마지막 기록에서 이어갈 수 있다 ===" % turn)
-            stopped_now = "user_paused"
+        except run_control.StopRequested as stop_exc:   # D79: 판단 정지 대기 중 사용자가 멈춤 — 루프 머리 스냅샷(이 틱 전)이 진실. 조용히 닫는다
+            # F1(09-18): 제한 시간(PAUSE_LIMIT_SEC) 동안 아무도 재시도를 안 누른 판도 같은 길로 스스로 닫는다 — 사유만 다르다
+            stopped_now = "pause_timeout" if isinstance(stop_exc, run_control.PauseTimeout) else "user_paused"
+            snapshot.write_meta(STATE, _snap_meta(turn, {"reason": stopped_now, "pages": {}}))
+            if stopped_now == "pause_timeout":
+                event("=== 판단 정지가 제한 시간(%d초)을 넘겨 원정을 멈춘다(t%d 전) — 마지막 기록에서 이어갈 수 있다 ===" % (PAUSE_LIMIT_SEC, turn))
+            else:
+                event("=== 판단 정지 중에 원정을 멈춘다(t%d 전) — 마지막 기록에서 이어갈 수 있다 ===" % turn)
             break
         brain_pause.resolved(turn)
         for c_, dec_ in (decisions or {}).items():   # D61 신탁 응답 — 캐릭터 장부(요청 id 별 한 번)·events.log. 판정 없음
