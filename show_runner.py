@@ -791,7 +791,8 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
             region = rname.get((spec_w.get("walk") or {}).get("region"))
             if not region:
                 continue
-            fid = d.add_walker(spec_w["name"], region, (spec_w.get("walk") or {}).get("rate", 0.5), avoid=avoid)
+            fid = d.add_walker(spec_w["name"], region, (spec_w.get("walk") or {}).get("rate", 0.5), avoid=avoid,
+                               rect=(spec_w.get("walk") or {}).get("rect"))   # D82 걷는 자리(구역 안의 앞마당) — 없으면 구역 전체
             if fid is None:
                 continue
             d.npc_defs[spec_w["name"]] = {k: v for k, v in spec_w.items() if v not in (None, [], "")}
@@ -1070,7 +1071,8 @@ def npc_facts(d, npc_name, bots, fallen, quests):
     facts = ["파티: " + ", ".join("%s(%s, HP %d/%d)" % (b.get("name") or ("모험가 %s" % b["char"]), b["job"], b["hp"], b["maxhp"]) for b in alive)]
     if fallen:
         facts.append("이번 원정에서 쓰러진 사람: " + ", ".join(str(c) for c in fallen))
-    facts.append("지금은 " + ("원정에서 돌아온 뒤다(워프게이트로 귀환)" if getattr(d, "expedition_returned", False) else "원정을 떠나기 전이다"))
+    facts.append("지금은 원정에서 돌아온 뒤다(워프게이트로 귀환)" if getattr(d, "expedition_returned", False)
+                 else "이 사람들은 아직 던전에 내려가지 않았다")   # D83(09-18): 옛 '지금은 원정을 떠나기 전이다'는 내려감을 전제했다 — 사실만(⚠️문구 임시)
     if nd.get("report") and quests is not None:
         board = []
         for tid, qid in sorted((getattr(d, "quest_ids", None) or {}).items()):

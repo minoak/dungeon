@@ -484,24 +484,30 @@ check("⑪ 같은 구역이면 heard [2] · 모두에게 한 말도 heard [1] ·
 print("── ⑫ 마을 행인(D73, 09-14 파트너 '마을에 돌아다니는 일반 캐릭터들')")
 d12, s12 = show_runner.build_town(walkers=True)
 wk = {f.name: f for f in d12.features.values() if f.type == "npc" and getattr(f, "walker", False)}
-check("⑫ 행인 3 — 떠돌이 모험자·노점 상인(번화가)·견습 모험자(샛길) 제 구역 바닥에 · 스냅샷 walker 표식 · 정착 NPC 는 표식 없음 · 기본 build_town() 엔 없음",
-      set(wk) == {"떠돌이 모험자", "견습 모험자", "노점 상인"}
-      and d12._town_zone(wk["떠돌이 모험자"].x, wk["떠돌이 모험자"].y) == "번화가" and d12._town_zone(wk["노점 상인"].x, wk["노점 상인"].y) == "번화가"
-      and d12._town_zone(wk["견습 모험자"].x, wk["견습 모험자"].y) == "샛길"
+WK_ZONE = {"떠돌이 모험자": "모험가 길드 지구", "견습 모험자": "모험가 길드 지구", "노점 상인": "번화가"}   # D82(09-18) 길드 앞마당 = 모임 자리 — 행인 둘이 여기서 걷는다
+check("⑫ 행인 3 — 떠돌이 모험자·견습 모험자(길드 지구 앞마당, D82)·노점 상인(번화가) 제 구역 바닥에 · 스냅샷 walker 표식 · 정착 NPC 는 표식 없음 · 기본 build_town() 엔 없음",
+      set(wk) == set(WK_ZONE)
+      and all(d12._town_zone(wk[n].x, wk[n].y) == z for n, z in WK_ZONE.items())
       and all(f.as_dict().get("walker") is True for f in wk.values()) and "walker" not in by_name(d12, "npc", "길드 접수원").as_dict()
       and not any(getattr(f, "walker", False) for f in show_runner.build_town()[0].features.values())
       and all(d12.npc_defs.get(n) and d12.feature_roles.get(f.id) for n, f in wk.items()))
 b12 = mkbot("1", *s12["1"])
 start12 = {n: (f.x, f.y) for n, f in wk.items()}
 moved = 0; bad = 0; traj = []
+YARD = {n: (G.ENT.npc(e).get("walk") or {}).get("rect") for n, e in (("떠돌이 모험자", "wandering_adventurer"), ("견습 모험자", "apprentice_adventurer"),
+                                                                       ("노점 상인", "street_vendor"))}   # D82 걷는 자리(앞마당) — 노점 상인은 없음(구역 전체)
 for _ in range(40):
     ev = d12.walk_npcs([b12])
     moved += len(ev); traj.append(tuple((f.x, f.y) for f in wk.values()))
     for n, f in wk.items():
-        if d12._town_zone(f.x, f.y) != {"떠돌이 모험자": "번화가", "노점 상인": "번화가", "견습 모험자": "샛길"}[n] or d12.grid[f.y][f.x] != G.FLOOR \
+        if d12._town_zone(f.x, f.y) != WK_ZONE[n] or d12.grid[f.y][f.x] != G.FLOOR or not d12._in_walk_rect(f.x, f.y, YARD[n]) \
                 or (f.x, f.y) == (b12["x"], b12["y"]) or sum(1 for g in d12.features.values() if (g.x, g.y) == (f.x, f.y)) != 1:
             bad += 1
-check("⑫ 40틱 걸음: 움직였고(≥5) 제 구역·바닥 안에서만 · 사람·피처와 안 겹침 · 사건 npc_move{id,npc,to}",
+check("⑫ D82 걷는 자리: 앞마당 rect 는 길드 지구 안의 바닥 칸을 갖고(둘 다) 출발 자리도 그 안 · 노점 상인은 rect 없음(구역 전체) · 길드 건물 문턱에서 6칸 안(인사가 닿는 거리)에 마당 칸이 있다",
+      all(YARD[n] and d12._in_walk_rect(*start12[n], YARD[n]) for n in ("떠돌이 모험자", "견습 모험자")) and YARD["노점 상인"] is None
+      and (lambda gd_: any(d12._in_walk_rect(x, y, YARD["견습 모험자"]) and d12._town_zone(x, y) == WK_ZONE["견습 모험자"] and d12.grid[y][x] == G.FLOOR
+                           and max(abs(x - gd_.x), abs(y - gd_.y)) <= d12.NPC_HAIL_RANGE for y in range(d12.h) for x in range(d12.w)))(by_name(d12, "building", "모험가 길드")))
+check("⑫ 40틱 걸음: 움직였고(≥5) 제 구역·바닥·걷는 자리(D82) 안에서만 · 사람·피처와 안 겹침 · 사건 npc_move{id,npc,to}",
       moved >= 5 and bad == 0 and all(e.get("type") == "npc_move" and e.get("npc") and len(e.get("to", [])) == 2 for e in ev) if ev else moved >= 5 and bad == 0)
 d12b, _ = show_runner.build_town(walkers=True)
 wkb = {f.name: f for f in d12b.features.values() if f.type == "npc" and getattr(f, "walker", False)}
@@ -512,18 +518,35 @@ for _ in range(40):
 check("⑫ 결정론: 같은 시드면 출발 자리·40틱 궤적이 같다(판정용 rng 무접촉 — walk_rng)",
       startb == start12 and trajb[-1] == traj[-1] and d12b.rng.getstate() == show_runner.build_town(walkers=True)[0].rng.getstate())
 w1 = wk["떠돌이 모험자"]
-n12 = mkbot("2", *next((x, y) for y in range(d12.h) for x in range(d12.w) if d12.grid[y][x] == G.FLOOR and d12._town_zone(x, y) == "번화가"
-                                and d12.feature_at(x, y) is None and 2 <= max(abs(x - w1.x), abs(y - w1.y)) <= 4))
+
+
+def near12(f, lo, hi):
+    """행인 f 와 같은 구역의 빈 바닥 중 체비쇼프 거리 lo~hi 인 첫 칸(행 우선 — 결정론)."""
+    z = d12._town_zone(f.x, f.y)
+    return next((x, y) for y in range(d12.h) for x in range(d12.w) if d12.grid[y][x] == G.FLOOR and d12._town_zone(x, y) == z
+                and d12.feature_at(x, y) is None and lo <= max(abs(x - f.x), abs(y - f.y)) <= hi)
+
+
+n12 = mkbot("2", *near12(w1, 2, 4))
 o12 = d12.view(n12, [n12])
 seen12 = {f["name"]: f for f in o12["sights"]["features"] if f["type"] == "npc"}
-check("⑫ 구역 지각: 번화가의 봇은 떠돌이 모험자(역할 줄)와 노점 상인은 보고 샛길의 견습 모험자는 못 본다 · 정착 NPC 는 늘 보인다",
-      "떠돌이 모험자" in seen12 and seen12["떠돌이 모험자"].get("role") and "노점 상인" in seen12 and "견습 모험자" not in seen12
-      and {"길드 접수원", "성직자", "주점 주인"} <= set(seen12))
-n12["x"], n12["y"] = w1.x + 1, w1.y
+check("⑫ 구역 지각(D82 앞마당): 길드 지구의 봇은 떠돌이 모험자(역할 줄)와 견습 모험자를 보고 번화가의 노점 상인은 못 본다 · 정착 NPC 는 늘 보인다 · '지금 있는 곳'의 특징 = 구역 정의 문장 그대로",
+      "떠돌이 모험자" in seen12 and seen12["떠돌이 모험자"].get("role") and "견습 모험자" in seen12 and "노점 상인" not in seen12
+      and {"길드 접수원", "성직자", "주점 주인"} <= set(seen12)
+      and o12.get("town_zone") == WK_ZONE["떠돌이 모험자"]
+      and o12.get("town_zone_about") == G.ENT.get("town_guild")["comps"]["story"]["trait"])
+m12 = mkbot("3", *near12(wk["노점 상인"], 2, 4))
+seenm = {f["name"] for f in d12.view(m12, [m12])["sights"]["features"] if f["type"] == "npc"}
+check("⑫ 번화가의 봇은 노점 상인은 보고 앞마당의 행인 둘은 못 본다(D70 그대로 — 모임은 그 구역에 들어가야 보인다)",
+      "노점 상인" in seenm and "떠돌이 모험자" not in seenm and "견습 모험자" not in seenm)
+n12["x"], n12["y"] = next((w1.x + dx, w1.y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))      # 말 걸기의 곁 = 상하좌우 한 칸
+                          if d12.grid[w1.y + dy][w1.x + dx] == G.FLOOR and d12.feature_at(w1.x + dx, w1.y + dy) is None)
 r12 = d12._interact(n12, "f%d" % w1.id, [n12])
-check("⑫ 말 걸기: npc_talk(정의 대사) · 두 번째는 line_again · 인사(D71)는 행인도 건다(hail_rumor 재료 있으면 숫자)",
+g12 = {g[0]: g for g in d12.npc_greetings([mkbot("3", *near12(w1, 2, 2))])}
+check("⑫ 말 걸기: npc_talk(정의 대사) · 두 번째는 line_again · 인사(D71)는 행인도 건다 — 앞마당의 인사는 던전 말이 아니라 사람 묻는 말(D82: 떠돌이 모험자의 hail_rumor 없음)",
       r12["result"] == "npc_talk" and "거미" in r12["line"] and d12._interact(n12, "f%d" % w1.id, [n12]).get("again") is True
-      and (lambda g: len(g) == 1 and g[0][0] == "떠돌이 모험자" and g[0][5] == "hail")(d12.npc_greetings([mkbot("3", w1.x + 2, w1.y)])))
+      and "떠돌이 모험자" in g12 and g12["떠돌이 모험자"][5] == "hail" and "hail_rumor" not in (d12.npc_defs.get("떠돌이 모험자") or {})
+      and "던전" not in g12["떠돌이 모험자"][2])
 
 print("── ⑬ D74 기도의 답 = 축복의 물약(09-15 파트너 '기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자')")
 d13, s13 = show_runner.build_town(apart=True)

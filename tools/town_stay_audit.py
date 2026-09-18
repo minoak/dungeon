@@ -9,7 +9,8 @@
 ⚠️ 단어 세기라 거칠다 — 이유 문장에 그 말이 '들어 있나'만 본다(뜻을 읽지 않는다). 서로 다른 조건의 판을 비교하는 점수가 아니라,
 같은 세계를 고치기 전과 뒤에 같은 잣대를 대 보는 용도다. 표본 문장(--show)을 함께 읽어라.
 
-사용: python tools/town_stay_audit.py [--show N] [스트림 파일 …]   (기본: runs/ 의 최근 14판 + state/stream.jsonl)
+사용: python tools/town_stay_audit.py [--show N] [--until T] [스트림 파일 …]   (기본: runs/ 의 최근 14판 + state/stream.jsonl)
+  --until T(2026-09-18): T 틱까지의 판단만 센다 — 짧게 끊은 시험 판(예: 45틱)과 옛 판을 같은 구간끼리 견주려고.
 """
 import collections
 import glob
@@ -22,6 +23,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # 리포 루트(tools/ 의 부모)
 PREP = re.compile('던전|원정|내려|출발|진입|계단|입구')              # 던전 준비 말
 SOCIAL = re.compile('친해|이야기|수다|놀|쉬|구경|궁금|반갑|인사')     # 사람·구경 말(던전 준비 말이 같이 있으면 안 센다)
+UNTIL = None                                                          # --until T: 이 틱까지의 판단만(없으면 첫 하강까지 전부)
 
 
 def audit(path):
@@ -47,6 +49,8 @@ def audit(path):
                 last_turn = o.get('turn') or last_turn
                 if first_descend is not None or not (meta and meta.get('town')):
                     continue
+                if UNTIL and (o.get('turn') or 0) > UNTIL:
+                    continue
                 dec = o.get('decisions') or {}
                 for ch, d in (dec.items() if isinstance(dec, dict) else []):
                     if not isinstance(d, dict) or not d.get('type'):
@@ -70,10 +74,15 @@ def audit(path):
 
 
 def main(argv):
+    global UNTIL
     show = 0
     if '--show' in argv:
         i = argv.index('--show')
         show = int(argv[i + 1])
+        argv = argv[:i] + argv[i + 2:]
+    if '--until' in argv:
+        i = argv.index('--until')
+        UNTIL = int(argv[i + 1])
         argv = argv[:i] + argv[i + 2:]
     paths = argv or (sorted(glob.glob(os.path.join(ROOT, 'runs', 'stream-*.jsonl')))[-14:] + [os.path.join(ROOT, 'state', 'stream.jsonl')])
     rows = [r for r in (audit(p) for p in paths) if r]

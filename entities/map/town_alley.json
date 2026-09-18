@@ -11,9 +11,9 @@
       "role": "street"
     },
     "story": {
-      "trait": "좁고 꺾이는 길. 견습 모험자가 서성인다",
-      "history": "주점 뒷문으로 이어지는 골목. 파티를 못 구한 이들이 여기서 나가는 파티를 눈으로 좇는다."
+      "trait": "좁고 꺾이는 길. 번화가와 주점 지구, 던전 입구 지구를 잇는다",
+      "history": "주점 뒷문으로 이어지는 골목. 던전으로 가는 지름길이라 나가는 파티가 자주 지난다."
     }
   },
-  "note": "story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md)."
+  "note": "story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). 2026-09-18 D82: 견습 모험자가 길드 앞마당으로 옮겨 가 '서성인다' 구절을 세계의 사실(연결)로 바꿨다 — 임시."
 }

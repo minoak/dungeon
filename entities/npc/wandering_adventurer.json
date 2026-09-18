@@ -8,23 +8,23 @@
     "adventurer"
   ],
   "sprite": "wl-npc-wanderer#0",
-  "note": "SilenceBreaker 임시 초안(2026-09-14 D73 마을 행인) — 문장·이름·성격 전부 파트너 대기. walk.region 은 layout 구역 id, rate 는 틱당 한 걸음 확률. 2026-09-15: 여성 SD 외형과 4방향 걷기 적용(art/npc-sprites-v1). story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md).",
+  "note": "SilenceBreaker 임시 초안(2026-09-14 D73 마을 행인) — 문장·이름·성격 전부 파트너 대기. walk.region 은 layout 구역 id, rate 는 틱당 한 걸음 확률. 2026-09-15: 여성 SD 외형과 4방향 걷기 적용(art/npc-sprites-v1). story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). 2026-09-18 D82: 걷는 구역 번화가 → 길드 지구(앞마당 = 모임 자리). walk.rect 는 구역 안에서 걷는 자리(layout 좌표 [x,y,w,h] — 길드 건물 남쪽 마당, 없으면 구역 전체). 먼저 거는 인사에서 던전 말을 뺐다(hail 을 사람 묻는 말로 · hail_rumor 삭제 — 09-17 부검: 마을의 모든 말이 던전 준비였다). 소문의 숫자는 그대로 안다(역할의 '소문' → NPC 두뇌의 사실 묶음 · 주점 주인의 hail_rumor 는 그대로) — 말을 걸면 들을 수 있다.",
   "comps": {
     "npc": {
       "line": "던전에서 막 올라온 참이야. 2층 계단 옆에 거미가 매복하더라 — 조심해.",
       "line_again": "아까 말했잖아, 2층 거미. 그것만 기억해.",
       "role": "다른 파티의 모험자 · 던전 소문",
-      "persona": "말수가 적고 피곤해 보인다. 던전 얘기는 정확하게, 그 밖엔 무심하다.",
-      "hail": "{name}? 처음 보는 얼굴이네. 던전 내려가나?",
-      "hail_rumor": "{name}, 내려갈 거면 알아 둬. 1층엔 {monsters}가 있어. 함정은 {traps}개 봤어.",
+      "persona": "말수가 적고 피곤해 보인다. 던전 얘기는 정확하게 한다. 마당에 앉아 남의 파티가 어떻게 지내는지 듣는 걸 은근히 좋아한다.",
+      "hail": "{name}? 처음 보는 얼굴이네. 어느 파티야?",
       "walk": {
-        "region": "main_street",
+        "region": "guild_district",
+        "rect": [29, 11, 17, 4],
         "rate": 0.5
       }
     },
     "story": {
-      "trait": "다른 파티의 모험자. 1층 몬스터·함정 수를 안다",
-      "history": "혼자 다닌다. 어느 파티에 있었는지는 말하지 않고, 던전 얘기만은 정확하게 한다. 피곤해 보이지만 계속 내려간다."
+      "trait": "다른 파티의 모험자. 길드 앞마당에서 쉰다. 1층 몬스터·함정 수를 안다",
+      "history": "혼자 다닌다. 어느 파티에 있었는지는 말하지 않고, 던전 얘기만은 정확하게 한다. 피곤해 보이지만 계속 내려간다. 올라오면 길드 앞마당에서 한참을 앉아 있다."
     }
   }
 }

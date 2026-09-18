@@ -3030,13 +3030,22 @@ class Dungeon:
                 'line': line, 'done': done, 'undone': undone, 'titles': titles, 'bag': int(bot.get('bag', 0))}
 
     # ── D73(2026-09-14 파트너 "마을에 돌아다니는 일반 캐릭터들이 필요해 … 플레이어블 캐릭터의 반응을 확인해보고 싶어") 마을 행인 ──
-    def add_walker(self, name, region_name, rate, avoid=()):
+    def _in_walk_rect(self, x, y, rect):
+        """D82 행인의 걷는 자리 — rect 는 layout 좌표 [x,y,w,h](구역 rect 와 같은 좌표계, 테두리 pad 만큼 되돌려 비교). 없으면 구역 전체."""
+        if not rect:
+            return True
+        pad = int((getattr(self, 'layout_result', None) or {}).get('pad', 0) or 0)
+        rx, ry, rw_, rh = rect
+        return rx <= x - pad < rx + rw_ and ry <= y - pad < ry + rh
+
+    def add_walker(self, name, region_name, rate, avoid=(), rect=None):
         """행인 NPC 하나를 제 구역(region_name = layout 구역 이름)의 빈 바닥 칸에 세운다(시드 파생 RNG — 결정론). 반환 fid(자리가 없으면 None).
-        피한다: 피처(문턱·NPC·입구)·avoid 칸(출발 자리)·출구 곁 1칸."""
+        피한다: 피처(문턱·NPC·입구)·avoid 칸(출발 자리)·출구 곁 1칸. rect(D82, 2026-09-18) = 구역 안에서 걷는 자리(길드 앞마당처럼) —
+        구역과 rect 가 겹치는 칸에만 서고 거기서만 걷는다. 없으면 옛 동작(구역 전체)."""
         if self.walk_rng is None:
             self.walk_rng = random.Random(self._derive_seed(self.master_seed, 0) ^ 0x57A1C)
         cells = [(x, y) for y in range(self.h) for x in range(self.w)
-                 if self.grid[y][x] == FLOOR and self._town_zone(x, y) == region_name
+                 if self.grid[y][x] == FLOOR and self._town_zone(x, y) == region_name and self._in_walk_rect(x, y, rect)
                  and self.feature_at(x, y) is None and (x, y) not in avoid
                  and max(abs(x - self.exit[0]), abs(y - self.exit[1])) > 1]
         if not cells:
@@ -3044,7 +3053,7 @@ class Dungeon:
         x, y = self.walk_rng.choice(cells)
         fid = self._add_feature('npc', name, x, y)
         self.features[fid].walker = True
-        self.walkers[fid] = {'region': region_name, 'rate': float(rate)}
+        self.walkers[fid] = {'region': region_name, 'rate': float(rate), **({'rect': [int(v) for v in rect]} if rect else {})}
         return fid
 
     def walk_npcs(self, bots):
@@ -3067,6 +3076,8 @@ class Dungeon:
                 if not (0 <= nx < self.w and 0 <= ny < self.h) or self.grid[ny][nx] != FLOOR:
                     continue
                 if (nx, ny) in occupied or self.feature_at(nx, ny) is not None or self._town_zone(nx, ny) != w['region']:
+                    continue
+                if not self._in_walk_rect(nx, ny, w.get('rect')):   # D82 걷는 자리(앞마당) 밖으로는 안 나간다
                     continue
                 if max(abs(nx - self.exit[0]), abs(ny - self.exit[1])) <= 1:
                     continue

@@ -11,9 +11,9 @@
       "role": "street"
     },
     "story": {
-      "trait": "넓고 트인 길. 노점 상인과 떠돌이 모험자가 다닌다",
+      "trait": "넓고 트인 길. 노점 상인이 다닌다",
       "history": "길드·주점·신전을 잇는 큰길. 낮이면 노점이 서고 지나가는 모험자가 많다."
     }
   },
-  "note": "story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md)."
+  "note": "story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). 2026-09-18 D82: 떠돌이 모험자가 길드 앞마당으로 옮겨 가 특징 문장에서 뺐다 — 임시."
 }

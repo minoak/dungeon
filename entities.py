@@ -135,6 +135,9 @@ def _problems(pairs, root):
                 out.append('%s: npc.walk 는 {region(layout 구역 id), rate} 객체' % rel)
             elif not (isinstance(wk.get('rate', 0.5), (int, float)) and 0 <= wk.get('rate', 0.5) <= 1):
                 out.append('%s: npc.walk.rate 는 0~1' % rel)
+            elif wk.get('rect') is not None and not (isinstance(wk['rect'], list) and len(wk['rect']) == 4
+                                                     and all(type(v) is int for v in wk['rect']) and wk['rect'][2] > 0 and wk['rect'][3] > 0):
+                out.append('%s: npc.walk.rect 는 정수 [x,y,w,h](layout 좌표 — 구역 안의 걷는 자리, D82)' % rel)
         if kind == 'map':
             space = comps.get('space') or {}
             if space.get('role') not in ('town', 'district', 'street'):
