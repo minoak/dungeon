@@ -311,6 +311,23 @@ check("⑩ (c) 던전에서 이름을 들으면 준비된 칸 + 내 기록이 �
 _, dec10e, _ = full_prompt(d10, bots10, a1, [{"from": "npc:길드 접수원", "text": "두란 님, 어서 오세요.", "turn": 6, "to": "1", "to_me": True}],
                            {"type": "search", "target": "self", "person_note": {"target": "길드 접수원", "name": "접수원 누님", "text": "물약을 챙겨 준다"}})
 check("⑩ 방금 내게 말한 NPC 에 대해서도 적을 수 있다 — 내가 붙인 이름으로", dec10e.get("person_note") == {"to": "npc:길드 접수원", "name": "접수원 누님", "text": "물약을 챙겨 준다"})
+rc10 = next(f for f in d10.features.values() if f.type == "npc" and f.name == "길드 접수원")
+a3["npc_hailed"] = set()
+put(a3, next((x, y) for x, y in g if max(abs(x - rc10.x), abs(y - rc10.y)) == 2))
+hails10 = [h for h in d10.npc_greetings(bots10) if h[1] == "3"]
+check("⑩ NPC 도 통성명 전엔 이름을 모른다 — 인사가 실명 대신 '모험가'를 부른다(처음 본다면서 이름을 아는 모순 수선)",
+      hails10 and all(REAL["3"] not in h[2] and "모험가" in h[2] for h in hails10), [h[2][:40] for h in hails10])
+seen10 = {}
+_cc = brains._call_claude
+brains._call_claude = lambda prompt, model="haiku": (seen10.__setitem__("p", prompt), '{"line": "어서 와요."}')[1]
+os.environ["DUNGEON_BRAIN_BACKEND"] = "claude_cli"
+try:
+    brains.npc_reply(a3, {"result": "npc_talk", "npc": "길드 접수원", "line": "모험가 길드예요."}, "안녕하세요", [], npc={"name": "길드 접수원"})
+finally:
+    brains._call_claude = _cc
+    os.environ["DUNGEON_BRAIN_BACKEND"] = "dummy"
+check("⑩ NPC 두뇌의 장면에도 실명·직업이 없다 — '처음 보는 모험가(겉모습)'", REAL["3"] not in seen10.get("p", REAL["3"]) and JOBS["3"] not in seen10.get("p", JOBS["3"])
+      and "처음 보는 모험가" in seen10.get("p", ""))
 p10f = full_prompt(d0, bots0, bots0[0], say10)[0]
 check("⑩ 꺼진 몸(옛 판)은 이름을 들어도 아무것도 안 뜬다", "## 떠오른 기억" not in p10f)
 

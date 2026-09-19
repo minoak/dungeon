@@ -3278,6 +3278,8 @@ class Dungeon:
     def _npc_hail_line(self, nd, bot):
         """상황별 인사 고르기 + 자리 채움 — (key, 문장). 문장은 정의(⚠️임시)·숫자는 세계가 센 것."""
         name = bot.get('name') or ('모험가 %s' % bot.get('char', '?'))
+        if bot.get('people') is not None:
+            name = '모험가'                                # D85: 규칙은 평등하다 — NPC 도 통성명하지 않은 사람의 이름을 모른다("피른? 처음 보는 얼굴이네" 같은 모순 수선)
         q = getattr(self, 'quests', None)
         ps = getattr(self, 'parties', None)
         key = 'hail'

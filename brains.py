@@ -328,6 +328,9 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None):
     npc = npc or {}
     name = res.get("npc") or npc.get("name") or "마을 사람"
     who = "%s(%s)" % (bot.get("name") or ("모험가 %s" % bot.get("char", "?")), bot.get("job", "모험가"))
+    if bot.get("people") is not None:       # D85: 규칙은 평등하다 — NPC 도 통성명하지 않은 사람의 이름·직업을 모른다(겉모습만)
+        import sheetkit
+        who = "처음 보는 모험가(%s)" % (sheetkit.looks_line(bot) or "차림은 평범하다")
     r = res.get("result")
     scene = []
     if r == "npc_hail":                               # D71 먼저 거는 인사 — 상대는 아직 말이 없다
