@@ -133,7 +133,10 @@ def load_looks(sprites_path=SPRITES_FILE, looks_path=LOOKS_FILE):
             atlas = json.load(f)
         illustrations = {sid: {"name": p["name"], "job": p["job"],
                               "hairstyles": {hid: h["name"] for hid, h in
-                                             p.get("hairstyles", {"default": {"name": "기본 머리"}}).items()}}
+                                             p.get("hairstyles", {"default": {"name": "기본 머리"}}).items()},
+                              # 세계 안에서 보이는 모습(looks_line 용 — name 은 고르는 목록의 분류 이름): 체격 = 성별 · 옷 한 줄 · 헤어 한 줄
+                              "sex": p.get("sex"), "looks": p.get("looks"),
+                              "hair_looks": {hid: h["looks"] for hid, h in (p.get("hairstyles") or {}).items() if h.get("looks")}}
                          for sid, p in atlas.get("presets", {}).items()}
     data = {"heads": heads, "bodies": bodies, "swatches": swatches, "defaults": defaults,
             "illustrations": illustrations}
@@ -145,7 +148,8 @@ def sanitize_look(look, data=None):
     """외형 필드 검증·정규화 — {head, body, colors{hair,skin,top,bottom}, sprite?, hairstyle?}.
     머리·몸통은 sprites.json 등재 id 만, 색은 '#rrggbb' 형식만(스와치 밖 자유 색 허용 — 가정 B),
     빠진 색은 기본색으로 보충·소문자 정규화. None 이면 None(=시트에 필드 없음 → 러너가 랜덤으로 뽑는다).
-    엔진·프롬프트는 이 값을 절대 안 읽는다 — 그래서 자유 색을 받아도 UGC 관문이 아니다(그림에만 닿는다)."""
+    프롬프트에 닿는 것은 '낯선 사람' 판의 겉모습 한 줄(looks_line)뿐이고, 그것도 등재된 이름(완성 외형·헤어)이나 정해진 색 이름
+    (color_word)으로만 나간다 — 그래서 자유 색을 받아도 UGC 관문이 아니다(사용자가 쓴 글자는 프롬프트에 안 들어간다)."""
     if look is None:
         return None
     data = data or load_looks()
@@ -210,14 +214,42 @@ def color_word(hx):
     return "보랏빛"
 
 
+SEX_LOOKS = {"남": "남자", "여": "여자"}       # 완성 외형의 체격 = 겉으로 보이는 성별(⚠️어휘 임시)
+
+
 def looks_line(bot):
-    """겉으로 보이는 것 한 줄 — 머리색·윗옷색·찬 무기·걸친 갑옷(D85). 이름·직업은 겉으로 안 보인다."""
-    colors = ((bot.get("look") or {}).get("colors") or {})
+    """겉으로 보이는 것 한 줄(D85) — 그림 그대로. 완성 외형(look.sprite)이면 외형 사전이 적어 둔 '보이는 모습'(looks):
+    성별(체격 — 파트너 09-19 "체격은 원래 여성 남성을 구분하려고 만든거라 성별으로 두면 될것 같아") · 옷 한 줄 · 헤어 한 줄
+    ("여자 · 녹색 두건 망토 · 녹색 리본으로 묶은 금발 포니테일"). 완성 외형은 머리색·옷이 그림에 고정이라 옛 colors 는 그림과 무관한
+    잔재다 — 안 읽는다. looks 가 없는 항목(옛 3종)은 분류 이름으로 물러난다(파트너 "색깔같은 정보보다는 궁수, 남성형, 리본 포네테일
+    이렇게 전달하면 되잖아" → "외형 네이밍은 좀 많이 다르게 … 사전에 넣기 좋게 가공"). 파츠 조합(종이인형)이면 그 색이 곧 그림이라
+    머리색·윗옷색. 뒤에 찬 무기·걸친 갑옷. 이름·직업은 겉으로 안 보인다(옷을 보고 직업을 짐작하는 것은 보는 사람의 몫)."""
+    look = bot.get("look") or {}
     bits = []
-    if colors.get("hair"):
-        bits.append("%s 머리" % color_word(colors["hair"]))
-    if colors.get("top"):
-        bits.append("%s 윗옷" % color_word(colors["top"]))
+    ill = None
+    if look.get("sprite"):
+        try:
+            ill = (load_looks().get("illustrations") or {}).get(look["sprite"])
+        except (OSError, ValueError):              # 외형 사전을 못 읽는 배치 — 아래 색으로 물러난다
+            ill = None
+    if ill:
+        hid = look.get("hairstyle") or "default"
+        if ill.get("looks"):
+            if ill.get("sex") in SEX_LOOKS:
+                bits.append(SEX_LOOKS[ill["sex"]])
+            bits.append(ill["looks"])
+        else:
+            name = ill["name"]
+            bits.append(name[3:] if name.startswith("SD ") else name)     # 옛 3종의 이름 머리말 'SD '는 세계의 말이 아니다
+        hair = (ill.get("hair_looks") or {}).get(hid) or (ill.get("hairstyles") or {}).get(hid)
+        if hair:
+            bits.append(hair)
+    else:
+        colors = look.get("colors") or {}
+        if colors.get("hair"):
+            bits.append("%s 머리" % color_word(colors["hair"]))
+        if colors.get("top"):
+            bits.append("%s 윗옷" % color_word(colors["top"]))
     for slot in ("weapon", "armor"):
         it = bot.get(slot)
         if isinstance(it, dict) and it.get("name"):

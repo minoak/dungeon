@@ -2,6 +2,7 @@
   "bodies": {
     "warrior-male": {
       "name": "전사 · 남성형",
+      "looks": "금테 두른 판금 갑옷에 흰 망토",
       "job": "전사",
       "sex": "남",
       "defaultHair": "tousled",
@@ -9,30 +10,35 @@
     },
     "warrior-female": {
       "name": "전사 · 여성형",
+      "looks": "금테 두른 판금 갑옷에 흰 망토",
       "job": "전사",
       "sex": "여",
       "defaultHair": "halfup"
     },
     "rogue-male": {
       "name": "도적 · 남성형",
+      "looks": "짙은 가죽옷에 붉은 목도리",
       "job": "도적",
       "sex": "남",
       "defaultHair": "pixie"
     },
     "rogue-female": {
       "name": "도적 · 여성형",
+      "looks": "짙은 가죽옷에 붉은 목도리",
       "job": "도적",
       "sex": "여",
       "defaultHair": "sidebraid-bob"
     },
     "archer-male": {
       "name": "궁수 · 남성형",
+      "looks": "녹색 두건 망토",
       "job": "궁수",
       "sex": "남",
       "defaultHair": "parted"
     },
     "archer-female": {
       "name": "궁수 · 여성형",
+      "looks": "녹색 두건 망토",
       "job": "궁수",
       "sex": "여",
       "defaultHair": "archer-ponytail",
@@ -40,12 +46,14 @@
     },
     "mage-male": {
       "name": "마법사 · 남성형",
+      "looks": "금장식 달린 보랏빛 로브",
       "job": "마법사",
       "sex": "남",
       "defaultHair": "layered-short"
     },
     "mage-female": {
       "name": "마법사 · 여성형",
+      "looks": "금장식 달린 보랏빛 로브",
       "job": "마법사",
       "sex": "여",
       "defaultHair": "wavy-twintails"
@@ -54,6 +62,7 @@
   "heads": {
     "tousled": {
       "name": "헝클어진 머리",
+      "looks": "헝클어진 갈색 머리",
       "source": "hair-brown",
       "row": 0,
       "anchors": [
@@ -83,6 +92,7 @@
     },
     "parted": {
       "name": "가르마",
+      "looks": "가르마 탄 갈색 머리",
       "source": "hair-brown",
       "row": 1,
       "anchors": [
@@ -112,6 +122,7 @@
     },
     "halfup": {
       "name": "반묶음",
+      "looks": "반묶음한 갈색 머리",
       "source": "hair-brown",
       "row": 2,
       "long": true,
@@ -142,6 +153,7 @@
     },
     "long": {
       "name": "긴 머리",
+      "looks": "긴 갈색 머리",
       "source": "hair-brown",
       "row": 3,
       "long": true,
@@ -172,6 +184,7 @@
     },
     "twintails": {
       "name": "양갈래",
+      "looks": "흰 리본으로 묶은 금발 양갈래",
       "source": "hair-gold",
       "row": 0,
       "long": true,
@@ -202,6 +215,7 @@
     },
     "archer-ponytail": {
       "name": "리본 포니테일",
+      "looks": "녹색 리본으로 묶은 금발 포니테일",
       "source": "hair-gold",
       "row": 1,
       "long": true,
@@ -232,6 +246,7 @@
     },
     "bob": {
       "name": "단발",
+      "looks": "금발 단발",
       "source": "hair-gold",
       "row": 2,
       "anchors": [
@@ -261,6 +276,7 @@
     },
     "braid": {
       "name": "땋은 머리",
+      "looks": "땋은 금발 머리",
       "source": "hair-gold",
       "row": 3,
       "long": true,
@@ -291,6 +307,7 @@
     },
     "sidebraid-bob": {
       "name": "단발 + 옆땋기",
+      "looks": "옆머리를 땋은 보랏빛 단발",
       "source": "hair-purple",
       "row": 0,
       "anchors": [
@@ -320,6 +337,7 @@
     },
     "pixie": {
       "name": "숏컷",
+      "looks": "짧은 보랏빛 머리",
       "source": "hair-purple",
       "row": 1,
       "anchors": [
@@ -349,6 +367,7 @@
     },
     "rogue-ponytail": {
       "name": "높은 포니테일",
+      "looks": "높이 묶은 보랏빛 포니테일",
       "source": "hair-purple",
       "row": 2,
       "long": true,
@@ -379,6 +398,7 @@
     },
     "layered-short": {
       "name": "마법사 레이어드 숏컷",
+      "looks": "짧은 은빛 머리",
       "source": "pilot-short",
       "chinY": [
         45,
@@ -389,6 +409,7 @@
     },
     "wavy-twintails": {
       "name": "마법사 웨이브 양갈래",
+      "looks": "보라 리본으로 묶은 연보랏빛 웨이브 양갈래",
       "source": "hair-purple",
       "row": 3,
       "long": true,
@@ -419,6 +440,7 @@
     },
     "blunt-long": {
       "name": "마법사 일자 앞머리 장발",
+      "looks": "일자 앞머리의 긴 은빛 머리",
       "source": "pilot-long",
       "long": true
     }

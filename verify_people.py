@@ -338,6 +338,23 @@ check("⑨ 색 이름: 스와치의 머리색 여덟이 서로 구별되는 말�
       and cw("zz") == "빛바랜", [cw(h) for h in ("#945c37", "#352c2c", "#d8ba77", "#a84c32", "#cbc8c3", "#415b73", "#38574e")])
 check("⑨ 겉모습 한 줄에 찬 무기·걸친 갑옷이 실린다", sheetkit.looks_line({"look": {"colors": {"hair": "#a84c32", "top": "#577348"}}, "weapon": {"name": "장검", "bonus": 1},
                                                                 "armor": {"name": "사슬 갑옷", "bonus": 2}}) == "붉은 머리 · 녹색 윗옷 · 장검 · 사슬 갑옷")
+_stale = {"hair": "#38574e", "top": "#577348"}           # 완성 외형 시트에 남은 옛 색(그림과 무관한 잔재) — 겉모습에 새면 안 된다
+ll = sheetkit.looks_line
+check("⑨ 완성 외형이면 외형 사전의 '보이는 모습' = 성별(체격) · 옷 · 헤어(그림 그대로 — 옛 색 잔재는 안 읽는다) · 헤어가 없거나 default 면 그 바디의 기본 헤어 · 무기는 뒤에",
+      ll({"look": {"sprite": "sd-archer-male", "hairstyle": "archer-ponytail", "colors": _stale}}) == "남자 · 녹색 두건 망토 · 녹색 리본으로 묶은 금발 포니테일"
+      and ll({"look": {"sprite": "sd-archer-male", "colors": _stale}}) == "남자 · 녹색 두건 망토 · 가르마 탄 갈색 머리"
+      and ll({"look": {"sprite": "sd-mage-female", "hairstyle": "default", "colors": _stale}, "weapon": {"name": "단검"}})
+      == "여자 · 금장식 달린 보랏빛 로브 · 보라 리본으로 묶은 연보랏빛 웨이브 양갈래 · 단검",
+      (ll({"look": {"sprite": "sd-archer-male", "hairstyle": "archer-ponytail", "colors": _stale}}), ll({"look": {"sprite": "sd-archer-male", "colors": _stale}})))
+_lk = sheetkit.load_looks()["illustrations"]
+check("⑨ 새 바디 8종과 그 헤어 15칸(14 + default)에 전부 '보이는 모습'이 있고, 그 말에 직업·분류어(전사·도적·궁수·마법사·남성형·여성형)가 없다",
+      all(v.get("looks") and len(v["hair_looks"]) == 15 for k, v in _lk.items() if v.get("sex"))
+      and sum(1 for v in _lk.values() if v.get("sex")) == 8
+      and not [w for v in _lk.values() if v.get("sex") for s in [v["looks"], *v["hair_looks"].values()]
+               for w in ("전사", "도적", "궁수", "마법사", "남성형", "여성형") if w in s])
+check("⑨ 옛 완성 외형 3종(보이는 모습 없음)은 분류 이름으로 물러난다 — 이름 머리말 'SD ' 없이 · 등재되지 않은 sprite 는 색으로 물러난다(죽지 않는다)",
+      ll({"look": {"sprite": "sd-rogue", "hairstyle": "ponytail", "colors": _stale}}) == "도적 · 포니테일"
+      and ll({"look": {"sprite": "no-such-preset", "colors": _stale}}) == "녹색 머리 · 녹색 윗옷")
 def text(*p):
     with open(os.path.join(HERE, *p), encoding="utf-8") as f:
         return f.read()

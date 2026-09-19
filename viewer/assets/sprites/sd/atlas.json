@@ -96,6 +96,7 @@
     },
     "sd-warrior-male": {
       "name": "전사 · 남성형",
+      "looks": "금테 두른 판금 갑옷에 흰 망토",
       "job": "전사",
       "sex": "남",
       "sharedHair": true,
@@ -104,68 +105,84 @@
       "hairstyles": {
         "default": {
           "name": "헝클어진 머리",
+          "looks": "헝클어진 갈색 머리",
           "sheet": "shared/warrior-male--tousled.png"
         },
         "tousled": {
           "name": "헝클어진 머리",
+          "looks": "헝클어진 갈색 머리",
           "sheet": "shared/warrior-male--tousled.png"
         },
         "parted": {
           "name": "가르마",
+          "looks": "가르마 탄 갈색 머리",
           "sheet": "shared/warrior-male--parted.png"
         },
         "halfup": {
           "name": "반묶음",
+          "looks": "반묶음한 갈색 머리",
           "sheet": "shared/warrior-male--halfup.png"
         },
         "long": {
           "name": "긴 머리",
+          "looks": "긴 갈색 머리",
           "sheet": "shared/warrior-male--long.png"
         },
         "twintails": {
           "name": "양갈래",
+          "looks": "흰 리본으로 묶은 금발 양갈래",
           "sheet": "shared/warrior-male--twintails.png"
         },
         "archer-ponytail": {
           "name": "리본 포니테일",
+          "looks": "녹색 리본으로 묶은 금발 포니테일",
           "sheet": "shared/warrior-male--archer-ponytail.png"
         },
         "bob": {
           "name": "단발",
+          "looks": "금발 단발",
           "sheet": "shared/warrior-male--bob.png"
         },
         "braid": {
           "name": "땋은 머리",
+          "looks": "땋은 금발 머리",
           "sheet": "shared/warrior-male--braid.png"
         },
         "sidebraid-bob": {
           "name": "단발 + 옆땋기",
+          "looks": "옆머리를 땋은 보랏빛 단발",
           "sheet": "shared/warrior-male--sidebraid-bob.png"
         },
         "pixie": {
           "name": "숏컷",
+          "looks": "짧은 보랏빛 머리",
           "sheet": "shared/warrior-male--pixie.png"
         },
         "rogue-ponytail": {
           "name": "높은 포니테일",
+          "looks": "높이 묶은 보랏빛 포니테일",
           "sheet": "shared/warrior-male--rogue-ponytail.png"
         },
         "layered-short": {
           "name": "마법사 레이어드 숏컷",
+          "looks": "짧은 은빛 머리",
           "sheet": "shared/warrior-male--layered-short.png"
         },
         "wavy-twintails": {
           "name": "마법사 웨이브 양갈래",
+          "looks": "보라 리본으로 묶은 연보랏빛 웨이브 양갈래",
           "sheet": "shared/warrior-male--wavy-twintails.png"
         },
         "blunt-long": {
           "name": "마법사 일자 앞머리 장발",
+          "looks": "일자 앞머리의 긴 은빛 머리",
           "sheet": "shared/warrior-male--blunt-long.png"
         }
       }
     },
     "sd-warrior-female": {
       "name": "전사 · 여성형",
+      "looks": "금테 두른 판금 갑옷에 흰 망토",
       "job": "전사",
       "sex": "여",
       "sharedHair": true,
@@ -174,68 +191,84 @@
       "hairstyles": {
         "default": {
           "name": "반묶음",
+          "looks": "반묶음한 갈색 머리",
           "sheet": "shared/warrior-female--halfup.png"
         },
         "tousled": {
           "name": "헝클어진 머리",
+          "looks": "헝클어진 갈색 머리",
           "sheet": "shared/warrior-female--tousled.png"
         },
         "parted": {
           "name": "가르마",
+          "looks": "가르마 탄 갈색 머리",
           "sheet": "shared/warrior-female--parted.png"
         },
         "halfup": {
           "name": "반묶음",
+          "looks": "반묶음한 갈색 머리",
           "sheet": "shared/warrior-female--halfup.png"
         },
         "long": {
           "name": "긴 머리",
+          "looks": "긴 갈색 머리",
           "sheet": "shared/warrior-female--long.png"
         },
         "twintails": {
           "name": "양갈래",
+          "looks": "흰 리본으로 묶은 금발 양갈래",
           "sheet": "shared/warrior-female--twintails.png"
         },
         "archer-ponytail": {
           "name": "리본 포니테일",
+          "looks": "녹색 리본으로 묶은 금발 포니테일",
           "sheet": "shared/warrior-female--archer-ponytail.png"
         },
         "bob": {
           "name": "단발",
+          "looks": "금발 단발",
           "sheet": "shared/warrior-female--bob.png"
         },
         "braid": {
           "name": "땋은 머리",
+          "looks": "땋은 금발 머리",
           "sheet": "shared/warrior-female--braid.png"
         },
         "sidebraid-bob": {
           "name": "단발 + 옆땋기",
+          "looks": "옆머리를 땋은 보랏빛 단발",
           "sheet": "shared/warrior-female--sidebraid-bob.png"
         },
         "pixie": {
           "name": "숏컷",
+          "looks": "짧은 보랏빛 머리",
           "sheet": "shared/warrior-female--pixie.png"
         },
         "rogue-ponytail": {
           "name": "높은 포니테일",
+          "looks": "높이 묶은 보랏빛 포니테일",
           "sheet": "shared/warrior-female--rogue-ponytail.png"
         },
         "layered-short": {
           "name": "마법사 레이어드 숏컷",
+          "looks": "짧은 은빛 머리",
           "sheet": "shared/warrior-female--layered-short.png"
         },
         "wavy-twintails": {
           "name": "마법사 웨이브 양갈래",
+          "looks": "보라 리본으로 묶은 연보랏빛 웨이브 양갈래",
           "sheet": "shared/warrior-female--wavy-twintails.png"
         },
         "blunt-long": {
           "name": "마법사 일자 앞머리 장발",
+          "looks": "일자 앞머리의 긴 은빛 머리",
           "sheet": "shared/warrior-female--blunt-long.png"
         }
       }
     },
     "sd-rogue-male": {
       "name": "도적 · 남성형",
+      "looks": "짙은 가죽옷에 붉은 목도리",
       "job": "도적",
       "sex": "남",
       "sharedHair": true,
@@ -244,68 +277,84 @@
       "hairstyles": {
         "default": {
           "name": "숏컷",
+          "looks": "짧은 보랏빛 머리",
           "sheet": "shared/rogue-male--pixie.png"
         },
         "tousled": {
           "name": "헝클어진 머리",
+          "looks": "헝클어진 갈색 머리",
           "sheet": "shared/rogue-male--tousled.png"
         },
         "parted": {
           "name": "가르마",
+          "looks": "가르마 탄 갈색 머리",
           "sheet": "shared/rogue-male--parted.png"
         },
         "halfup": {
           "name": "반묶음",
+          "looks": "반묶음한 갈색 머리",
           "sheet": "shared/rogue-male--halfup.png"
         },
         "long": {
           "name": "긴 머리",
+          "looks": "긴 갈색 머리",
           "sheet": "shared/rogue-male--long.png"
         },
         "twintails": {
           "name": "양갈래",
+          "looks": "흰 리본으로 묶은 금발 양갈래",
           "sheet": "shared/rogue-male--twintails.png"
         },
         "archer-ponytail": {
           "name": "리본 포니테일",
+          "looks": "녹색 리본으로 묶은 금발 포니테일",
           "sheet": "shared/rogue-male--archer-ponytail.png"
         },
         "bob": {
           "name": "단발",
+          "looks": "금발 단발",
           "sheet": "shared/rogue-male--bob.png"
         },
         "braid": {
           "name": "땋은 머리",
+          "looks": "땋은 금발 머리",
           "sheet": "shared/rogue-male--braid.png"
         },
         "sidebraid-bob": {
           "name": "단발 + 옆땋기",
+          "looks": "옆머리를 땋은 보랏빛 단발",
           "sheet": "shared/rogue-male--sidebraid-bob.png"
         },
         "pixie": {
           "name": "숏컷",
+          "looks": "짧은 보랏빛 머리",
           "sheet": "shared/rogue-male--pixie.png"
         },
         "rogue-ponytail": {
           "name": "높은 포니테일",
+          "looks": "높이 묶은 보랏빛 포니테일",
           "sheet": "shared/rogue-male--rogue-ponytail.png"
         },
         "layered-short": {
           "name": "마법사 레이어드 숏컷",
+          "looks": "짧은 은빛 머리",
           "sheet": "shared/rogue-male--layered-short.png"
         },
         "wavy-twintails": {
           "name": "마법사 웨이브 양갈래",
+          "looks": "보라 리본으로 묶은 연보랏빛 웨이브 양갈래",
           "sheet": "shared/rogue-male--wavy-twintails.png"
         },
         "blunt-long": {
           "name": "마법사 일자 앞머리 장발",
+          "looks": "일자 앞머리의 긴 은빛 머리",
           "sheet": "shared/rogue-male--blunt-long.png"
         }
       }
     },
     "sd-rogue-female": {
       "name": "도적 · 여성형",
+      "looks": "짙은 가죽옷에 붉은 목도리",
       "job": "도적",
       "sex": "여",
       "sharedHair": true,
@@ -314,68 +363,84 @@
       "hairstyles": {
         "default": {
           "name": "단발 + 옆땋기",
+          "looks": "옆머리를 땋은 보랏빛 단발",
           "sheet": "shared/rogue-female--sidebraid-bob.png"
         },
         "tousled": {
           "name": "헝클어진 머리",
+          "looks": "헝클어진 갈색 머리",
           "sheet": "shared/rogue-female--tousled.png"
         },
         "parted": {
           "name": "가르마",
+          "looks": "가르마 탄 갈색 머리",
           "sheet": "shared/rogue-female--parted.png"
         },
         "halfup": {
           "name": "반묶음",
+          "looks": "반묶음한 갈색 머리",
           "sheet": "shared/rogue-female--halfup.png"
         },
         "long": {
           "name": "긴 머리",
+          "looks": "긴 갈색 머리",
           "sheet": "shared/rogue-female--long.png"
         },
         "twintails": {
           "name": "양갈래",
+          "looks": "흰 리본으로 묶은 금발 양갈래",
           "sheet": "shared/rogue-female--twintails.png"
         },
         "archer-ponytail": {
           "name": "리본 포니테일",
+          "looks": "녹색 리본으로 묶은 금발 포니테일",
           "sheet": "shared/rogue-female--archer-ponytail.png"
         },
         "bob": {
           "name": "단발",
+          "looks": "금발 단발",
           "sheet": "shared/rogue-female--bob.png"
         },
         "braid": {
           "name": "땋은 머리",
+          "looks": "땋은 금발 머리",
           "sheet": "shared/rogue-female--braid.png"
         },
         "sidebraid-bob": {
           "name": "단발 + 옆땋기",
+          "looks": "옆머리를 땋은 보랏빛 단발",
           "sheet": "shared/rogue-female--sidebraid-bob.png"
         },
         "pixie": {
           "name": "숏컷",
+          "looks": "짧은 보랏빛 머리",
           "sheet": "shared/rogue-female--pixie.png"
         },
         "rogue-ponytail": {
           "name": "높은 포니테일",
+          "looks": "높이 묶은 보랏빛 포니테일",
           "sheet": "shared/rogue-female--rogue-ponytail.png"
         },
         "layered-short": {
           "name": "마법사 레이어드 숏컷",
+          "looks": "짧은 은빛 머리",
           "sheet": "shared/rogue-female--layered-short.png"
         },
         "wavy-twintails": {
           "name": "마법사 웨이브 양갈래",
+          "looks": "보라 리본으로 묶은 연보랏빛 웨이브 양갈래",
           "sheet": "shared/rogue-female--wavy-twintails.png"
         },
         "blunt-long": {
           "name": "마법사 일자 앞머리 장발",
+          "looks": "일자 앞머리의 긴 은빛 머리",
           "sheet": "shared/rogue-female--blunt-long.png"
         }
       }
     },
     "sd-archer-male": {
       "name": "궁수 · 남성형",
+      "looks": "녹색 두건 망토",
       "job": "궁수",
       "sex": "남",
       "sharedHair": true,
@@ -384,68 +449,84 @@
       "hairstyles": {
         "default": {
           "name": "가르마",
+          "looks": "가르마 탄 갈색 머리",
           "sheet": "shared/archer-male--parted.png"
         },
         "tousled": {
           "name": "헝클어진 머리",
+          "looks": "헝클어진 갈색 머리",
           "sheet": "shared/archer-male--tousled.png"
         },
         "parted": {
           "name": "가르마",
+          "looks": "가르마 탄 갈색 머리",
           "sheet": "shared/archer-male--parted.png"
         },
         "halfup": {
           "name": "반묶음",
+          "looks": "반묶음한 갈색 머리",
           "sheet": "shared/archer-male--halfup.png"
         },
         "long": {
           "name": "긴 머리",
+          "looks": "긴 갈색 머리",
           "sheet": "shared/archer-male--long.png"
         },
         "twintails": {
           "name": "양갈래",
+          "looks": "흰 리본으로 묶은 금발 양갈래",
           "sheet": "shared/archer-male--twintails.png"
         },
         "archer-ponytail": {
           "name": "리본 포니테일",
+          "looks": "녹색 리본으로 묶은 금발 포니테일",
           "sheet": "shared/archer-male--archer-ponytail.png"
         },
         "bob": {
           "name": "단발",
+          "looks": "금발 단발",
           "sheet": "shared/archer-male--bob.png"
         },
         "braid": {
           "name": "땋은 머리",
+          "looks": "땋은 금발 머리",
           "sheet": "shared/archer-male--braid.png"
         },
         "sidebraid-bob": {
           "name": "단발 + 옆땋기",
+          "looks": "옆머리를 땋은 보랏빛 단발",
           "sheet": "shared/archer-male--sidebraid-bob.png"
         },
         "pixie": {
           "name": "숏컷",
+          "looks": "짧은 보랏빛 머리",
           "sheet": "shared/archer-male--pixie.png"
         },
         "rogue-ponytail": {
           "name": "높은 포니테일",
+          "looks": "높이 묶은 보랏빛 포니테일",
           "sheet": "shared/archer-male--rogue-ponytail.png"
         },
         "layered-short": {
           "name": "마법사 레이어드 숏컷",
+          "looks": "짧은 은빛 머리",
           "sheet": "shared/archer-male--layered-short.png"
         },
         "wavy-twintails": {
           "name": "마법사 웨이브 양갈래",
+          "looks": "보라 리본으로 묶은 연보랏빛 웨이브 양갈래",
           "sheet": "shared/archer-male--wavy-twintails.png"
         },
         "blunt-long": {
           "name": "마법사 일자 앞머리 장발",
+          "looks": "일자 앞머리의 긴 은빛 머리",
           "sheet": "shared/archer-male--blunt-long.png"
         }
       }
     },
     "sd-archer-female": {
       "name": "궁수 · 여성형",
+      "looks": "녹색 두건 망토",
       "job": "궁수",
       "sex": "여",
       "sharedHair": true,
@@ -454,68 +535,84 @@
       "hairstyles": {
         "default": {
           "name": "리본 포니테일",
+          "looks": "녹색 리본으로 묶은 금발 포니테일",
           "sheet": "shared/archer-female--archer-ponytail.png"
         },
         "tousled": {
           "name": "헝클어진 머리",
+          "looks": "헝클어진 갈색 머리",
           "sheet": "shared/archer-female--tousled.png"
         },
         "parted": {
           "name": "가르마",
+          "looks": "가르마 탄 갈색 머리",
           "sheet": "shared/archer-female--parted.png"
         },
         "halfup": {
           "name": "반묶음",
+          "looks": "반묶음한 갈색 머리",
           "sheet": "shared/archer-female--halfup.png"
         },
         "long": {
           "name": "긴 머리",
+          "looks": "긴 갈색 머리",
           "sheet": "shared/archer-female--long.png"
         },
         "twintails": {
           "name": "양갈래",
+          "looks": "흰 리본으로 묶은 금발 양갈래",
           "sheet": "shared/archer-female--twintails.png"
         },
         "archer-ponytail": {
           "name": "리본 포니테일",
+          "looks": "녹색 리본으로 묶은 금발 포니테일",
           "sheet": "shared/archer-female--archer-ponytail.png"
         },
         "bob": {
           "name": "단발",
+          "looks": "금발 단발",
           "sheet": "shared/archer-female--bob.png"
         },
         "braid": {
           "name": "땋은 머리",
+          "looks": "땋은 금발 머리",
           "sheet": "shared/archer-female--braid.png"
         },
         "sidebraid-bob": {
           "name": "단발 + 옆땋기",
+          "looks": "옆머리를 땋은 보랏빛 단발",
           "sheet": "shared/archer-female--sidebraid-bob.png"
         },
         "pixie": {
           "name": "숏컷",
+          "looks": "짧은 보랏빛 머리",
           "sheet": "shared/archer-female--pixie.png"
         },
         "rogue-ponytail": {
           "name": "높은 포니테일",
+          "looks": "높이 묶은 보랏빛 포니테일",
           "sheet": "shared/archer-female--rogue-ponytail.png"
         },
         "layered-short": {
           "name": "마법사 레이어드 숏컷",
+          "looks": "짧은 은빛 머리",
           "sheet": "shared/archer-female--layered-short.png"
         },
         "wavy-twintails": {
           "name": "마법사 웨이브 양갈래",
+          "looks": "보라 리본으로 묶은 연보랏빛 웨이브 양갈래",
           "sheet": "shared/archer-female--wavy-twintails.png"
         },
         "blunt-long": {
           "name": "마법사 일자 앞머리 장발",
+          "looks": "일자 앞머리의 긴 은빛 머리",
           "sheet": "shared/archer-female--blunt-long.png"
         }
       }
     },
     "sd-mage-male": {
       "name": "마법사 · 남성형",
+      "looks": "금장식 달린 보랏빛 로브",
       "job": "마법사",
       "sex": "남",
       "sharedHair": true,
@@ -524,68 +621,84 @@
       "hairstyles": {
         "default": {
           "name": "마법사 레이어드 숏컷",
+          "looks": "짧은 은빛 머리",
           "sheet": "shared/mage-male--layered-short.png"
         },
         "tousled": {
           "name": "헝클어진 머리",
+          "looks": "헝클어진 갈색 머리",
           "sheet": "shared/mage-male--tousled.png"
         },
         "parted": {
           "name": "가르마",
+          "looks": "가르마 탄 갈색 머리",
           "sheet": "shared/mage-male--parted.png"
         },
         "halfup": {
           "name": "반묶음",
+          "looks": "반묶음한 갈색 머리",
           "sheet": "shared/mage-male--halfup.png"
         },
         "long": {
           "name": "긴 머리",
+          "looks": "긴 갈색 머리",
           "sheet": "shared/mage-male--long.png"
         },
         "twintails": {
           "name": "양갈래",
+          "looks": "흰 리본으로 묶은 금발 양갈래",
           "sheet": "shared/mage-male--twintails.png"
         },
         "archer-ponytail": {
           "name": "리본 포니테일",
+          "looks": "녹색 리본으로 묶은 금발 포니테일",
           "sheet": "shared/mage-male--archer-ponytail.png"
         },
         "bob": {
           "name": "단발",
+          "looks": "금발 단발",
           "sheet": "shared/mage-male--bob.png"
         },
         "braid": {
           "name": "땋은 머리",
+          "looks": "땋은 금발 머리",
           "sheet": "shared/mage-male--braid.png"
         },
         "sidebraid-bob": {
           "name": "단발 + 옆땋기",
+          "looks": "옆머리를 땋은 보랏빛 단발",
           "sheet": "shared/mage-male--sidebraid-bob.png"
         },
         "pixie": {
           "name": "숏컷",
+          "looks": "짧은 보랏빛 머리",
           "sheet": "shared/mage-male--pixie.png"
         },
         "rogue-ponytail": {
           "name": "높은 포니테일",
+          "looks": "높이 묶은 보랏빛 포니테일",
           "sheet": "shared/mage-male--rogue-ponytail.png"
         },
         "layered-short": {
           "name": "마법사 레이어드 숏컷",
+          "looks": "짧은 은빛 머리",
           "sheet": "shared/mage-male--layered-short.png"
         },
         "wavy-twintails": {
           "name": "마법사 웨이브 양갈래",
+          "looks": "보라 리본으로 묶은 연보랏빛 웨이브 양갈래",
           "sheet": "shared/mage-male--wavy-twintails.png"
         },
         "blunt-long": {
           "name": "마법사 일자 앞머리 장발",
+          "looks": "일자 앞머리의 긴 은빛 머리",
           "sheet": "shared/mage-male--blunt-long.png"
         }
       }
     },
     "sd-mage-female": {
       "name": "마법사 · 여성형",
+      "looks": "금장식 달린 보랏빛 로브",
       "job": "마법사",
       "sex": "여",
       "sharedHair": true,
@@ -594,62 +707,77 @@
       "hairstyles": {
         "default": {
           "name": "마법사 웨이브 양갈래",
+          "looks": "보라 리본으로 묶은 연보랏빛 웨이브 양갈래",
           "sheet": "shared/mage-female--wavy-twintails.png"
         },
         "tousled": {
           "name": "헝클어진 머리",
+          "looks": "헝클어진 갈색 머리",
           "sheet": "shared/mage-female--tousled.png"
         },
         "parted": {
           "name": "가르마",
+          "looks": "가르마 탄 갈색 머리",
           "sheet": "shared/mage-female--parted.png"
         },
         "halfup": {
           "name": "반묶음",
+          "looks": "반묶음한 갈색 머리",
           "sheet": "shared/mage-female--halfup.png"
         },
         "long": {
           "name": "긴 머리",
+          "looks": "긴 갈색 머리",
           "sheet": "shared/mage-female--long.png"
         },
         "twintails": {
           "name": "양갈래",
+          "looks": "흰 리본으로 묶은 금발 양갈래",
           "sheet": "shared/mage-female--twintails.png"
         },
         "archer-ponytail": {
           "name": "리본 포니테일",
+          "looks": "녹색 리본으로 묶은 금발 포니테일",
           "sheet": "shared/mage-female--archer-ponytail.png"
         },
         "bob": {
           "name": "단발",
+          "looks": "금발 단발",
           "sheet": "shared/mage-female--bob.png"
         },
         "braid": {
           "name": "땋은 머리",
+          "looks": "땋은 금발 머리",
           "sheet": "shared/mage-female--braid.png"
         },
         "sidebraid-bob": {
           "name": "단발 + 옆땋기",
+          "looks": "옆머리를 땋은 보랏빛 단발",
           "sheet": "shared/mage-female--sidebraid-bob.png"
         },
         "pixie": {
           "name": "숏컷",
+          "looks": "짧은 보랏빛 머리",
           "sheet": "shared/mage-female--pixie.png"
         },
         "rogue-ponytail": {
           "name": "높은 포니테일",
+          "looks": "높이 묶은 보랏빛 포니테일",
           "sheet": "shared/mage-female--rogue-ponytail.png"
         },
         "layered-short": {
           "name": "마법사 레이어드 숏컷",
+          "looks": "짧은 은빛 머리",
           "sheet": "shared/mage-female--layered-short.png"
         },
         "wavy-twintails": {
           "name": "마법사 웨이브 양갈래",
+          "looks": "보라 리본으로 묶은 연보랏빛 웨이브 양갈래",
           "sheet": "shared/mage-female--wavy-twintails.png"
         },
         "blunt-long": {
           "name": "마법사 일자 앞머리 장발",
+          "looks": "일자 앞머리의 긴 은빛 머리",
           "sheet": "shared/mage-female--blunt-long.png"
         }
       }

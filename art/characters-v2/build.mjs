@@ -98,9 +98,10 @@ try{
  const atlas=JSON.parse(await fs.readFile(new URL('atlas.json',dest),'utf8'));
  for(const id of ['sd-warrior','sd-rogue','sd-archer','sd-warrior-illustration'])if(atlas.presets[id])atlas.presets[id].selectable=false;
  for(const [id,b]of Object.entries(catalog.bodies)){
-  const hairstyles=Object.fromEntries(Object.entries(catalog.heads).map(([h,v])=>[h,{name:v.name,sheet:`shared/${id}--${h}.png`}]));
+  // looks = 세계 안에서 보이는 모습 한 줄('낯선 사람' 판의 겉모습 문장 — sheetkit.looks_line 이 읽는다). name 은 고르는 목록용 분류 이름.
+  const hairstyles=Object.fromEntries(Object.entries(catalog.heads).map(([h,v])=>[h,{name:v.name,...(v.looks?{looks:v.looks}:{}),sheet:`shared/${id}--${h}.png`}]));
   // The default alias is kept for old consumers; selectors show the 14 actual ids.
-  atlas.presets['sd-'+id]={name:b.name,job:b.job,sex:b.sex,sharedHair:true,defaultHair:b.defaultHair,sheet:hairstyles[b.defaultHair].sheet,hairstyles:{default:hairstyles[b.defaultHair],...hairstyles}};
+  atlas.presets['sd-'+id]={name:b.name,...(b.looks?{looks:b.looks}:{}),job:b.job,sex:b.sex,sharedHair:true,defaultHair:b.defaultHair,sheet:hairstyles[b.defaultHair].sheet,hairstyles:{default:hairstyles[b.defaultHair],...hairstyles}};
  }
  await fs.writeFile(new URL('atlas.json',dest),JSON.stringify(atlas,null,2)+'\n');
  const report={bodies:8,hairs:14,combinations:Object.keys(compiled.sheets).length,frames:compiled.checks.length,checks:compiled.checks};
