@@ -181,6 +181,8 @@ export interface TickLine {
   replies?: Reply[];
   oracle?: { id: string; text: string };         // D61 개정(09-13) 이 틱에 새로 들린 신의 요청
   npc_hails?: NpcHail[];                         // D71(09-14) 이 틱에 NPC 가 먼저 건 인사(마을)
+  npc_replies?: NpcReply[];                      // D93(09-20) 이 틱에 NPC 가 되받은 말(마을 — NPC 되받기 판에만)
+  overheard?: Overheard[];                       // D90(09-20) 이 틱의 관측에 실린 '들린 말'(마을 생활 판에만)
   events: StreamEvent[];
   bots: Bot[]; monsters: Monster[]; features: Feature[]; traps: Trap[];
   [k: string]: unknown;
@@ -188,6 +190,10 @@ export interface TickLine {
 
 /** D71 NPC 가 먼저 건 인사 — 같은 구역·6칸 안, 캐릭터당 NPC 당 한 번. line_src 'brain' = LLM 이 쓴 문장. */
 export interface NpcHail { npc: string; char: Char; line: string; key?: string; line_src?: string }
+/** D93 NPC 가 되받은 말 — 캐릭터가 그 NPC 를 지목해 말했거나(via 'to') 그 NPC 의 말에 상대 없이 답했다(via 'reply'). 문장은 늘 LLM 이 쓴다. */
+export interface NpcReply { npc: string; char: Char; line: string; via?: string }
+/** D90 들린 말 — 구역에 들어선 첫 관측에 한 줄(0콜, 구역 정의의 고정 풀). */
+export interface Overheard { char: Char; zone: string; text: string }
 
 export interface DescendLine {
   reaction_summary?: ReactionFloor;
@@ -235,6 +241,8 @@ export interface Frame {
   replies?: Reply[];
   oracle?: { id: string; text: string };         // D61 개정(09-13) 이 틱에 새로 들린 신의 요청(어디서나) — 로그 줄
   npc_hails?: NpcHail[];                         // D71 NPC 가 먼저 건 인사 — NPC 말풍선·로그 줄
+  npc_replies?: NpcReply[];                      // D93 NPC 가 되받은 말 — NPC 말풍선·로그 줄
+  overheard?: Overheard[];                       // D90 들린 말 — 로그 줄
   descend?: DescendLine;                         // 이 틱 뒤에 층 전이(다음 프레임이 level)
   facing: Record<Char, Dir>;                     // 직전 프레임과의 좌표 차(안 움직이면 유지, 처음은 front)
   moved: Record<Char, boolean>;                  // 이 프레임에서 걸었나(트윈·걷기 애니의 방아쇠)

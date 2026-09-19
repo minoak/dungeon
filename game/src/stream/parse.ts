@@ -141,6 +141,7 @@ export class StreamParser {
       bots, monsters, features, traps,
       events: t.events || [], decisions: t.decisions || {}, inbox: t.inbox || {},
       hails: t.hails, answers: t.answers, replies: t.replies, oracle: t.oracle, npc_hails: t.npc_hails,   // D71 NPC 가 먼저 건 인사   // D61 개정(09-13) 이 틱에 새로 들린 신의 요청
+      npc_replies: t.npc_replies, overheard: t.overheard,   // D93 NPC 가 되받은 말 · D90 들린 말(09-20 — 켠 판에만 실린다)
       social_events: t.social_events, reactions: t.reactions, reaction_stats: t.reaction_stats,
       facing, moved, vis, seen, visited: ls.visitedList.length,
     };

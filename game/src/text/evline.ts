@@ -19,7 +19,7 @@ const obj = (v: unknown): Record<string, unknown> | null =>
 const isBotChar = (run: Run, v: unknown): boolean => typeof v === 'string' && v in run.names;
 
 /** 이름(색 없음, 평문). */
-export function nameOf(run: Run, c: unknown): string { const k = str(c); return run.names[k] || k; }
+export function nameOf(run: Run, c: unknown): string { const k = str(c); return run.names[k] || (k.startsWith('npc:') ? k.slice(4) : k); }   // D93: 말의 상대가 마을 사람('npc:<이름>')이면 그 이름
 /** 캐릭터 색 이름 span. */
 export function nameSpan(run: Run, c: unknown): string {
   const k = str(c);
@@ -392,7 +392,11 @@ export function groupHtml(f: Frame, run: Run, focus: Char | null): string {
   if (f.oracle) parts.push(lineHtml('ev gold', `🔮 신의 요청 — 「${esc(f.oracle.text)}」 (요청이지 명령이 아니다)`, [], focus));   // D61 개정(09-13) 어디서나
   for (const h of f.npc_hails || []) parts.push(lineHtml('ev notable',                                                         // D71 NPC 가 먼저 건 인사
     `${esc(h.npc)} → ${nameSpan(run, h.char)}: 「${esc(h.line)}」${h.line_src === 'brain' ? ' <span class="kind">두뇌</span>' : ''}`, [h.char], focus));
+  for (const o of f.overheard || []) parts.push(lineHtml('ev dim',                                                            // D90 들린 말(구역에 들어선 첫 관측)
+    `${nameSpan(run, o.char)} — ${esc(o.zone)}에 들어서며 들린 말: 「${esc(o.text)}」`, [o.char], focus));
   for (const c of Object.keys(f.decisions)) parts.push(decisionLines(c, f.decisions[c], run, focus));
+  for (const h of f.npc_replies || []) parts.push(lineHtml('ev notable',                                                       // D93 NPC 가 되받은 말(캐릭터의 말 뒤에)
+    `${esc(h.npc)} → ${nameSpan(run, h.char)}: 「${esc(h.line)}」 <span class="kind">두뇌</span>`, [h.char], focus));
   for (const reaction of f.reactions || []) {
     parts.push(lineHtml('ev notable reaction', reactionHtml(reaction, run), [reaction.actor, reaction.to], focus));
   }

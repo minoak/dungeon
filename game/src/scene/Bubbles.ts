@@ -130,6 +130,7 @@ export function installBubbles(app: App): void {
       if (d.to && d.to !== 'all' && d.to in run.names) app.scene.turnToward(c, d.to);
     }
     for (const h of cur.npc_hails || []) showNpcBubble(h.npc, h.line, h.line_src, expires);   // D71 NPC 가 먼저 건 인사
+    for (const h of cur.npc_replies || []) showNpcBubble(h.npc, h.line, 'brain', expires);    // D93 NPC 가 되받은 말 — NPC 머리 위
     for (const e of cur.events) {
       if ((e.result === 'npc_talk' || e.result === 'npc_gift' || e.result === 'npc_report') && typeof e.npc === 'string' && e.line) {
         showNpcBubble(e.npc, String(e.line), e.line_src, expires);   // D69 NPC 의 답 — NPC 머리 위
