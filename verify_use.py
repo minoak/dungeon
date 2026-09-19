@@ -20,6 +20,7 @@
   ⑪ 피클 왕복: 다 쓴 상태(use_spent)·읽던 쪽수가 남는다 · 속성이 없는 옛 스냅샷도 그대로 돈다(getattr)
   ⑫ 배치 도우미 place(): 이름·type·story 등록 · 바닥 아님/이미 찬 칸/오브젝트 아님 = ValueError
   ⑬ 배선: _interact 훅 한 곳 · decorate 의 used_up · 러너 생성 세 자리 무접촉 · _run_gates.sh 등록
+  ⑭ 진짜 마을(build_town): 부품 없는 건물 문턱엔 줄이 없고, 정의(메모리)에 use 를 달면 '묵기 … (문턱)'이 열린다 — 떼면 다시 없다
 (기존 verify 는 별도 실행 — 'use 부품이 없는 세계는 옛 판과 바이트 동일'의 본 검사는 verify_skill_off.)
 """
 import os
@@ -425,6 +426,28 @@ check("⑫ place — 정의의 type·이름으로 피처 · story 는 place_stor
 check("⑫ place 거절 — 벽 칸 · 이미 피처가 선 칸(출구 포함) · 오브젝트가 아닌 정의 = ValueError(시작 전에 죽는다)",
       raises(lambda: IA.place(d12, "bench", 0, 0)) and raises(lambda: IA.place(d12, "bench", 4, 2))
       and raises(lambda: IA.place(d12, "bench", 10, 1)) and raises(lambda: IA.place(d12, "t_inn", 5, 2)))
+
+print("── ⑭ 진짜 마을(build_town, layout v4)의 건물 문턱")
+dt, _ = show_runner.build_town()
+bare = next(((fid, eid) for fid, eid in sorted((getattr(dt, "building_defs", None) or {}).items())
+             if eid and not ENT.get(eid)["comps"].get("use")), None)
+if bare is None:
+    check("⑭ (건너뜀) 마을의 모든 건물 정의에 이미 use 부품이 있다", True)
+else:
+    fid_t, eid_t = bare
+    ft = dt.features[fid_t]
+    bt = mkbot("1", ft.x, ft.y, hp=5)
+    head = lambda: [o["label"] for o in dt.view(bt, [bt]).get("options", []) if o["type"] == "interact" and o.get("target") == "f%d" % fid_t]
+    before = head()
+    ENT.get(eid_t)["comps"]["use"] = {"kind": "lodge"}          # 메모리의 정의에만 잠깐 단다(파일 무접촉) — '새 건물 기능은 JSON 한 장'의 모사
+    try:
+        after = head()
+        rt = dt._interact(bt, "f%d" % fid_t, [bt])
+    finally:
+        del ENT.get(eid_t)["comps"]["use"]
+    check("⑭ 부품 없는 건물(%s)의 문턱엔 상호작용 줄이 없다(D60) → 정의에 use 를 달면 '묵기: … (문턱)' 이 열리고 묵어진다 → 떼면 다시 없다" % ft.name,
+          before == [] and len(after) == 1 and after[0].startswith("묵기: %s f%d (문턱)" % (ft.name, fid_t))
+          and rt["result"] == "lodged" and bt["hp"] == bt["maxhp"] and head() == [])
 
 print("── ⑬ 배선")
 gm, ca, sr = src("dungeon_gm.py"), src("composed_actions.py"), src("show_runner.py")
