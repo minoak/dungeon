@@ -1,0 +1,19 @@
+{
+  "id": "floor_tablet",
+  "name": "석판",
+  "kind": "object",
+  "type": "floor_tablet",
+  "tags": [
+    "object"
+  ],
+  "comps": {
+    "use": {
+      "kind": "read",
+      "text": "글자 위로 물이 흘러 절반이 닳았다."
+    },
+    "story": {
+      "trait": "벽을 등지고 선 글 새긴 돌판"
+    }
+  },
+  "note": "D92(2026-09-20) 던전 층의 읽는 것(D9 저작 레이어의 첫 조각). 실제 본문은 층마다 다르다 — 엔진이 그 층을 세어 피처마다 얹는다(Dungeon.use_over → interactables.use_of). 여기 text 는 그 칸이 없는 판(옛 피클·손그림 장면)의 몫이다. 이름·글·trait 는 SilenceBreaker 임시 문장 — 파트너 교정 대기."
+}

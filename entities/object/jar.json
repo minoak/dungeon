@@ -1,0 +1,33 @@
+{
+  "id": "jar",
+  "name": "항아리",
+  "kind": "object",
+  "type": "jar",
+  "tags": [
+    "object"
+  ],
+  "comps": {
+    "use": {
+      "kind": "rummage",
+      "once": true,
+      "loot": [
+        {
+          "item": "nothing",
+          "w": 5
+        },
+        {
+          "item": "potion",
+          "w": 2
+        },
+        {
+          "item": "treasure",
+          "w": 1
+        }
+      ]
+    },
+    "story": {
+      "trait": "허리께까지 오는 오지 항아리"
+    }
+  },
+  "note": "D92(2026-09-20) 던전의 뒤지는 소품 셋째. 가중치 5:2:1 은 임시(비어 있음이 절반 이상). 이름·trait 는 SilenceBreaker 임시 문장 — 파트너 교정 대기."
+}

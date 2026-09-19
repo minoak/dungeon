@@ -6,7 +6,7 @@
     "concept"
   ],
   "seedsPerProfile": 100,
-  "placements": 7699,
+  "placements": 7698,
   "furnishingTypes": [
     0,
     1,
@@ -16,10 +16,10 @@
     5
   ],
   "attachedPiers": 848,
-  "previousRuleAttachedPiers": 13052,
+  "previousRuleAttachedPiers": 13036,
   "unchangedEngineSnapshots": true,
   "floorPlacements": 6536,
-  "wallAccents": 1163,
+  "wallAccents": 1162,
   "connectedWithFurnitureAsObstacles": true,
   "engineCollisionChanged": false,
   "blockedDoorApproaches": 0,

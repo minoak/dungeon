@@ -18,7 +18,9 @@ const generated = spawnSync(process.env.WL_PYTHON || 'python', ['-c',
   "import sys,json;sys.path.insert(0,'art/dungeon-v2');from preview_server import stream;print(json.dumps([json.loads(stream(i,p).decode().splitlines()[1]) for p in ('original','concept') for i in range(100)]))"],
   { cwd: root, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
 assert.equal(generated.status, 0, generated.stderr);
-const levels = JSON.parse(generated.stdout), frames = new Set();
+// D92(2026-09-20): the engine now ships its own props on concept levels; this file tests the client lottery,
+// so strip level.props to restore the pre-D92 input (the engine-owned path is covered by game/verify/props.mjs).
+const levels = JSON.parse(generated.stdout).map(({ props, ...L }) => L), frames = new Set();
 let count = 0, floorCount = 0, attachedPiers = 0, previousRuleAttachedPiers = 0;
 for (const L of levels) {
   const before = JSON.stringify(L);

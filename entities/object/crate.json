@@ -1,0 +1,33 @@
+{
+  "id": "crate",
+  "name": "나무 상자",
+  "kind": "object",
+  "type": "crate",
+  "tags": [
+    "object"
+  ],
+  "comps": {
+    "use": {
+      "kind": "rummage",
+      "once": true,
+      "loot": [
+        {
+          "item": "nothing",
+          "w": 4
+        },
+        {
+          "item": "potion",
+          "w": 1
+        },
+        {
+          "item": "treasure",
+          "w": 1
+        }
+      ]
+    },
+    "story": {
+      "trait": "못이 반쯤 빠진 나무 상자"
+    }
+  },
+  "note": "D92(2026-09-20) 던전의 뒤지는 소품 둘째. 무엇이 들었나는 세계 시드·층·자리에서 정해진다(판정 rng 무접촉) — 가중치 4:1:1 은 임시(비어 있음이 절반 이상). 이름·trait 는 SilenceBreaker 임시 문장 — 파트너 교정 대기."
+}

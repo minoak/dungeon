@@ -1,0 +1,19 @@
+{
+  "id": "campfire",
+  "name": "모닥불",
+  "kind": "object",
+  "type": "campfire",
+  "tags": [
+    "object"
+  ],
+  "comps": {
+    "use": {
+      "kind": "warm",
+      "heal": 2
+    },
+    "story": {
+      "trait": "아직 사위지 않은 불자리"
+    }
+  },
+  "note": "D92(2026-09-20) 던전 층의 모닥불 — 2층부터 층당 0~1. once 가 아니다(쓸 때마다 한 틱에 HP +2, 상처가 있을 때만). '안전'은 약속하지 않는다 — 몹은 불을 피하지 않는다. heal 2·이름·trait 는 SilenceBreaker 임시 — 파트너 교정 대기."
+}

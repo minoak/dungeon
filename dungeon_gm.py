@@ -874,6 +874,17 @@ class Dungeon:
     ZONE_BIG_ROOM = 30        # 다 본 방의 bbox 면적이 이 이상이면 '넓은 방'
     ZONE_SMALL_ROOM = 12      #   이 이하면 '작은 방'
     ZONE_LONG_CORRIDOR = 10   # 다 본 통로의 길이(_zone_len)가 이 이상이면 '긴 통로'
+    # D92(2026-09-20) 엔진 소유 소품 — 방 가장자리에 놓인 큰 물건(통·상자·항아리·잔해). 격자(#/.)가 아니라
+    #   별도 목록이라 구역 스캐너·시야·문 판정은 글자 하나 안 바뀐다(소품은 바닥이다). 막는 것은 '발'뿐:
+    #   prop_cells 에 든 칸은 아무도 서지 못한다(walkable·몹 걸음·길찾기·프런티어·스폰·도착 칸이 같은 눈).
+    #   **클래스 속성**인 이유 = ZONE_BLOCK 과 같다: from_ascii 는 __new__ 경유고 옛 피클 스냅샷(D79)에는 이 값이 없다.
+    props = ()                # [{'id','kind','x','y','blocks'}] — level_snapshot 에 싣는 쪽은 프로필(ConceptDungeon)
+    prop_cells = frozenset()  # 그중 통행을 막는 칸. 빈 집합 = 소품 없는 세계 = 옛 판과 바이트 동일
+    floor_life = False        # 던전 살림(뒤지는 통·석판·모닥불) — 엔진 기본 꺼짐. 러너 DUNGEON_FLOOR_LIFE 가 켠다
+    # 한 층에 놓는 살림의 수 — '얼마나'는 세계가 정하고(좌표·시드 해시) '무엇을 할지'는 캐릭터가 정한다.
+    LIFE_RUMMAGE = (2, 4)     # 소품이 있는 층: 그중 뒤질 수 있는 것으로 승격할 수(나머지는 조용한 장애물 — 피처는 시야에 들 때마다 정지를 낳는다)
+    LIFE_RUMMAGE_BARE = (1, 3)   # 소품이 없는 층(옛 생성기): 방 구석에 놓는 통의 수
+    LIFE_TABLETS = (1, 2)     # 층당 석판 수
 
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                  scan=False, n_potions=0, loops=False, selfstop=False,
@@ -882,6 +893,7 @@ class Dungeon:
                  town=False, status=False, rest_verb=False, relations=False, trail=False,
                  objtags=False, floor=False, explore_dirs=False, give_verb=False, bond_verb=False,
                  bestiary_plus=False,   # D92(09-20) 새 몬스터 풀 — 전부 키워드로 부르는 자리라 가운데 줄에 둔다(다른 갈래의 끝줄 추가와 안 부딪치게)
+                 floor_life=False,      # D92(09-20) 던전 살림(뒤지는 통·석판·모닥불) — 같은 이유로 제 줄에(위와 같은 규율)
                  auto_approach=False, composed_actions=False, skills=False, trpg_combat=False, random_skill=False,
                  ally_doing=False, boss=False, plan_max=None):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
@@ -1025,6 +1037,10 @@ class Dungeon:
                                    #   엔진 기본 PLAN_MAX(기존 게이트 비트 동일), 러너는 DUNGEON_PLAN(기본 0)으로 0 을 준다
         if self.boss_on:
             self._place_boss()
+        self.floor_life = bool(floor_life)   # D92(09-20) 던전 살림 — 엔진 기본 0(기존 판 비트 동일: 굴림도 피처도 안 는다)
+        self._place_props()        # D92 엔진 소유 소품 — 기본 Dungeon 은 아무 일도 안 한다(생성 프로필이 덮어쓴다).
+        if self.floor_life:        #   피처·몹·함정·출구·보스가 다 놓인 **뒤**여야 그 칸과 주변을 비울 수 있다
+            self._place_floor_life()   #   살림은 소품 다음(소품 중 일부를 뒤질 수 있는 것으로 승격한다)
         self._classify_tiles()     # 각 바닥 칸에 'room'/'corridor' 속성 부여
         self.zones = None
         self.zone_at = {}
@@ -1105,6 +1121,8 @@ class Dungeon:
         d.boss_on, d.boss, d.sealed = False, None, False   # 보스층·워프게이트(D65, 09-13) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.plan_max = PLAN_MAX      # 작정 수 상한(D66, 09-13) — 손그림 장면은 엔진 기본(호출측이 0 으로 끈다)
         d.bestiary_plus = False    # 새 몬스터 풀(D92, 09-20) — 손그림 장면은 배치를 장면이 정한다(새 종도 monsters 템플릿의 kind 로 직접)
+        d.floor_life = False       # 던전 살림(D92, 09-20) — 손그림 장면도 기본 꺼짐(호출측이 IA.place 로 직접 놓는다).
+                                   #   소품(props·prop_cells)은 클래스 속성이라 여기서 안 짚어도 '없음'이다
         d.auto_approach = False
         d.composed_actions = False
         d.skills = d.trpg_combat = d.random_skill = False
@@ -1418,10 +1436,116 @@ class Dungeon:
                 dx = -1 if x < room.x else (1 if x >= room.x + room.w else 0)
                 dy = -1 if y < room.y else (1 if y >= room.y + room.h else 0)
                 ox, oy = x + dx, y + dy                         # 관통 칸의 바깥쪽 한 칸 = '방 앞'
-                if 0 <= ox < self.w and 0 <= oy < self.h and self.grid[oy][ox] == FLOOR and not room.contains(ox, oy):
+                if (0 <= ox < self.w and 0 <= oy < self.h and self.grid[oy][ox] == FLOOR
+                        and not self.prop_at(ox, oy) and not room.contains(ox, oy)):   # D92: 소품 칸에는 아무도 설 수 없다(D67 프리셋의 닻)
                     cands.append((ox, oy))
         cands.sort(key=lambda c: (c[1], c[0]))
         return cands[0] if cands else None
+
+    # ── D92(2026-09-20) 던전의 물건들 — 소품(발을 막는 큰 물건)과 살림(뒤지는 통·석판·모닥불) ──
+    def _life_roll(self, salt, *parts):
+        """소품·살림의 추첨 — **판정 rng(self.rng)를 건드리지 않는** 결정론 해시(세계 시드·층·자리).
+        왜 rng 가 아닌가: 굴림을 하나라도 더 하면 같은 시드의 옛 배치가 통째로 밀린다(verify_skill_off 해시).
+        그리고 '저 통에 무엇이 들었나'는 판정이 아니라 세계가 지어질 때 이미 정해진 사실이다(interactables._draw 와 같은 문법)."""
+        key = '%s|%s|%s|%s' % (self.master_seed, self.depth, salt, '|'.join(str(p) for p in parts))
+        return int.from_bytes(hashlib.sha256(key.encode('utf-8')).digest()[:8], 'big')
+
+    def _life_count(self, salt, span, *parts):
+        """(lo, hi) 범위에서 결정론적으로 하나 — 층마다 몇 개를 놓을지."""
+        lo, hi = span
+        return lo + self._life_roll(salt, *parts) % (hi - lo + 1)
+
+    def prop_at(self, x, y):
+        """(x,y)를 엔진 소유 소품이 막고 있나(D92). 소품이 없는 세계는 늘 False — 옛 판의 모든 판정이 그대로다."""
+        return (x, y) in self.prop_cells
+
+    def _place_props(self):
+        """엔진 소유 소품 배치 — 기본 생성기는 소품을 놓지 않는다(옛 판 그대로). 생성 프로필이 덮어쓴다.
+        굴림도 피처도 늘지 않는 빈 자리 = '통합 순서 2'(art/dungeon-v2/IMPLEMENTATION_GUIDE.md)의 갈고리."""
+        return
+
+    LIFE_RUMMAGE_IDS = ('barrel', 'crate', 'jar')   # 뒤질 수 있는 것 — 정의 id = 피처 type(entities/object/*.json)
+    LIFE_TABLET_ID = 'floor_tablet'
+    LIFE_CAMPFIRE_ID = 'campfire'
+    # ⚠️문구 임시(검토표 등재 대상) — 석판에 새겨진 글. (a) 이 층을 세계가 센 참인 사실 (b) 아무 기능도 약속하지 않는 한 줄.
+    LIFE_TABLET_LORE = ('돌아온 자만이 이야기를 남긴다.',
+                        '이 돌을 깎은 손의 이름은 남아 있지 않다.',
+                        '글자 위로 물이 흘러 절반이 닳았다.')
+    LIFE_TABLET_SEAL = '이 층의 문은 봉인되어 있다. 봉인은 이 층의 주인이 쓰러질 때 풀린다.'   # ⚠️문구 임시 — BOSS_FLOOR_NOTICE 와 같은 사실(보스가 죽어야 출구가 열린다)
+
+    def _life_free(self, x, y, gap=2):
+        """살림을 놓을 수 있는 빈 바닥인가 — 바닥이고, 소품·함정·몹이 없고, 이미 있는 피처와 gap 칸 이상 떨어진 칸.
+        (한 칸에 피처가 둘이면 _interact 가 먼저 등록된 쪽만 집는다 — 겹치지 않게 두는 게 규율)."""
+        if not (0 <= x < self.w and 0 <= y < self.h) or self.grid[y][x] != FLOOR:
+            return False
+        if self.prop_at(x, y) or self.monster_at(x, y) or any((t.x, t.y) == (x, y) for t in self.traps):
+            return False
+        return all(abs(f.x - x) + abs(f.y - y) >= gap for f in self.features.values())
+
+    def _tablet_facts(self):
+        """석판에 적을 수 있는 '이 층의 참인 사실' — 세계가 실제로 센 수(주점 소문 D71 과 같은 재료).
+        쓰러뜨릴 수 있는 것은 현재형으로 말하지 않는다(몹은 죽는다) · 계단의 방향·위치는 말하지 않는다(D19 '층 지도 안 줌'). ⚠️문구 임시"""
+        out = ['이 층에 놓인 함정은 %d개다.' % len(self.traps),
+               '이 층은 방 %d개로 이루어져 있다.' % len(self.rooms)]
+        kinds = {}
+        for m in self.monsters:
+            kinds[m.kind] = kinds.get(m.kind, 0) + 1
+        if kinds:
+            out.append('이 층에 처음 있던 것 — %s.' % ', '.join('%s %d' % (k, n) for k, n in sorted(kinds.items())))
+        return out
+
+    def _place_floor_life(self):
+        """D92 던전 살림 — 뒤지는 통·읽는 석판·모닥불. 새 동사는 없다(전부 기존 use/interact 밑, 부품은 정의 JSON).
+        소품이 있는 층(생성 프로필)에서는 **놓인 소품 중 몇을** 뒤질 수 있는 것으로 승격하고(나머지는 조용한 장애물 —
+        피처는 시야에 들 때마다 정지를 낳는다 = 콜), 소품이 없는 층(옛 생성기)에서는 방 구석 빈 바닥에 통을 놓는다.
+        굴림 없음(전부 _life_roll) · 놓는 것은 사실뿐이고 무엇을 할지는 캐릭터가 정한다."""
+        # ① 뒤지는 것
+        if self.props:
+            cands = [p for p in self.props if p['kind'] in self.LIFE_RUMMAGE_IDS and p.get('blocks', True)
+                     and any(self.grid[p['y'] + dy][p['x'] + dx] in (FLOOR, DOOR) and not self.prop_at(p['x'] + dx, p['y'] + dy)
+                             for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0))
+                             if 0 <= p['x'] + dx < self.w and 0 <= p['y'] + dy < self.h)]
+            cands.sort(key=lambda p: self._life_roll('promote', p['x'], p['y']))   # 곁에 설 자리가 있는 것만(막힌 소품은 못 뒤진다)
+            for p in cands[:min(self._life_count('n_rummage', self.LIFE_RUMMAGE), len(cands))]:
+                if self.feature_at(p['x'], p['y']) is None:
+                    self._add_feature(p['kind'], ENT.object_name(p['kind']), p['x'], p['y'])
+        else:
+            corners = [c for r in self.rooms for c in ((r.x, r.y), (r.x + r.w - 1, r.y),
+                                                       (r.x, r.y + r.h - 1), (r.x + r.w - 1, r.y + r.h - 1))]
+            free = sorted({c for c in corners if self._life_free(*c)},
+                          key=lambda c: self._life_roll('bare', *c))
+            for i, (x, y) in enumerate(free[:min(self._life_count('n_bare', self.LIFE_RUMMAGE_BARE), len(free))]):
+                eid = self.LIFE_RUMMAGE_IDS[self._life_roll('bare_kind', x, y) % len(self.LIFE_RUMMAGE_IDS)]
+                self._add_feature(eid, ENT.object_name(eid), x, y)
+        # ② 읽는 것 — 벽을 등진 빈 바닥(방 안). 본문은 피처마다 다르므로 세계의 상태(use_over)로 얹는다
+        walled = sorted({(x, y) for r in self.rooms
+                         for y in range(max(1, r.y), min(self.h - 1, r.y + r.h))
+                         for x in range(max(1, r.x), min(self.w - 1, r.x + r.w))
+                         if self._life_free(x, y) and any(self.grid[y + dy][x + dx] == WALL
+                                                          for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0)))},
+                        key=lambda c: self._life_roll('tablet', *c))
+        n_tab = min(self._life_count('n_tablet', self.LIFE_TABLETS), len(walled))
+        seal_left = 1 if getattr(self, 'boss_on', False) else 0   # 보스층에는 봉인을 말하는 석판 하나(BOSS_FLOOR_NOTICE 와 같은 사실)
+        facts = self._tablet_facts()
+        for x, y in walled[:n_tab]:
+            fid = self._add_feature(self.LIFE_TABLET_ID, ENT.object_name(self.LIFE_TABLET_ID), x, y)
+            if seal_left:
+                text, seal_left = self.LIFE_TABLET_SEAL, 0
+            else:
+                pool = facts + list(self.LIFE_TABLET_LORE)
+                text = pool[self._life_roll('tablet_text', x, y) % len(pool)]
+            if getattr(self, 'use_over', None) is None:
+                self.use_over = {}        # 피처마다 다른 쓰임(interactables.use_of 가 정의보다 먼저 본다)
+            self.use_over[fid] = {'kind': 'read', 'text': text}
+        # ③ 모닥불 — 2층부터 층당 0~1. '안전'을 약속하지 않는다(곁에서 쓰면 HP 가 오를 뿐이다)
+        if self.depth >= 2 and self._life_roll('campfire') % 2 == 0:
+            spots = sorted({(x, y) for r in self.rooms
+                            for y in range(max(1, r.y), min(self.h - 1, r.y + r.h))
+                            for x in range(max(1, r.x), min(self.w - 1, r.x + r.w))
+                            if self._life_free(x, y, gap=3)},
+                           key=lambda c: self._life_roll('campfire_spot', *c))
+            if spots:
+                self._add_feature(self.LIFE_CAMPFIRE_ID, ENT.object_name(self.LIFE_CAMPFIRE_ID), *spots[0])
 
     def _assign_room_types(self):
         """출구 든 방 = exit, 출구에서 가장 먼 방 = entrance, 나머지 standard.
@@ -1808,6 +1932,8 @@ class Dungeon:
             return False
         if self.grid[y][x] == WALL:
             return False
+        if (x, y) in self.prop_cells:      # D92(09-20) 엔진 소유 소품 — 통·상자·항아리·잔해는 몸으로 길을 막는다(동료 교대도 못 지난다)
+            return False
         if not ally_pass and any(b['x'] == x and b['y'] == y
                                  and b['alive'] and not b['won'] for b in bots):
             return False
@@ -1864,7 +1990,8 @@ class Dungeon:
         ⚠️ 대각 코너컷 금지는 여기도 동일 적용 — 이동 규칙과 거리맵 규칙이 어긋나면 벽 모서리
         X자 틈으로 '지형상 가깝다'는 불가능 거리가 나와 best_effort가 거짓 제자리([])를 낸다(seed242 실측)."""
         def open_(x, y):
-            return 0 <= x < self.w and 0 <= y < self.h and self.grid[y][x] != WALL
+            return (0 <= x < self.w and 0 <= y < self.h and self.grid[y][x] != WALL
+                    and (x, y) not in self.prop_cells)   # D92: 소품도 지형이다 — 거리맵과 이동 규칙이 갈리면 best_effort 가 거짓 거리를 낸다
         if open_(tx, ty):
             starts = [(tx, ty)]
         else:                                       # 목표가 벽/맵밖이면 직교 인접 floor에서 시작
@@ -2721,8 +2848,8 @@ class Dungeon:
         프런티어가 되어 탐색 폴백이 문으로 걸어간다(종결 보장이 문에서 끊기지 않게)."""
         out = []
         for (x, y) in seen:
-            if (x, y) == (cx, cy) or self.grid[y][x] not in (FLOOR, DOOR):
-                continue
+            if (x, y) == (cx, cy) or self.grid[y][x] not in (FLOOR, DOOR) or self.prop_at(x, y):
+                continue                       # D92: 소품이 막은 칸은 '더 갈 수 있는 가장자리'가 아니다(못 서는 칸을 종점으로 부르지 않는다)
             for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0)):
                 nx, ny = x + dx, y + dy
                 if 0 <= nx < self.w and 0 <= ny < self.h and (nx, ny) not in seen:
@@ -3962,7 +4089,8 @@ class Dungeon:
         cx, cy = bot['x'], bot['y']
         cands = []
         for (x, y) in scells:
-            if (x, y) == (cx, cy) or not (0 <= x < self.w and 0 <= y < self.h) or self.grid[y][x] == WALL:
+            if ((x, y) == (cx, cy) or not (0 <= x < self.w and 0 <= y < self.h)
+                    or self.grid[y][x] == WALL or self.prop_at(x, y)):   # D92: 소품 칸은 도착 칸이 될 수 없다
                 continue
             if any(0 <= x + dx < self.w and 0 <= y + dy < self.h and (x + dx, y + dy) not in scells
                    for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0))):
@@ -5232,6 +5360,8 @@ class Dungeon:
             return False
         if self.grid[y][x] == WALL:
             return False
+        if (x, y) in self.prop_cells:      # D92: 몹도 소품을 통과하지 못한다(캐릭터와 같은 규칙 — 길막힘이 한쪽만의 사실이면 거짓이다)
+            return False
         if any(b['x'] == x and b['y'] == y and b['alive'] and not b['won'] for b in bots):
             return False
         if self.monster_at(x, y):
@@ -6069,6 +6199,7 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
 
     def free(x, y):
         return (dungeon.grid[y][x] == FLOOR
+                and not dungeon.prop_at(x, y)                             # D92(09-20) 소품 위 출발 금지 — 스폰은 소품 배치 뒤에 정해진다
                 and not dungeon.feature_at(x, y)                          # 피처(출구·보물·상자·샘…) 위 출발 금지
                 and not any((t.x, t.y) == (x, y) for t in dungeon.traps)  # 숨은 함정 위 출발 금지
                 and not dungeon.monster_at(x, y)

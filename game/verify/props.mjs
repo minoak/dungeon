@@ -46,7 +46,10 @@ const made = spawnSync(process.env.WL_PYTHON || 'python', ['-c',
   "import sys,json;sys.path.insert(0,'art/dungeon-v2');from preview_server import stream;print(json.dumps([json.loads(stream(i,p).decode().splitlines()[1]) for p in ('original','concept') for i in range(12)]))"],
   { cwd: root, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, env: { ...process.env, PYTHONUTF8: '1', DUNGEON_BRAIN_BACKEND: 'dummy' } });
 assert.equal(made.status, 0, made.stderr);
-const levels = JSON.parse(made.stdout);
+// D92(09-20): 엔진이 concept 층에 제 소품(level.props)을 싣기 시작했다 — ② 는 '엔진 목록이 없을 때의 추첨'과
+//   '있을 때의 그대로 받기'를 **둘 다** 보는 자리라, 입력에서 props 를 걷어 옛 조건을 되살린 뒤 아래에서 직접 얹는다
+//   (renderer_streams.py 가 같은 이유로 덮어쓴다). 클라이언트 코드는 무접촉.
+const levels = JSON.parse(made.stdout).map(({ props, ...L }) => L);
 check('② kind 어휘 = barrel·crate·jar·rubble·storage·ruin', JSON.stringify(Object.keys(PROP_KINDS)) === JSON.stringify(['barrel', 'crate', 'jar', 'rubble', 'storage', 'ruin']));
 const kinds = [...Object.keys(PROP_KINDS), 'mystery'];
 let placed = 0, accents = 0, lottery = 0;
