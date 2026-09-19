@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "preview:static": "vite preview --mode static",
     "smoke": "node verify/smoke.mjs",
+    "check:props": "node verify/props.mjs",
+    "check:renderer": "node verify/renderer.mjs",
     "smoke:static": "node -e \"process.env.WL_STATIC = '1'; import('./verify/smoke.mjs')\"",
     "launch": "python ../launcher.py --no-browser",
     "smoke:launcher": "node -e \"process.env.WL_GAME_URL ||= (process.env.WL_LAUNCHER || 'http://127.0.0.1:8000') + '/game/'; import('./verify/smoke.mjs')\""

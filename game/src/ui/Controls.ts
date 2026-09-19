@@ -114,7 +114,8 @@ export function installControls(app: App): void {
     sel.innerHTML = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
     sel.onchange = () => {
       pb.pause();
-      history.replaceState(null, '', '?run=' + encodeURIComponent(sel.value));
+      const art = new URLSearchParams(location.search).get('dungeonArt');   // D88 렌더러 강제 지정은 판을 바꿔도 주소에 남긴다(새로고침해도 같은 그림)
+      history.replaceState(null, '', '?run=' + encodeURIComponent(sel.value) + (art ? '&dungeonArt=' + encodeURIComponent(art) : ''));
       void app.loadRun(sel.value);
     };
   }

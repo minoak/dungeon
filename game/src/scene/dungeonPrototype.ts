@@ -16,12 +16,24 @@ import decorUrl from '../../../art/dungeon-v2/runtime/decor.png';
 import architectureUrl from '../../../art/dungeon-v2/runtime/architecture.png';
 import weatheringUrl from '../../../art/dungeon-v2/runtime/weathering.png';
 
-const artMode = new URLSearchParams(location.search).get('dungeonArt');
-export const dungeonPrototypeEnabled = artMode === 'prototype' || artMode === 'flat';
-export const projectedDungeonEnabled = artMode === 'prototype';
+// D88(2026-09-20) 렌더러는 층마다 고른다. 전에는 URL ?dungeonArt= 를 모듈 로드 때 한 번 읽어 판 전체에 고정했고, 본편 URL 에서는 늘 꺼져 있었다.
+//   · 스트림의 level.architecture(새 던전 생성 프로필의 건축 기록)가 있는 층 = 입체(projected) · 없는 층 = 옛 그림(null).
+//   · URL ?dungeonArt= 는 강제 덮어쓰기로 남는다: prototype = 입체 · flat = 평면 시제품 · off = 옛 그림.
+//     실험실(art/dungeon-v2/compare.js)이 같은 스트림을 prototype|flat 두 화면에 나란히 놓고, 옛 생성기 판(architecture 없음)도 입체로 그려 본다.
+//   · 마을 층(town · visual)에서는 URL 로도 켜지지 않는다 — 마을은 제 그림(저작 조감도·마을 타일)이 있다.
+const artParam = new URLSearchParams(location.search).get('dungeonArt');
+export type DungeonArt = 'projected' | 'flat';
+export function dungeonArtFor(L: LevelLine, town: boolean): DungeonArt | null {
+  if (town || L.visual) return null;
+  if (artParam === 'prototype') return 'projected';
+  if (artParam === 'flat') return 'flat';
+  if (artParam === 'off') return null;
+  return L.architecture ? 'projected' : null;
+}
+/** 씬의 preload 는 판 로드보다 먼저 돈다(main.ts: 씬 생성 → loadRun) — 스트림을 보고 고를 수 없으니 입체 에셋 9장(약 200KB)은 늘 싣는다.
+ *  평면 시제품은 URL 로만 켜지므로 그때만 전용 2장을 더 싣는다(props·decor 시트는 두 렌더러가 같은 키로 같이 쓴다). */
 export function queueDungeonPrototype(load: Phaser.Loader.LoaderPlugin): void {
-  if (artMode === 'flat') { queueFlat(load); return; }
-  if (!projectedDungeonEnabled) return;
+  if (artParam === 'flat') queueFlat(load);
   for (const [name,url] of [['front',frontUrl],['coping',copingUrl],['side',sideUrl],['cap',capUrl],['floor',floorUrl]]) load.image('dungeon-v3-'+name,url);
   load.spritesheet('dungeon-v2-props',propsUrl,{frameWidth:96,frameHeight:96});
   load.spritesheet('dungeon-v2-decor',decorUrl,{frameWidth:96,frameHeight:96});
@@ -34,12 +46,13 @@ export function dungeonPrototypeVisual(key: string): {texture:string;frame:numbe
 interface Part {
   image: Phaser.GameObjects.Image; x:number; y:number; wall:boolean; foot:number;
   width:number; height:number; brightness:number; hidden:boolean; baseAlpha:number;
+  door?:boolean;                                 // D88 문 그림 — 그 칸에 누가 서면 옅어진다(tickDungeonPrototype)
 }
-interface View { parts:Part[]; objects:Phaser.GameObjects.GameObject[]; stats:{hidden:number;remembered:number;cutaway:number} }
+interface View { parts:Part[]; objects:Phaser.GameObjects.GameObject[]; tile:number; stats:{hidden:number;remembered:number;cutaway:number} }
 const views = new WeakMap<Phaser.GameObjects.Image,View>();
 
-export function paintDungeonPrototype(scene:Phaser.Scene,L:LevelLine,tile:number):Phaser.GameObjects.Image {
-  if (artMode === 'flat') return paintFlat(scene,L,tile);
+export function paintDungeonPrototype(scene:Phaser.Scene,L:LevelLine,tile:number,art:DungeonArt='projected'):Phaser.GameObjects.Image {
+  if (art === 'flat') return paintFlat(scene,L,tile);
   const layout=planDungeonArchitecture(L),decorations=planDungeonDecor(L,layout.torches);
   const prefix='dungeon-v3-', keys:string[]=[], objects:Phaser.GameObjects.GameObject[]=[], parts:Part[]=[];
   const tex=(name:string,w:number,h:number) => {
@@ -139,17 +152,21 @@ export function paintDungeonPrototype(scene:Phaser.Scene,L:LevelLine,tile:number
   for(const d of layout.doors){
     const image=scene.add.image((d.x+.5)*tile,(d.y+1)*tile-2,'dungeon-v3-architecture',d.side?1:0).setOrigin(.5,120/128).setFlipX(d.side&&d.flip).setName('dungeon-door');
     add(image,d.x,d.y,true,(d.y+1)*tile-2,d.side?31:60,83);
+    parts[parts.length-1].door=true;
   }
   for(const p of decorations){
     const floorObject=p.surface==='floor';
     const foot=(p.y+1)*tile-(floorObject?5:24)+p.offsetY;
-    const cluster=floorObject&&(p.frame===0||p.frame===1)&&hash(p.x,p.y)%3===0;
-    const ruin=floorObject&&p.frame===3&&hash(p.x,p.y)%2===0;
+    // D89 엔진 소유 소품(p.kind 있음)은 kind 가 그림을 정한다 — storage·ruin 만 전용 그림. 클라이언트 추첨(옛 스트림·실험실)일 때만 해시로 변형을 섞는다.
+    const cluster=floorObject&&(p.kind?p.kind==='storage':(p.frame===0||p.frame===1)&&hash(p.x,p.y)%3===0);
+    const ruin=floorObject&&(p.kind?p.kind==='ruin':p.frame===3&&hash(p.x,p.y)%2===0);
     const texture=cluster||ruin?'dungeon-v3-architecture':'dungeon-v2-decor',frame=cluster?3:ruin?2:p.frame;
     const scale=cluster?.78:ruin?.85:floorObject?1.15:1.2;
     const image=scene.add.image((p.x+.5)*tile+p.offsetX,foot,texture,frame).setOrigin(.5,cluster||ruin?120/128:92/96).setScale(scale).setName('dungeon-furnishing');
     add(image,p.x,p.y,!floorObject,floorObject?foot:(p.y+1)*tile,floorObject?43:36,floorObject?42:80);
     if(!floorObject)image.setDepth(20+p.y*.01+.004);
+    // D89 통행을 막지 않는 소품(blocks=false)은 그 칸에 선 몹(−0.005)·캐릭터(0)보다 뒤에 — 밟고 선 이가 소품에 가리지 않게.
+    if(floorObject&&p.blocks===false)image.setDepth(20+p.y*.01-.006);
     if(floorObject){g.fillStyle='rgba(1,5,11,.34)';g.beginPath();g.ellipse((p.x+.5)*tile+p.offsetX,foot-2,22,7,0,0,Math.PI*2);g.fill();}
   }
   for(const [x,y] of layout.torches){
@@ -183,7 +200,7 @@ export function paintDungeonPrototype(scene:Phaser.Scene,L:LevelLine,tile:number
   }
   groundTex.refresh();
   const ground=scene.add.image(0,-96,groundTex.key).setOrigin(0).setDepth(.5).setName('dungeon-v2-ground');
-  const stats={hidden:0,remembered:0,cutaway:0};views.set(ground,{parts,objects,stats});
+  const stats={hidden:0,remembered:0,cutaway:0};views.set(ground,{parts,objects,tile,stats});
   ground.setData({projected:true,wallHeight:80,torches:layout.torches,decorations,wallDetails:layout.walls,stoneFragments:fragments,moss,exteriorRocks:exterior.size,visibility:stats});
   ground.once('destroy',()=>{for(const o of objects)o.destroy();for(const key of keys)if(scene.textures.exists(key))scene.textures.remove(key);views.delete(ground);});
   return ground;
@@ -197,11 +214,16 @@ export function syncDungeonPrototype(scene:Phaser.Scene,visible:Set<string>|null
     if(!known)view.stats.hidden++;else if(!isVisible)view.stats.remembered++;
   }
 }
-export function tickDungeonPrototype(scene:Phaser.Scene,actors:{x:number;y:number}[]):void {
+/** actors = 벽 뒤에 서면 그 벽을 옅게 하는 이들(파티). others = 문 칸 판정에만 드는 이들(보이는 산 몹) — 발(월드 px) 좌표. */
+export function tickDungeonPrototype(scene:Phaser.Scene,actors:{x:number;y:number}[],others:{x:number;y:number}[]=[]):void {
   const ground=scene.children.getByName('dungeon-v2-ground') as Phaser.GameObjects.Image|null;
   const view=ground&&views.get(ground);if(!view)return;let cutaway=0;
+  const t=view.tile,everyone=others.length?actors.concat(others):actors;
   for(const p of view.parts){if(!p.wall||p.hidden)continue;
-    const obscures=actors.some(a=>Math.abs(a.x-(p.x+.5)*48)<p.width/2+12&&a.y<p.foot-7&&a.y>p.foot-p.height-12);
+    let obscures=actors.some(a=>Math.abs(a.x-(p.x+.5)*t)<p.width/2+12&&a.y<p.foot-7&&a.y>p.foot-p.height-12);
+    // D88 문 칸 가림: 문 그림의 깊이(같은 줄 +0.0026)는 그 칸에 선 캐릭터(+0)·몹(−0.005)보다 앞이고, 위의 '벽 뒤' 조건(발이 문 발치보다 7px 넘게 위)에도
+    // 안 걸려서 문 칸에 선 이가 닫힌 문 그림에 통째로 가려졌다. 문 칸 안에 발이 있으면 같은 28% 로 옅게 — 열고 지나가는 문처럼 읽힌다.
+    if(!obscures&&p.door)obscures=everyone.some(a=>Math.abs(a.x-(p.x+.5)*t)<t/2&&a.y>p.y*t&&a.y<=(p.y+1)*t);
     p.image.setAlpha(p.brightness*(obscures?.28:1));if(obscures)cutaway++;
   }
   view.stats.cutaway=cutaway;
