@@ -28,6 +28,7 @@ import social_reactions as SR
 import skill_core as SK
 import skill_combat as SC
 import entities as ENT           # 엔티티 저장소(D50, 09-11) — 몬스터·함정·오브젝트·NPC 정의(수치·이름·지식 본문)
+import interactables as IA       # 쓰임 부품(D89, 09-20) — 정의의 use{kind} 가 오브젝트·건물 상호작용을 낸다(엔진 무의존 모듈 — 순환 import 없음)
 import town_layout as TL         # 마을 layout(town-layout-v1, 맵 트랙 저작 원본) → 격자 컴파일(엔진 무의존 모듈)
 import math
 import os
@@ -160,13 +161,15 @@ TRAIL_MAX = 12           # 자기 행동 궤적(D38, 09-06) 상한: 마지막 vi
 OBJ_VERBS = {'npc': '말 걸어 봄',   # 오브젝트 태그(D39, 09-06): **쓰고도 남아 있는 오브젝트만**
              'weapon': '착용해 봄', 'armor': '착용해 봄'}   # D57(09-12): 장비는 개체(번호 유지)라 내려놓아도 태그가 남는다
                                     #   (샘·상자·보물·물약·장비는 쓰면 사라져 "×N"이 뜻이 없다. 문·몹은 서랍)
+                                    #   D89(09-20): 쓰임 부품(use)이 있는 피처도 쓰고도 남는다 — 타입이 정의마다 달라 이 사전이
+                                    #   아니라 kind 의 '~해 봄'(IA.tried)에서 온다(Dungeon._obj_verb 가 둘을 잇는다)
 
 
 def _obj_note(res):
     """오브젝트 태그의 마지막 사실 한 마디(D39) — 상호작용 결과에서. 해석 없음(사실만). None=이전 note 유지."""
     if res.get('result') == 'npc_gift':
         return '%s 받음' % res.get('item', '?')
-    return None
+    return IA.obj_note(res)             # D89 뒤지기: 무엇이 나왔나·비었나(그 밖의 결과는 None)
 
 
 def _tagsfx(f):
@@ -319,6 +322,8 @@ def event_tags(rec, names=None):
     if t == 'rest':
         return [('start', '휴식 시작', '')]
     if t == 'interact':
+        if r in IA.RESULTS:                                   # D89 쓰임 부품의 결과(읽음·앉음·뒤짐…) — 꼬리표 어휘는 그 모듈이 소유
+            return IA.event_tags(rec)
         if r == 'exit':
             return [('descend', '하강', '함께' if len(rec.get('party') or []) > 1 else '혼자')]
         if r == 'ascend':
@@ -818,6 +823,7 @@ class Zone:
     rooms=생성기의 내부 골격(배치·스폰·구판 어휘용 존치), zones=스캐너가 **격자만 보고** 재구성한
     세계의 실제 짜임 — 손그림(from_ascii)·생성·미래 UGC 맵을 동일 취급(D20 빌더의 접속면).
     분류 규칙: 2×2 바닥 블록에 속한 칸=방, 나머지 바닥=통로(폭 1 길). 직교 연결 컴포넌트가 구역.
+    (블록의 한 변은 프로필 값 Dungeon.ZONE_BLOCK — 기본 2, 넓은 통로 프로필은 4 · D88)
     scan 스위치 켠 판만 만들어진다(기존 게이트 무수정 통과 — D17 장부 스위치 선례)."""
     __slots__ = ('id', 'kind', 'cells', 'x', 'y', 'w', 'h', 'doors', 'junctions', 'deadends')
 
@@ -853,6 +859,18 @@ class Door:
 
 
 class Dungeon:
+    # D88(2026-09-20) 구역 분류 프로필 — 스캐너가 '방'으로 읽는 바닥 블록의 한 변(K×K). 기본 2 = D19 원문
+    #   (2×2 블록=방, 폭 1=통로) 그대로라 옛 판·손그림 장면·마을은 글자 하나 안 바뀐다. 통로 폭이 2~3칸인
+    #   생성 프로필(dungeon_concept.ConceptDungeon)은 4 로 덮어쓴다 — 2×2 로 읽으면 넓은 통로가 방과 한
+    #   구역으로 뭉쳐(0콜 실측: 가장 큰 구역이 바닥 절반 이상인 시드 42/200 · 통로 구역 0개 56/100) 구역
+    #   어휘(크기·가 본 곳·재회·장부 주소)가 뜻을 잃는다. **클래스 속성**인 이유: from_ascii 는 __new__
+    #   경유라 인스턴스 속성은 명시 초기화 함정에 걸리고, 옛 피클 스냅샷(D79)에는 이 값이 없다.
+    ZONE_BLOCK = 2
+    # 구역의 사람말 이름(_zone_name) 임계 — 옛 생성기 크기(방 5~9 × 3~5 · 폭 1 통로) 기준. 프로필이 덮어쓴다(D88).
+    ZONE_BIG_ROOM = 30        # 다 본 방의 bbox 면적이 이 이상이면 '넓은 방'
+    ZONE_SMALL_ROOM = 12      #   이 이하면 '작은 방'
+    ZONE_LONG_CORRIDOR = 10   # 다 본 통로의 길이(_zone_len)가 이 이상이면 '긴 통로'
+
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                  scan=False, n_potions=0, loops=False, selfstop=False,
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
@@ -1432,17 +1450,38 @@ class Dungeon:
         """격자의 바닥(FLOOR)을 방(2×2 블록)/통로(폭1)로 나눠 직교 연결 컴포넌트로 묶는다 —
         _scan_zones 와 _stamp_doors 가 같은 눈으로 격자를 읽는 공통 심장. 문 타일(+)은 바닥이
         아니므로 컴포넌트가 문에서 끊긴다(문=구역의 경계라는 정의가 격자에서 그대로 성립).
+        D88(09-20): 블록의 한 변은 프로필 값 ZONE_BLOCK(기본 2 = 아래 원문 경로 그대로). K>2 면 '넉넉한 공간'의
+        기준이 K×K 로 커지고(폭 2~3 통로=통로), **홀로 선 기둥**(벽 칸인데 직교 네 이웃이 전부 바닥)은 블록
+        판정 때만 바닥으로 센다 — 안 그러면 기둥 곁 칸들이 어떤 K×K 블록에도 못 들어 방 안에 가짜 '통로'
+        주머니와 가짜 트임 문이 생긴다. 기둥은 여전히 벽이다(구역에 안 들고 · 못 밟고 · 빛을 막는다) —
+        격자만 읽는 계약(D19)은 그대로.
         반환: (comp_at: 칸→컴포넌트 번호, room_cells, comps: [(kind, cells), ...]) — 행 우선 결정론."""
         floors = [(x, y) for y in range(self.h) for x in range(self.w)
                   if self.grid[y][x] == FLOOR]
         fset = set(floors)
         room_cells = set()
-        for (x, y) in floors:          # 2×2 블록 소속 검사 — 넉넉한 공간=방, 외길=통로
-            for ox, oy in ((0, 0), (-1, 0), (0, -1), (-1, -1)):
-                bx, by = x + ox, y + oy
-                if {(bx, by), (bx + 1, by), (bx, by + 1), (bx + 1, by + 1)} <= fset:
-                    room_cells.add((x, y))
-                    break
+        k = self.ZONE_BLOCK
+        if k <= 2:
+            for (x, y) in floors:      # 2×2 블록 소속 검사 — 넉넉한 공간=방, 외길=통로
+                for ox, oy in ((0, 0), (-1, 0), (0, -1), (-1, -1)):
+                    bx, by = x + ox, y + oy
+                    if {(bx, by), (bx + 1, by), (bx, by + 1), (bx + 1, by + 1)} <= fset:
+                        room_cells.add((x, y))
+                        break
+        else:
+            solid = set(fset)          # 블록 판정용 바닥 = 바닥 + 홀로 선 기둥(분류 때만)
+            for y in range(1, self.h - 1):
+                for x in range(1, self.w - 1):
+                    if self.grid[y][x] == WALL and all(
+                            (x + dx, y + dy) in fset for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0))):
+                        solid.add((x, y))
+            for by in range(self.h - k + 1):       # 전부 바닥인 K×K 블록마다 그 안의 바닥 칸 = 방
+                for bx in range(self.w - k + 1):
+                    if all((bx + i, by + j) in solid for j in range(k) for i in range(k)):
+                        for j in range(k):
+                            for i in range(k):
+                                if (bx + i, by + j) in fset:
+                                    room_cells.add((bx + i, by + j))
         comp_at, comps = {}, []
         for c in floors:               # 행 우선 스캔 → 컴포넌트 번호 결정론
             if c in comp_at:
@@ -1539,12 +1578,12 @@ class Dungeon:
 
     def _scan_zones(self):
         """격자만 읽어 구역(Zone)·문(Door)을 재구성한다 — 스캐너의 토대.
-        ① 분류: 2×2 바닥 블록에 속한 칸=방 후보, 나머지 바닥=통로(폭 1 길).
+        ① 분류: 2×2 바닥 블록에 속한 칸=방 후보, 나머지 바닥=통로(폭 1 길). 블록 크기=ZONE_BLOCK(D88, 기본 2).
         ② 구역: 같은 분류의 직교 연결 컴포넌트. id=스캔 순서(행 우선) — 방 r0.., 통로 c0..
         ③ 문: (a) 문 타일(+) — 직교 이웃 바닥이 정확히 두 구역이면 그 사이의 문(격자 실재, 광학 차단)
               (b) 서로 다른 구역의 바닥이 직교로 맞닿는 접경 칸쌍의 묶음(문 없는 트임 —
                  개방 아치·손그림 맵 하위호환. 빛은 안 막는다)
-        ④ 통로 사건: 갈림길(직교 바닥 이웃 3+)·막다른 곳(이웃 1).
+        ④ 통로 사건: 갈림길(직교 바닥 이웃 3+)·막다른 곳(이웃 1) — 폭 1 길 전용(ZONE_BLOCK>2 프로필은 비운다, D88).
         전부 결정론(굴림 없음)·읽기 전용 — 세계를 바꾸지 않는다(시야 엔진 파이프라인 ②구조 조회의 재료)."""
         comp_at, room_cells, comps = self._zone_components()
         fset = set(comp_at)
@@ -1614,6 +1653,10 @@ class Dungeon:
             self.doors[door.id] = door
             self.zones[za].doors.append(door.id)
             self.zones[zb].doors.append(door.id)
+        if self.ZONE_BLOCK > 2:        # D88: 갈림길(직교 이웃 3+)·막다른 곳(이웃 1)은 **폭 1 길**의 정의다 — 폭 2~3
+            return                     #   통로에선 거의 모든 칸이 '갈림길'이 되고 '막다른 곳'은 0 이 돼 obs 의 ends 가
+                                       #   거짓 문장으로 폭주한다. 넓은 통로 프로필은 이 두 명사를 말하지 않는다(빈 목록) —
+                                       #   갈 길은 문·트임(zone.doors)과 방향 탐색(프런티어)이 말한다.
         for z in self.zones.values():  # 통로 사건: 갈림길·막다른 곳(이동 결정이 흐려지는 명사만)
             if z.kind != '통로':
                 continue
@@ -1624,6 +1667,12 @@ class Dungeon:
                     z.junctions.append((x, y))
                 elif deg == 1:
                     z.deadends.append((x, y))
+
+    def _zone_len(self, z):
+        """통로 구역의 길이(칸) — obs '길이 약 Nm'·'긴 통로' 판정의 한 벌. 폭 1 길(기본 프로필)은 칸 수가 곧 길이다.
+        D88: 넓은 통로 프로필(ZONE_BLOCK>2)은 칸 수가 폭만큼 부풀어 거짓이 된다 → bbox 의 긴 변으로 센다
+        (꺾인 통로는 긴 쪽 다리의 길이 — 실제 걸음 수보다 짧게 말하는 쪽으로 어긋난다)."""
+        return len(z.cells) if self.ZONE_BLOCK <= 2 else max(z.w, z.h)
 
     @staticmethod
     def _at_label(z, x, y):
@@ -2104,6 +2153,7 @@ class Dungeon:
                              'visited': (f.x, f.y) in self.visited, **bear(f.x, f.y),
                              **({'role': roles_[f.id]} if roles_.get(f.id) else {}),   # D69(09-14) 역할(있을 때만)
                              **({'about': story_[f.id]['trait']} if (story_.get(f.id) or {}).get('trait') else {}),   # D75 특징 한 줄(있을 때만)
+                             **IA.obs_fact(self, f),            # D89 쓰임 부품 {use:{kind[,heal]}}(정의에 use 가 있는 피처만 — 없으면 옛 obs 그대로)
                              **self._obj_tag_obs(bot, f),       # D39 오브젝트 태그(있을 때만)
                              **({'new': True} if (f.type in ('weapon', 'armor')            # D57: 아무도 착용한 적 없는 장비(객체 사실,
                                                  and not getattr(f, 'worn', None)) else {})})   #   파트너 "진짜 착용한 적이 없는 것만 new")
@@ -2280,7 +2330,7 @@ class Dungeon:
                     zone_obs['at'] = self._at_label(zh, cx, cy)
                 if zh.kind == '통로':          # 통로: 길이=다 본 것만, 사건=눈에 든 칸만
                     if full:
-                        zone_obs['len'] = len(zh.cells)
+                        zone_obs['len'] = self._zone_len(zh)   # 폭 1 길=칸 수 · 넓은 통로 프로필=bbox 긴 변(D88)
                     zone_obs['ends'] = (
                         [{'kind': '갈림길', 'bearing': self._bearing(x - cx, y - cy),
                           'dist': max(abs(x - cx), abs(y - cy)), 'been': (x, y) in self.visited}
@@ -2336,9 +2386,11 @@ class Dungeon:
                                                                      (' (보상: %s)' % q_['reward']) if q_.get('reward') else ''))
         for f in feats:
             if f['adj']:
-                if f['type'] == 'building':    # D60(09-12) 마을 관측: 건물은 문턱까지(goto)만 — 안으로 드는 동사는 없다(실내는 후속)
-                    continue
-                if f['type'] == 'stairs_up':   # 마을 복귀(D29) — 라벨이 규칙을 말한다(하강 라벨 대칭)
+                if f['type'] == 'building' and not f.get('use'):   # D60(09-12) 마을 관측: 건물은 문턱까지(goto)만 — 안으로 드는 동사는 없다(실내는 후속)
+                    continue                   #   D89(09-20): 정의에 쓰임 부품(use)이 있는 건물만 문턱에서 그 기능이 어휘가 된다(없는 건물은 옛 줄 그대로)
+                if f.get('use'):               # D89 쓰임 부품 — 줄 머리가 무엇을 하는 줄인지 말한다('읽기'·'앉기'·'묵기' … 말 걸기·장비 선례, 사실만)
+                    _add('interact', f['id'], IA.menu_label(f, _tagsfx(f)))
+                elif f['type'] == 'stairs_up':   # 마을 복귀(D29) — 라벨이 규칙을 말한다(하강 라벨 대칭)
                     _add('interact', f['id'],
                          '계단을 올라 마을로 돌아간다 (규칙: 너 혼자 올라간다)'
                          if self.solo else
@@ -2983,7 +3035,7 @@ class Dungeon:
         태그=지금 참인 사실과 횟수, 궤적=순서"): 이 봇이 그 오브젝트와 상호작용한 횟수와 마지막 사실
         한 마디를 기계가 센다(나↔오브젝트 사이의 사실 — D36 뼈의 오브젝트판. 몸 태그 D34 는 몸 상태로).
         수명=봇 dict(층 재스폰이면 초기화 — shop_served 리듬). 엔진 판정은 절대 안 읽는다(시야 줄·라벨 접미뿐)."""
-        if not getattr(self, 'objtags', False) or f is None or f.type not in OBJ_VERBS:
+        if not getattr(self, 'objtags', False) or f is None or not self._obj_verb(f):
             return
         if res.get('result') in ('no_target', 'too_far'):
             return                                  # 닿지 않은 시도는 상호작용이 아니다
@@ -3011,13 +3063,20 @@ class Dungeon:
 
     def _obj_tag_obs(self, bot, f):
         """view() 용(D39): 피처 항목에 얹을 {'tag': {verb, n, note?}} — 태그 없으면 {} (구판 obs 그대로)."""
-        if not getattr(self, 'objtags', False) or f.type not in OBJ_VERBS:
+        if not getattr(self, 'objtags', False):
             return {}
         e = (bot.get('obj_tags') or {}).get(f.id)
         if not e or not e.get('n'):
             return {}
-        return {'tag': {'verb': OBJ_VERBS[f.type], 'n': int(e['n']),
+        verb = self._obj_verb(f)                    # 센 적 있는 피처만 동사를 찾는다(센 적 없으면 위에서 끝 — 옛 obs 그대로)
+        if not verb:
+            return {}
+        return {'tag': {'verb': verb, 'n': int(e['n']),
                         **({'note': e['note']} if e.get('note') else {})}}
+
+    def _obj_verb(self, f):
+        """D39 태그의 동사 — 타입 사전(OBJ_VERBS: 말 걸어 봄·착용해 봄) 또는 D89 쓰임 부품의 kind('읽어 봄'·'뒤져 봄' …). 없으면 None."""
+        return OBJ_VERBS.get(f.type) or IA.tried(self, f)
 
     def plan_step(self, bot, bots):
         """작정(D16)의 다음 수 활성화 — **착수 시점 재검증**(D16 유일한 신규 규칙).
@@ -4598,9 +4657,9 @@ class Dungeon:
         zseen = (bot.get('zone_seen') or {}).get(zid, set())
         if z.cells <= zseen:                        # 다 본 공간만 크기를 안다("일부만 봤으면 모른다")
             if z.kind == '방':
-                area = z.w * z.h
-                return '넓은 방' if area >= 30 else ('작은 방' if area <= 12 else '방')
-            return '긴 통로' if len(z.cells) >= 10 else '통로'
+                area = z.w * z.h                    # 임계는 프로필 값(D88 — 기본 30/12/10 = 옛 판 그대로)
+                return '넓은 방' if area >= self.ZONE_BIG_ROOM else ('작은 방' if area <= self.ZONE_SMALL_ROOM else '방')
+            return '긴 통로' if self._zone_len(z) >= self.ZONE_LONG_CORRIDOR else '통로'
         return z.kind
 
     def _ledger_note(self, bot, seen, bots=None):
@@ -4937,6 +4996,12 @@ class Dungeon:
                                'what': '오염된 샘', 'dmg': 1},
                               exclude=(bot['char'],))
             return out
+        # D89(2026-09-20) 쓰임 부품 — 엔진이 제 뜻으로 아는 타입을 다 지난 자리: 정의(오브젝트·건물)에 use{kind} 가 있으면 그 kind 의
+        # 일이 난다(읽기·앉기·마시기·구경·몸 풀기·뒤지기·묵기·불 쬐기 — interactables.py). 부품이 없으면 None → 옛 'nothing' 그대로.
+        # 지목한 피처를 먼저 잡는다(같은 칸에 내려놓인 장비가 있어도 부른 것은 그 오브젝트다). 굴림 없음 — 판정 rng 무접촉.
+        used = IA.handle(self, bot, self._feature_by_target(target_id) or f, bots, target_id)
+        if used is not None:
+            return used
         return {**base, 'result': 'nothing'}
 
     def _attack(self, bot, target_id=None, bots=None):

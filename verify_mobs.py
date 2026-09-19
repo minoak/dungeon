@@ -216,6 +216,40 @@ check('③ 2층부터 모든 층에 새 종이 있다 · 세 종이 2층에서 �
 print('── ④ 무리형 묶음')
 check('④ 묶음이 실제로 놓인 층 %d개 — 전부 3마리 · PACK_REACH(%d) 안 · 방 안이면 같은 방 · 피처·함정 위 아님' % (packs_seen, G.PACK_REACH),
       packs_seen >= 20 and not pack_bad, pack_bad[:3])
+try:                                                   # D88 던전 생성 프로필(concept, 42×34 · 큰 홀·폭 2~3 통로·기둥)이 있는 나무에서는 그 층에서도 같은 규칙인지 본다
+    import dungeon_concept
+except ImportError:
+    dungeon_concept = None
+if dungeon_concept is not None:
+    cbad, cpacks, cerr = [], 0, []
+    for dp in (1, 2, 3, 5):
+        for s in range(1, 13):
+            kw = dict(RUNNER_KW, seed=s, depth=dp, n_monsters=2 + dp - 1, boss=(dp == 5))
+            off, on = dungeon_concept.ConceptDungeon(**kw), dungeon_concept.ConceptDungeon(bestiary_plus=True, **kw)
+            if dp == 1:
+                if fp(off) != fp(on):
+                    cbad.append((dp, s, '1층이 달라졌다'))
+                continue
+            if off.level_snapshot()['grid'] != on.level_snapshot()['grid']:
+                cbad.append((dp, s, '지형이 달라졌다'))
+            if not (PLUS & {m.kind for m in on.monsters}) or not any(m.kind == GOBLIN for m in on.monsters):
+                cbad.append((dp, s, '새 종이 없거나 고블린이 안 남았다'))
+            cells = [(m.x, m.y) for m in on.monsters]
+            if sorted(m.id for m in on.monsters) != list(range(len(cells))) or len(set(cells)) != len(cells) \
+                    or any(on.grid[y][x] != G.FLOOR for x, y in cells):
+                cbad.append((dp, s, '번호 불연속·칸 겹침·바닥 아님(기둥·문 위)'))
+            pk = sorted((m for m in on.monsters if m.kind == SWARM), key=lambda m: m.id)
+            if pk:
+                cpacks += 1
+                if len(pk) != 3 or any(max(abs(m.x - pk[0].x), abs(m.y - pk[0].y)) > G.PACK_REACH for m in pk):
+                    cbad.append((dp, s, '묶음이 흐트러졌다'))
+            if s <= 3:
+                try:
+                    sim(on, party(on), 120)
+                except Exception as ex:                # noqa: BLE001
+                    cerr.append((dp, s, repr(ex)[:160]))
+    check('④ 생성 프로필 concept(D88) 층에서도 같은 규칙 — 1층 불변 · 2층+ 새 종·고블린 하나 남김 · 기둥·문 위에 안 놓임 · 묶음 %d개 · 더미 판 예외 0' % cpacks,
+          not cbad and not cerr and cpacks >= 8, (cbad[:2], cerr[:2]))
 tiny = Dungeon(seed=3, depth=2, w=44, h=18, n_monsters=1, n_traps=0, n_lurkers=0, bestiary_plus=True)
 none_ = Dungeon(seed=3, depth=2, w=44, h=18, n_monsters=0, n_traps=0, n_lurkers=0, bestiary_plus=True)
 check('④ 고블린이 하나뿐인 층·몹이 없는 층은 그대로(하나는 남긴다)', [m.kind for m in tiny.monsters] == [GOBLIN] and none_.monsters == [])

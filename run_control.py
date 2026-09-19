@@ -55,14 +55,25 @@ def request_retry(state, pause_id, pid=None):
     write_json(Path(state) / RETRY_FILE, {"id": pause_id})
 
 
-def request_stop(state, pages=True):
-    """D79 곱게 멈추기 — 러너가 다음 틱 머리에서 읽는다: 수첩 한 장(pages=True, 살아 있는 캐릭터당 1콜)을 쓰고 stopped 줄·스냅샷을 남긴 뒤 스스로 끝난다."""
-    write_json(Path(state) / STOP_FILE, {"id": uuid.uuid4().hex, "pages": bool(pages), "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+STOP_REASONS = ("unwatched",)    # D91(09-20) 사람이 누른 멈춤("user") 말고 러너가 그대로 받아 적는 사유 — unwatched = 공개 서버가 관전자 없는 판을 멈췄다
+
+
+def request_stop(state, pages=True, reason=None):
+    """D79 곱게 멈추기 — 러너가 다음 틱 머리에서 읽는다: 수첩 한 장(pages=True, 살아 있는 캐릭터당 1콜)을 쓰고 stopped 줄·스냅샷을 남긴 뒤 스스로 끝난다.
+    reason(D91 additive): 사람이 누른 멈춤이 아닐 때만 적는다 — 없으면 옛 모양 그대로(= "user")."""
+    write_json(Path(state) / STOP_FILE, {"id": uuid.uuid4().hex, "pages": bool(pages), "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                         **({"reason": str(reason)} if reason else {})})
 
 
 def stop_requested(state):
     """멈춤 요청이 있으면 그 dict, 없으면 None."""
     return read_json(Path(state) / STOP_FILE) or None
+
+
+def stop_reason(req, default="user"):
+    """D91 멈춤 요청(stop.json)이 말하는 사유 — 아는 사유(STOP_REASONS)만 받아 적고, 없거나 모르는 값이면 default(사람이 누른 멈춤)."""
+    why = (req or {}).get("reason")
+    return why if why in STOP_REASONS else default
 
 
 def clear_stop(state):

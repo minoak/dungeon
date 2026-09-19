@@ -272,16 +272,18 @@ class Runner:
                     "action_mode": action_mode, "mode": mode,
                     "resumed": resume, **({"from_turn": meta.get("turn_last")} if meta else {})}   # D79 additive
 
-    def stop(self, graceful=False, pages=True, wait=45.0):
+    def stop(self, graceful=False, pages=True, wait=45.0, reason=None):
         """러너 종료. graceful(D79 '수첩 쓰고 멈춤'): state/stop.json 을 두고 러너가 다음 틱 머리에서 스스로 닫기를 기다린다(수첩 캐릭터당 1콜 → 몇 초 ~
-        한 틱) — 기다림이 끝나면 terminate(루프 머리 스냅샷이 진실이라 잃는 건 수첩뿐). graceful 이 아니면 즉시 terminate(= 끊김. 역시 이어갈 수 있다)."""
+        한 틱) — 기다림이 끝나면 terminate(루프 머리 스냅샷이 진실이라 잃는 건 수첩뿐). graceful 이 아니면 즉시 terminate(= 끊김. 역시 이어갈 수 있다).
+        reason(D91, 09-20 additive): 사람이 누른 멈춤이 아닐 때 그 사유(공개 서버의 'unwatched' = 관전자 없는 판) — 러너가 stopped 줄·요약에 그대로 적는다.
+        화면의 멈춤 버튼(/api/stop)은 reason 을 안 준다 = 옛 동작 그대로."""
         with self.lock:
             if not self.running():
                 run_control.clear_stop(self.state_dir)
                 return {"ok": True, "stopped": False}
             done = False
             if graceful:
-                run_control.request_stop(self.state_dir, pages=pages)
+                run_control.request_stop(self.state_dir, pages=pages, reason=reason)
                 try:
                     self.proc.wait(timeout=max(1.0, float(wait)))
                     done = True
@@ -293,8 +295,18 @@ class Runner:
                     self.proc.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     self.proc.kill()
+                if reason:
+                    self._note_stop(reason)
             run_control.clear_stop(self.state_dir)
-            return {"ok": True, "stopped": True, "graceful": bool(graceful and done)}
+            return {"ok": True, "stopped": True, "graceful": bool(graceful and done), **({"reason": reason} if reason else {})}
+
+    def _note_stop(self, reason):
+        """D91: 스스로 닫히기 전에 끊은 판에도 멈춘 사유를 요약(snapshot.json)에 남긴다 — 몸(피클)은 루프 머리 그대로, 요약의 stop 만 채운다.
+        러너가 이미 사유를 적었으면(stop 있음) 건드리지 않는다. 요약이 없으면(이어갈 몸이 없다) 할 일도 없다."""
+        meta = snapshot.read_meta(self.state_dir)
+        if meta and not meta.get("stop"):
+            body = {k: v for k, v in meta.items() if k not in ("version", "saved_at")}
+            snapshot.write_meta(self.state_dir, {**body, "stop": {"reason": reason, "pages": {}}})
 
     def oracle_set(self, text):
         """D61 신탁 소켓(2026-09-12) — 사용자 한 줄을 state/oracle.json 에 둔다(러너가 틱마다 읽어 신전 문턱 근처 캐릭터의

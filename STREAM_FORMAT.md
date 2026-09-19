@@ -36,7 +36,9 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 
 - `stopped {turn, reason:"user", depth, pages?:{char: 수첩 한 장}}`: 사람이 '수첩 쓰고 멈춤'을 눌렀다. 러너가 다음 틱 머리에서 살아 있는 캐릭터마다 수첩 한 장(1콜,
   `stop_page`)을 쓰고 이 줄과 스냅샷을 남긴 뒤 스스로 끝난다 — `end` 없음(끊긴 판 = 이어갈 판). '바로 멈춤'·재시작·크래시는 이 줄 없이 끊긴다(마지막 틱까지가 기록).
-- `resume {turn, started, segment, backend, depth, stopped:"user"|"user_paused"|null, pages?:{char: 장}, party:[{char,hp,alive}]}`: 이어가기 시작. `turn` 은 마지막으로
+  **2026-09-20 D91 additive**: `reason:"unwatched"` = 공개 서버(server.py)가 관전 요청(`/api/status`·`/state/…`)이 제한 시간(기본 600초) 동안 없던 판을 멈췄다 —
+  같은 길(다음 틱 머리·스냅샷·`end` 없음)이고 수첩은 쓰지 않는다(`pages` 없음). 멈춤 요청 파일 `state/stop.json` 의 `reason`(있을 때만)을 러너가 받아 적는다.
+- `resume {turn, started, segment, backend, depth, stopped:"user"|"user_paused"|"pause_timeout"|"unwatched"|null, pages?:{char: 장}, party:[{char,hp,alive}]}`: 이어가기 시작. `turn` 은 마지막으로
   기록된 틱, 다음 `tick.turn` 은 그 +1(틱 번호 연속). `pages` 는 멈출 때 쓴 장 — 이어가는 몸이 '기억해두기로 한 것'(notes)에 들고 가고 첫 관측에 `floor_notice` 로
   "원정을 이어간다" 한 줄이 한 번 들어간다. `backend` 는 이 조각의 두뇌(앞 조각과 다를 수 있다 — 같은 시드라도 다른 판). `segment` 는 몇 번째 이어가기인가.
 - `run_meta.resume_failed {path, reason, run_id, pages, kept}`(additive): 이어가기를 청했지만 몸을 되살리지 못했다(엔진이 바뀜·설정이 다름·기록 파일이 다른 판) →
@@ -168,6 +170,18 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 - 집계 형태는 `{total:{like,dislike},by_actor:{char:{like,dislike}},pairs:[{from,to,like,dislike}],events,opportunities,unrated}`. `from→to`는 평가자→원래 행위자 방향이다. `events`는 사회 사건 수, `opportunities`는 수신 건수(한 발화의 수신자가 둘이면 2), `unrated`는 아직 평가 기록이 없는 수신 건수이며 대기·생략·만료를 포함한다.
 - `level.reaction_stats`와 `tick.reaction_stats`는 `{run:집계,floor:{id,depth,since,...집계}}` 전체 스냅샷이다. 임의 턴으로 돌아가도 그 프레임 당시 값을 읽는다. `descend/ascend.reaction_summary`는 떠나는 방문의 `{id,depth,since,until,...집계}`. `end.reaction_summary`는 원정 전체, `end.reaction_floors[]`는 방문별 결산이다. 마을 재방문도 새 `floor_N`으로 분리한다.
 - 수치와 과거 like/dislike는 관전 전용이다. 봇의 intent·history·notes·relations·floor 관측에 자동 주입하거나 호감 점수로 환산하지 않는다. 기존 `replies`(말/행동/없음)와 관계 장부는 별개로 유지한다.
+
+## 쓰임 부품 — 오브젝트·건물 상호작용 — 2026-09-20 D89 additive (스위치 없음 — 정의에 `use` 부품이 있는 피처가 놓인 세계에서만 나타난다)
+
+- 새 동사는 없다 — 전부 기존 `use`(메뉴형 `interact`) 밑이다. `level.features[].type` 에 정의의 `type`(예: `bench`·`well`·`barrel`·`stone_tablet`)이 그대로 실린다. 피처 필드는 옛 그대로이고, 쓰고도 피처는 남는다(샘·상자와 다르다).
+- `interact` 이벤트의 새 `result`(조합형은 `type:"use"` + `effect_type:"interact"`). 공통 칸 `what`(피처 이름)·`use_kind`(정의의 kind):
+  `read`{text, page?, pages?} · `sat`/`drank`/`warmed`{heal, hp} · `browsed`{wares[]} · `practiced` · `rummaged`{got:"potion"|"treasure"|"nothing", potions?|bag?, quest?} · `lodged`{heal, hp, cleared[]} · `used_up`(once 로 다 쓴 오브젝트를 다시 씀 — 조합형 `resolution.status` 는 `no_effect`).
+  뒤져서 나온 것의 칸이 `found` 가 아니라 `got` 인 까닭: `found` 는 수색 결과의 목록 계약이다.
+- 굴림이 없다(`roll`·`total` 칸 없음) — 뒤지기의 추첨은 세계 시드·층·피처 번호·자리의 해시라 판정 rng 를 쓰지 않는다. HP 가 오르는 결과는 `heal`·`hp` 를 싣는다(샘과 같은 칸).
+- 원장 델타(파생 규칙의 확장): `sat`/`drank`/`warmed`/`lodged` = HP += `heal` · `rummaged` 의 `got:"potion"` = potions +1, `got:"treasure"` = bag +1(`verify_stream` 의 원장 감사가 같은 규칙으로 센다).
+- 목격은 기존 `ally_use{char, what, id, result}` 그대로다(`result` = '앉아 쉬었다'·'물약을 꺼냈다' 같은 괄호 한 마디).
+- obs `sights.features[i].use = {kind, heal?}`(쓰임 부품이 있는 피처만) → 메뉴형 줄 머리('읽기'·'앉기'·'묵기' …)와 조합형 대상 태그(`interactable` + `readable`·`seat`·`drinkable`·`wares`·`practice`·`container`·`lodging`·`warmth`)의 재료. 쓰임 부품이 있는 건물만 문턱에서 `interact` 옵션이 열린다(없는 건물은 D60 그대로 goto 뿐).
+- D39 오브젝트 태그는 쓰임 부품이 있는 피처에도 붙는다(`tag.verb` = '앉아 봄'·'뒤져 봄' …, `note` = '물약 나옴'·'비어 있음').
 
 ## 파일 규칙
 - 위치: `state/stream.jsonl`. **실행 시작 때 truncate**(이전 판 기록은 사라진다 — 보존하려면 실행 후 복사). 예외 = 이어가기(D79, 2026-09-16):

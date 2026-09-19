@@ -6,6 +6,7 @@
 """
 import copy
 import entities as ENT
+import interactables as IA
 import skill_core as SK
 import skill_combat as SC
 
@@ -38,6 +39,8 @@ def observe(d, bot, bots, obs):
                     else ENT.feature_tags(obj.get('type')))     # 오브젝트 태그 = 정의(D50): 장비·물약 = object+item
             if kind == 'bot':
                 tags += ['inventory_holder']
+            if kind == 'feature' and obj.get('use'):            # D89(09-20) 쓰임 부품 — 정의에 use 가 있는 오브젝트·건물만 사실 태그가 붙는다
+                tags += [t for t in IA.tags(obj['use']) if t not in tags]   #   (interactable + readable·seat·lodging …). 없는 피처는 옛 목록 그대로
             targets.append({'id': rid, 'kind': kind, 'tags': tags,
                             **{k: obj[k] for k in ('name', 'dist', 'bearing') if k in obj}})
     if sights.get('exit'):
@@ -443,8 +446,8 @@ def decorate(bot, action, result):
         status = None
     elif r in ('lost', 'no_target', 'too_far', 'no_path', 'blocked', 'nothing', 'no_potion', 'no_boon', 'no_room', 'wait_allies', 'disabled', 'skill_failed', 'skill_missed'):
         status = 'failed'
-    elif r in ('no_effect', 'already_beside') or (action['type'] == 'search' and not result.get('found')):
-        status = 'no_effect'
+    elif r in ('no_effect', 'already_beside', 'used_up') or (action['type'] == 'search' and not result.get('found')):
+        status = 'no_effect'                                   # used_up = D89 once 로 다 쓴 오브젝트를 다시 씀(실패가 아니라 변화 없음)
     elif r == 'attack' and not result.get('hit'):
         status = 'failed'
     elif result.get('approach_status') == 'interrupted':

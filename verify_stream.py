@@ -121,6 +121,13 @@ def audit(recs):
                         dpot[e["char"]] += 1; cov["potion_get"] += 1
                     elif res == "chest_loot":
                         dbag[e["char"]] += e["loot"]; cov["chest_loot"] += 1
+                    elif res in ("sat", "drank", "warmed", "lodged"):   # D89(09-20) 쓰임 부품 — HP 가 오르는 결과는 heal 을 싣는다(샘과 같은 칸).
+                        dhp[e["char"]] += e["heal"]                    #   지금 이 게이트의 판엔 그런 오브젝트가 없다 — 놓이는 날 원장 감사가 그대로 선다
+                    elif res == "rummaged":                            # D89 뒤지기 — 나온 것만큼 소지가 는다(got: potion|treasure|nothing)
+                        if e.get("got") == "potion":
+                            dpot[e["char"]] += 1
+                        elif e.get("got") == "treasure":
+                            dbag[e["char"]] += 1
                 elif t == "drink" and e.get("result") == "drink_heal":
                     dhp[e["char"]] += e["heal"]      # 확정 완전 회복(07-17) — heal=만피까지의 결손
                     dpot[e["char"]] -= 1; cov["drink"] += 1

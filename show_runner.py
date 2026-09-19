@@ -16,6 +16,8 @@
   데이터 계약 = STREAM_FORMAT.md. 시드+decisions = 완전 리플레이.
 
 환경변수: DUNGEON_W / DUNGEON_H / DUNGEON_SEED / DUNGEON_TURNS
+          DUNGEON_ARCH(기본 '' — 옛 생성기. 'concept' = 던전 생성 프로필 D88(큰 홀·폭 2~3 통로·기둥).
+                       W/H 를 명시하지 않으면 42×34. run_meta 에 arch·arch_v 가 실린다)
           DUNGEON_GM(0이면 GM 끔) / DUNGEON_MONSTERS(기본2) / DUNGEON_TRAPS(기본3)
           DUNGEON_DEPTHS(스킬 원정 기본5 — 층수. 마지막 층 계단=탈출)
           DUNGEON_SKILLS / DUNGEON_TRPG_COMBAT / DUNGEON_RANDOM_SKILL(조합형 원정 기본1)
@@ -66,6 +68,8 @@ import threading
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import dungeon_gm as G
+import dungeon_concept          # D88(09-20) 던전 생성 프로필 'concept'(DUNGEON_ARCH) — 리포 루트 모듈이라 이어가기(D79)의 피클이
+                                #   'dungeon_concept.ConceptDungeon' 으로 되살린다. import 만으로는 굴림·판정에 안 닿는다
 import brains
 import run_control
 import snapshot                 # D79(09-16) 이어가기 — 판의 몸을 틱마다 얼려 둔다(마지막 기록에서 이어간다)
@@ -80,6 +84,19 @@ os.makedirs(STATE, exist_ok=True)
 
 DUNGEON_W = int(os.environ.get("DUNGEON_W", "56"))
 DUNGEON_H = int(os.environ.get("DUNGEON_H", "20"))
+# D88(2026-09-20) 던전 생성 프로필 — 기본 '' = 옛 생성기(방 5~9×3~5 · 폭 1 통로, 옛 판과 바이트 동일). 'concept' =
+#   dungeon_concept.ConceptDungeon(큰 홀·회랑·작은 방 · 폭 2~3 통로 · 기둥, 구역 분류는 4×4 블록 — 작업지시서
+#   art/dungeon-v2/IMPLEMENTATION_GUIDE.md '본편 통합 순서' 1). 층을 짓는 세 자리(new_floor·시작·전이)가 같은 클래스를
+#   쓴다 — 하나라도 다르면 주점 소문(new_floor 미리보기)이 실제 1층과 다른 숫자를 말한다. 그 프로필은 42×34 에서
+#   검증됐으므로 DUNGEON_W/H 를 환경에 **명시하지 않았을 때만** 그 크기를 쓴다(명시하면 그 값 — 너무 작으면 생성기가
+#   ValueError 로 이유를 말한다). 세계 지문·run_meta 에는 켠 판에만 적는다(arch · arch_v).
+DUNGEON_ARCH = "concept" if os.environ.get("DUNGEON_ARCH", "") == "concept" else ""
+FLOOR_CLS = dungeon_concept.ConceptDungeon if DUNGEON_ARCH else G.Dungeon
+if DUNGEON_ARCH:
+    if "DUNGEON_W" not in os.environ:
+        DUNGEON_W = dungeon_concept.DEFAULT_W
+    if "DUNGEON_H" not in os.environ:
+        DUNGEON_H = dungeon_concept.DEFAULT_H
 def _pick_seed(raw):
     """DUNGEON_SEED 해석 — 정수 또는 'random'(D31 09-05, 파트너 발제 "데모도 이제 랜덤 시드").
     'random' 이면 SystemRandom 으로 1~999999 를 뽑는다. 재현성은 그대로다: 뽑힌 값이
@@ -131,6 +148,8 @@ SCAN_ON = os.environ.get("DUNGEON_SCAN", "1") != "0"         # 스캐너(D19) �
                                                              #   (2026-07-15 미로 판정 채택 — 파트너 육안)
                                                              #   (채택 시 기본 1로 승격 — 사전등록 절차)
                                                              #   (spawn 기본은 None=끔 — 기존 게이트 무접촉)
+if DUNGEON_ARCH:                                             # D88: concept 프로필은 scan 전제(생성기가 문 타일을 직접 찍는다 —
+    SCAN_ON = True                                           #   ConceptDungeon 이 scan 을 강제로 켠다). 메타·지문이 실제와 같은 말을 하게
 LOOPS_ON = os.environ.get("DUNGEON_LOOPS", "1") != "0"       # 월드 빌더(D20) — 러너 기본 1(물약 선례),
                                                              #   엔진 직생성 기본 0(기존 verify 비트 동일).
                                                              #   사슬(외길) 대신 주 고리+막다른 가지
@@ -587,6 +606,8 @@ def act_summary(res):
         return pre + "%s (%s)" % (res.get("to", "?"), tag.get(r, r))
     if t == "interact":
         r = res["result"]
+        if r in G.IA.RESULTS:                      # D89(09-20) 쓰임 부품의 결과(읽음·앉음·뒤짐·묵음 …) — 문장은 interactables 가 소유
+            return G.IA.summary(res)
         if r == "exit":
             group = res.get("party", [])
             if len(group) == 1:                    # 솔로 판 — 혼자 계단을 내려간다. '다 모였다'는
@@ -1086,7 +1107,7 @@ def town_for_run(apart, quests, walkers=False, guide=False):
 
 def new_floor(nd, lore, quests=None):
     """던전 층 하나(nd ≥ 1) — 시작 층·층 전이·소문 미리보기가 같은 인자로 짓는다(D69 에서 한곳으로). 시드 파생이라 같은 nd 는 같은 층."""
-    d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
+    d = FLOOR_CLS(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
                   n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
                   bestiary_plus=BESTIARY_PLUS_ON,   # D92 새 몬스터 풀 — 생성 세 자리(소문 미리보기·시작·전이)가 같은 값을 넘긴다
                   scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
@@ -1177,7 +1198,8 @@ def _world_fingerprint():
             **({"bestiary_plus": True} if BESTIARY_PLUS_ON else {}),   # D92: 같은 규율(켠 판에만) — 안 가 본 층의 몹 배치가 달라지는 스위치
             **({"partyform": True} if PARTYFORM_ON else {}),   # D84: 켠 판에만 적는다 — 옛 스냅샷의 지문과 글자까지 같게
             **({"strangers": True} if STRANGERS_ON else {}),   # D85: 같은 규율
-            **({"town_sight": "zone"} if (TOWN_SIGHT == "zone" and TOWN_ON) else {})}   # D86: 같은 규율
+            **({"town_sight": "zone"} if (TOWN_SIGHT == "zone" and TOWN_ON) else {}),   # D86: 같은 규율
+            **({"arch": DUNGEON_ARCH, "arch_v": dungeon_concept.ARCH_VERSION} if DUNGEON_ARCH else {})}   # D88: 같은 규율 — 생성 규칙이 다른 판의 몸을 이 세계에 놓지 않는다
 
 
 def _preserve_stream(src):
@@ -1322,7 +1344,7 @@ def main():
             if npc_brain or NPC_HAIL_ON:       # D69·D71 주점 소문 재료 — 지하 1층의 실제 배치(같은 시드=같은 층, 0콜): NPC 답·인사의 숫자
                 d.rumor = floor_rumor(new_floor(1, lore))
         else:
-            d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION, depth=START_DEPTH,   # D67: 프리셋이면 최심층
+            d = FLOOR_CLS(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION, depth=START_DEPTH,   # D67: 프리셋이면 최심층
                           n_monsters=N_MON + START_DEPTH - 1, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,   #   (층 전이와 같은 몹 수 규칙)
                           bestiary_plus=BESTIARY_PLUS_ON,   # D92 새 몬스터 풀(보스 프리셋처럼 깊은 층에서 시작하는 판도 같은 규칙)
                           loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
@@ -1414,6 +1436,7 @@ def main():
                 **alpha_metadata(),
                 **({"resume_failed": resume_fail} if resume_fail else {}),   # D79(09-16 additive) 이어가기를 청했으나 못 함 — 새 판을 열었다(사유·대피한 옛 기록·들고 온 수첩)
                 **({'reaction': True, 'reaction_schema': 'social-v0.4'} if reaction_book is not None else {}),
+                **({"arch": DUNGEON_ARCH, "arch_v": dungeon_concept.ARCH_VERSION} if DUNGEON_ARCH else {}),   # D88(09-20 additive, 켠 판에만) 던전 생성 프로필·생성 규칙 버전 — 격자 크기는 아래 w/h. level 줄에 rooms[].art_style · architecture 가 실린다
                 **({"town_sight": "zone"} if (TOWN_SIGHT == "zone" and TOWN_ON) else {}),   # D86(09-19 additive, 켠 판에만) 마을의 시야 = 지금 선 구역 — 시야·정지 물리 메타(town_hear 급)
                 **({"strangers": True} if STRANGERS_ON else {}),   # D85(09-19 additive, 켠 판에만) 인물 기록 판 — 프롬프트의 호칭이 캐릭터마다 다르다(내가 적은 이름|낯선 사람) · decisions.person_note
                 **({"partyform": True} if PARTYFORM_ON else {}),   # D84(09-19 additive, 켠 판에만) 파티 결성 판 — 계단은 내 파티원만·세계마다 제 시계:
@@ -1527,7 +1550,7 @@ def main():
                                                 RESUME_NOTICE_PAGE if pg else "")
         sw.emit("resume", turn=int(snap["next_turn"]) - 1, started=time.strftime("%Y-%m-%dT%H:%M:%S"), segment=segment,
                 backend=brains.backend_name(), depth=d.depth,
-                stopped=(stop_info.get("reason") or None),          # 앞 조각이 어떻게 끝났나: user(수첩 쓰고 멈춤)·user_paused(판단 정지 중 멈춤)·pause_timeout(F1 판단 정지 제한 시간)·None(끊김·크래시)
+                stopped=(stop_info.get("reason") or None),          # 앞 조각이 어떻게 끝났나: user(수첩 쓰고 멈춤)·user_paused(판단 정지 중 멈춤)·pause_timeout(F1 판단 정지 제한 시간)·unwatched(D91 관전자 없는 판 — 공개 서버)·None(끊김·크래시)
                 **({"pages": pages_prev} if pages_prev else {}),   # 멈출 때 쓴 수첩 장(캐릭터별) — 이어가는 몸이 들고 간다
                 party=[{"char": b["char"], "hp": b["hp"], "alive": b["alive"]} for b in bots])
     run_id = "%s@%s" % (DUNGEON_SEED, run_started)   # 캠페인(D78)의 판 식별자 — 이어가도 같은 판
@@ -1650,7 +1673,9 @@ def main():
             decisions = brains.think_all(d, bots, inbox, on_error=lambda errors: brain_pause.wait(turn, errors))
         except run_control.StopRequested as stop_exc:   # D79: 판단 정지 대기 중 사용자가 멈춤 — 루프 머리 스냅샷(이 틱 전)이 진실. 조용히 닫는다
             # F1(09-18): 제한 시간(PAUSE_LIMIT_SEC) 동안 아무도 재시도를 안 누른 판도 같은 길로 스스로 닫는다 — 사유만 다르다
-            stopped_now = "pause_timeout" if isinstance(stop_exc, run_control.PauseTimeout) else "user_paused"
+            # D91(09-20): 판단 정지 중에 온 멈춤 요청이 사유를 들고 있으면(unwatched = 관전자 없는 판) 그 사유를 그대로 적는다
+            stopped_now = ("pause_timeout" if isinstance(stop_exc, run_control.PauseTimeout)
+                           else run_control.stop_reason(run_control.stop_requested(STATE), "user_paused"))
             snapshot.write_meta(STATE, _snap_meta(turn, {"reason": stopped_now, "pages": {}}))
             if stopped_now == "pause_timeout":
                 event("=== 판단 정지가 제한 시간(%d초)을 넘겨 원정을 멈춘다(t%d 전) — 마지막 기록에서 이어갈 수 있다 ===" % (PAUSE_LIMIT_SEC, turn))
@@ -1905,7 +1930,7 @@ def main():
                 d.lore = lore
                 fresh = False
             else:
-                d = G.Dungeon(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
+                d = FLOOR_CLS(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
                               n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
                               bestiary_plus=BESTIARY_PLUS_ON,   # D92 새 몬스터 풀 — 2층부터 고블린의 절반이 새 종(1층은 그대로)
                               scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
@@ -2061,16 +2086,18 @@ def main():
     for turn in range(first_turn, MAX_TURNS + 1):
         req = run_control.stop_requested(STATE)   # D79 곱게 멈춤(론처 '수첩 쓰고 멈춤') — 이 틱을 시작하기 전에, 지난 틱까지의 기록이 진실
         if req:
+            why = run_control.stop_reason(req)    # D91(09-20): 사람이 누른 멈춤 = "user" · 공개 서버가 관전자 없는 판을 멈춤 = "unwatched" — 길은 같고 사유만 다르다(기록은 누가 멈췄는지 그대로)
             pages = stop_pages(d, bots, names, turn - 1, req)
             for x in worlds:                      # D84: 다른 세계에 있는 사람도 한 장씩(옛 판은 세계가 하나라 돌지 않는다)
                 if x is not W:
                     pages.update(stop_pages(x["d"], x["bots"], names, turn - 1, req))
-            sw.emit("stopped", turn=turn - 1, reason="user", depth=d.depth, **({"pages": pages} if pages else {}))   # D79 additive
-            stop_rec = {"reason": "user", "pages": pages}
+            sw.emit("stopped", turn=turn - 1, reason=why, depth=d.depth, **({"pages": pages} if pages else {}))   # D79 additive
+            stop_rec = {"reason": why, "pages": pages}
             _take_snapshot(sw, {**_snap_core(), "next_turn": turn, "stop": stop_rec}, _snap_meta(turn, stop_rec))
-            event("=== 원정을 멈춘다(t%d, %s) — 마지막 기록에서 이어갈 수 있다%s ==="
-                  % (turn - 1, brains._floor_name(d.depth), " · 수첩 %d장" % len(pages) if pages else ""))
-            stopped_now = "user"
+            event("=== 원정을 멈춘다(t%d, %s) — 마지막 기록에서 이어갈 수 있다%s%s ==="
+                  % (turn - 1, brains._floor_name(d.depth), " · 수첩 %d장" % len(pages) if pages else "",
+                     " · 관전자가 없어 서버가 멈췄다" if why == "unwatched" else ""))
+            stopped_now = why
             break
         _take_snapshot(sw, {**_snap_core(), "next_turn": turn, "stop": None}, _snap_meta(turn))   # 틱마다 — 끊겨도 여기서 이어간다
         flag = None
