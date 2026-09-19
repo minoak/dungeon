@@ -10,6 +10,10 @@
   ③ 론처 서버 API(launcher.py) — presets / party 저장·거부 / start(dummy 두뇌)→run_meta·status / 409 / stop
   ④ 시드: _pick_seed('7')=7 · 'random' 은 1~999999 · 두 번 뽑아 다름 · 기본 경로 7 유지
   ⑤ 기본 party.json 바이트 무변경(커스텀은 party_custom.json 별 파일)
+  ⑥ 시작 옵션 → 러너 환경변수(09-20, 러너를 안 띄우고 Popen 을 가로채 env 만 본다): 맵 concept = DUNGEON_ARCH·42x34 · 다른 맵은
+     부모 env 의 DUNGEON_ARCH 를 지운다 · normal 은 부모 env 그대로(지우는 척하던 BIG_KEYS 줄 철거) · 스위치 넷(마을 생활·NPC 되받기·
+     던전의 물건들·새 몬스터)은 옵션 없으면 끔 · run_opts.json(이어가기 재료) · NIGHT_DEFAULTS → /api/presets → 화면의 첫 자리 · 옛 론처 구별
+  ⑦ 기본 파티(party.json)의 외형(09-20): 외형 사전의 새 바디 + 공용 헤어 · 직업·성별 일치 · 겉모습 한 줄 · 론처 미리보기
 (기존 verify 32종은 별도 실행.)
 """
 import contextlib
@@ -381,6 +385,106 @@ else:
           and (o2.get("oracle") or {}).get("id") == o1["oracle"]["id"] and (st_o3.get("oracle") or {}).get("id") == o1["oracle"]["id"]
           and st_c == 200 and o3.get("oracle") is None)
     srv.shutdown()
+
+    # ───────────────────── ⑥ 시작 옵션 → 러너 환경변수(09-20) ─────────────────────
+    # 러너를 띄우지 않는다 — Popen 을 가로채 '자식에게 넘어갈 env' 만 본다(0콜 · 판 없음). 부모 env 는 이 게이트의 40x16 그대로.
+    print("── ⑥ 시작 옵션 → 러너 환경변수 — 새 맵 · '09-20 추가' 스위치 넷 · 생성 프로필 지우기 · 화면의 첫 자리")
+    from unittest import mock
+
+    class _FakeProc:
+        pid = 4242
+
+        def poll(self):
+            return 0                              # 곧바로 끝난 러너 — 다음 start 가 409 에 안 걸린다
+
+    got = {}
+
+    def _fake_popen(cmd, cwd=None, env=None, stdout=None, stderr=None):
+        got.clear()
+        got.update(env)
+        return _FakeProc()
+
+    rn = launcher.Runner(HERE, os.path.join(TMP, "state_env"), os.path.join(TMP, "runs_env"))
+    NIGHT_ENV = ("DUNGEON_TOWN_LIFE", "DUNGEON_NPC_REPLY", "DUNGEON_FLOOR_LIFE", "DUNGEON_BESTIARY_PLUS")
+    NIGHT_OPTS = ("town_life", "npc_reply", "floor_life", "bestiary_plus")
+    base_opts = {"mode": "classic", "town": False, "brain": "dummy", "seed": 7, "party": "default"}
+
+    def env_of(opts, parent=None):
+        """opts 로 start 했을 때 러너가 받을 env. parent = 그동안만 부모(os.environ)에 심어 두는 값(.env·서비스 환경값 흉내)."""
+        with mock.patch.dict(os.environ, parent or {}), mock.patch.object(launcher.subprocess, "Popen", _fake_popen):
+            rn.start({**base_opts, **opts}, os.path.join(TMP, "party_web.json"))
+        return dict(got)
+
+    e_con = env_of({"map": "concept"})
+    check("⑥ 맵 concept: DUNGEON_ARCH=concept · 크기 42x34 를 같이 준다(부모 env 의 40x16 을 덮는다)",
+          e_con.get("DUNGEON_ARCH") == "concept" and (e_con.get("DUNGEON_W"), e_con.get("DUNGEON_H")) == ("42", "34"))
+    leak = {"DUNGEON_ARCH": "concept", **{k: "1" for k in NIGHT_ENV}}
+    e_nor, e_big, e_none = env_of({"map": "normal"}, leak), env_of({"map": "big"}, leak), env_of({}, leak)
+    check("⑥ 다른 맵(normal·big·옵션 없음)을 고른 판: 부모 env 에 DUNGEON_ARCH 가 있어도 자식 env 에서 지운다",
+          all("DUNGEON_ARCH" not in e for e in (e_nor, e_big, e_none)) and e_big.get("DUNGEON_W") == "80")
+    check("⑥ normal = 러너 기본 + 부모 env 그대로(게이트의 40x16·짧은 판이 이 길로 간다 — 'BIG_KEYS 지우기'는 걷었다)",
+          (e_nor.get("DUNGEON_W"), e_nor.get("DUNGEON_H"), e_nor.get("DUNGEON_TURNS")) == ("40", "16", "6")
+          and not hasattr(launcher, "BIG_KEYS"))
+    check("⑥ 스위치 넷: 옵션이 없으면 끈다 — 부모 env 의 1 도 덮는다(옛 판 · 멈춰 둔 옛 판과 같은 세계)",
+          all(e.get(k) == "0" for e in (e_nor, e_big, e_none) for k in NIGHT_ENV))
+    e_on = env_of({"map": "concept", **{k: True for k in NIGHT_OPTS}})
+    e_str = env_of({**{k: "1" for k in NIGHT_OPTS}})
+    check("⑥ 스위치 넷: true 면 1 · 참이 아닌 값('1' 문자열)은 끔(파티 결성·낯선 사람과 같은 규칙)",
+          all(e_on.get(k) == "1" for k in NIGHT_ENV) and all(e_str.get(k) == "0" for k in NIGHT_ENV))
+    for i, opt in enumerate(NIGHT_OPTS):
+        e_one = env_of({opt: True})
+        check("⑥ %s 만 켜면 %s 만 1" % (opt, NIGHT_ENV[i]), [e_one.get(k) for k in NIGHT_ENV] == ["1" if j == i else "0" for j in range(4)])
+    env_of({"map": "concept", **{k: True for k in NIGHT_OPTS}})
+    saved_on = (rn._read_run_opts() or {}).get("opts", {})
+    env_of({"map": "normal"})
+    saved_off = (rn._read_run_opts() or {}).get("opts", {})
+    check("⑥ 이어가기 재료: run_opts.json 에 맵·스위치 넷이 그대로 남는다(D79 — 이어가는 판이 같은 옵션으로 뜬다) · 안 보낸 키는 안 생긴다(옛 판 = 끔)",
+          saved_on.get("map") == "concept" and all(saved_on.get(k) is True for k in NIGHT_OPTS) and not any(k in saved_off for k in NIGHT_OPTS))
+    try:
+        with mock.patch.object(launcher.subprocess, "Popen", _fake_popen):
+            rn.start({**base_opts, "map": "cavern"}, os.path.join(TMP, "party_web.json"))
+        bad_map = ""
+    except launcher.BadRequest as e:
+        bad_map = str(e)
+    check("⑥ 모르는 맵은 400 — 이유에 아는 맵 키 전부", all(k in bad_map for k in launcher.MAPS) and "concept" in launcher.MAPS)
+    ND, OD = launcher.NIGHT_DEFAULTS, launcher.OLD_DEFAULTS
+    check("⑥ NIGHT_DEFAULTS·OLD_DEFAULTS: 키 = 맵 + 스위치 넷 · 맵은 MAPS 에 있는 키 · 옛 판 = normal + 넷 다 끔",
+          set(ND) == set(OD) == {"map", *NIGHT_OPTS} and ND["map"] in launcher.MAPS and all(isinstance(ND[k], bool) for k in NIGHT_OPTS)
+          and OD == {"map": "normal", **{k: False for k in NIGHT_OPTS}})
+    check("⑥ /api/presets: night_defaults·old_defaults = 론처 상수 그대로 · options_ui_version(옛 론처 구별)",
+          pre.get("night_defaults") == ND and pre.get("old_defaults") == OD and pre.get("options_ui_version") == launcher.OPTIONS_UI_VERSION == 1)
+    with io.open(os.path.join(HERE, "launcher", "index.html"), encoding="utf-8") as f_html:
+        lh = f_html.read()
+    check("⑥ 화면: 맵 라디오 concept · 체크박스 넷(첫 자리는 HTML 에 없다 = checked 를 적지 않는다) · 출발 본문에 네 옵션",
+          'name="map" value="concept"' in lh
+          and all(('id="%s">' % i) in lh and ('id="%s" checked' % i) not in lh for i in ("townLife", "npcReply", "floorLife", "bestiaryPlus"))
+          and all(s_ in lh for s_ in ("town_life: $('townLife').checked", "npc_reply: $('npcReply').checked",
+                                      "floor_life: $('floorLife').checked", "bestiary_plus: $('bestiaryPlus').checked")))
+    check("⑥ 화면: 첫 자리는 서버 값으로(applyStartDefaults(presets.night_defaults)) · '이전 판 설정으로' 버튼 = old_defaults · 옛 서버면 재시작 안내",
+          "applyStartDefaults(presets.night_defaults)" in lh and 'id="bOldDefaults"' in lh and "setStartOptions(presets && presets.old_defaults)" in lh
+          and "presets.options_ui_version !== 1" in lh and "LLM 호출이 조금 늘어난다" in lh)
+    lp_src = io.open(os.path.join(HERE, "launcher.py"), encoding="utf-8").read()
+    check("⑥ launcher.py: 스위치 넷의 env 줄(옵션 없으면 끈다) · 떠 있던 옛 론처를 다시 쓰는 조건에 시작 옵션 판 번호",
+          all(('env["%s"] = "1" if opts.get("%s") is True else "0"' % (v, o)) in lp_src for v, o in zip(NIGHT_ENV, NIGHT_OPTS))
+          and 'existing.get("options_ui_version") == OPTIONS_UI_VERSION' in lp_src)
+
+    # ───────────────────── ⑦ 기본 파티의 외형(09-20) ─────────────────────
+    print("── ⑦ 기본 파티(party.json)의 외형 — 외형 사전의 바디·공용 헤어 · 직업·성별이 맞는다 · 화면 미리보기")
+    ills = looks["illustrations"]
+    dparty = show_runner.load_party(os.path.join(HERE, "party.json"))
+    check("⑦ party.json 세 사람 다 look 이 있고 러너 검증(load_party)을 통과한다 — 완성 외형(sprite) + 그 외형에 등재된 헤어",
+          sorted(dparty) == ["1", "2", "3"] and all((s.get("look") or {}).get("sprite") in ills
+                                                    and s["look"].get("hairstyle") in ills[s["look"]["sprite"]]["hairstyles"] for s in dparty.values()))
+    check("⑦ 고른 바디는 새 외형(성별이 적힌 8종)이고 그 사람의 직업·성별과 같다",
+          all(ills[s["look"]["sprite"]].get("sex") == s["sex"] and ills[s["look"]["sprite"]]["job"] == s["job"] for s in dparty.values()))
+    check("⑦ 겉모습 한 줄(D85)이 그림 그대로 나온다 — 성별 · 옷 · 헤어",
+          sheetkit.looks_line(dparty["1"]) == "남자 · 금테 두른 판금 갑옷에 흰 망토 · 헝클어진 갈색 머리"
+          and sheetkit.looks_line(dparty["3"]) == "여자 · 녹색 두건 망토 · 녹색 리본으로 묶은 금발 포니테일")
+    check("⑦ /api/presets.default_party 에 검증된 look 이 실린다 · 화면은 그 그림을 그린다(없는 사람만 '랜덤' 안내)",
+          [p.get("look") for p in pre["default_party"]] == [dparty[c]["look"] for c in sorted(dparty)]
+          and 'canvas[data-dp]' in lh and "dp.every(p => p.look)" in lh)
+    check("⑦ 깨진 외형은 미리보기에서 None(론처는 산다 — 그 판은 러너 검증이 말한다)",
+          launcher._preview_look({"head": "Z9", "body": "B1"}) is None and launcher._preview_look(None) is None)
 
 print()
 if C.failed:
