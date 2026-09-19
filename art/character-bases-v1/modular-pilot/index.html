@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>원더랜드 · 공용 헤어 연결 미리보기</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#181724;color:#eee7dc}*{box-sizing:border-box}body{max-width:1100px;margin:auto;padding:30px 24px}h1{font-size:26px;margin:6px 0 12px}p{line-height:1.7;color:#bcb5cb}small,.eyebrow{color:#bcb5cb}.eyebrow{letter-spacing:2px;font-size:12px}header{margin-bottom:24px}button,select,input{font:inherit}button,select{background:#302d43;color:#f4ede2;border:1px solid #666079;border-radius:7px;padding:8px 12px}button[aria-pressed=true]{background:#675390;border-color:#bc9fea}button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #dfbd7c;outline-offset:3px}.controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:16px;background:#232132;border-radius:12px;margin-bottom:20px}.directions{display:flex;gap:6px}label{display:flex;gap:7px;align-items:center}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card{background:#262334;border:1px solid #474056;border-radius:12px;padding:14px;text-align:center;overflow:hidden}.card h2{font-size:15px;margin:0 0 12px}.stage{height:222px;display:grid;place-items:center;background:radial-gradient(ellipse,#69607566,transparent 70%);border-bottom:1px solid #484055;margin-bottom:13px}canvas{image-rendering:pixelated;width:192px;height:192px}.card label{display:block;text-align:left;font-size:12px;color:#bcb5cb;margin-top:10px}.card select{display:block;width:100%;margin-top:5px;font-size:13px}.note{margin:22px 0;font-size:13px;border-left:3px solid #8c71b5;padding:0 14px}a{color:#d4b9ff}#status{min-height:24px}input[type=range]{max-width:110px}@media(max-width:950px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:480px){body{padding:18px 12px}.grid{grid-template-columns:1fr}.directions{flex-wrap:wrap}}
+</style></head><body>
+<header><div class="eyebrow">WONDERLAND · CHARACTER WORKSHOP</div><h1>몸통은 그대로, 머리는 자유롭게</h1><p>두 복장에 같은 숏컷과 장발을 붙인 첫 연결 미리보기입니다.<br>머리를 바꾼 뒤 방향과 걷기를 전환해 조합을 비교해 보세요.</p></header>
+<div class="controls">
+<div class="directions" role="group" aria-label="바라보는 방향">
+<button data-dir="front" aria-pressed="true">정면</button><button data-dir="right" aria-pressed="false">오른쪽</button><button data-dir="back" aria-pressed="false">뒷면</button><button data-dir="left" aria-pressed="false">왼쪽</button></div>
+<label><input id="walking" type="checkbox" checked>걷기</label>
+<label>동작 <input id="frame" type="range" min="0" max="4" value="0" disabled><output id="frameValue">1</output></label>
+<label>크기 <select id="zoom"><option value="48">48px</option><option value="96">96px</option><option value="192" selected>192px</option></select></label>
+<label>보기 <select id="layer"><option value="all">완성 조합</option><option value="body">몸통만</option><option value="head">머리만</option></select></label>
+</div>
+<div id="status" role="status">부품을 불러오는 중…</div><main id="cards" class="grid"></main>
+<p class="note">연결 검증용 4조합입니다. 궁수는 몸통 결합을 확인하기 위해 활과 화살통을 제외했습니다. 전체 14종 헤어와 게임 런처 적용은 후속 작업이며, 여기서 바꾼 선택은 실제 캐릭터에 저장되지 않습니다.</p>
+<p><a href="../classes/warrior-front.png">전사 시안</a> · <a href="../classes/archer-front.png">궁수 시안</a> · <a href="../shared-hair/mage-hair-front.png">헤어 시안</a></p>
+<script type="module">
+import {loadAssets,drawCharacter} from './compose.js';
+window.pilotReady=(async()=>{
+ const assets=await loadAssets();const {manifest}=assets;
+ let direction='front';let tick=0;
+ const cards=[];
+ const options=(entries,selected)=>Object.entries(entries).map(([id,v])=>{const o=document.createElement('option');o.value=id;o.textContent=v.name;o.selected=id===selected;return o;});
+ for(const body of Object.keys(manifest.bodies))for(const head of Object.keys(manifest.heads)){
+  const card=document.createElement('section');card.className='card';
+  const title=document.createElement('h2');title.textContent=`조합 ${cards.length+1}`;
+  const stage=document.createElement('div');stage.className='stage';
+  const canvas=document.createElement('canvas');canvas.width=canvas.height=manifest.cell;canvas.setAttribute('aria-label',`${manifest.bodies[body].name}와 ${manifest.heads[head].name}`);stage.append(canvas);
+  const bodyLabel=document.createElement('label');bodyLabel.textContent='몸통';const bodySelect=document.createElement('select');bodySelect.dataset.body='';bodySelect.append(...options(manifest.bodies,body));bodyLabel.append(bodySelect);
+  const headLabel=document.createElement('label');headLabel.textContent='공용 헤어';const headSelect=document.createElement('select');headSelect.dataset.head='';headSelect.append(...options(manifest.heads,head));headLabel.append(headSelect);
+  card.append(title,stage,bodyLabel,headLabel);document.querySelector('#cards').append(card);
+  const entry={canvas,bodySelect,headSelect};cards.push(entry);
+  for(const el of [bodySelect,headSelect])el.addEventListener('change',()=>{canvas.setAttribute('aria-label',`${manifest.bodies[bodySelect.value].name}와 ${manifest.heads[headSelect.value].name}`);render();});
+ }
+ const walking=document.querySelector('#walking'),frame=document.querySelector('#frame'),layer=document.querySelector('#layer');
+ function render(){
+   const column=walking.checked?1+Math.floor(tick/manifest.frameMs)%4:Number(frame.value);
+   document.querySelector('#frameValue').value=String(column);
+   for(const c of cards){const ctx=c.canvas.getContext('2d');ctx.clearRect(0,0,96,96);drawCharacter(ctx,assets,c.bodySelect.value,c.headSelect.value,direction,column,{layer:layer.value});}
+ }
+ document.querySelectorAll('[data-dir]').forEach(button=>button.addEventListener('click',()=>{direction=button.dataset.dir;document.querySelectorAll('[data-dir]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();}));
+ walking.addEventListener('change',()=>{frame.disabled=walking.checked;render();});frame.addEventListener('input',render);layer.addEventListener('change',render);
+ document.querySelector('#zoom').addEventListener('change',e=>{for(const {canvas}of cards)canvas.style.width=canvas.style.height=e.target.value+'px';});
+ document.querySelector('#status').textContent='2개 몸통 · 2개 공용 헤어 · 네 방향';
+ render();const start=performance.now();function animate(now){tick=now-start;if(walking.checked)render();requestAnimationFrame(animate);}requestAnimationFrame(animate);
+ return {assets,render,drawCharacter};
+})().catch(error=>{document.querySelector('#status').textContent='부품을 불러오지 못했습니다: '+error.message;throw error;});
+</script></body></html>

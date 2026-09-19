@@ -1,11 +1,9 @@
 // 실행: python art/sprites-v4/serve-preview.py, 별도 터미널에서 node art/sprites-v4/verify-browser.mjs
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import os from 'node:os';
-import {fileURLToPath,pathToFileURL} from 'node:url';
+import {fileURLToPath} from 'node:url';
 const here=path.dirname(fileURLToPath(import.meta.url));
-const {chromium}=await import('playwright').catch(()=>import(pathToFileURL(path.join(os.homedir(),
-  '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs'))));
+import {chromium} from '../../game/node_modules/playwright-core/index.mjs';
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'msedge'}:{})});
 const origin=process.env.WL_PREVIEW_URL || 'http://127.0.0.1:8766';
 const errors=[];
@@ -16,7 +14,9 @@ try {
   await page.waitForFunction(()=>document.querySelector('#status').textContent==='세 외형 준비 완료');
   const summary=await page.evaluate(()=>{
     let frames=0;
-    for(const preset of WLSprites.illustrations())for(const hair of WLSprites.hairstyles({sprite:preset.id}))for(const dir of WLSprites.DIRS)for(let p=-1;p<4;p++){
+    // The original pixel-art contract remains binary-alpha and 96px. HD art has
+    // its own smooth-alpha verification in art/sd-illustration-v1/verify.mjs.
+    for(const preset of ['sd-warrior','sd-archer','sd-rogue'].map(id=>({id})))for(const hair of WLSprites.hairstyles({sprite:preset.id}))for(const dir of WLSprites.DIRS)for(let p=-1;p<4;p++){
       const c=WLSprites.cell({sprite:preset.id,hairstyle:hair.id},dir,p),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;
       let count=0,bottom=0,left=c.width,right=0;
       for(let i=0;i<d.length;i+=4){
@@ -59,36 +59,37 @@ try {
   await page.setViewportSize({width:1280,height:1080});
   await page.goto(origin+'/launcher/');await page.locator('#bNew').click();
   await page.waitForSelector('[data-art]');
-  assert.deepEqual(await page.locator('[data-art]').evaluateAll(es=>es.map(e=>e.value)),['sd-warrior','sd-rogue','sd-archer']);
-  assert.equal(await page.locator('.lookPrev').first().getAttribute('width'),'96');
-  const first=page.locator('.card').first();
+  const first=page.locator('#cards [data-i="0"]');
+  assert.equal(await first.locator('[data-art]').inputValue(),'sd-warrior-male');
+  assert.equal(await first.locator('.lookPrev').getAttribute('width'),'96');
   await first.locator('[data-art]').selectOption('');
   assert.equal(await first.locator('.lookParts').isVisible(),true);
   assert.equal(await first.locator('.lookPrev').getAttribute('width'),'16');
   await first.locator('[data-lk=head] label').nth(6).click();
-  await first.locator('[data-art]').selectOption('sd-warrior');
+  await first.locator('[data-art]').selectOption('sd-warrior-male');
   assert.equal(await first.locator('.lookParts').isVisible(),false);
-  assert.equal(await first.locator('[data-hairstyle] option').count(),5);
+  assert.equal(await first.locator('[data-hairstyle] option').count(),14);
   await first.locator('[data-hairstyle]').selectOption('parted');
-  await first.locator('[data-art]').selectOption('sd-archer');
-  assert.equal(await first.locator('[data-hairstyle]').inputValue(),'default');
-  assert.equal(await first.locator('[data-hairstyle] option[value=parted]').count(),0);
-  await first.locator('[data-art]').selectOption('sd-warrior');
-  for(let i=0;i<3;i++){
-    const card=page.locator('.card').nth(i);
-    await card.locator('[data-hairstyle]').selectOption(['twintails','ponytail','braid'][i]);
-    await card.locator('[data-k=name]').fill('도트검증'+(i+1));
-    await card.locator('[data-k=persona]').fill('신중하게 주변을 살피는 모험가.');
-  }
-  await page.screenshot({path:path.join(here,'hairstyles/launcher-preview.png'),fullPage:true});
-  const saved=page.waitForResponse(r=>r.url().endsWith('/api/party') && r.request().method()==='POST');
-  await page.locator('#bNext').click();const response=await saved;assert.equal(response.status(),200);
-  assert.deepEqual(response.request().postDataJSON().slots.map(s=>s.look.hairstyle),['twintails','ponytail','braid']);
+  await first.locator('[data-art]').selectOption('sd-archer-female');
+  assert.equal(await first.locator('[data-hairstyle]').inputValue(),'parted');
+  await first.locator('[data-hairstyle]').selectOption('twintails');
+  await first.locator('[data-k=name]').fill('도트검증');
+  await first.locator('[data-k=persona]').fill('신중하게 주변을 살피는 모험가.');
+  const saved=page.waitForResponse(r=>r.url().endsWith('/api/characters') && r.request().method()==='POST');
+  await first.locator('[data-preset-save]').click();const response=await saved;assert.equal(response.status(),200);
+  assert.equal((await response.json()).preset.slot.look.hairstyle,'twintails');
   await page.goto(origin+'/viewer/?run=art/sprites-v4/demo-hairstyles.jsonl');
   await page.waitForFunction(()=>document.querySelectorAll('.face.sd-face').length===3);
   assert.equal(await page.locator('#err').textContent(),'');
   await page.locator('#mapScale').selectOption('close');
-  assert.deepEqual(await page.evaluate(()=>Object.values(looks).map(l=>l.hairstyle)),['long','braid','ponytail']);
+  assert.equal(await page.evaluate(async()=>{
+    const text=await (await fetch('/art/sprites-v4/demo-hairstyles.jsonl')).text();
+    const meta=text.trim().split('\n').map(JSON.parse).find(line=>line.kind==='run_meta');
+    return meta.party.every(member=>{
+      const face=document.querySelector(`[data-face="${member.char}"]`);
+      return face?.toDataURL()===WLSprites.cell(member.look,'front',-1).toDataURL();
+    });
+  }),true);
   await page.screenshot({path:path.join(here,'hairstyles/viewer-preview.png'),fullPage:true});
   await page.locator('#bPlay').click();
   await page.waitForFunction(()=>document.querySelector('#slider').value!=='0');

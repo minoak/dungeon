@@ -12,7 +12,7 @@ import { townTerrainData, TOWN_PROP_CELL, TOWN_PROP_FOOT, TOWN_NPC_CELL, TOWN_NP
 import type { FrameChange } from '../play/Playback';
 import { TILE, tileIndex, type Tileset, type TilesCfg } from '../assets/tiles';
 import { FOOT_Y, frameIndex, portraitCanvas, queueSdSheets, registerAnims, resolveMember, sheetKey,
-         walkAnimKey, type SdAtlas } from '../assets/sd';
+         walkAnimKey, sdMetrics, configureSdTextures, type SdAtlas } from '../assets/sd';
 import { cellKey } from '../world/Sight';
 import { ROOT } from '../paths';
 import { queueWorld, registerWorldAnims, terrainFrame, TERRAIN_CELL, WORLD_CELL, WORLD_FOOT,
@@ -76,6 +76,7 @@ export class DungeonScene extends Phaser.Scene {
     const src = this.textures.get('tiny').getSourceImage() as HTMLImageElement;
     this.cols = Math.max(1, Math.floor(src.width / this.ts.tile));
     registerAnims(this.anims, this.atlas);
+    configureSdTextures(this.textures, this.atlas);
     registerWorldAnims(this.anims);
     registerNpcAnims(this.anims);
     this.footprints = this.add.graphics().setDepth(DEPTH.footprint);
@@ -88,7 +89,16 @@ export class DungeonScene extends Phaser.Scene {
     this.app.playback.on('frame', ch => this.applyFrame(ch));
     this.app.focus.on('change', ({ char }) => this.follow(char, true));
     // 판 교체(B4 적발): 새 판의 levelIdx 가 옛 판과 같으면(0→0) 층 재구축이 안 돼 옛 타일맵·본 칸 캐시가 남는다 — 강제로 비운다
-    this.app.bus.on('run', () => { this.levelIdx = -1; this.seenCache = null; });
+    this.app.bus.on('run', () => {
+      this.levelIdx = -1; this.seenCache = null;
+      // A different run can reuse character IDs with different art/resolution.
+      // Release the previous run's actors, animations and camera target together.
+      this.cameras.main.stopFollow(); this.followChar = null;
+      for (const a of this.actors.values()) {
+        this.tweens.killTweensOf(a.sprite); a.sprite.destroy(); a.label.destroy();
+      }
+      this.actors.clear();
+    });
     this.app.bus.emit('scene', this);
     const cur = this.app.playback.cur;
     if (cur) this.applyFrame({ prev: null, cur, idx: this.app.playback.idx, mode: 'seek' });
@@ -109,7 +119,7 @@ export class DungeonScene extends Phaser.Scene {
   /** 캐릭터 머리 위(월드 px) — 말풍선 앵커. */
   headOf(char: Char): { x: number; y: number } | null {
     const a = this.actors.get(char);
-    return a ? { x: a.sprite.x, y: a.sprite.y - (FOOT_Y - 6) * a.sprite.scaleY } : null;
+    return a ? { x: a.sprite.x, y: a.sprite.y - a.sprite.displayHeight * (a.sprite.originY - 6 / this.atlas.cell) } : null;
   }
   /** 마을 NPC 머리 위(월드 px) — 이름으로 찾는다(D69 NPC 말풍선 앵커). 그려져 있지 않으면 null. */
   npcHeadOf(name: string): { x: number; y: number } | null {
@@ -385,7 +395,7 @@ export class DungeonScene extends Phaser.Scene {
 
   /** The authored town's wide composition needs more readable people. Keep feet
    * anchored to the same cells, and restore normal scale when leaving this map. */
-  private get characterScale(): number { return this.townVisual?.art ? 1.6 : 1; }
+  private get characterScale(): number { return this.townVisual?.art ? 2 : 1; }
 
   private ensureActor(b: Bot): Actor {
     let a = this.actors.get(b.char);
@@ -393,9 +403,10 @@ export class DungeonScene extends Phaser.Scene {
     const run = this.app.run!;
     const member = run.party.find(p => p.char === b.char);
     const key = sheetKey(resolveMember(member, b.job || run.jobs[b.char], this.atlas));
+    const metrics = sdMetrics(this.atlas, key);
     const w = this.worldOf(b.x, b.y);
     const sprite = this.add.sprite(w.x, w.y, key, frameIndex(this.atlas, 'front', -1))
-      .setOrigin(0.5, FOOT_Y / this.atlas.cell).setDepth(DEPTH.stand + b.y * 0.01);
+      .setOrigin(0.5, metrics.footY / metrics.cell).setDepth(DEPTH.stand + b.y * 0.01);
     const label = this.add.text(w.x, w.y - FOOT_Y, run.names[b.char] || b.char, {
       fontFamily: '"Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif', fontSize: '12px',
       color: run.colors[b.char] || '#fff', stroke: '#000', strokeThickness: 3,
@@ -407,7 +418,7 @@ export class DungeonScene extends Phaser.Scene {
 
   private updateActor(a: Actor, b: Bot, cur: Frame, snap: boolean): void {
     const s = a.sprite;
-    s.setScale(this.characterScale);
+    s.setScale(this.characterScale * sdMetrics(this.atlas, a.key).scale);
     a.label.setScale(this.characterScale);
     const target = this.worldOf(b.x, b.y);
     a.cell = [b.x, b.y]; a.alive = b.alive; a.won = b.won;
@@ -540,7 +551,7 @@ export class DungeonScene extends Phaser.Scene {
   update(): void {
     for (const a of this.actors.values()) {
       if (!a.label.visible) continue;
-      a.label.setPosition(a.sprite.x, a.sprite.y - (a.alive ? FOOT_Y : 30) * a.sprite.scaleY - 2);
+      a.label.setPosition(a.sprite.x, a.sprite.y - a.sprite.displayHeight * (a.alive ? a.sprite.originY : 30 / this.atlas.cell) - 2);
     }
     this.ring.clear();
     const fc = this.app.focus.char;
@@ -548,7 +559,7 @@ export class DungeonScene extends Phaser.Scene {
     if (a && a.sprite.visible && a.alive) {
       const col = Phaser.Display.Color.HexStringToColor(this.app.run?.colors[a.char] || '#ffd166').color;
       this.ring.lineStyle(2, col, 0.9);
-      this.ring.strokeEllipse(a.sprite.x, a.sprite.y - 2, TILE * 0.8 * a.sprite.scaleX, TILE * 0.36 * a.sprite.scaleY);
+      this.ring.strokeEllipse(a.sprite.x, a.sprite.y - 2, TILE * 0.8 * a.sprite.displayWidth / this.atlas.cell, TILE * 0.36 * a.sprite.displayHeight / this.atlas.cell);
     }
   }
 }

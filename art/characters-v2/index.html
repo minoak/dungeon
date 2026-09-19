@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>원더랜드 · 도트 캐릭터 의상실</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#161723;color:#f1e9dd}*{box-sizing:border-box}body{max-width:1160px;padding:28px 24px;margin:auto}h1{font-size:28px;margin:8px 0}p{color:#bebacb;line-height:1.7}.eyebrow{font-size:12px;color:#c0a6ea;letter-spacing:2px}.controls{display:flex;flex-wrap:wrap;align-items:center;gap:12px;background:#252435;padding:15px;border-radius:12px;margin:20px 0}.directions{display:flex;gap:5px}button,select,input{font:inherit}button,select{color:inherit;background:#302d43;border:1px solid #666079;border-radius:6px;padding:8px}button[aria-pressed=true]{background:#68508d}label{display:flex;align-items:center;gap:6px}button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #dfbd7c;outline-offset:2px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card{background:#252334;border:1px solid #484255;border-radius:12px;padding:14px;text-align:center}.card h2{font-size:16px;margin:0}.stage{height:200px;display:grid;place-items:center;background:radial-gradient(ellipse,#74618055,transparent 70%)}canvas{width:192px;height:192px;image-rendering:pixelated}.card label{display:block;text-align:left;font-size:12px;color:#bfb9cc;margin-top:9px}.card select{display:block;width:100%;margin-top:5px;font-size:13px}.note{font-size:13px;border-left:3px solid #9b7ab9;padding-left:14px}a{color:#d4b9ff}#status{font-size:14px;margin:14px 0}#frame{width:90px}@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:480px){body{padding:20px 12px}.grid{grid-template-columns:1fr}.directions{flex-wrap:wrap}}
+</style></head><body>
+<div class="eyebrow">WONDERLAND · PIXEL CHARACTER WARDROBE</div><h1>여덟 가지 바디, 함께 쓰는 열네 가지 헤어</h1>
+<p>전사 · 도적 · 궁수 · 마법사, 각 남성형과 여성형.<br>어느 바디든 같은 헤어를 사용할 수 있습니다. 방향을 돌리고 걸음을 움직여 비교해 보세요.</p>
+<div class="controls"><div class="directions" aria-label="바라보는 방향" role="group"><button data-dir="front" aria-pressed="true">정면</button><button data-dir="right" aria-pressed="false">오른쪽</button><button data-dir="back" aria-pressed="false">뒷면</button><button data-dir="left" aria-pressed="false">왼쪽</button></div>
+<label><input id="walking" type="checkbox" checked>걷기</label><label>동작 <input id="frame" type="range" min="0" max="4" value="0" disabled></label>
+<label>크기 <select id="zoom"><option value="96">96px</option><option value="192" selected>192px</option></select></label>
+<label>전체 헤어 <select id="allHair"><option value="">각 바디의 기본 머리</option></select></label></div>
+<div id="status" role="status">의상실을 준비하고 있습니다…</div><main class="grid" id="cards"></main>
+<p class="note">런처에 등록된 도트 외형 112조합입니다. 이 비교 화면의 선택은 캐릭터에 저장되지 않으며, 실제 선택과 저장은 런처에서 할 수 있습니다. 머리와 눈 색은 각 헤어의 고정 색입니다.</p>
+<p><a href="../../game/?run=art/characters-v2/preview-run.jsonl&focus=1&t=1">마을에서 크기 확인하기 →</a></p>
+<script type="module">
+import{loadAssets,drawCharacter}from'../character-bases-v1/modular-pilot/compose.js';
+window.wardrobeReady=(async()=>{
+const assets=await loadAssets(new URL('./',import.meta.url)),{manifest}=assets,cards=[];let direction='front',tick=0;
+const options=(entries,value)=>Object.entries(entries).map(([id,v])=>{const o=document.createElement('option');o.value=id;o.textContent=v.name;o.selected=id===value;return o;});
+const allHair=document.querySelector('#allHair');allHair.append(...options(manifest.heads,''));allHair.value='';
+for(const [id,b]of Object.entries(manifest.bodies)){
+ const section=document.createElement('section');section.className='card';
+ const title=document.createElement('h2');title.textContent=b.name;
+ const stage=document.createElement('div');stage.className='stage';const canvas=document.createElement('canvas');canvas.width=canvas.height=96;canvas.setAttribute('aria-label',b.name);stage.append(canvas);
+ const label=document.createElement('label');label.textContent='바디';const body=document.createElement('select');body.dataset.body='';body.append(...options(manifest.bodies,id));label.append(body);
+ const hl=document.createElement('label');hl.textContent='공용 헤어';const head=document.createElement('select');head.dataset.head='';head.append(...options(manifest.heads,b.defaultHair));hl.append(head);
+ section.append(title,stage,label,hl);document.querySelector('#cards').append(section);cards.push({canvas,body,head});
+ body.onchange=()=>{title.textContent=manifest.bodies[body.value].name;canvas.setAttribute('aria-label',title.textContent);render();};head.onchange=()=>{allHair.value='';render();};
+}
+const walking=document.querySelector('#walking'),frame=document.querySelector('#frame');
+function render(){const col=walking.checked?1+Math.floor(tick/manifest.frameMs)%4:Number(frame.value);for(const c of cards){const g=c.canvas.getContext('2d');g.clearRect(0,0,96,96);drawCharacter(g,assets,c.body.value,c.head.value,direction,col);}}
+document.querySelectorAll('[data-dir]').forEach(b=>b.onclick=()=>{direction=b.dataset.dir;document.querySelectorAll('[data-dir]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));render();});
+walking.onchange=()=>{frame.disabled=walking.checked;render();};frame.oninput=render;
+document.querySelector('#zoom').onchange=e=>{for(const c of cards)c.canvas.style.width=c.canvas.style.height=e.target.value+'px';};
+allHair.onchange=()=>{for(const c of cards)c.head.value=allHair.value||manifest.bodies[c.body.value].defaultHair;render();};
+document.querySelector('#status').textContent='8종 바디 × 14종 공용 헤어 = 112조합 · 네 방향과 걷기';render();
+const start=performance.now();function animate(now){tick=now-start;if(walking.checked)render();requestAnimationFrame(animate);}requestAnimationFrame(animate);
+return{assets,drawCharacter,render};
+})().catch(e=>{document.querySelector('#status').textContent='불러오기 실패: '+e.message;throw e;});
+</script></body></html>

@@ -1,8 +1,8 @@
-// SD 도트 캐릭터(viewer/assets/sprites/sd/atlas.json v2) → Phaser 스프라이트시트·애니메이션.
-// 규격(art/sprites-v4/README): 셀 96px, 행 = directions 순서(front,right,back,left), 열 0 정지·1~4 걷기,
+// SD 캐릭터(viewer/assets/sprites/sd/atlas.json v3) → Phaser 스프라이트시트·애니메이션.
+// 기본 셀 96px, 일러스트는 프리셋별 cell/footY/filter. 행 = directions 순서(front,right,back,left), 열 0 정지·1~4 걷기,
 // frame_ms 160, 발 바닥 y=91 → origin (0.5, 91/96). 헤어별 PNG 는 전체 캐릭터 프레임(가발 레이어 아님).
 // 선택값 = look.sprite + look.hairstyle. look.sprite 가 없는 옛 판 = 직업별 기본 SD 로 폴백(계획 §8 제안).
-import type Phaser from 'phaser';
+import Phaser from 'phaser';
 import type { Dir, Look, PartyMember } from '../stream/types';
 import { ROOT } from '../paths';
 
@@ -11,7 +11,8 @@ export const SD_ATLAS_URL = SD_DIR + 'atlas.json';
 export const FOOT_Y = 91;                        // 셀 안 발 바닥 y
 
 export interface SdHairstyle { name: string; sheet: string }
-export interface SdPreset { name: string; sheet: string; job: string; hairstyles?: Record<string, SdHairstyle> }
+export interface SdPreset { name: string; sheet: string; job: string; hairstyles?: Record<string, SdHairstyle>;
+  cell?: number; footY?: number; filter?: 'nearest' | 'linear' }
 export interface SdAtlas {
   version: number; cell: number; directions: Dir[]; columns: number; frame_ms: number; display_scale: number;
   presets: Record<string, SdPreset>;
@@ -27,13 +28,29 @@ export async function fetchAtlas(): Promise<SdAtlas> {
 /** 텍스처 키 — 프리셋×헤어 한 장. */
 export const sheetKey = (c: SdChoice): string => `sd|${c.sprite}|${c.hairstyle}`;
 
+/** Texture resolution is independent of the 96px world/display footprint. */
+export function sdMetrics(atlas: SdAtlas, key: string): { cell: number; footY: number; scale: number; smooth: boolean } {
+  const p = atlas.presets[key.split('|')[1]];
+  const cell = p?.cell ?? atlas.cell;
+  return { cell, footY: p?.footY ?? FOOT_Y * cell / atlas.cell, scale: atlas.cell / cell, smooth: p?.filter === 'linear' };
+}
+
+export function configureSdTextures(textures: Phaser.Textures.TextureManager, atlas: SdAtlas): void {
+  for (const [id, p] of Object.entries(atlas.presets)) {
+    for (const hairstyle of Object.keys(p.hairstyles || { default: {} })) {
+      const key = sheetKey({ sprite: id, hairstyle });
+      if (textures.exists(key)) textures.get(key).setFilter(p.filter === 'linear' ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST);
+    }
+  }
+}
+
 /** 로더에 시트 전부 등록(부팅 preload 에서). 헤어가 없는 프리셋은 default 한 장. */
 export function queueSdSheets(load: Phaser.Loader.LoaderPlugin, atlas: SdAtlas): void {
   for (const [id, p] of Object.entries(atlas.presets)) {
     const hs = p.hairstyles && Object.keys(p.hairstyles).length ? p.hairstyles : { default: { name: '기본', sheet: p.sheet } };
     for (const [hid, h] of Object.entries(hs)) {
       load.spritesheet(sheetKey({ sprite: id, hairstyle: hid }), SD_DIR + h.sheet,
-                       { frameWidth: atlas.cell, frameHeight: atlas.cell });
+                       { frameWidth: p.cell ?? atlas.cell, frameHeight: p.cell ?? atlas.cell });
     }
   }
 }
@@ -82,7 +99,7 @@ export function registerAnims(anims: Phaser.Animations.AnimationManager, atlas: 
   }
 }
 
-/** 정면 정지 프레임에서 얼굴·어깨를 잘라 초상 캔버스로(칩용, 최근접 확대). */
+/** 정면 얼굴·어깨 초상. 원본 해상도와 프리셋의 보간 방식을 함께 적용한다. */
 export function portraitCanvas(textures: Phaser.Textures.TextureManager, atlas: SdAtlas, key: string,
                                size = 56): HTMLCanvasElement | null {
   if (!textures.exists(key)) return null;
@@ -91,9 +108,12 @@ export function portraitCanvas(textures: Phaser.Textures.TextureManager, atlas: 
   c.width = c.height = size;
   const g = c.getContext('2d');
   if (!g) return null;
-  g.imageSmoothingEnabled = false;
+  const metrics = sdMetrics(atlas, key), ratio = metrics.cell / atlas.cell;
+  g.imageSmoothingEnabled = metrics.smooth;
+  g.imageSmoothingQuality = 'high';
+  c.style.imageRendering = metrics.smooth ? 'auto' : 'pixelated';
   const row = Math.max(0, atlas.directions.indexOf('front'));
   // 셀 96 중 머리~어깨: x 20..76, y 4..60 (56×56) — 발은 초상에 안 넣는다
-  g.drawImage(img, 0 * atlas.cell + 20, row * atlas.cell + 4, 56, 56, 0, 0, size, size);
+  g.drawImage(img, 20 * ratio, row * metrics.cell + 4 * ratio, 56 * ratio, 56 * ratio, 0, 0, size, size);
   return c;
 }

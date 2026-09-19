@@ -33,7 +33,7 @@ export function installChips(app: App): void {
       root.appendChild(chip);
       const face = chip.querySelector('canvas.face') as HTMLCanvasElement;
       const pc = app.scene?.portrait(c, 56);
-      if (pc) { const g = face.getContext('2d'); if (g) { g.imageSmoothingEnabled = false; g.drawImage(pc, 0, 0); } }
+      if (pc) { face.style.imageRendering = pc.style.imageRendering; const g = face.getContext('2d'); if (g) { g.imageSmoothingEnabled = false; g.drawImage(pc, 0, 0); } }
       nodes.set(c, { root: chip, face, hpfill: chip.querySelector('.hpfill') as HTMLElement,
                      hpnum: chip.querySelector('.hpnum') as HTMLElement, tags: chip.querySelector('.tags') as HTMLElement });
     });

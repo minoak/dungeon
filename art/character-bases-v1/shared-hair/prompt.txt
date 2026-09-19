@@ -1,0 +1,11 @@
+MODE: Built-in image_gen
+
+Use case: stylized-concept.
+Asset type: Wonderland SD pixel-art character customization, THREE NEW SHARED HAIRSTYLE front-view comparison, a head-and-shoulders concept board.
+Input image 1 is the approved male/female mage concept and supplies hair color, appealing subculture anime eyes, detailed crisp pixel art and overall aesthetic. Input image 2 supplies existing game's compact SD pixel style. Style references only.
+Make exactly THREE evenly spaced HEAD-AND-SHOULDERS portraits in one horizontal row, all same head size, same eye level, same scale and straight front view, on plain warm pale-gray background with generous margins. Frame from hair top to a small strip of shoulders; long hair remains fully visible down to tips. No text or labels. These are shared hairstyle concepts that will be available on every outfit, not exclusive mage classes.
+All three have silver-lavender hair and amber eyes, the same neutral ivory tunic collar, no robes or class-specific equipment. Hair is the main subject. Hats are ABSOLUTELY absent. No crowns, horns, staffs, spellbooks, magic effects or star ornaments. Cute premium Japanese anime subculture character design, detailed controlled pixel clusters, clear dark outlines, crisp shading; not realistic portraits and not smooth vector illustrations.
+LEFT: male-presenting SD face, short layered silver-lavender hair, swept asymmetric long fringe with visible eyebrow, light feathered nape, a little upward flick, attractive calm confident eyes. Different from messy spiky brown warrior haircut: soft flowing layered silhouette.
+CENTER: female-presenting SD face, medium-long WAVY TWIN-TAILS with soft large S-shaped waves reaching shoulders, side-swept bangs, two small plain dark ribbons, playful warm expression. Reinterpret mage twin-tails with clearly softer wavy outline; do not make straight spiky bunches.
+RIGHT: female-presenting SD face, long STRAIGHT sleek silver-lavender hair, neat blunt bangs just above eyebrows, symmetric face-framing side locks extending below shoulders, reserved slight smile, no hair accessories. Distinct clean long vertical silhouette contrasting with center's waves.
+Keep heads the same actual size; no shrinking the male head. Fully clothed shoulders, no jewelry clutter. Portrait sheet only, no full-body figures and no sprite animation grid.

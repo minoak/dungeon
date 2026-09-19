@@ -1,0 +1,10 @@
+{
+  "frames": 80,
+  "unchangedBodyFrames": 40,
+  "directions": 4,
+  "combinations": 4,
+  "uiPreservesSelections": true,
+  "walkingChangesFrames": true,
+  "mobileOverflow": false,
+  "browserErrors": []
+}

@@ -9,7 +9,7 @@ const output = path.resolve(here, '../../viewer/assets/sprites/sd');
 const playwright = await import('playwright').catch(() => import(pathToFileURL(path.join(
   os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs'))));
 const browser = await playwright.chromium.launch({headless:true, ...(process.platform === 'win32' ? {channel:'msedge'} : {})});
-const manifest = {version:2, cell:96, directions:['front','right','back','left'], columns:5,
+const manifest = {version:3, cell:96, directions:['front','right','back','left'], columns:5,
   frame_ms:160, display_scale:1.5, presets:{}};
 const hairStyles={
   warrior:[['default','헝클어진 머리'],['parted','가르마'],['halfup','반묶음'],['long','긴 머리'],['twintails','양갈래']],
@@ -110,6 +110,11 @@ try {
     preset.hairstyles[style]={name:hairName,sheet:`${stem}.png`};
     }
   }
+  // Independently authored presets (e.g. high-resolution illustrations) survive
+  // rebuilding the original three pixel-art costume families.
+  const previous=JSON.parse(await fs.readFile(path.join(output,'atlas.json'),'utf8').catch(()=>'{}'));
+  for(const [id,preset] of Object.entries(previous.presets||{}))if(!manifest.presets[id])manifest.presets[id]=preset;
+  for(const [id,preset] of Object.entries(manifest.presets))if(previous.presets?.[id]?.selectable===false)preset.selectable=false;
   await fs.writeFile(path.join(output,'atlas.json'),JSON.stringify(manifest,null,2)+'\n');
   await fs.writeFile(path.join(here,'build-report.json'),JSON.stringify(reports,null,2)+'\n');
   console.log(`SD 도트 외형 ${Object.keys(manifest.presets).length}종, 헤어 포함 ${Object.keys(reports).length}종 × 20 = ${Object.keys(reports).length*20}프레임 생성:`,output);

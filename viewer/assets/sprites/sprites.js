@@ -56,9 +56,10 @@
       const col = phase == null || phase < 0 ? 0 : 1 + ((Math.floor(phase) % 4) + 4) % 4;
       const key = ['sd', look.sprite, look.hairstyle || 'default', dir, col].join('|');
       if (cache.has(key)) return cache.get(key);
-      const c = document.createElement('canvas'); c.width = c.height = SD.cell;
-      c.getContext('2d').drawImage(sdSheet(look), col * SD.cell,
-        SD.directions.indexOf(dir) * SD.cell, SD.cell, SD.cell, 0, 0, SD.cell, SD.cell);
+      const size = SD.presets[look.sprite].cell || SD.cell;
+      const c = document.createElement('canvas'); c.width = c.height = size;
+      c.getContext('2d').drawImage(sdSheet(look), col * size,
+        SD.directions.indexOf(dir) * size, size, size, 0, 0, size, size);
       cache.set(key, c); return c;
     }
     if (!DATA || !look || !DATA.heads[look.head] || !DATA.bodies[look.body]) return null;
@@ -100,7 +101,8 @@
         Object.entries(preset.hairstyles || {default:{name:'기본 머리',sheet:preset.sheet}}).map(async ([style, art]) => {
         const img = new Image(); img.src = new URL(art.sheet, base).href;
         await img.decode();
-        if (img.width !== config.cell * config.columns || img.height !== config.cell * config.directions.length)
+        const size = preset.cell || config.cell;
+        if (img.width !== size * config.columns || img.height !== size * config.directions.length)
           throw new Error('SD 시트 크기 불일치: ' + id);
         hairSheets.set(id + '|' + style, img);
         if(style === 'default') sheets.set(id, img);
@@ -117,18 +119,21 @@
 
   root.WLSprites = {
     load, cell, palette, indices, DIRS, isSD,
+    smooth(look) { return !!(isSD(look) && SD.presets[look.sprite].filter === 'linear'); },
     get data() { return DATA; },
     get ready() { return !!DATA; },
     frameMs(look) { return isSD(look) ? SD.frame_ms :
       (DATA && DATA.animations && DATA.animations.walk && DATA.animations.walk.frame_ms) || 140; },
     displayScale(look) { return isSD(look) ? SD.display_scale : 1; },
-    illustrations() { return SD ? Object.entries(SD.presets).filter(([id]) => sheets.has(id))
-      .map(([id, p]) => ({id, name:p.name, job:p.job})) : []; },
-    // 머리 선택은 외형마다 따로 등재한다. 로드에 실패한 선택지는 표시하지 않는다.
+    illustrations(look) { return SD ? Object.entries(SD.presets)
+      .filter(([id,p]) => sheets.has(id) && (p.selectable !== false || id === look?.sprite))
+      .map(([id, p]) => ({id, name:p.name, job:p.job, sex:p.sex})) : []; },
+    defaultHair(look) { return SD?.presets[look?.sprite]?.defaultHair || 'default'; },
+    // 새 바디는 동일한 공용 헤어 id를 쓴다. default는 저장 호환용 별칭이다.
     hairstyles(look) {
       const p = SD && look && SD.presets[look.sprite];
       return p ? Object.entries(p.hairstyles || {default:{name:'기본 머리'}})
-        .filter(([id]) => hairSheets.has(look.sprite + '|' + id)).map(([id,h]) => ({id,name:h.name})) : [];
+        .filter(([id]) => (!p.sharedHair || id !== 'default') && hairSheets.has(look.sprite + '|' + id)).map(([id,h]) => ({id,name:h.name})) : [];
     },
     // 파츠 목록(론처 칩용) — {heads:[{id,name,group}], bodies:[{id,name}]}
     parts() {

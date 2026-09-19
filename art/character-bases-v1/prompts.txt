@@ -1,0 +1,20 @@
+MODE: Built-in image_gen
+
+INITIAL PROMPT
+Use case: stylized-concept.
+Asset type: Wonderland game character art, front-view BODY BASE COMPARISON concept, not an animation sheet.
+Input image 1 (warrior.png) and input image 2 (archer.png) are STYLE REFERENCES ONLY. Match their charming subculture anime SD pixel-art style, expressive large eyes, crisp small pixel clusters, subtle shading, warm outlines and approximately 2.3-head-tall proportions. Do not reproduce their sprite-sheet layout or weapons.
+Create exactly TWO full-body adult fantasy adventurer base characters side by side on a clean pale warm-gray background: male-presenting body on the left, female-presenting body on the right. Same total height, same head size, same neutral front-facing standing pose with arms slightly away from torso, same feet baseline, equal scale. Plenty of clear margin. No text, no labels, no extra panels or props.
+Both wear the SAME modest simple cream short-sleeved tunic, brown waist belt, charcoal fitted trousers, and brown ankle boots, no armor, no cape, no skirt, no weapon. The male base has slightly broader square shoulders, a gently straight torso, slightly sturdier arms and legs. The female base has slightly narrower softer shoulders, a subtly defined waist and gently wider hips, slightly slimmer limbs. Keep differences understated but legible in small game sprites. Both bodies must feel like the same game's SD anatomy. Fully clothed, no sexualized anatomy or exaggerated curves.
+Both have similarly sized short brown hair (ears visible, no large accessories), same skin tone, same eye color. Female softer face with a small upper lash detail; male slightly straighter brow. Hair silhouette size and skull size MUST remain equal: the user wants fewer MALE HAIRSTYLE OPTIONS in the eventual preset roster, NOT physically smaller male heads or hair.
+This is a polished first concept for two reusable body silhouettes. Keep compact chunky game-sprite proportions, avoid tall realistic bodies, avoid smooth vector art, avoid painterly blur, avoid infant proportions. Do not put them in a scene.
+
+FINAL REVISION PROMPT
+Use case: identity-preserve.
+Edit target: image 1, the two clothed male/female base characters. Supporting STYLE AND PROPORTION reference: image 2, the existing Wonderland warrior sprite sheet.
+Make a revised front-view comparison with exactly those TWO base characters, same outfits, palette, hair, adult identities, left male/right female order and modest silhouette differences, but radically SHORTEN their bodies to match the compact SD anatomy of the warrior in image 2. The current bodies in image 1 are far too tall and leggy.
+MANDATORY proportion: each whole character from hair top to soles must be only about 2.2 times the height of the hair-and-head silhouette. Head and hair should occupy about 45 percent of total character height. Short tiny torso, very short chunky legs, compact hands, squat small boots. No long shins or long forearms. Keep same head size between the pair and same feet baseline. Male has slightly broader straighter shoulders/torso; female has subtle waist taper, narrower shoulders, gently rounder hip silhouette. Fully clothed identical cream tunic, brown belt, dark trousers, brown boots. Do not exaggerate chest or anatomy.
+Render as clean crisp GAME PIXEL ART like reference image 2, not a large smooth illustration with pixelated edges. Use small economical pixel clusters, limited shaded ramps, warm dark outline, subculture anime eyes. Two full-body characters only, front-facing neutral idle stance with arms close to sides, plain pale warm-gray background, no text or labels, no weapons. Think actual 96x96 sprite proportions enlarged with nearest-neighbor for review, not realistic anime doll proportions. Give generous margins.
+
+Revision input 1: C:/Users/akals/.codex/generated_images/01a0b91a-7b6f-7e90-a997-73d2f36dd08a/exec-28ef2cb1-6b24-486e-9353-094d2dec2adf.png
+Final output: body-comparison.png

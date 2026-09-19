@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "bodies": 8,
+  "hairs": 14,
+  "combinations": 112,
+  "frames": 2240,
+  "unchangedBodyFrames": 160,
+  "launcherPreservesHair": true,
+  "launcherSaveLoad": true,
+  "appearanceDoesNotChangeJobOrSex": true,
+  "oldReplay": true,
+  "legacy": {
+    "old": 96,
+    "hd": 256,
+    "selectedOld": true
+  },
+  "walking": true,
+  "mobileOverflow": false,
+  "llmCalls": 0,
+  "errors": []
+}

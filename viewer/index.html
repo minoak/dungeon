@@ -564,7 +564,8 @@ function drawBot(b, f, alpha = 1, rot = 0) {
   if (!img) { drawCell('bot:' + b.job, b.x, b.y, alpha, rot, colors[b.char]); return; }
   const px = b.x * T * S, py = b.y * T * S, sz = T * S;
   ctx.save();
-  ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = spr.smooth(look);
+  ctx.imageSmoothingQuality = 'high';
   if (rot) { ctx.translate(px + sz / 2, py + sz / 2); ctx.rotate(rot); ctx.translate(-sz / 2, -sz / 2); }
   else ctx.translate(px, py);
   // SD의 발은 같은 타일에 고정하고 머리만 위로 확장한다. 이동 좌표·판정 크기는 그대로다.
@@ -722,6 +723,7 @@ function renderParty() {
       const img = WLSprites.cell(looks[cv2.dataset.face], 'front', -1);
       if (img) {
         cv2.width = cv2.height = img.width;
+        cv2.style.imageRendering = WLSprites.smooth(looks[cv2.dataset.face]) ? 'auto' : 'pixelated';
         cv2.classList.toggle('sd-face', WLSprites.isSD(looks[cv2.dataset.face]));
         const g = cv2.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(img, 0, 0);
       }

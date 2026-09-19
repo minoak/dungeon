@@ -334,6 +334,7 @@ async function loadSprites() {                  // 미리보기 합성기 — �
 function drawLook(cv, look) {
   const img = (look && window.WLSprites && WLSprites.ready) ? WLSprites.cell(look, 'front', -1) : null;
   cv.width = cv.height = img ? img.width : 16;
+  cv.style.imageRendering = window.WLSprites?.smooth(look) ? 'auto' : 'pixelated';
   const g = cv.getContext('2d');
   g.imageSmoothingEnabled = false; g.clearRect(0, 0, cv.width, cv.height);
   if (img) g.drawImage(img, 0, 0);
@@ -344,7 +345,7 @@ function lookBlock(s, lk) {
   const rows = LOOK_KEYS.map(k => `<div class="swrow"><span class="swlab">${LOOK_LABELS[k]}</span>` +
     (lk.swatches[k] || []).map(c => `<button type="button" class="sw ${s.look.colors[k] === c ? 'on' : ''}" data-sw="${k}" data-c="${c}" style="background:${c}" title="${c}"></button>`).join('') +
     `<input type="color" data-sw-free="${k}" value="${esc(s.look.colors[k])}" title="자유 색"></div>`).join('');
-  const illustrations = window.WLSprites ? WLSprites.illustrations() : [];
+  const illustrations = window.WLSprites ? WLSprites.illustrations(s.look) : [];
   return `<label class="f">외형 <span class="hint" style="display:inline">— 원하는 모습을 고르세요</span></label>
       <div class="look" data-k="look">
         <canvas class="lookPrev" width="16" height="16" title="정면"></canvas>
@@ -354,7 +355,7 @@ function lookBlock(s, lk) {
           <label class="hint" data-hair-row ${s.look.sprite ? '' : 'hidden'}>헤어스타일
             <select data-hairstyle aria-label="헤어스타일"></select>
           </label>
-          <span class="hint" data-art-note ${s.look.sprite ? '' : 'hidden'}>의상은 유지하고 머리 모양을 고를 수 있어요.</span>
+          <span class="hint" data-art-note ${s.look.sprite ? '' : 'hidden'}>남녀 바디 8종과 공용 헤어 14종을 자유롭게 조합할 수 있어요. 외형은 실제 직업·성별과 별도로 선택해요.</span>
           <div class="lookParts" ${s.look.sprite ? 'hidden' : ''}>
           <div class="radios" data-lk="head">${chips(lk.heads, 'head')}</div>
           <div class="radios" data-lk="body">${chips(lk.bodies, 'body')}</div>
@@ -640,7 +641,7 @@ async function loadPresets() {
   await loadSprites();                                                 // D37 미리보기 합성기
   for (const s of slots) if (!s.look) {
     s.look = randomLook(s.sex);
-    const art = window.WLSprites && WLSprites.illustrations().find(p => p.job === s.job);
+    const art = window.WLSprites && WLSprites.illustrations().find(p => p.job === s.job && (!p.sex || p.sex === s.sex));
     if (s.look && art) s.look.sprite = art.id;
   }
   if (!matesTouched) mates = defaultMates();                           // D81 첫 화면의 동료 칸은 채워서 시작한다(바로 출발할 수 있게)
@@ -901,7 +902,7 @@ function bindCard(card, i) {
       const hairSelect=lookEl.querySelector('[data-hairstyle]');
       const styles=window.WLSprites ? WLSprites.hairstyles(s.look) : [];
       hairSelect.innerHTML=styles.map(h=>`<option value="${esc(h.id)}">${esc(h.name)}</option>`).join('');
-      hairSelect.value=s.look.hairstyle || 'default';
+      hairSelect.value=s.look.hairstyle && s.look.hairstyle !== 'default' ? s.look.hairstyle : WLSprites.defaultHair(s.look);
       for (const k of ['head', 'body']) {
         lookEl.querySelectorAll(`[data-lk=${k}] label`).forEach(l =>
           l.classList.toggle('on', l.querySelector('input').value === s.look[k]));
@@ -911,8 +912,10 @@ function bindCard(card, i) {
       drawLook(lookEl.querySelector('canvas.lookPrev'), s.look);
     };
     lookEl.querySelector('[data-art]').onchange = e => {
+      const hair=s.look.hairstyle && s.look.hairstyle !== 'default' ? s.look.hairstyle : WLSprites.defaultHair(s.look);
       if(e.target.value) s.look.sprite=e.target.value; else delete s.look.sprite;
-      delete s.look.hairstyle; // 외형마다 허용되는 머리가 다르므로 새 외형은 기본 머리로 시작한다.
+      if(s.look.sprite) s.look.hairstyle=WLSprites.hairstyles(s.look).some(h=>h.id===hair) ? hair : WLSprites.defaultHair(s.look);
+      else delete s.look.hairstyle;
       paintLook();
     };
     lookEl.querySelector('[data-hairstyle]').onchange = e => {s.look.hairstyle=e.target.value;paintLook();};

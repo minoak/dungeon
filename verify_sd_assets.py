@@ -14,11 +14,18 @@ import sheetkit
 
 ROOT = Path(__file__).resolve().parent
 catalog = sheetkit.load_looks()
-assert set(catalog["illustrations"]) == {"sd-warrior", "sd-archer", "sd-rogue"}
+legacy_ids = {"sd-warrior", "sd-archer", "sd-rogue"}
+shared_catalog = json.loads((ROOT / "art/characters-v2/catalog.json").read_text(encoding="utf-8"))
+shared_ids = {"sd-" + body for body in shared_catalog["bodies"]}
+assert len(shared_ids) == 8 and len(shared_catalog["heads"]) == 14
+assert set(catalog["illustrations"]) == legacy_ids | {"sd-warrior-illustration"} | shared_ids
 base = sheetkit.sanitize_look({"head": "M1", "body": "B1"})
 assert "sprite" not in base  # 예전 저장 형식을 임의로 새 외형으로 바꾸지 않는다.
 for sprite, info in catalog["illustrations"].items():
-    assert len(info["hairstyles"]) == (5 if sprite == "sd-warrior" else 3)
+    if sprite in shared_ids:
+        assert set(info["hairstyles"]) == set(shared_catalog["heads"]) | {"default"}
+    else:
+        assert len(info["hairstyles"]) == {"sd-warrior": 5, "sd-archer": 3, "sd-rogue": 3, "sd-warrior-illustration": 1}[sprite]
     assert "default" in info["hairstyles"]
     assert "hairstyle" not in sheetkit.sanitize_look({**base, "sprite": sprite})
     for hairstyle in info["hairstyles"]:
@@ -57,7 +64,7 @@ with tempfile.TemporaryDirectory(prefix="wl_sd_") as tmp:
                DUNGEON_TRAPS="1", DUNGEON_LURKERS="0", DUNGEON_DEPTHS="1",
                DUNGEON_BESTIARY_FILE="", PYTHONIOENCODING="utf-8")
     streams = []
-    for mode in ["hair", "sd", "parts"]:
+    for mode in ["hair", "sd", "parts", "illustration", "shared"]:
         content = copy.deepcopy(party)
         if mode != "hair":
             for member in content.values():
@@ -65,6 +72,13 @@ with tempfile.TemporaryDirectory(prefix="wl_sd_") as tmp:
         if mode == "parts":
             for member in content.values():
                 del member["look"]["sprite"]
+        if mode == "illustration":
+            content["1"]["look"]["sprite"] = "sd-warrior-illustration"
+            content["1"]["look"]["hairstyle"] = "default"
+        if mode == "shared":
+            for member, sprite in zip(content.values(), ["sd-mage-female", "sd-warrior-male", "sd-rogue-female"]):
+                member["look"]["sprite"] = sprite
+                member["look"]["hairstyle"] = "wavy-twintails"
         party_path = tmp / (mode + ".json")
         party_path.write_text(json.dumps(content, ensure_ascii=False), encoding="utf-8")
         state = tmp / mode
@@ -73,15 +87,18 @@ with tempfile.TemporaryDirectory(prefix="wl_sd_") as tmp:
                              cwd=ROOT, env=run_env, capture_output=True, text=True, encoding="utf-8", timeout=60)
         assert run.returncode == 0, run.stderr[-2000:]
         streams.append((state / "stream.jsonl").read_text(encoding="utf-8"))
-    hair, sd, parts = [[json.loads(line) for line in raw.splitlines()] for raw in streams]
-    assert {m["look"]["sprite"] for m in sd[0]["party"]} == set(catalog["illustrations"])
+    hair, sd, parts, illustration, shared = [[json.loads(line) for line in raw.splitlines()] for raw in streams]
+    assert [m["look"]["sprite"] for m in shared[0]["party"]] == ["sd-mage-female", "sd-warrior-male", "sd-rogue-female"]
+    assert all(m["look"]["hairstyle"] == "wavy-twintails" for m in shared[0]["party"])
+    assert illustration[0]["party"][0]["look"]["sprite"] == "sd-warrior-illustration"
+    assert {m["look"]["sprite"] for m in sd[0]["party"]} == legacy_ids
     assert [m["look"]["hairstyle"] for m in hair[0]["party"]] == ["long", "braid", "ponytail"]
     assert all("hairstyle" not in m["look"] for m in sd[0]["party"])
     fields = ["char", "x", "y", "hp", "alive", "won", "bag", "job", "order"]
     def physical(records):
         return [[{k: bot.get(k) for k in fields} for bot in record["bots"]]
                 for record in records if record["kind"] == "tick"]
-    assert physical(hair) and physical(hair) == physical(sd) == physical(parts), "외형이 게임 진행을 바꿨다"
+    assert physical(hair) and physical(hair) == physical(sd) == physical(parts) == physical(illustration) == physical(shared), "외형이 게임 진행을 바꿨다"
     if "--demo" in sys.argv:
         (ROOT / "art/sprites-v4/demo-hairstyles.jsonl").write_text(streams[0], encoding="utf-8")
-print("PASS: SD 외형 3종·헤어 포함 11종 저장·run_meta 전달, 잘못된 조합 거부, 기존 외형 보존, 머리 변경 전후 게임 진행 일치")
+print("PASS: 공용 바디 8종 x 헤어 14종 입력 검증, 기존 외형 보존, run_meta 전달, 외형 변경 전후 게임 진행 일치 (LLM 0콜)")

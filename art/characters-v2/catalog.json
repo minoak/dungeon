@@ -1,0 +1,437 @@
+{
+  "bodies": {
+    "warrior-male": {
+      "name": "전사 · 남성형",
+      "job": "전사",
+      "sex": "남",
+      "defaultHair": "tousled",
+      "source": "../character-bases-v1/modular-pilot/source/warrior-body.png"
+    },
+    "warrior-female": {
+      "name": "전사 · 여성형",
+      "job": "전사",
+      "sex": "여",
+      "defaultHair": "halfup"
+    },
+    "rogue-male": {
+      "name": "도적 · 남성형",
+      "job": "도적",
+      "sex": "남",
+      "defaultHair": "pixie"
+    },
+    "rogue-female": {
+      "name": "도적 · 여성형",
+      "job": "도적",
+      "sex": "여",
+      "defaultHair": "sidebraid-bob"
+    },
+    "archer-male": {
+      "name": "궁수 · 남성형",
+      "job": "궁수",
+      "sex": "남",
+      "defaultHair": "parted"
+    },
+    "archer-female": {
+      "name": "궁수 · 여성형",
+      "job": "궁수",
+      "sex": "여",
+      "defaultHair": "archer-ponytail",
+      "source": "../character-bases-v1/modular-pilot/source/archer-body.png"
+    },
+    "mage-male": {
+      "name": "마법사 · 남성형",
+      "job": "마법사",
+      "sex": "남",
+      "defaultHair": "layered-short"
+    },
+    "mage-female": {
+      "name": "마법사 · 여성형",
+      "job": "마법사",
+      "sex": "여",
+      "defaultHair": "wavy-twintails"
+    }
+  },
+  "heads": {
+    "tousled": {
+      "name": "헝클어진 머리",
+      "source": "hair-brown",
+      "row": 0,
+      "anchors": [
+        [
+          154.56,
+          301
+        ],
+        [
+          474.5,
+          301
+        ],
+        [
+          779.5,
+          301
+        ],
+        [
+          1083.09,
+          301
+        ]
+      ],
+      "chinY": [
+        45,
+        45,
+        45,
+        45
+      ]
+    },
+    "parted": {
+      "name": "가르마",
+      "source": "hair-brown",
+      "row": 1,
+      "anchors": [
+        [
+          155.43,
+          591
+        ],
+        [
+          476.5,
+          591
+        ],
+        [
+          781,
+          591
+        ],
+        [
+          1088.5,
+          591
+        ]
+      ],
+      "chinY": [
+        45,
+        45,
+        45,
+        45
+      ]
+    },
+    "halfup": {
+      "name": "반묶음",
+      "source": "hair-brown",
+      "row": 2,
+      "long": true,
+      "anchors": [
+        [
+          153,
+          881
+        ],
+        [
+          481.25,
+          881
+        ],
+        [
+          778,
+          881
+        ],
+        [
+          1087.5,
+          880
+        ]
+      ],
+      "chinY": [
+        45,
+        45,
+        45,
+        45
+      ]
+    },
+    "long": {
+      "name": "긴 머리",
+      "source": "hair-brown",
+      "row": 3,
+      "long": true,
+      "anchors": [
+        [
+          153.5,
+          1165
+        ],
+        [
+          480.5,
+          1164
+        ],
+        [
+          780,
+          1165
+        ],
+        [
+          1086,
+          1163
+        ]
+      ],
+      "chinY": [
+        45,
+        45,
+        45,
+        45
+      ]
+    },
+    "twintails": {
+      "name": "양갈래",
+      "source": "hair-gold",
+      "row": 0,
+      "long": true,
+      "anchors": [
+        [
+          164,
+          277
+        ],
+        [
+          490,
+          277
+        ],
+        [
+          785,
+          277
+        ],
+        [
+          1100,
+          277
+        ]
+      ],
+      "chinY": [
+        44,
+        44,
+        45,
+        44
+      ]
+    },
+    "archer-ponytail": {
+      "name": "리본 포니테일",
+      "source": "hair-gold",
+      "row": 1,
+      "long": true,
+      "anchors": [
+        [
+          167,
+          579
+        ],
+        [
+          506,
+          578
+        ],
+        [
+          786,
+          578
+        ],
+        [
+          1048,
+          578
+        ]
+      ],
+      "chinY": [
+        44,
+        44,
+        45,
+        44
+      ]
+    },
+    "bob": {
+      "name": "단발",
+      "source": "hair-gold",
+      "row": 2,
+      "anchors": [
+        [
+          166,
+          878
+        ],
+        [
+          482.64,
+          877
+        ],
+        [
+          791,
+          878
+        ],
+        [
+          1084.1,
+          877
+        ]
+      ],
+      "chinY": [
+        44,
+        44,
+        45,
+        44
+      ]
+    },
+    "braid": {
+      "name": "땋은 머리",
+      "source": "hair-gold",
+      "row": 3,
+      "long": true,
+      "anchors": [
+        [
+          161,
+          1164
+        ],
+        [
+          490,
+          1164
+        ],
+        [
+          785,
+          1164
+        ],
+        [
+          1084,
+          1164
+        ]
+      ],
+      "chinY": [
+        45,
+        45,
+        45,
+        45
+      ]
+    },
+    "sidebraid-bob": {
+      "name": "단발 + 옆땋기",
+      "source": "hair-purple",
+      "row": 0,
+      "anchors": [
+        [
+          168.64,
+          302
+        ],
+        [
+          488.83,
+          302
+        ],
+        [
+          791.5,
+          302
+        ],
+        [
+          1084.2,
+          302
+        ]
+      ],
+      "chinY": [
+        45,
+        45,
+        45,
+        45
+      ]
+    },
+    "pixie": {
+      "name": "숏컷",
+      "source": "hair-purple",
+      "row": 1,
+      "anchors": [
+        [
+          170,
+          597
+        ],
+        [
+          499.5,
+          596
+        ],
+        [
+          792.5,
+          597
+        ],
+        [
+          1081.5,
+          596
+        ]
+      ],
+      "chinY": [
+        45,
+        45,
+        45,
+        45
+      ]
+    },
+    "rogue-ponytail": {
+      "name": "높은 포니테일",
+      "source": "hair-purple",
+      "row": 2,
+      "long": true,
+      "anchors": [
+        [
+          147,
+          914
+        ],
+        [
+          510,
+          912
+        ],
+        [
+          789.5,
+          914
+        ],
+        [
+          1059,
+          912
+        ]
+      ],
+      "chinY": [
+        45,
+        45,
+        45,
+        45
+      ]
+    },
+    "layered-short": {
+      "name": "마법사 레이어드 숏컷",
+      "source": "pilot-short",
+      "chinY": [
+        45,
+        45,
+        45,
+        45
+      ]
+    },
+    "wavy-twintails": {
+      "name": "마법사 웨이브 양갈래",
+      "source": "hair-purple",
+      "row": 3,
+      "long": true,
+      "anchors": [
+        [
+          161.95,
+          1207
+        ],
+        [
+          494,
+          1207
+        ],
+        [
+          784,
+          1207
+        ],
+        [
+          1069,
+          1207
+        ]
+      ],
+      "chinY": [
+        45,
+        45,
+        45,
+        45
+      ]
+    },
+    "blunt-long": {
+      "name": "마법사 일자 앞머리 장발",
+      "source": "pilot-long",
+      "long": true
+    }
+  },
+  "headPlacement": {
+    "neckInset": 4,
+    "walkBob": [
+      0,
+      0,
+      1,
+      0,
+      1
+    ],
+    "collarOffset": 4
+  }
+}
