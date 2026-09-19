@@ -300,9 +300,27 @@ else:
           and sorted(pre["looks"]["swatches"]) == sorted(sheetkit.LOOK_KEYS) and len(pre["looks"]["defaults"]) == 4)
     st_sj, sj = call("/viewer/assets/sprites/sprites.json")
     with urllib.request.urlopen(base + "/viewer/assets/sprites/sprites.js", timeout=10) as r_js:
-        js_ok = r_js.status == 200 and b"WLSprites" in r_js.read()
+        js_body = r_js.read()
+        js_ok = r_js.status == 200 and b"WLSprites" in js_body
+        js_cc, js_lm = r_js.headers.get("Cache-Control"), r_js.headers.get("Last-Modified")
     check("③ 정적 서빙(D37): /viewer/assets/sprites/sprites.json(heads 12)·sprites.js(WLSprites) 200 — 론처·뷰어 공용",
           st_sj == 200 and len(sj.get("heads", {})) == 12 and js_ok)
+    # 09-19 "WLSprites.defaultHair is not a function": 론처 화면은 캐시 금지(새 HTML)인데 /viewer/ 자산엔 캐시 지시가 없어
+    # 브라우저가 옛 sprites.js 를 계속 썼다 — 새 화면이 옛 스크립트에 없는 함수를 불렀다. no-cache = 쓸 때마다 물어본다(안 바뀌었으면 304).
+    try:
+        urllib.request.urlopen(urllib.request.Request(base + "/viewer/assets/sprites/sprites.js", headers={"If-Modified-Since": js_lm or ""}), timeout=10)
+        st_304 = 200
+    except urllib.error.HTTPError as e:
+        st_304 = e.code
+    import re as _re
+    with io.open(os.path.join(HERE, "launcher", "index.html"), encoding="utf-8") as f_html:
+        html_calls = set(_re.findall(r"WLSprites\??\.(\w+)\(", f_html.read()))
+    js_api = js_body.decode("utf-8").split("root.WLSprites = {", 1)[-1]           # 공개 객체 안: 메서드 'name(' 와 이름만 늘어놓은 줄 'load, cell, …,'
+    js_defs = set(_re.findall(r"^\s{4}(\w+)\(", js_api, _re.M))
+    for ln in _re.findall(r"^\s{4}((?:\w+,\s*)+)$", js_api, _re.M):
+        js_defs |= set(_re.findall(r"\w+", ln))
+    check("③ /viewer/ 자산은 Cache-Control: no-cache(옛 스크립트가 새 론처 화면과 안 섞인다) · 안 바뀌었으면 304 · 론처 화면이 부르는 WLSprites 함수는 전부 sprites.js 에 있다",
+          js_cc == "no-cache" and bool(js_lm) and st_304 == 304 and bool(html_calls) and html_calls <= js_defs)
     # 거부 테스트를 먼저 — 배경 401자 케이스는 200(절단 저장)이라 파일을 덮어쓴다(게이트 순서 교정 09-05:
     # 이 저장이 뒤의 3인 파티를 덮어써 start 검사가 1인 판을 보는 사고가 있었다).
     st1, r1_ = call("/api/party", {"slots": [{"job": "전사", "traits": [], "name": "a", "sex": "남"}]})

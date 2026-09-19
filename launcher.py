@@ -533,6 +533,12 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")   # 라이브 스트림·론처 페이지는 캐시 금지(09-11: 옛 론처 화면이 남아 마을 체크가 회색으로 보인 사고)
         elif urlparse(self.path).path in GAME_NO_STORE:
             self.send_header("Cache-Control", "no-store")   # 게임 클라이언트 진입 HTML — 새 빌드가 바로 보이게(해시 자산은 기본 캐시)
+        elif self.path.startswith("/viewer/"):
+            # 론처·관전이 같이 쓰는 스프라이트 합성기(sprites.js)·외형 사전(atlas.json)·시트 PNG — 파일 이름에 해시가 없다.
+            # 캐시 지시가 없으면 브라우저가 옛 sprites.js 를 제 판단으로 계속 쓰고, 캐시 금지인 론처 화면(새 HTML)과 섞인다
+            # (09-19 "WLSprites.defaultHair is not a function" — 새 화면이 옛 스크립트에 없는 함수를 불렀다).
+            # no-cache = 저장은 하되 쓸 때마다 서버에 물어본다(안 바뀌었으면 304 — 그림을 다시 내려받지 않는다).
+            self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
     # ── 게임 클라이언트(M3/B5) — /game/… 을 game/dist/… 로 ──
