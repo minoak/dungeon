@@ -8,6 +8,7 @@
   · 함정: trap.dc·dmg·status → dungeon_gm.TRAP_KINDS
   · 오브젝트: type(엔진 피처 type)·name → _add_feature 이름 / equipment.slot·bonus → GEAR_KINDS / tags → 조합형 관측 태그
   · NPC: npc.line·line_again·gift → show_runner.build_town (town.json 은 배치=id·좌표만)
+  · 구역(map): overheard(D90, 09-20 — 들린 말 문장 풀) → show_runner.build_town 이 마을 생활 판에만 Dungeon.zone_overheard 로 건다
   · 지식: knowledge.deep → Dungeon.lore (옛 lore.json 본문 그대로. 키 = monster:<name> / trap:<id> / feature:<type>)
     D53(09-12): knowledge.brief(처음 알게 된 한 줄)·unlock{event, count}(심층 해금 조건 — 코드가 센다, LLM 0콜)도 같은
     항목에 실린다. 지금 세는 사건은 encounter(개체 하나를 새로 인지한 순간 = aware_of 증분, 몬스터만)뿐 — 나머지 어휘는 자리.
@@ -29,7 +30,8 @@ COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
          'trap': {'trap', 'knowledge'},
          'object': {'equipment', 'consumable', 'loot', 'container', 'heal', 'exit', 'knowledge'},
          'npc': {'npc', 'knowledge', 'story'},   # story=D75(09-15) 장소·사람 소개(trait 한 줄·history 본문) — 도감 지식과 다른 층(해금 없음)
-         'map': {'space', 'story'}, 'building': {'building', 'board', 'oracle', 'story'},   # D61 건물 역할 부품(메모 §4-4 [제안]): 게시판·신탁 · story=D75
+         'map': {'space', 'story', 'overheard'}, 'building': {'building', 'board', 'oracle', 'story'},   # D61 건물 역할 부품(메모 §4-4 [제안]): 게시판·신탁 · story=D75
+         #   overheard=D90(09-20) 구역의 '들린 말' 고정 풀(메모 §4-4 "거리 분위기 '들린 말' 한 줄 고정 풀(0콜)") — 문장 목록, 마을 생활 스위치 판에서만 읽는다
          'quest': {'quest'},
          'companion': {'sheet', 'npc', 'story'}}   # D81: sheet=파티 시트 칸(능력치 없음 — 직업에서) · npc/story=마을 주민일 때의 말·걸음·소개(NPC 와 같은 꼴)
 UNLOCK_EVENTS = {'encounter', 'kill', 'search_first', 'trap_avoid', 'trap_disarm', 'visit', 'talk'}   # 메모 §2-5 어휘.
@@ -142,6 +144,9 @@ def _problems(pairs, root):
             space = comps.get('space') or {}
             if space.get('role') not in ('town', 'district', 'street'):
                 out.append('%s: space.role 은 town|district|street' % rel)
+            oh = comps.get('overheard')                      # D90(09-20) 들린 말 풀 — 비어 있지 않은 문장 목록(고르는 건 엔진, 0콜)
+            if oh is not None and not (isinstance(oh, list) and oh and all(isinstance(v, str) and v.strip() for v in oh)):
+                out.append('%s: overheard 는 비어 있지 않은 문장 목록' % rel)
         if kind == 'building':
             b = comps.get('building') or {}
             size, entry = b.get('size'), b.get('entrance')

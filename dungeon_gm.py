@@ -29,6 +29,7 @@ import skill_core as SK
 import skill_combat as SC
 import entities as ENT           # 엔티티 저장소(D50, 09-11) — 몬스터·함정·오브젝트·NPC 정의(수치·이름·지식 본문)
 import town_layout as TL         # 마을 layout(town-layout-v1, 맵 트랙 저작 원본) → 격자 컴파일(엔진 무의존 모듈)
+import hashlib                  # D90(09-20) 들린 말 고르기 — 판정 rng 를 건드리지 않는 결정론 해시
 import math
 import os
 import random
@@ -288,8 +289,8 @@ def event_tags(rec, names=None):
         who = ', '.join((str(c)[4:] if str(c).startswith('npc:') else nm(c)) for c in rec.get('froms', [])) or '동료'   # D76: NPC 인사 정지는 'npc:<이름>'
         return [('hail', '부름', '%s의 말에 멈춤' % who)]
     if t == 'said':                                        # D72 말의 결과 — 누가 들었나(러너 배달 사실)
-        heard = rec.get('heard') or []
-        return [('talk', '말', ('들은 사람 ' + '·'.join(nm(c) for c in heard)) if heard else '들은 사람 없음')]
+        heard = rec.get('heard') or []                     #   D93(09-20): 마을 사람에게 건 말이면 그 사람도 들은 사람이다('npc:<이름>' — 되받기 판에만 실린다)
+        return [('talk', '말', ('들은 사람 ' + '·'.join((str(c)[4:] if str(c).startswith('npc:') else nm(c)) for c in heard)) if heard else '들은 사람 없음')]
     if t == 'plan_broken':
         st = rec.get('step') or {}
         return [('plan_broken', '작정 깨짐', '%s %s — %s' % (st.get('type', '?'), place_word(st.get('target', ''), 'decide'), rec.get('why', '?')))]
@@ -591,6 +592,8 @@ PARTY_ENTRY_SIZE = 3             # D84 조각 5(09-19 밤 파트너 "던전에 �
 #   발단 = 파트너 실판: 동료 둘이 맺고 내려가자 내 캐릭터(미나)만 마을에 남아 판이 사실상 끝났다(입구는 파티가 필요한데 맺을 사람이 없다).
 #   세는 것은 장부의 파티원 수(쓰러진 사람 포함 — 한 명을 잃고 돌아온 파티가 다시 못 들어가 막다른 길이 되지 않게. ⚠️임시 가정)
 PARTY_LEAVE_ANYWHERE = True      # 탈퇴는 어디서나(⚠️임시 가정 — 파트너 답 대기: 떠나는 건 혼자 하는 결정이라 장소·동의가 없다 / False = 길드 구역에서만)
+NPC_REPLY_MAX = 3                # D93(09-20) NPC 되받기 — 같은 캐릭터-NPC 쌍이 한 번의 마을 방문(봇 dict 수명) 동안 되받는 말의 상한(⚠️임시 가정 — 두뇌 콜 상한이기도 하다).
+#   캐릭터가 다시 말해야만 다시 답한다(NPC 가 먼저 잇지 않는다 = 연쇄 핑퐁 없음). 세는 곳은 러너(bot['npc_replies']) — 엔진은 숫자만 든다(프롬프트의 사실 문장과 한 값).
 
 
 def quest_def(qid):
@@ -2531,7 +2534,8 @@ class Dungeon:
                 **({'town_zone_about': za} if (self.town and (za := ((getattr(self, 'zone_story', None) or {}).get(self._town_zone(bot['x'], bot['y'])) or {}).get('trait'))) else {}),   # D75 구역 특징 한 줄
                 **({'town_hear': 'zone'} if (self.town and getattr(self, 'town_hear', None) == 'zone') else {}),   # D70 사람 지각=구역(관측 문장용)
                 **({'town_sight': 'zone'} if (self.town and getattr(self, 'town_sight', None) == 'zone') else {}),   # D86 시야=지금 선 구역(관측 문장용)
-                **({'notices': nts_} if (nts_ := self._notices(bot)) else {}),   # D61 게시판(문턱 근처)·신의 요청(09-13 개정: 어느 층에서나)
+                **({'notices': nts_} if (nts_ := self._notices(bot) + self._overheard_once(bot)) else {}),   # D61 게시판(문턱 근처)·신의 요청(09-13 개정: 어느 층에서나) · D90 들린 말(구역에 들어선 첫 관측 한 번 — 풀이 걸린 판에만)
+                **({'npc_ears': ne_} if (ne_ := self._npc_ears(bot)) is not None else {}),   # D93(09-20) 내 말이 들리는 마을 사람(되받기 판의 마을에만 — 말의 상대 `to` 의 재료)
                 **({'quests': qs_} if (qs_ := self._quest_obs()) else {}),        # D69(09-14) 맡은 의뢰와 진행(파티 장부 — 정보만)
                 **({'expedition_returned': True} if (self.town and getattr(self, 'expedition_returned', False)
                                                      and (getattr(self, 'quests', None) or {}).get('reported') is None) else {}),   # D69 원정에서 돌아온 마을(보고 전)
@@ -3062,6 +3066,43 @@ class Dungeon:
             out.append({'kind': 'oracle', 'where': 'sky', 'id': orc.get('id'), 'text': orc['text'], 'turn': orc.get('turn'),
                         **({'replied': mine} if mine else {})})
         return out
+
+    def _overheard_once(self, bot):
+        """D90(2026-09-20, 메모 §4-4 "거리 분위기 '들린 말' 한 줄 고정 풀(0콜)") 마을 구역에 들어선 **첫 관측**에 한 번 — 그 구역 사람들끼리
+        나누던 말 한 줄(notices kind 'overheard' — 목록으로 돌려준다: 없으면 []). 풀은 구역 정의의 overheard 부품(러너가 마을 생활 판에만
+        self.zone_overheard = {구역 이름: [문장…]} 로 건다 — 없으면 아무 일도 없다 = 옛 판과 비트까지 같다). 한 번뿐인 것이라 _notices(관측 한 번에
+        두 번 불린다 — 메뉴의 의뢰 줄·obs) 안이 아니라 view() 의 obs 조립 자리에서만 부른다. 방문 = 지난 관측과 다른 구역에서 관측한 것:
+        장부 bot['overheard'] = {'zone': 지난 관측의 구역, 'n': {구역: 방문 횟수}}(몸의 수명 — 원정에서 돌아오면 새로 센다).
+        고르기는 판정 rng 가 아니라 (시드·구역·캐릭터) 해시에서 시작해 방문마다 한 칸씩 — 같은 사람이 풀을 한 바퀴 돌기 전엔 같은 말을
+        다시 듣지 않는다(rng 무접촉 = 굴림·배치 불변). 들려줄 뿐이다 — 정지·뼈·판정 없음. 관전용 기록은 self.overheard_log(러너가 틱마다 비운다)."""
+        pool = getattr(self, 'zone_overheard', None)
+        if not pool or not self.town:
+            return []
+        z = self._town_zone(bot['x'], bot['y'])
+        st = bot.setdefault('overheard', {'zone': None, 'n': {}})
+        if z == st['zone']:
+            return []
+        st['zone'] = z
+        lines = pool.get(z) if z else None
+        if not lines:
+            return []
+        n = st['n'][z] = st['n'].get(z, 0) + 1
+        h = hashlib.sha256(('%s|%s|%s' % (self.master_seed, z, bot['char'])).encode('utf-8')).digest()
+        text = lines[(int.from_bytes(h[:4], 'big') + n - 1) % len(lines)]
+        self.__dict__.setdefault('overheard_log', []).append({'char': bot['char'], 'zone': z, 'text': text})
+        return [{'kind': 'overheard', 'zone': z, 'text': text}]
+
+    def _npc_ears(self, bot):
+        """D93(2026-09-20, D82 실측 결함 "캐릭터가 NPC 인사에 말로 답해도 NPC 는 되받지 않는다"의 수선) NPC 되받기 판의 마을에서 —
+        지금 내 말이 들리는 마을 사람 [{id, name}](피처 id 순, 없으면 []). 말의 상대(`to`)로 마을 사람을 지목할 때의 재료다: 프롬프트가
+        이 목록을 사실로 보여 주고, 응답의 `to` 는 여기 있는 사람만 'npc:<이름>' 으로 풀린다(brains._parse_to). 되받기 스위치
+        (self.npc_reply — 러너가 NPC 두뇌가 실제로 도는 판에만 건다)가 꺼졌거나 마을이 아니면 None = 관측에 키가 없다(옛 판과 비트까지 같다).
+        들리는 자리는 단일 판정처 hears(D70 — 같은 구역이거나 곁 1칸)."""
+        if not self.town or not getattr(self, 'npc_reply', False):
+            return None
+        seen = None if getattr(self, 'town_hear', None) == 'zone' else self.visible_cells(bot['x'], bot['y'])
+        return [{'id': 'f%d' % f.id, 'name': f.name} for f in sorted(self.features.values(), key=lambda f_: f_.id)
+                if f.type == 'npc' and self.hears(bot, f.x, f.y, seen)]
 
     # ── D69(2026-09-14) 길드 척추 — 의뢰 맡기·진행·귀환 보고. 파트너 "이 세상이 던전만 있는 건 아니라는 걸 보여주고 싶다 …
     #    던전과 마을을 이어주는 연결점이 바로 길드". 판정은 전부 여기(엔진)·숫자로만, 문장은 정의·두뇌 몫. ──
