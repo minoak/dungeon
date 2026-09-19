@@ -9,7 +9,7 @@
   ② [깊이 1~6 × 25시드 · 마지막 깊이만 보스] 예외 0 · 바닥∪문 단일 연결 · 출구·피처·몹·함정 도달 · 기둥은 벽(못 밟는다) · 계획 밖 홀로 선 벽 0 ·
      보스층엔 보스·봉인·boss_front · 같은 시드 = 같은 층(전역 random 오염 무관) · level_snapshot 은 rng 를 안 굴린다
   ③ [120시드] 구역 건전성(K=4): zone_at = 모든 바닥 · 통로 구역 존재 · 구역 그래프 단일 연결 · 모든 '+' 칸이 문 명사(cell)로 등재되고 양쪽이 다른 구역 ·
-     가장 큰 구역 점유율 상한(실측 고정) · 갈림길/막다른 곳은 비어 있다
+     모든 문 타일의 양 어깨가 벽(09-20 수선) · 가장 큰 구역 점유율 상한(실측 고정) · 갈림길/막다른 곳은 비어 있다
   ④ 문장층(K>2 에서 거짓이 되던 말): 통로 길이 = bbox 긴 변(칸 수 아님) · obs zone.ends 빈 목록 · 프롬프트에 '갈림길'·'막다른 곳' 줄 없음 ·
      이름 임계가 프로필 값(넓은 방·작은 방·긴 통로가 셋 다 실제로 갈린다)
   ⑤ 견고화: scan 강제 · 최소 격자 가드(명시 문장 ValueError) · 작은 격자의 완화 폴백(26×17 에서도 방 5+·연결) · from_ascii 경유 인스턴스의 level_snapshot
@@ -248,6 +248,7 @@ check("② 결정론: 같은 시드 = 같은 level_snapshot(전역 random 무관
 print("── ③ 구역 건전성(K=4 · 120시드)")
 NZ = 120
 zbad, nocorr, gbad, plusbad, ends, shares, styles = 0, 0, 0, 0, 0, [], set()
+noshoulder = ndoors = 0
 names3 = set()
 for s in range(NZ):
     d = build(s)
@@ -259,7 +260,10 @@ for s in range(NZ):
     plus = {c for c in walk_cells(d) if d.grid[c[1]][c[0]] == DOOR}
     cells = {dr.cell for dr in d.doors.values() if dr.cell}
     plusbad += (plus != cells) or any(dr.zones[0] == dr.zones[1] for dr in d.doors.values())
-    ends += sum(len(z.junctions) + len(z.deadends) for z in d.zones.values())
+    noshoulder += sum(1 for (x, y) in plus if not ((d.grid[y][x - 1] == WALL and d.grid[y][x + 1] == WALL)
+                                                   or (d.grid[y - 1][x] == WALL and d.grid[y + 1][x] == WALL)))
+    ndoors += len(plus)
+    ends +=sum(len(z.junctions) + len(z.deadends) for z in d.zones.values())
     shares.append(max(len(z.cells) for z in d.zones.values()) / float(len(floors)))
     allseen = {'zone_seen': {z.id: set(z.cells) for z in d.zones.values()}}
     names3.update(d._zone_name(allseen, z.id) for z in d.zones.values())
@@ -268,6 +272,8 @@ print("  [실측] 가장 큰 구역 점유율 평균 %.3f · 최대 %.3f · 절�
       % (sum(shares) / NZ, max(shares), big50, NZ))
 check("③ zone_at = 모든 바닥 칸 · 통로 구역이 있다 · 구역 그래프 단일 연결", zbad == 0 and nocorr == 0 and gbad == 0, (zbad, nocorr, gbad))
 check("③ 모든 '+' 칸이 문 명사(cell)로 등재 · 문의 양쪽은 서로 다른 구역", plusbad == 0, plusbad)
+check("③ 모든 문 타일의 양 어깨(좌우 또는 위아래)가 벽이다 — 문짝 옆으로 돌아 들어가는 문 0(09-20 수선 · 수선 전 6.1%%) · 문 %d개" % ndoors,
+      noshoulder == 0 and ndoors > 0, (noshoulder, ndoors))
 check("③ 가장 큰 구역 점유율: 최대 < 0.80 · 절반 이상인 시드 ≤ 6/120(실측 고정)", max(shares) < .80 and big50 <= 6, (max(shares), big50))
 check("③ 갈림길·막다른 곳은 비어 있다(폭 1 길의 명사 — 넓은 통로 프로필은 말하지 않는다)", ends == 0, ends)
 check("③ 방 유형이 다 나온다(hall·pillared_hall·gallery·chamber·two_columns)",

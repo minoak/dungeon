@@ -223,19 +223,54 @@ class ConceptDungeon(G.Dungeon):
 
     RESTORE_ARCH = True       # ⑤ 스위치(측정용 — 끄면 시제품 그대로: 되돌려진 문 자리에 어깨 벽 사이 1칸 구멍이 남는다)
 
+    def _shouldered(self, c, run):
+        """문 칸 c 의 양 어깨(문턱이 뻗은 방향의 두 이웃)가 둘 다 벽인가 — 문턱 run 은 방의 한 변을 따라 뻗는다.
+        어깨는 run 안의 칸(3칸 문턱의 양옆 · 2칸 문턱의 한 옆)일 수도, run 밖의 칸(2칸 문턱의 다른 옆 — 방 모서리 너머)일 수도 있다."""
+        (x, y), flat = c, run[0][1] == run[-1][1]
+        return all(self.grid[yy][xx] == G.WALL for xx, yy in (((x - 1, y), (x + 1, y)) if flat else ((x, y - 1), (x, y + 1))))
+
+    def _flanked(self, x, y):
+        """문 칸의 좌우 또는 위아래가 둘 다 벽인가(방향을 모르는 문 — 엔진 1단계가 찍은 것)."""
+        g = self.grid
+        return (g[y][x - 1] == G.WALL and g[y][x + 1] == G.WALL) or (g[y - 1][x] == G.WALL and g[y + 1][x] == G.WALL)
+
+    def _settle_doors(self):
+        """부모 _stamp_doors 의 정착 루프와 같은 눈 — 직교 이웃 구역이 정확히 둘이 아닌 문 타일을 바닥으로(되돌리기만 하므로 수렴).
+        부모 것은 1단계 스탬프와 한 함수라 따로 못 부른다(부모를 부르면 방금 걷은 문을 다시 찍는다) — 그래서 여기 한 벌."""
+        while True:
+            comp_now = self._zone_components()[0]
+            bad = [(x, y) for y in range(self.h) for x in range(self.w) if self.grid[y][x] == G.DOOR
+                   and len({comp_now.get((x + dx, y + dy)) for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0))} - {None}) != 2]
+            if not bad:
+                return
+            for x, y in bad:
+                self.grid[y][x] = G.FLOOR
+
     def _stamp_doors(self):
         """엔진의 문 스탬프·정착 루프(부모) 뒤에, **되돌려진 생성기 문**을 열린 아치로 복원한다(D88 ⑤).
         부모의 정착 루프는 '직교 이웃 구역이 정확히 둘'이 아닌 문 타일을 바닥으로 되돌린다(스캐너에게 유효한 문만 남긴다).
         이 프로필의 문은 2~3칸 문턱을 문 한 칸+어깨 벽으로 좁힌 것이라, 문만 바닥이 되면 어깨 벽 사이 1칸 구멍이 남는다 —
         문도 아치도 아닌 모양. 그 문턱의 어깨를 다시 바닥으로 걷어 원래의 2~3칸 트임으로 되돌린다(바닥만 늘어 연결은 안 끊긴다).
-        바닥이 늘면 구역 짜임이 달라질 수 있으니 부모를 다시 돌려 남은 문을 재검한다 — 복원은 문턱을 하나씩 없애므로 수렴."""
+        바닥이 늘면 구역 짜임이 달라질 수 있으니 부모를 다시 돌려 남은 문을 재검한다 — 복원은 문턱을 하나씩 없애므로 수렴.
+        **어깨를 잃은 문**(09-20 리뷰 수선 — 0콜 실측 200시드 1499문 중 91 = 6.1%): ① '홀로 선 벽 제거'(_clear_stray_walls)가
+        3칸 문턱의 어깨 한 칸을 걷어 간 자리 ② 2칸 문턱이 방 모서리에서 끝나 문의 다른 옆(모서리 너머)이 통로 바닥인 자리
+        ③ 엔진 1단계가 넓은 공간의 한 칸 접점에 찍은 홀로 선 문. 문짝 옆으로 돌아 들어갈 수 있고 같은 구역쌍에 문 명사가
+        둘(문 + 트임) 생긴다 — 문이 아닌 모양이니 같은 복원(문 칸까지 바닥 = 열린 아치)으로 되돌린다. 수선 뒤 실측 0/1408."""
         gen = dict(getattr(self, '_thresholds', None) or {})
         while True:
             super()._stamp_doors()
             if not self.RESTORE_ARCH:
                 break
-            lost = [c for c in sorted(gen) if self.grid[c[1]][c[0]] != G.DOOR]
-            for c in lost:
+            # ③ 엔진이 찍은 문(생성기 문턱 밖) 가운데 어깨 쌍이 없는 것 — 부모는 돌 때마다 같은 자리에 다시 찍으므로 매 회차 걷고,
+            #    걷은 뒤의 구역 짜임으로 남은 문을 재검한다(_settle_doors = 부모 정착 루프와 같은 눈).
+            free = [(x, y) for y in range(1, self.h - 1) for x in range(1, self.w - 1)
+                    if self.grid[y][x] == G.DOOR and (x, y) not in gen and not self._flanked(x, y)]
+            for x, y in free:
+                self.grid[y][x] = G.FLOOR
+            if free:
+                self._settle_doors()
+            lost = [c for c in sorted(gen) if self.grid[c[1]][c[0]] != G.DOOR or not self._shouldered(c, gen[c])]
+            for c in lost:                       # 되돌려진 문 · 어깨를 잃은 문(①②) → 그 문턱을 통째로 바닥으로(열린 아치)
                 for x, y in gen.pop(c):
                     self.grid[y][x] = G.FLOOR
             stray = self._clear_stray_walls()
