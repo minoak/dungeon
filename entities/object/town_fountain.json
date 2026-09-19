@@ -1,0 +1,20 @@
+{
+  "id": "town_fountain",
+  "name": "분수",
+  "kind": "object",
+  "type": "town_fountain",
+  "tags": [
+    "object"
+  ],
+  "comps": {
+    "use": {
+      "kind": "drink",
+      "heal": 1
+    },
+    "story": {
+      "trait": "번화가 한가운데의 분수. 물을 마실 수 있다",
+      "history": "돌 테두리가 닳아 반들거린다. 장이 서는 날엔 좌판이 분수를 빙 둘러 서고, 아이들은 물가에서 논다."
+    }
+  },
+  "note": "D90(2026-09-20) 마을 생활 — 마을 v4 그림 속 고정물 곁에 서는 오브젝트(배치 = art/town-v4 layout 의 life_objects, 마을 생활 스위치 판에서만). 던전의 샘(fountain — 한 번 쓰면 사라지는 도박)과 다른 것: 쓰고도 남고 굴림이 없다. 이름·글·trait·history 전부 SilenceBreaker 임시 문장(2026-09-20 D90 마을 생활) — 파트너 교정 대기."
+}

@@ -1,0 +1,20 @@
+{
+  "id": "camp_tent",
+  "name": "천막",
+  "kind": "object",
+  "type": "camp_tent",
+  "tags": [
+    "object"
+  ],
+  "comps": {
+    "use": {
+      "kind": "sit",
+      "heal": 1
+    },
+    "story": {
+      "trait": "던전 입구 지구 동쪽에 쳐 둔 천막. 안에 앉아 쉴 자리가 있다",
+      "history": "원정을 기다리는 사람들이 번갈아 쓴다. 누구 것인지는 아무도 모른다."
+    }
+  },
+  "note": "D90(2026-09-20) 마을 생활 — 마을 v4 그림 속 고정물 곁에 서는 오브젝트(배치 = art/town-v4 layout 의 life_objects, 마을 생활 스위치 판에서만). 이름·글·trait·history 전부 SilenceBreaker 임시 문장(2026-09-20 D90 마을 생활) — 파트너 교정 대기."
+}

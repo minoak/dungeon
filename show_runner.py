@@ -744,10 +744,11 @@ def mon_summary(e):
 
 
 # ── 마을(D29, 2026-07-30) — 마을(0층)↔던전(1층~) 왕복의 러너 몫 ──────────────
-def _story_of(eid):
-    """D75(09-15) 정의의 story 부품({trait, history}) — 없으면 None(옛 인라인 NPC·정의 없는 건물)."""
+def _story_of(eid, life=False):
+    """D75(09-15) 정의의 story 부품({trait, history}) — 없으면 None(옛 인라인 NPC·정의 없는 건물).
+    life=True(D90 마을 생활 판)면 정의의 life.story 칸을 얹은 것 — 켠 판에서 거짓이 되는 '…서비스는 아직 준비 중이다'를 갈아 끼운다."""
     try:
-        return ((G.ENT.get(eid) or {}).get("comps") or {}).get("story") if eid else None
+        return (G.ENT.comps_of(eid, life) or {}).get("story") if eid else None
     except Exception:
         return None
 
@@ -799,9 +800,15 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
     d.composed_actions = brains.COMPOSE
     d.place_story, d.zone_story, d.town_notice = {}, {}, None   # D75(09-15) 장소·사람 소개(피처 id → {trait, history}) · 구역 이름 → 같은 꼴 · 마을 진입 한마디
     d.skills, d.trpg_combat, d.random_skill = SKILLS_ON and brains.COMPOSE, TRPG_COMBAT_ON, RANDOM_SKILL_ON
+    life = bool(TOWN_LIFE_ON and (getattr(d, "layout_result", None) or {}).get("spaces"))   # D90(09-20) 마을 생활 판 — 구역이 있는(layout) 마을만.
+    blife = life and NOTICES_ON and TOWN_BUILDINGS_ON   # 켠 판용 문장(정의의 life 부품)을 읽는가 — 그 문장들은 건물의 쓰임('문턱에서 묵어 가면 돼')을 말하는데, 건물의 쓰임은
+    #   피처 → 정의 id 사전(building_defs — 건물 역할 부품 스위치가 건다)으로 찾는다. 그 스위치를 끈 판은 쓰임을 못 찾으니 문장도 옛 것 그대로 둔다(거짓 방지)
+    if life:                                   #   끈 판은 아래 전부를 안 탄다 = 피처 수·행인 자리·rng 소비가 옛 판과 같다(verify_townlife ①)
+        d.town_life = blife                    #   쓰임 부품이 건물 정의의 life.use 를 읽는 표식(interactables.use_of) — 끈 판엔 속성 자체가 없다
+        placements = list(placements) + list(d.layout_result.get("life_npcs") or [])   # 새 정착 주민(layout 의 life_npcs — 기존 셋 뒤에 선다)
     for n in placements:
         x, y = int(n["x"]), int(n["y"])
-        spec_n = {**G.ENT.npc(n["id"]), **{k: v for k, v in n.items() if k in ("name", "line", "line_again", "gift")}} \
+        spec_n = {**G.ENT.npc(n["id"], life=blife), **{k: v for k, v in n.items() if k in ("name", "line", "line_again", "gift")}} \
             if n.get("id") else n              # D50: 배치(id·좌표)는 town.json, 이름·대사·선물은 entities/npc — 옛 인라인 꼴도 읽힌다
         if d.grid[y][x] != G.FLOOR:            # 좌표-그림 어긋남은 시작 전에 죽는 게 낫다
             raise ValueError("town.json NPC %r 좌표 (%d,%d)가 바닥이 아니다" % (spec_n["name"], x, y))
@@ -810,8 +817,8 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
         if spec_n.get("role"):                 # D69 역할 한 줄 — 관측 "길드 접수원 (원정 물품 · 의뢰 접수와 귀환 보고)"
             d.feature_roles[nfid] = spec_n["role"]
         d.npc_lines[spec_n["name"]] = spec_n.get("line") or "…"
-        if n.get("id") and _story_of(n["id"]):
-            d.place_story[nfid] = dict(_story_of(n["id"]))   # D75 소개(정의가 있는 NPC 만)
+        if n.get("id") and _story_of(n["id"], blife):
+            d.place_story[nfid] = dict(_story_of(n["id"], blife))   # D75 소개(정의가 있는 NPC 만)
         if spec_n.get("gift"):                 # D32 상점 v0 — 고정 선물(물약 1/방문·빈손이면 단검)
             d.npc_gifts[spec_n["name"]] = dict(spec_n["gift"])
         if spec_n.get("line_again"):           #   두 번째 대사(정해진 문장만)
@@ -831,16 +838,24 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
             if NOTICES_ON:                         # D61 건물 역할 부품 — 정의의 board/oracle 을 _notices 가 읽는다
                 d.building_defs[fid] = ents.get(e.get("building"))
             try:                                   # D69 건물 역할 한 줄(정의 comps.building.role) — 관측 "모험가 길드 (의뢰 게시판 · …)"
-                role = ((G.ENT.get(ents.get(e.get("building"))) or {}).get("comps") or {}).get("building", {}).get("role")
+                role = (G.ENT.comps_of(ents.get(e.get("building")), blife) or {}).get("building", {}).get("role")   # D90: 켠 판은 life 의 역할(묵어 가는 곳 · 구경)
             except Exception:
                 role = None
             if role:
                 d.feature_roles[fid] = role
-            if _story_of(ents.get(e.get("building"))):
-                d.place_story[fid] = dict(_story_of(ents.get(e.get("building"))))   # D75 건물 소개
+            if _story_of(ents.get(e.get("building")), blife):
+                d.place_story[fid] = dict(_story_of(ents.get(e.get("building")), blife))   # D75 건물 소개
     d.features[d._exit_fid].name = "던전 입구"   # 같은 '>'라도 마을에선 탈출구가 아니라 입구다
     if _story_of("dungeon_gate"):
         d.place_story[d._exit_fid] = dict(_story_of("dungeon_gate"))   # D75 던전 입구 소개(입구 피처=건물 정의 dungeon_gate)
+    if life:                                       # D90(09-20) 마을 생활 — 그림 속 고정물 곁의 쓸 수 있는 오브젝트(layout 의 life_objects · 정의 = entities/object 의
+        for o_ in res.get("life_objects") or []:   #   쓰임 부품 use — 마시기·앉기·읽기·구경·불 쬐기·몸 풀기·뒤지기). 행인보다 먼저 세운다(행인은 피처 칸을 피한다)
+            G.IA.place(d, o_["entity"], int(o_["x"]), int(o_["y"]))
+        vis_ = getattr(d, "visual", None)          # 관전 그림: 새 정착 주민도 기존 NPC 시트의 행으로(칸이 맞으면 그 행 — 없으면 폴백 타일). 좌표는 테두리 앞(layout) 좌표
+        if isinstance(vis_, dict) and isinstance(vis_.get("npcs"), list):
+            pad_ = int(res.get("pad", 0) or 0)
+            vis_["npcs"].extend({"id": n_["id"], "row": int(n_.get("row", 0)), "cell": [int(n_["x"]) - pad_, int(n_["y"]) - pad_]}
+                                for n_ in res.get("life_npcs") or [])
     d.town_hear = "zone" if (TOWN_HEAR == "zone" and res.get("spaces")) else None   # D70 구역 지각 — 구역이 있는(layout) 마을만
     d.town_sight = "zone" if (TOWN_SIGHT == "zone" and res.get("spaces")) else None   # D86 시야 = 지금 선 구역 — 같은 조건
     if NPC_REPLY_ON and brains.backend_name() != "dummy":   # D93(09-20) NPC 되받기 — NPC 두뇌가 실제로 도는 판에만 건다(관측 npc_ears·프롬프트 한 줄이
@@ -862,8 +877,9 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
     if walkers and res.get("spaces"):              # D73 마을 행인 — 정의(npc.walk)가 있는 NPC 를 제 구역의 빈 칸에(시드 파생 RNG, 결정론)
         rname = {r["id"]: r.get("name") for r in res["spaces"]["regions"]}
         avoid = {tuple(v) for v in starts.values()}
-        for eid in sorted(e for e, dd in G.ENT.load().items() if dd["kind"] == "npc" and (dd["comps"].get("npc") or {}).get("walk")):
-            spec_w = G.ENT.npc(eid)
+        for eid in sorted(e for e, dd in G.ENT.load().items() if dd["kind"] == "npc" and (dd["comps"].get("npc") or {}).get("walk")
+                          and (life or not dd["comps"]["npc"].get("town_life"))):   # D90: town_life 행인(동네 주민·짐꾼)은 마을 생활 판에만 — 끈 판은 옛 셋 그대로
+            spec_w = G.ENT.npc(eid, life=blife)
             if eid in res.get('walker_rects', {}):
                 spec_w = {**spec_w, 'walk': {**spec_w['walk'], 'rect': list(res['walker_rects'][eid])}}
             region = rname.get((spec_w.get("walk") or {}).get("region"))
@@ -877,8 +893,8 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
             if spec_w.get("role"):
                 d.feature_roles[fid] = spec_w["role"]
             d.npc_lines[spec_w["name"]] = spec_w.get("line") or "…"
-            if _story_of(eid):
-                d.place_story[fid] = dict(_story_of(eid))   # D75 행인 소개
+            if _story_of(eid, blife):
+                d.place_story[fid] = dict(_story_of(eid, blife))   # D75 행인 소개
             if spec_w.get("line_again"):
                 d.npc_lines_again[spec_w["name"]] = spec_w["line_again"]
     if quests is not None:                         # D69 의뢰 장부(파티 단위) — 게시판 순서로 q1, q2… 를 매긴다(결정론)

@@ -15,7 +15,8 @@ sys.path.insert(0, str(ROOT))
 from town_layout import compile_layout
 
 def write(name, data):
-    (HERE / name).write_text(json.dumps(data, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    # newline='\n': Windows 의 기본 줄끝 변환(CRLF)으로 생성물이 통째로 바뀌지 않게(리포의 생성물은 LF — 09-20 재생성 때 실제로 밟았다)
+    (HERE / name).write_text(json.dumps(data, ensure_ascii=False, indent=2)+'\n', encoding='utf-8', newline='\n')
 
 def rect(x, y, w, h):
     return [[x,y],[x+w,y],[x+w,y+h],[x,y+h]]
@@ -67,6 +68,22 @@ solids = [
     ('forge',[1135,431,51,108]), ('fountain_pot_w',[658,475,27,21]),
     ('fountain_pot_e',[754,475,27,21]),
 ]
+# D90(2026-09-20) 마을 생활 — 위 고정물(solids) 곁의 보행 바닥 칸에 서는 '쓸 수 있는 오브젝트'. id 는 고정물 id 와 같다(아래에서 곁 칸인지 검사).
+# entity 는 entities/object 의 정의 id(쓰임 부품 use — 마시기·앉기·읽기·구경·불 쬐기·몸 풀기·뒤지기). 서쪽 좌판(west_stall)은 잡화점 건물과
+# 같은 자리라 오브젝트를 따로 세우지 않는다(잡화점 문턱이 구경하는 자리다). 화분 둘(fountain_pot_*)은 장식으로 남긴다.
+# 엔진은 이 필드를 마을 생활 스위치(DUNGEON_TOWN_LIFE=1)를 켠 판에서만 읽는다 — 끈 판의 마을은 옛 그대로다.
+life_objects = [
+    ('fountain','town_fountain',[44,29]), ('well','well',[20,48]), ('statue','town_statue',[11,15]),
+    ('guild_board','guild_noticeboard',[55,16]), ('temple_bench','bench',[28,19]), ('guild_bench','bench',[56,18]),
+    ('guild_bench_east','bench',[82,18]), ('tavern_table','tavern_table',[32,33]), ('east_stall','produce_stall',[50,27]),
+    ('south_stall','sundries_stall',[55,34]), ('forge','forge_hearth',[72,34]), ('training_rack','training_rack',[66,53]),
+    ('training_crate','training_crate',[71,53]), ('camp_tent','camp_tent',[86,53]), ('flowerbed','flowerbed',[25,51]),
+]
+# 새 정착 주민(entities/npc 의 정의 id · row = 관전 그림 wl-town-npcs 의 행, 새 그림이 생기기 전까지 기존 세 행을 빌린다).
+life_npcs = [
+    ('innkeeper',[30,51],2), ('gear_merchant',[83,35],2), ('item_merchant',[37,30],1), ('smith',[71,34],2),
+    ('flower_elder',[22,49],0), ('fountain_child',[41,27],1), ('retired_adventurer',[34,32],2),
+]
 builds = [
     ('temple_1','temple','temple_district',[14,8,14,10],[7,9]),
     ('guild_1','guild_hall','guild_district',[61,7,22,10],[8,9]),
@@ -99,6 +116,9 @@ while q:
     for p in ((x-1,y),(x+1,y),(x,y-1),(x,y+1)):
         if p in floor and p not in seen:seen.add(p);q.append(p)
 floor &= seen
+solid_cells = {i:{(x,y) for y in range(64) for x in range(96) if inside(x*16+8,y*16+8,rect(*r))} for i,r in solids}
+for oid,_,(x,y) in life_objects:
+    assert (x,y) in floor and any((x+dx,y+dy) in solid_cells[oid] for dx,dy in ((1,0),(-1,0),(0,1),(0,-1))), f'life object {oid} must stand on floor beside its solid'
 blocked=[]
 for y in range(64):
     x=0
@@ -140,6 +160,8 @@ layout=dict(schema='town-layout-v1',id='town-concept-v4',space='town_wonderland'
           dict(id='guild_receptionist',cell=[71,18],row=1),
           dict(id='tavern_keeper',cell=[23,34],row=2)],
     dungeon_entry=dict(cell=[76,52]),
+    life_objects=[dict(id=i,entity=e,cell=c) for i,e,c in life_objects],
+    life_npcs=[dict(id=i,cell=c,row=r) for i,c,r in life_npcs],
     connections=[dict(zip(('from','to','cells'),c)) for c in [
         ('temple_district','main_street',[[32,20],[32,21]]),
         ('guild_district','main_street',[[55,20],[55,21]]),

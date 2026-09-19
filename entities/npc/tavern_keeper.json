@@ -7,7 +7,7 @@
     "tavern"
   ],
   "sprite": "wl-town-npcs#2",
-  "note": "대사·역할·성격·먼저 거는 인사(hail_*)는 SilenceBreaker 임시 초안(2026-09-14 D69·D71) — 파트너 문장으로 교체할 것. 선물·보고 판정은 엔진, 문장은 두뇌가 켜지면 LLM 이 대신 쓴다(고정 대사=폴백). {name}=캐릭터 이름, {quests}=안 맡은 의뢰 수, {monsters}/{traps}/{treasure}=지하 1층 실측. story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md).",
+  "note": "대사·역할·성격·먼저 거는 인사(hail_*)는 SilenceBreaker 임시 초안(2026-09-14 D69·D71) — 파트너 문장으로 교체할 것. 선물·보고 판정은 엔진, 문장은 두뇌가 켜지면 LLM 이 대신 쓴다(고정 대사=폴백). {name}=캐릭터 이름, {quests}=안 맡은 의뢰 수, {monsters}/{traps}/{treasure}=지하 1층 실측. story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). 2026-09-20 D90: life = 마을 생활 스위치 판에서만 덮어쓰는 칸(끈 판의 문장은 그대로). 옛 대사의 '자리는 있으니 앉았다 가도 돼'가 가리키는 자리 = 주점 바깥 탁자(앉기 오브젝트). life 의 문장은 SilenceBreaker 임시 문장(2026-09-20 D90 마을 생활) — 파트너 교정 대기.",
   "comps": {
     "npc": {
       "line": "주점은 아직 준비 중이야. 자리는 있으니 앉았다 가도 돼.",
@@ -20,6 +20,12 @@
     "story": {
       "trait": "1층 몬스터·함정 수를 소문으로 알려준다",
       "history": "손님 말은 다 기억하고 자기 말은 반쯤 보탠다. 그래도 숫자만은 정확하다 — 틀리면 장사가 안 된다는 걸 안다."
+    },
+    "life": {
+      "npc": {
+        "line": "안은 아직 준비 중이야. 바깥 탁자는 비어 있으니 앉았다 가도 돼.",
+        "line_again": "아까 왔잖아. 안은 아직이라니까 — 바깥 탁자는 그대로 있어."
+      }
     }
   }
 }

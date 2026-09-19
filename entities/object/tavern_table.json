@@ -1,0 +1,20 @@
+{
+  "id": "tavern_table",
+  "name": "주점 바깥 탁자",
+  "kind": "object",
+  "type": "tavern_table",
+  "tags": [
+    "object"
+  ],
+  "comps": {
+    "use": {
+      "kind": "sit",
+      "heal": 1
+    },
+    "story": {
+      "trait": "주점 밖에 내놓은 탁자와 걸상. 앉아 쉴 수 있다",
+      "history": "볕이 좋은 날엔 주점 주인이 걸상을 하나 더 내놓는다. 해 질 녘엔 이 자리가 먼저 찬다."
+    }
+  },
+  "note": "D90(2026-09-20) 마을 생활 — 마을 v4 그림 속 고정물 곁에 서는 오브젝트(배치 = art/town-v4 layout 의 life_objects, 마을 생활 스위치 판에서만). 이름·글·trait·history 전부 SilenceBreaker 임시 문장(2026-09-20 D90 마을 생활) — 파트너 교정 대기."
+}

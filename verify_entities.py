@@ -37,10 +37,15 @@ defs = ENT.load()
 #   '최소 4장(게이트용) 이상'으로만 본다(동료 프리셋 '수는 늘어난다'와 같은 문법). 쓰임 오브젝트의 꼴·동작은 verify_use 가 본다.
 use_objs = [d for d in ENT.by_kind('object') if d['comps'].get('use')]
 core_objs = {d['id'] for d in ENT.by_kind('object') if not d['comps'].get('use')}
+# D90(2026-09-20): 마을 생활의 새 주민(정착 넷·행인 둘)도 '내용'이다 — 마을 생활 스위치 판에서만 나오고 JSON 한 장씩 늘어난다. 개수 고정은
+#   코어 NPC 아홉(옛 마을 셋·마을 v1 셋·행인 셋)에만 걸고, 새 주민은 '최소 여섯 이상'으로만 본다(꼴·동작은 verify_townlife 가 본다).
+LIFE_NPC_IDS = {'smith', 'flower_elder', 'fountain_child', 'retired_adventurer', 'town_resident', 'shop_porter'}
+life_npcs = [d for d in ENT.by_kind('npc') if d['id'] in LIFE_NPC_IDS or d['comps']['npc'].get('town_life')]
 check('① 정의 로드 — 마을 v3 공간 정의(맵 9·건물 12, 이전 지도 정의 포함) + 동료 프리셋(D81 — 수는 늘어난다) + 쓰임 오브젝트(D89 — 수는 늘어난다)',
       {d['kind'] for d in defs.values()} == set(ENT.KINDS)
-      and len(defs) - len(ENT.by_kind('companion')) - len(use_objs) == 48 and len(ENT.by_kind('companion')) >= 3
-      and len(ENT.by_kind('monster')) == 3 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('npc')) == 9
+      and len(defs) - len(ENT.by_kind('companion')) - len(use_objs) - len(life_npcs) == 48 and len(ENT.by_kind('companion')) >= 3
+      and len(ENT.by_kind('monster')) == 3 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('npc')) - len(life_npcs) == 9
+      and LIFE_NPC_IDS <= {d['id'] for d in life_npcs}
       and core_objs == {'exit', 'treasure', 'chest', 'fountain', 'potion', 'dagger', 'longsword', 'leather_armor', 'chain_mail'}
       and {'stone_tablet', 'bench', 'well', 'barrel'} <= {d['id'] for d in use_objs}
       and len(ENT.by_kind('map')) == 9 and len(ENT.by_kind('building')) == 12 and len(ENT.by_kind('quest')) == 3)

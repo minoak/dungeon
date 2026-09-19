@@ -1,0 +1,20 @@
+{
+  "id": "forge_hearth",
+  "name": "대장간 화덕",
+  "kind": "object",
+  "type": "forge_hearth",
+  "tags": [
+    "object"
+  ],
+  "comps": {
+    "use": {
+      "kind": "warm",
+      "heal": 1
+    },
+    "story": {
+      "trait": "불이 살아 있는 화덕과 모루. 곁에서 불을 쬘 수 있다",
+      "history": "대장간과 공방 사이 작업 마당에 있다. 불은 밤에도 꺼뜨리지 않는다."
+    }
+  },
+  "note": "D90(2026-09-20) 마을 생활 — 마을 v4 그림 속 고정물 곁에 서는 오브젝트(배치 = art/town-v4 layout 의 life_objects, 마을 생활 스위치 판에서만). 이름·글·trait·history 전부 SilenceBreaker 임시 문장(2026-09-20 D90 마을 생활) — 파트너 교정 대기."
+}
