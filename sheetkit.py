@@ -183,6 +183,48 @@ def sanitize_look(look, data=None):
     return result
 
 
+def color_word(hx):
+    """hex 색 → 한국어 색 이름(D85, 2026-09-19 — 낯선 사람의 겉모습 문장용 · ⚠️어휘 임시). 스와치 밖 자유 색도 받는다(가까운 이름)."""
+    import colorsys
+    try:
+        h_ = str(hx).lstrip("#")
+        r, g, b = (int(h_[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+    except (ValueError, IndexError):
+        return "빛바랜"
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    if s < 0.25:
+        return "검은" if v < 0.3 else ("회색" if v < 0.72 else "흰")
+    deg = h * 360
+    if deg < 20 or deg >= 330:
+        return "붉은"
+    if deg < 35:
+        return "갈색" if v < 0.75 else "주황"
+    if deg < 70:
+        return "금빛" if v >= 0.6 else "황갈색"
+    if deg < 170:
+        return "녹색"
+    if deg < 200:
+        return "청록"
+    if deg < 255:
+        return "푸른"
+    return "보랏빛"
+
+
+def looks_line(bot):
+    """겉으로 보이는 것 한 줄 — 머리색·윗옷색·찬 무기·걸친 갑옷(D85). 이름·직업은 겉으로 안 보인다."""
+    colors = ((bot.get("look") or {}).get("colors") or {})
+    bits = []
+    if colors.get("hair"):
+        bits.append("%s 머리" % color_word(colors["hair"]))
+    if colors.get("top"):
+        bits.append("%s 윗옷" % color_word(colors["top"]))
+    for slot in ("weapon", "armor"):
+        it = bot.get(slot)
+        if isinstance(it, dict) and it.get("name"):
+            bits.append(it["name"])
+    return " · ".join(bits)
+
+
 def random_look(rng, sex, data=None):
     """외형 랜덤(가정 A — 파트너 확정 "기본 파티는 랜덤"): 머리=성별 그룹 안(남→male, 여→female),
     몸통=남 B1(바지형)·여 B2(치마형), 색 4종=스와치 안. rng 는 호출자가 준 random.Random —

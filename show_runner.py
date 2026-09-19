@@ -205,6 +205,15 @@ TOWN_WALKERS_ON = os.environ.get("DUNGEON_TOWN_WALKERS", "1") != "0"   # D73(09-
 TOWN_GUIDE_ON = os.environ.get("DUNGEON_TOWN_GUIDE", "1") != "0"   # D81(09-17 파트너 "마을 첫 관측에 튜토리얼 문단") 마을 안내 — 원정을 시작한 마을의
                                                              #   첫 관측에 한 번: 장소마다 정의의 특징 한 줄(새 문장 없음) + 동료가 지금 선 구역. 0콜.
                                                              #   러너 기본 1(마을 판만), build_town 직접 호출은 끔(행인 D73 과 같은 관례)
+PARTYFORM_ON = os.environ.get("DUNGEON_PARTYFORM", "0") == "1" and TOWN_ON   # D84 조각 2(09-19 파트너 "마을/던전 이렇게 나누는 편이
+#   좋지 않아?" → "마을은 마을의 시계로, 던전은 던전의 시계로 — 사람이 있는 세계는 다 흐른다") 파티 결성 판 — 파티 장부(G.new_parties)를
+#   층마다 걸고, 계단을 쓴 무리만 옮긴다: 남은 사람의 세계는 그대로 계속 틱을 돈다(같은 층은 같은 세계 — 사람이 있으면 합류, 비었으면 복원).
+#   본 스트림은 내 캐릭터(첫 번호 — 쓰러지면 살아 있는 가장 앞 번호)가 있는 세계만 지금과 같은 모양으로, 다른 세계의 기록은 옆 파일
+#   (state/stream_side.jsonl). 러너 기본 0 = 세계 하나(옛 판과 비트까지 같다 — 같은 틱 몸통을 세계 하나로 도는 것). 마을 판만.
+STRANGERS_ON = os.environ.get("DUNGEON_STRANGERS", "0") == "1" and PARTYFORM_ON   # 파티 결성 판에서만 — 끈 판은 셋이 자동으로 한 일행이라 '모르는 일행'이 된다 · D85(09-19 파트너 "낯선 사람이 맞아 … 말을 걸고 상호작용을 하면서 해당 캐릭터에
+#   대한 지식이 생기고 나면 거기에 대해 따로 저장할수 있게 하자 로어북처럼") 인물 기록 — 켜면 몸마다 bot['people'](내가 쓴 사람 기록)을 건다:
+#   기록이 없는 사람은 '낯선 사람'(+겉모습), 이름·직업은 자동으로 주어지지 않는다. 시트에 작가가 쓴 관계 문장은 미리 채워진 기록이 된다.
+#   러너 기본 0 = 옛 판과 비트까지 같다(엔진·프롬프트는 bot['people'] 이 None 이면 옛 길). 파티 결성(D84)과 별개 스위치.
 NPC_BRAIN_ON = os.environ.get("DUNGEON_NPC_BRAIN", "1") != "0"   # D69 마을 NPC 두뇌 — 캐릭터가 말을 걸면 NPC 한마디를 LLM 이 쓴다(1콜,
                                                              #   먼저 말하지 않음·잡담 배달·판정은 엔진·고정 대사=폴백). 러너 기본 1,
                                                              #   더미 두뇌(dummy) 판에선 저절로 꺼진다(콜 0 유지)
@@ -631,6 +640,19 @@ def act_summary(res):
         if res.get("result") == "done":
             return "봇%s에게 친목 — %s" % (res.get("to", "?"), res.get("form", "몸짓"))
         return "친목 — " + {"too_far": "곁에 없다", "no_target": "대상 없음"}.get(res.get("result"), str(res.get("result")))
+    if t == "party_form":                                      # 파티 결성(D84 조각 3)
+        r_ = res.get("result")
+        if r_ == "party_asked":
+            return "봇%s에게 파티 결성을 청함" % res.get("to", "?")
+        if r_ == "party_formed":
+            return "파티 결성 — %s" % "·".join("봇%s" % c for c in res.get("members") or [])
+        return "파티 결성 — " + {"party_need_guild": "모험가 길드 구역 밖", "party_already": "이미 같은 파티", "party_asked_already": "이미 청해 두었다",
+                             "party_not_gathered": "길드 구역에 없는 사람 " + "·".join("봇%s" % c for c in res.get("missing") or []),
+                             "no_target": "대상 없음"}.get(r_, str(r_))
+    if t == "party_leave":                                     # 파티 탈퇴(D84 조각 3)
+        if res.get("result") == "party_left":
+            return "파티 탈퇴%s" % (" — 남은 사람이 하나라 그 파티는 없어졌다" if res.get("freed") else "")
+        return "파티 탈퇴 — " + {"party_none": "파티가 없다", "party_need_guild": "모험가 길드 구역 밖"}.get(res.get("result"), str(res.get("result")))
     if t == "drink":
         if res.get("result") == "drink_heal":
             return "회복 물약을 들이켰다 — HP %d 회복(전부), 남은 물약 %d병" % (
@@ -925,7 +947,7 @@ def classify_reply(dec, other):
     "시도했다고 수락까지 자동으로 정하지 않는다"). 순수 함수."""
     if not dec:
         return "없음"
-    if dec.get("type") in ("give", "bond", "follow", "goto") and str(dec.get("target") or "") == "b%s" % other:
+    if dec.get("type") in ("give", "bond", "follow", "goto", "party_form") and str(dec.get("target") or "") == "b%s" % other:   # party_form = D84 조각 3
         return "행동"
     if dec.get("say") and dec.get("to") in (other, "all"):
         return "말"
@@ -994,8 +1016,9 @@ def keep_pending(inbox, decisions, cap=PENDING_MAX):
     return out
 
 
-def arrive_cells(d, ax, ay, k):
-    """(ax,ay) 곁의 자유 칸 k개 — BFS 순(결정론). 계단을 내려선 사람들이 계단 곁에 선다."""
+def arrive_cells(d, ax, ay, k, taken=()):
+    """(ax,ay) 곁의 자유 칸 k개 — BFS 순(결정론). 계단을 내려선 사람들이 계단 곁에 선다.
+    taken(D84) = 이미 사람이 서 있는 칸 — 사람이 있는 세계에 합류할 때만 준다(없으면 옛 판 그대로)."""
     seen, out, frontier = {(ax, ay)}, [], [(ax, ay)]
     while frontier and len(out) < k:
         nxt = []
@@ -1009,7 +1032,7 @@ def arrive_cells(d, ax, ay, k):
                 if d.grid[ny][nx] == G.WALL:
                     continue
                 nxt.append((nx, ny))
-                if d.feature_at(nx, ny) is None and not d.monster_at(nx, ny):
+                if d.feature_at(nx, ny) is None and not d.monster_at(nx, ny) and (nx, ny) not in taken:
                     out.append((nx, ny))
         frontier = nxt
     return out[:k]
@@ -1101,13 +1124,18 @@ def npc_facts(d, npc_name, bots, fallen, quests):
     return facts
 
 
+_WK = ("d", "bots", "inbox", "pending", "open_props", "open_acts")   # D84 세계 하나의 지역 상태(틱 몸통이 머리에서 풀고 나갈 때 되담는다)
+
+
 def _world_fingerprint():
     """D79 이어가기 전제 — 판의 모양을 정하는 상수들. 스냅샷과 지금 러너가 다르면 그 몸을 이 세계에 놓지 않는다(폴백)."""
     return {"w": DUNGEON_W, "h": DUNGEON_H, "depths": DEPTHS, "max_turns": MAX_TURNS, "town": TOWN_ON, "boss": BOSS_ON,
             "start_boss": START_BOSS, "skills": SKILLS_ON, "trpg": TRPG_COMBAT_ON, "random_skill": RANDOM_SKILL_ON,
             "solo": SOLO_ON, "monsters": N_MON, "traps": N_TRAP, "lurkers": N_LURK, "potions": N_POTION, "gear": N_GEAR,
             "compose": bool(brains.COMPOSE), "scan": SCAN_ON, "loops": LOOPS_ON, "town_apart": TOWN_APART_ON,
-            "town_hear": TOWN_HEAR, "quests": bool(QUESTS_ON and NOTICES_ON), "plan": PLAN_ON}
+            "town_hear": TOWN_HEAR, "quests": bool(QUESTS_ON and NOTICES_ON), "plan": PLAN_ON,
+            **({"partyform": True} if PARTYFORM_ON else {}),   # D84: 켠 판에만 적는다 — 옛 스냅샷의 지문과 글자까지 같게
+            **({"strangers": True} if STRANGERS_ON else {})}   # D85: 같은 규율
 
 
 def _preserve_stream(src):
@@ -1150,6 +1178,11 @@ def _load_resume():
             if f.read(1) != b"\n":
                 raise snapshot.SnapshotError("스냅샷 자리가 줄 끝이 아니다")
             f.truncate(pos)
+        if snap.get("side_pos") is not None:                 # D84: 옆 파일도 스냅샷 자리로(없거나 짧으면 그대로 — 옆 기록은 보조, 실패 사유가 아니다)
+            ssp = os.path.join(STATE, "stream_side.jsonl")
+            if os.path.exists(ssp) and os.path.getsize(ssp) >= int(snap["side_pos"]):
+                with open(ssp, "r+b") as f:
+                    f.truncate(int(snap["side_pos"]))
         return snap, meta, None
     except (snapshot.SnapshotError, OSError, ValueError, KeyError, TypeError) as e:
         meta0 = snapshot.read_meta(os.path.dirname(os.path.abspath(RESUME_PATH))) or {}
@@ -1232,9 +1265,11 @@ def main():
     returned, returned_party = False, []   # D65 워프게이트 귀환으로 끝난 판의 표식(outcome 'returned')·귀환한 사람들
     last_oracle_id = None                  # D61 개정: 마지막으로 스트림에 남긴 신의 요청 id(새 요청·거둠을 한 번만 적는다)
     quests = G.new_quests() if (QUESTS_ON and NOTICES_ON) else None   # D69 의뢰 장부(파티 단위·판 전체) — 층마다 같은 객체를 건다
+    parties = G.new_parties() if PARTYFORM_ON else None               # D84 파티 장부(판 전체) — 의뢰 장부처럼 층마다 같은 객체를 건다(None = 옛 판)
     if snap is not None:                   # D79: 장부·표식도 얼린 그대로
         returned, returned_party = bool(snap["returned"]), list(snap["returned_party"])
         last_oracle_id, quests = snap["last_oracle_id"], snap["quests"]
+        parties = snap.get("parties") if PARTYFORM_ON else None
     npc_brain = NPC_BRAIN_ON and brains.backend_name() != "dummy"       # D69 마을 NPC 두뇌 — 더미 판은 콜 0 유지
 
     if snap is None:                       # ── 새 판: 세계를 짓고 파티를 놓는다 ──
@@ -1257,6 +1292,8 @@ def main():
             d.lore = lore
             d.quests = quests                  # D69 던전 시작 판(보스 프리셋 등)도 장부를 든다 — 워프 귀환 뒤 마을에서 보고
         d.plan_max = G.PLAN_MAX if PLAN_ON else 0    # 마을(from_layout)도 같은 스위치
+        if PARTYFORM_ON:
+            d.parties = parties                # D84 파티 장부 — 계단이 '내 파티원'만 센다(파티 없는 캐릭터는 혼자)
         bots = []
         for c in chars:
             b = G.spawn(d, c, bots, sheet=sheets[c], apart=SOLO_ON)
@@ -1277,9 +1314,14 @@ def main():
             b['book'] = iss.record(ledger_keys[c])   # D53 진행도(조우 수·심층 여부)도 같은 객체 — 해금 즉시 다음 obs 에 본문
             if LEDGER_ON:
                 b['ledger'] = G.new_ledger()   # 공간 장부(D17) 켬 — 이 층에서 본 것의 원장
+            if STRANGERS_ON:                   # D85 인물 기록 — 씨앗 = 시트에 작가가 쓴 관계 문장(이 캐릭터가 이미 아는 사람). 없으면 아무도 모르는 채로
+                b['people'] = {"b%s" % oc: {"name": sheets[oc].get("name") or "봇%s" % oc, "text": str(txt), "turn": 0, "src": "sheet"}
+                               for oc, txt in sorted((sheets[c].get("relationships") or {}).items()) if oc in sheets and oc != c}
             bots.append(b)
         saved = {}                             # 마을 판(D29): 층 보존 — depth → {'d': 던전, 'mem': 봇별
                                                #   층-로컬 기억}. "재입장=같은 1층"(파트너 확정 07-30)
+        if PARTYFORM_ON:                       # D84: 세계는 지어질 때 등록한다 — 사람이 있든 비었든 같은 층은 같은 세계(합류·복원이 한 길)
+            saved[d.depth] = {"d": d, "mem": {}}
     else:                                  # D79 이어가기 — 세계·파티·보존 층을 얼린 그대로(같은 객체 그래프: quests·reaction_book·known 공유 유지)
         d, bots, saved = snap["d"], snap["bots"], snap["saved"]
         d.lore = lore                      #   지식 본문은 지금 정의로(피클에 든 옛 사본 대신 — 판정 무접촉)
@@ -1326,6 +1368,9 @@ def main():
                 **alpha_metadata(),
                 **({"resume_failed": resume_fail} if resume_fail else {}),   # D79(09-16 additive) 이어가기를 청했으나 못 함 — 새 판을 열었다(사유·대피한 옛 기록·들고 온 수첩)
                 **({'reaction': True, 'reaction_schema': 'social-v0.4'} if reaction_book is not None else {}),
+                **({"strangers": True} if STRANGERS_ON else {}),   # D85(09-19 additive, 켠 판에만) 인물 기록 판 — 프롬프트의 호칭이 캐릭터마다 다르다(내가 적은 이름|낯선 사람) · decisions.person_note
+                **({"partyform": True} if PARTYFORM_ON else {}),   # D84(09-19 additive, 켠 판에만) 파티 결성 판 — 계단은 내 파티원만·세계마다 제 시계:
+                                           #   tick.bots 가 '이 세계에 있는 사람'만이고 depart/arrive 줄이 실린다(다른 세계 = stream_side.jsonl). 판 모양 메타(town 급)
                 seed=DUNGEON_SEED, w=DUNGEON_W, h=DUNGEON_H, depths=DEPTHS,
                 monsters=N_MON, traps=N_TRAP, lurkers=N_LURK,
                 potions=N_POTION,          # 층당 회복 물약(07-17 additive) — 배치를 바꾸는 판 파라미터
@@ -1471,27 +1516,54 @@ def main():
                 "sheets": sheets, "d": d, "bots": bots, "saved": saved, "fallen": fallen, "inbox": inbox, "pending": pending,
                 "open_props": open_props, "open_acts": open_acts, "quests": quests, "iss": iss, "rs": rs,
                 "reaction_book": reaction_book, "last_oracle_id": last_oracle_id, "returned": returned,
-                "returned_party": returned_party, "segment": segment}
+                "returned_party": returned_party, "segment": segment,
+                **({"worlds": worlds, "parties": parties, "side_pos": side.tell()} if PARTYFORM_ON else {})}   # D84: 켠 판에만(옛 스냅샷과 같은 열쇠)
 
     def _snap_meta(next_turn, stop=None):    # 론처가 읽는 요약(json) — 피클을 열지 않고도 '지하 3층 t158 에서 멈춤'을 안다
         return {"run_id": run_id, "seed": DUNGEON_SEED, "started": run_started, "next_turn": next_turn, "turn_last": next_turn - 1,
                 "depth": d.depth, "segment": segment, "backend": brains.backend_name(),
                 "party": [{"char": b["char"], "name": b.get("name") or b["job"], "id": b.get("id"), "job": b["job"],
-                           "hp": b["hp"], "alive": b["alive"]} for b in bots],
+                           "hp": b["hp"], "alive": b["alive"]} for b in _everyone()],
                 "fallen": list(fallen), "stop": stop}
 
-    for turn in range(first_turn, MAX_TURNS + 1):
-        req = run_control.stop_requested(STATE)   # D79 곱게 멈춤(론처 '수첩 쓰고 멈춤') — 이 틱을 시작하기 전에, 지난 틱까지의 기록이 진실
-        if req:
-            pages = stop_pages(d, bots, names, turn - 1, req)
-            sw.emit("stopped", turn=turn - 1, reason="user", depth=d.depth, **({"pages": pages} if pages else {}))   # D79 additive
-            stop_rec = {"reason": "user", "pages": pages}
-            _take_snapshot(sw, {**_snap_core(), "next_turn": turn, "stop": stop_rec}, _snap_meta(turn, stop_rec))
-            event("=== 원정을 멈춘다(t%d, %s) — 마지막 기록에서 이어갈 수 있다%s ==="
-                  % (turn - 1, brains._floor_name(d.depth), " · 수첩 %d장" % len(pages) if pages else ""))
-            stopped_now = "user"
-            break
-        _take_snapshot(sw, {**_snap_core(), "next_turn": turn, "stop": None}, _snap_meta(turn))   # 틱마다 — 끊겨도 여기서 이어간다
+    # ── D84 조각 2(09-19): 세계 = 틱 몸통이 도는 단위(층 하나와 거기 있는 사람들·편지함·장부) ──
+    # 옛 판은 세계가 하나다(W — 층을 옮기면 그 내용이 통째로 바뀐다). 파티 결성 판(PARTYFORM_ON)은 사람이 있는 세계마다 한 번씩 돈다.
+    # main 의 d·bots·inbox… 는 '본 스트림이 좇는 세계(W)'의 거울 — 틱마다 맨 끝에서 다시 맞춘다(스냅샷·판 끝 집계가 읽는다).
+    W = {"d": d, "bots": bots, "inbox": inbox, "pending": pending, "open_props": open_props, "open_acts": open_acts}
+    worlds, side = [W], None
+    if PARTYFORM_ON:
+        if snap is not None and snap.get("worlds"):   # 이어가기 — 세계 목록도 얼린 그대로(같은 피클 그래프라 d·bots 가 같은 객체)
+            worlds = snap["worlds"]
+            W = next(x for x in worlds if x["d"] is d)
+        else:
+            W["iss"] = {"depth": iss.depth, "_idkind": iss._idkind, "_aware": iss._aware}
+        side = stream.StreamWriter(os.path.join(STATE, "stream_side.jsonl"), append=snap is not None)   # 본 스트림 밖 세계의 기록(관전·캠페인 무접촉)
+
+    def _iss(w, kind, rec):                  # 도감 발급기는 세계 하나(층의 몹 id→종 지도·인지 집합)를 가정한다 — 세계마다 제 것을 끼웠다 뺀다
+        if not PARTYFORM_ON:
+            return iss.consume(kind, rec)
+        st = w.setdefault("iss", {"depth": w["d"].depth, "_idkind": {}, "_aware": {}})
+        iss.depth, iss._idkind, iss._aware = st["depth"], st["_idkind"], st["_aware"]
+        out = iss.consume(kind, rec)
+        st.update(depth=iss.depth, _idkind=iss._idkind, _aware=iss._aware)
+        return out
+
+    def _everyone():                         # 판에 있는 사람 전부 — 옛 판은 이 층의 사람들 그대로
+        return sorted((b for x in worlds for b in x["bots"]), key=lambda b: b["char"]) if PARTYFORM_ON else bots
+
+    def _focus():                            # 본 스트림이 좇는 사람 = 내 캐릭터(첫 번호) — 쓰러졌으면 살아 있는 가장 앞 번호
+        live = sorted(b["char"] for x in worlds for b in x["bots"] if b["alive"])
+        return live[0] if live else chars[0]
+
+    def _tick_world(w, turn):
+        """한 세계의 한 틱(판단 → 행동 → 몹 → 말 배달 → 기록). 돌려주는 값: None | "break"(판을 닫는다).
+        몸통은 옛 틱 루프 그대로 — 세계의 지역 상태를 머리에서 풀고 나갈 때 되담는다."""
+        nonlocal last_oracle_id, returned, returned_party, stopped_now
+        d, bots, inbox, pending, open_props, open_acts = (w[k] for k in _WK)
+        show = w is W                        # 본 스트림·지도·관전 속도는 좇는 세계만(옛 판은 늘 참)
+        if PARTYFORM_ON:                     # D84 조각 3: 다른 층에 가 있는 산 사람들 — 명단(obs.party)이 '여기 없다 — 어디에 있다'를 말한다
+            d.elsewhere = [{"char": b["char"], "job": b["job"], "depth": x["d"].depth}
+                           for x in worlds if x is not w for b in x["bots"] if b["alive"]]
         d.turn = turn       # 장부(D17) 목격 스탬프 — 판정 무관여, "언제 봤나"의 단일 원천
         if PENDING_ON:                        # D47 배관: 걷는 동안 들은(안 세운) 말을 이번 결정에 함께 읽힌다
             inbox = merge_inbox(pending, inbox)
@@ -1536,7 +1608,8 @@ def main():
                 event("=== 판단 정지가 제한 시간(%d초)을 넘겨 원정을 멈춘다(t%d 전) — 마지막 기록에서 이어갈 수 있다 ===" % (PAUSE_LIMIT_SEC, turn))
             else:
                 event("=== 판단 정지 중에 원정을 멈춘다(t%d 전) — 마지막 기록에서 이어갈 수 있다 ===" % turn)
-            break
+            w.update(d=d, bots=bots, inbox=inbox, pending=pending, open_props=open_props, open_acts=open_acts)
+            return "break"
         brain_pause.resolved(turn)
         for c_, dec_ in (decisions or {}).items():   # D61 신탁 응답 — 캐릭터 장부(요청 id 별 한 번)·events.log. 판정 없음
             orp = dec_.get("oracle_reply") if isinstance(dec_, dict) else None
@@ -1556,7 +1629,7 @@ def main():
         for b in bots:
             b.pop("hailed", None)            # 표시 소비 — 한 번 들은 말로 두 번 열리지 않는다
         thinkers = "·".join(sorted(decisions)) if decisions else "-"
-        event("-- tick %d --  (사고:%s / 나머지 자동보행)" % (turn, thinkers))
+        event("-- tick %d --  (사고:%s / 나머지 자동보행)%s" % (turn, thinkers, ("  [%s]" % brains._floor_name(d.depth)) if PARTYFORM_ON else ""))
         turn_events = []
         npc_says = []                        # D69 이번 틱 NPC 의 답 [(NPC 이름, 문장, 말 건 봇)] — 배달은 아래(잡담·정지 없음)
         says = dict(social)                  # 걸으면서 한 말도 같은 배달 규칙을 탄다
@@ -1613,8 +1686,9 @@ def main():
             event("   봇%s  %s%s" % (b["char"], act_summary(res), mark))
             if not b["alive"]:
                 event("   봇%s 쓰러졌다!" % b["char"])
-            write_map(d, bots, turn)
-            time.sleep(STEP_DELAY)
+            if show:
+                write_map(d, bots, turn)
+                time.sleep(STEP_DELAY)
 
         if reaction_book is not None:
             for char, decision in sorted(decisions.items()):
@@ -1633,7 +1707,7 @@ def main():
             event("   %s" % mon_summary(e))
             if e.get("down"):
                 event("   봇%s 쓰러졌다!" % e["target"])
-        if mon_events:
+        if mon_events and show:
             write_map(d, bots, turn)
         turn_events += mon_events
         if TOWN_WALKERS_ON and getattr(d, "walkers", None):   # D73 마을 행인 걸음(0콜) — 사건은 npc_move, 관전은 스냅샷 좌표로 그린다
@@ -1666,10 +1740,13 @@ def main():
                     "monsters": [m.as_dict() for m in d.monsters],
                     "features": [f.as_dict() for f in d.features.values()],
                     "traps": [t.as_dict() for t in d.traps]}
-        sw.emit("tick", **tick_rec)
+        if show:
+            sw.emit("tick", **tick_rec)
+        else:                                 # D84: 좇지 않는 세계의 틱은 옆 파일에(world = 그 층)
+            side.emit("tick", world=d.depth, **tick_rec)
 
         # 도감 획득(D9) — 스트림의 결정론 투영(LLM 0콜). 등재 즉시 봇 known(공유 set)에 반영.
-        new_knowledge = iss.consume("tick", tick_rec)
+        new_knowledge = _iss(w, "tick", tick_rec)
         for nm, key, tier in new_knowledge:
             if tier == 'deep':                  # D53 심층 해금 — 다음 obs 부터 본문 전체
                 event('   \U0001f4d6 %s — 도감 심층 해금: %s' % (nm, bestiary.label(key, lore)))
@@ -1686,7 +1763,7 @@ def main():
         # ④ GM 진행자(옵션 소비자): 이번 틱 events를 장면으로 연출.
         #    party 도 스트림 스냅샷의 projection — GM 이 별도 진실 조립을 갖지 않는다(이중화 제거).
         #    name 만 시트에서 보강(스냅샷엔 없음 — 호칭용).
-        if GM_ON and turn_events:
+        if GM_ON and turn_events and show:
             party = [{**{k: s[k] for k in ("char", "job", "hp", "maxhp", "bag", "alive", "won")},
                       "name": sheets[s["char"]].get("name")}
                      for s in tick_rec["bots"]]
@@ -1704,25 +1781,43 @@ def main():
             event("=== 길드에 보고했다 — 완수 %s / 미완 %s — 원정 완료 ==="
                   % ("·".join(tt.get(x, x) for x in (rep.get("done") or [])) or "없음",
                      "·".join(tt.get(x, x) for x in (rep.get("undone") or [])) or "없음"))
-            break
+            w.update(d=d, bots=bots, inbox=inbox, pending=pending, open_props=open_props, open_acts=open_acts)
+            return "break"
+        w.update(d=d, bots=bots, inbox=inbox, pending=pending, open_props=open_props, open_acts=open_acts)
+        return None
 
-        if all(b["won"] or not b["alive"] for b in bots):
+    def _shift_world(w, turn):
+        """층 전이 — 계단을 쓴 사람들을 간 곳의 세계로 옮긴다. 돌려주는 값: None | "break"(판을 닫는다).
+        옛 판(세계 하나): 전원이 떠났을 때만, 이 세계의 내용이 간 곳으로 통째로 바뀐다(몸통은 옛 전이 그대로).
+        파티 결성 판(D84): 계단을 쓴 무리만 옮긴다 — 남은 사람의 세계는 그대로 흐르고, 간 층에 사람이 있으면 그 세계에 합류한다."""
+        nonlocal fallen, returned, returned_party, W
+        d, bots, inbox, pending, open_props, open_acts = (w[k] for k in _WK)
+        if all(b["won"] or not b["alive"] for b in bots) or (PARTYFORM_ON and any(b["won"] for b in bots)):
             survivors = [b for b in bots if b["won"]]
-            fallen += [b["char"] for b in bots if not b["alive"]]
+            if PARTYFORM_ON and survivors:    # 한 번에 한 무리(같은 길을 고른 사람들) — 같은 틱에 길이 갈린 나머지는 다음 틱에 옮긴다
+                way = (bool(survivors[0].get("warp")), survivors[0].get("went"))
+                survivors = [b for b in survivors if (bool(b.get("warp")), b.get("went")) == way]
+            fallen += [b["char"] for b in bots if not b["alive"] and b["char"] not in fallen]
             warp = bool(survivors) and all(b.get("warp") for b in survivors)   # D65 워프게이트 — 최심층에서 바로 마을(0층)로
             up = bool(survivors) and all(b.get("went") == "up" for b in survivors) and (TOWN_ON or warp)
             # 행선 혼합(위/아래)은 여기 못 온다 — 파티는 모임 규칙이 한 계단을 강제하고,
             # 솔로+마을은 main() 초입에서 거부(v0 — 서랍: 다중 층 동시 진행).
             if not survivors or (not up and d.depth >= DEPTHS):
-                break                     # 전멸 or 최심층 하강 = 탈출(기존)/관측 클리어(마을 판)
+                if PARTYFORM_ON and not survivors and any(b["alive"] for x in worlds if x is not w for b in x["bots"]):
+                    worlds[:] = [x for x in worlds if x is not w]   # D84: 이 세계엔 산 사람이 없다 — 다른 세계는 계속 흐른다
+                    return None
+                if PARTYFORM_ON:
+                    W = w                 # 판을 닫는 세계를 끝 기록이 비춘다(좇던 세계가 아니어도)
+                return "break"            # 전멸 or 최심층 하강 = 탈출(기존)/관측 클리어(마을 판)
             # ── 층 전이: 하강(기존 Stage 4) + 마을 왕복(D29 — 보존된 층은 그대로 복원) ──
+            keep_mem = ((saved.get(d.depth) or {}).get("mem") or {}) if PARTYFORM_ON else {}   # D84: 먼저 떠난 사람의 그 층 기억도 남긴다
             if TOWN_ON:                   # 떠나는 층을 봇별 층-로컬 기억과 함께 보존("같은 1층")
-                saved[d.depth] = {"d": d, "mem": {
+                saved[d.depth] = {"d": d, "mem": {**keep_mem, **{
                     b["char"]: {"seen_keys": b.get("seen_keys"),
                                 "searched": b.get("searched"),
                                 "aware_of": b.get("aware_of"),
                                 "ledger": b.get("ledger")}
-                    for b in survivors}}
+                    for b in survivors}}}
             frozen = ({b["char"]: G.floor_freeze(b, d.depth, turn) for b in survivors}   # D40 ② 결산: 떠나는
                       if FLOOR_ON else {})                                            #   층의 집계를 얼린다
             pages = {}
@@ -1737,14 +1832,21 @@ def main():
                     else:
                         event('   \U0001f4d3 %s — 수첩 없음(두뇌 응답 없음) — 뼈만 남긴다' % names[b["char"]])
             nd = 0 if warp else (d.depth - 1 if up else d.depth + 1)   # D65: 워프게이트는 층을 건너뛰어 마을로
-            sw.emit("ascend" if up else "descend", turn=turn, to_depth=nd,
+            follow = (not PARTYFORM_ON) or any(b["char"] == _focus() for b in survivors)   # D84: 본 스트림이 좇는 사람이 옮기나(옛 판은 늘 참)
+            out = sw if follow else side                      #   좇는 사람이 옮기면 본 스트림에 지금과 같은 모양으로, 아니면 옆 파일에
+            out.emit("ascend" if up else "descend", turn=turn, to_depth=nd,
                     **({'gate': True} if warp else {}),       # D65 additive — 워프게이트로 귀환한 상행
                     **({'pages': pages} if pages else {}),    # D59 additive — 캐릭터별 수첩 한 장(플레이 데이터)
-                    **({'reaction_summary': reaction_book.close_floor(turn)} if reaction_book is not None else {}),
+                    **({'reaction_summary': reaction_book.close_floor(turn)} if (reaction_book is not None and follow) else {}),
                     party=[{"char": b["char"], "hp": b["hp"], "bag": b["bag"],
                             "potions": b.get("potions", 0), **({"boons": b["boons"]} if b.get("boons") else {})}   # boons=D74 additive
                            for b in sorted(survivors, key=lambda b: b["char"])],
-                    fallen=list(fallen))
+                    fallen=list(fallen),
+                    **({} if follow else {"world": d.depth}))
+            if not follow and w is W:                         # D84 additive: 좇는 세계에서 다른 사람들이 떠났다(다음 틱부터 tick.bots 에 없다)
+                sw.emit("depart", turn=turn, to_depth=nd, dir=("up" if up else "down"),
+                        party=sorted(b["char"] for b in survivors))
+            src_depth = d.depth
             mem = {}
             if nd in saved:               # 가 본 층(마을 판) = 세계 상태 그대로(몹·주운 것·묘·헌 장비)
                 d = saved[nd]["d"]
@@ -1771,6 +1873,12 @@ def main():
                 d.quests = quests         # D69 의뢰 장부 — 새 층도 같은 객체(처치·획득 판정이 여기로 센다)
                 fresh = True
             d.plan_max = G.PLAN_MAX if PLAN_ON else 0    # 복원한 층·새로 지은 마을도 같은 스위치
+            tw = None                     # D84: 간 층에서 지금 흐르고 있는 세계(사람이 있다) — 있으면 합류, 없으면(옛 판은 늘) 새로 연다
+            if PARTYFORM_ON:
+                d.parties = parties
+                saved.setdefault(nd, {"d": d, "mem": {}})
+                tw = next((x for x in worlds if x["d"] is d), None)
+            there = tw["bots"] if tw else []
             # 도착 지점(D29): 계단을 지나 온 사람은 계단 곁에 선다 — 마을 복귀='던전 입구' 곁,
             # 재입장='위로 오르는 계단' 곁. 첫 하강만 기존 스폰(깊은 곳에서 눈뜸)+곁에 '<' 신설.
             anchor = None
@@ -1778,10 +1886,10 @@ def main():
                 anchor = (d.exit if up else
                           next(((f.x, f.y) for f in d.features.values()
                                 if f.type == "stairs_up"), d.exit))
-            spots = arrive_cells(d, *anchor, len(survivors)) if anchor else []
+            spots = arrive_cells(d, *anchor, len(survivors), taken={(o["x"], o["y"]) for o in there}) if anchor else []
             nb = []
             for b in sorted(survivors, key=lambda b: b["char"]):
-                n = G.spawn(d, b["char"], nb, sheet=sheets[b["char"]],
+                n = G.spawn(d, b["char"], there + nb, sheet=sheets[b["char"]],
                             apart=SOLO_ON and not spots)                # ⚠️ sheet 필수 — 없으면
                 if spots:                                 # 계단 곁 도착(BFS 순 = 결정론)
                     d.visited.discard((n["x"], n["y"]))
@@ -1801,6 +1909,8 @@ def main():
                                        "queue": list(e.get("queue") or []),
                                        "acts": [dict(a) for a in (e.get("acts") or [])]}   # D47 ② 상세 기록도 이월
                                   for oc, e in (b.get("relations") or {}).items()}   # 관계 장부(D36)도 이월
+                if b.get("people") is not None:
+                    n["people"] = b["people"]                 # D85 인물 기록도 이월 — 사람에 대한 기억은 층을 넘어도 그대로(같은 객체)
                 n["memories"] = list(b.get("memories") or [])   # 기억도 이월(D22) — 전사는 원정급
                                                           # 사건(장부=층의 기억과 대비. 구역 이름은
                                                           # 그 층의 것 — 층수 없인 모호하나 v0 수용)
@@ -1809,8 +1919,8 @@ def main():
                 n["floors"] = frozen.get(b["char"], [dict(x) for x in (b.get("floors") or [])])   # 결산(D40 ②) 이월
                 n["floor"] = {"since": turn, "n": {}, "w": {}}   # 새 층의 집계는 지금부터(스폰 시각이 아니라 이 틱)
                 n["critical"] = bool(b.get("critical"))   # 위급 플래그(D40) — 몸은 층을 넘어도 그 몸이다
-                n["known"] = iss.known(names[b["char"]])  # 도감은 층을 넘어도 그대로(지식=영속층)
-                n["book"] = iss.record(names[b["char"]])  # D53 진행도도 그대로(같은 원장 객체)
+                n["known"] = iss.known(ledger_keys[b["char"]])  # 도감은 층을 넘어도 그대로(지식=영속층) · 09-19 수선: 열쇠는 시작 때와 같은
+                n["book"] = iss.record(ledger_keys[b["char"]])  # D78 원장 키(id|이름) — 이름으로 묶으면 저장 캐릭터는 첫 계단에서 지식을 잃는다
                 if LEDGER_ON:
                     n["ledger"] = G.new_ledger()          # 장부는 새 원장(층의 기억 — id 층-로컬, D17)
                 lm = mem.get(b["char"]) or {}             # 가 본 층 = 그 층의 기억도 그대로(D29 —
@@ -1824,7 +1934,8 @@ def main():
                 d._add_feature("stairs_up", "위로 오르는 계단", ux, uy)
             d.turn = turn
             if reaction_book is not None:
-                reaction_book.start_floor(d.depth, turn)
+                if follow:                          # D84: 반응 장부의 '지금 층'은 좇는 사람의 층(v0 — 다른 세계의 반응도 이 층 집계로 센다)
+                    reaction_book.start_floor(d.depth, turn)
                 d.reaction_book = reaction_book
             bots = nb
             acquired_skills = G.SK.acquire(d, bots)
@@ -1832,6 +1943,11 @@ def main():
             pending = {b["char"]: [] for b in bots}   # 보관함도 리셋(D47 배관)
             open_props = {}                         # 제안 장부도 리셋(D47)
             open_acts = {}                          # 친목·건네기 장부도 리셋(D47 ②)
+            if tw is not None:                      # D84: 사람이 있는 세계에 합류 — 그 세계의 편지함·장부는 그대로, 온 사람 몫만 새로
+                bots = tw["bots"] + nb
+                inbox = {**tw["inbox"], **{b["char"]: [] for b in nb}}
+                pending = {**tw["pending"], **{b["char"]: [] for b in nb}}
+                open_props, open_acts = tw["open_props"], tw["open_acts"]
             lvl = {"turn": turn, **d.level_snapshot(),            # descend/ascend 직후 level 불변식
                    **({'skill_acquisitions': acquired_skills} if acquired_skills else {}),
                    **({'reaction_stats': reaction_book.snapshot()} if reaction_book is not None else {}),
@@ -1839,8 +1955,34 @@ def main():
             qv_ = d._quest_event("reach", depth=d.depth) if (quests is not None and nd >= 1) else []   # D69 층 도달형 의뢰
             if qv_:
                 lvl["quests"] = qv_                  # additive — 이 층에 들어서며 채워진 의뢰
-            sw.emit("level", **lvl)
-            iss.consume("level", lvl)               # 새 층 몹 id→종 지도 갱신
+            dest = w                                # 옛 판: 이 세계가 곧 간 곳이다(세계 하나 — 내용이 통째로 바뀐다)
+            if PARTYFORM_ON:                        # D84: 떠난 세계엔 남은 사람이, 간 세계엔 온 사람이 — 둘 다 계속 흐른다
+                gone = {b["char"] for b in survivors}
+                stay = [b for b in w["bots"] if b["char"] not in gone]
+                w.update(bots=stay, inbox={c: v for c, v in w["inbox"].items() if c not in gone},
+                         pending={c: v for c, v in w["pending"].items() if c not in gone},
+                         open_props={c: {c2: v for c2, v in m.items() if c2 not in gone}       # 떠난 사람이 낀 열린 제안·친목은 닫는다
+                                     for c, m in w["open_props"].items() if c not in gone},
+                         open_acts={c: {c2: v for c2, v in m.items() if c2 not in gone}
+                                    for c, m in w["open_acts"].items() if c not in gone})
+                if not any(b["alive"] for b in stay):
+                    worlds[:] = [x for x in worlds if x is not w]   # 사람이 없는 세계는 멈춘다(보존은 saved 에 — 다시 오면 그대로 이어진다)
+                dest = tw
+                if dest is None:
+                    dest = {}
+                    worlds.append(dest)
+            dest.update(d=d, bots=bots, inbox=inbox, pending=pending, open_props=open_props, open_acts=open_acts)
+            if follow or tw is None:                # 본 스트림(좇는 사람이 옮겼다) 또는 옆 세계가 새로 열렸다 — descend/ascend 직후 level 불변식
+                out.emit("level", **lvl, **({} if follow else {"world": d.depth}))
+            if tw is None:
+                _iss(dest, "level", lvl)            # 새 층 몹 id→종 지도 갱신
+            else:                                   # 흐르던 세계 — 있던 사람의 인지 집합은 그대로, 온 사람 것만 새로(스폰 봇의 aware_of 초기화와 짝)
+                for b in nb:
+                    (tw.get("iss") or {}).get("_aware", {}).pop(b["char"], None)
+            if PARTYFORM_ON and follow:
+                W = dest                            # 본 스트림이 좇는 세계가 바뀌었다
+            elif PARTYFORM_ON and tw is W:          # D84 additive: 좇는 세계에 다른 사람들이 왔다(다음 틱부터 tick.bots 에 있다)
+                sw.emit("arrive", turn=turn, from_depth=src_depth, party=[G.bot_snapshot(b) for b in nb])
             for qv in qv_:
                 event("   \U0001f4dc 의뢰 %s: %s (%d/%d)" % ("완수" if qv.get("done") else "진행", qv.get("title", "?"), qv.get("n", 0), qv.get("need", 0)))
             if warp:
@@ -1852,8 +1994,9 @@ def main():
             else:
                 event("=== 일행은 어둠 속 계단을 내려선다 — 지하 %d층 (깊을수록 흉흉하다: 몬스터 %d) ==="
                       % (nd, N_MON + nd - 1))
-            write_map(d, bots, turn)
-            time.sleep(1.0)
+            if follow:
+                write_map(d, bots, turn)
+                time.sleep(1.0)
             if warp:                          # D65: 마을 도착 = 원정 완료 — 옛 판(의뢰 없음)은 여기서 닫는다
                 if quests is not None:        # D69(09-14 파트너 "원정의 끝을 게이트가 아니라 길드 보고로"): 마을에서 이어 논다 —
                     quests["returned"] = turn  #   접수원에게 말을 걸면 보고(원정 완료). 안 하면 턴 상한으로 끝난다(세계 규칙, 캐릭터 규칙 아님)
@@ -1861,8 +2004,48 @@ def main():
                     event("=== 원정에서 돌아왔다 — 길드 접수원에게 보고하면 원정이 끝난다 ===")
                 else:
                     returned, returned_party = True, [b["char"] for b in survivors]
-                    break
+                    return "break"
+        return None
 
+    for turn in range(first_turn, MAX_TURNS + 1):
+        req = run_control.stop_requested(STATE)   # D79 곱게 멈춤(론처 '수첩 쓰고 멈춤') — 이 틱을 시작하기 전에, 지난 틱까지의 기록이 진실
+        if req:
+            pages = stop_pages(d, bots, names, turn - 1, req)
+            for x in worlds:                      # D84: 다른 세계에 있는 사람도 한 장씩(옛 판은 세계가 하나라 돌지 않는다)
+                if x is not W:
+                    pages.update(stop_pages(x["d"], x["bots"], names, turn - 1, req))
+            sw.emit("stopped", turn=turn - 1, reason="user", depth=d.depth, **({"pages": pages} if pages else {}))   # D79 additive
+            stop_rec = {"reason": "user", "pages": pages}
+            _take_snapshot(sw, {**_snap_core(), "next_turn": turn, "stop": stop_rec}, _snap_meta(turn, stop_rec))
+            event("=== 원정을 멈춘다(t%d, %s) — 마지막 기록에서 이어갈 수 있다%s ==="
+                  % (turn - 1, brains._floor_name(d.depth), " · 수첩 %d장" % len(pages) if pages else ""))
+            stopped_now = "user"
+            break
+        _take_snapshot(sw, {**_snap_core(), "next_turn": turn, "stop": None}, _snap_meta(turn))   # 틱마다 — 끊겨도 여기서 이어간다
+        flag = None
+        order = [W] + sorted((x for x in worlds if x is not W), key=lambda x: x["d"].depth)   # 좇는 세계 먼저, 나머지는 얕은 층부터(결정론)
+        for x in order:                           # 사람이 있는 세계마다 한 번 — "마을은 마을의 시계로, 던전은 던전의 시계로"(옛 판은 세계가 하나)
+            flag = _tick_world(x, turn)
+            if flag:
+                break
+        if not flag:                              # 전이는 모든 세계의 틱이 끝난 뒤에 — 옮겨 간 사람이 같은 틱에 두 번 움직이지 않는다
+            for x in order:
+                if any(x is y for y in worlds):
+                    flag = _shift_world(x, turn)
+                    if flag:
+                        break
+        if PARTYFORM_ON and not flag:             # D84: 좇던 사람이 쓰러졌거나 그 세계가 비었다 — 살아 있는 가장 앞 번호의 세계로 본 스트림을 옮긴다
+            fc = _focus()
+            nw = next((x for x in worlds if any(b["char"] == fc and b["alive"] for b in x["bots"])), None)
+            if nw is not None and nw is not W:
+                W = nw
+                sw.emit("level", turn=turn, **W["d"].level_snapshot(), party=[G.bot_snapshot(b) for b in W["bots"]], follow=fc)
+        d, bots, inbox, pending, open_props, open_acts = (W[k] for k in _WK)   # 거울 맞추기(스냅샷·판 끝 집계가 읽는다)
+        if flag:
+            break
+
+    if side is not None:
+        side.close()
     if stopped_now:                                  # D79 곱게 멈춤 — end 없이 닫는다(끊긴 판 = 이어갈 판). stopped 줄·스냅샷이 남았다
         sw.close()
         if GM_ON:
@@ -1870,9 +2053,9 @@ def main():
             gm_thread.join(timeout=gm.TIMEOUT + 10)
         write_map(d, bots, turn)
         return
-    won = [b["char"] for b in bots if b["won"]]
-    dead = fallen + [b["char"] for b in bots if not b["alive"] and b["char"] not in fallen]
-    left = [b["char"] for b in bots if b["alive"] and not b["won"]]
+    won = [b["char"] for b in _everyone() if b["won"]]            # D84: 켠 판은 모든 세계의 사람을 센다(옛 판 = 이 층의 사람들 그대로)
+    dead = fallen + [b["char"] for b in _everyone() if not b["alive"] and b["char"] not in fallen]
+    left = [b["char"] for b in _everyone() if b["alive"] and not b["won"]]
     if returned:                                     # D65: 보스를 잡고 워프게이트로 마을 귀환 = 원정 완료 (D69: 길드 보고까지)
         outcome = "returned"
         won = list(returned_party)

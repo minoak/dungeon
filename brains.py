@@ -234,6 +234,7 @@ def notebook_page(bot, entry, names, roster=None, up=False):
          "%s을(를) 떠난다. 아래는 이 층에서 세계가 센 횟수와 네가 남긴 기록이다. 이 층에서 무슨 일이 있었고 너는 어땠는지, "
          "네 문장으로 수첩 한 장을 쓴다(%d자 안). 상대 하나하나의 평가는 도감 한줄평이 따로 맡으니, 여기엔 이 층의 이야기와 "
          "네 마음을 적는다. 다음 층에서도 이 장을 다시 읽는다." % (fname, NOTEBOOK_LEN), ""]
+    names = _names_for(bot, roster, real=names)     # D85: 인물 기록 판은 내가 적은 이름으로만(모르는 사람은 '봇N')
     L += _page_material(bot, entry, names)
     L += ["", '응답은 JSON 한 줄: {"page": "수첩 한 장"}']
     prompt = _with_context(_sheet(bot, roster) + "\n" + "\n".join(L))
@@ -297,6 +298,7 @@ def stop_page(bot, entry, names, roster=None):
          "원정이 여기(%s, t%d)서 잠시 멈춘다 — 세계가 멈추는 것이지 네가 떠나는 게 아니다. 다음에 이어갈 때 너는 이 장을 먼저 읽는다. "
          "지금까지 이 층에서 무슨 일이 있었고 너는 어땠는지, 그리고 무엇을 하려던 참이었는지 네 문장으로 한 장을 쓴다(%d자 안)."
          % (fname, int(entry.get("t1") or 0), NOTEBOOK_LEN), ""]   # ⚠️문구 임시(파트너 문장 대기)
+    names = _names_for(bot, roster, real=names)     # D85
     L += _page_material(bot, entry, names)
     L += ["", '응답은 JSON 한 줄: {"page": "수첩 한 장"}']
     prompt = _with_context(_sheet(bot, roster) + "\n" + "\n".join(L))
@@ -729,6 +731,20 @@ def _extract(raw):
     return obj, None
 
 
+STRANGER = "낯선 사람"
+PERSON_NAME_LEN = 20     # 인물 기록의 부르는 이름 상한(D85)
+
+
+def _names_for(bot, roster, real=None):
+    """프롬프트에 넘기는 호칭 사전 — 인물 기록이 걸린 몸(D85)은 **보는 사람 기준**: 내가 이름을 적어 둔 사람만 들어 있다
+    (없는 사람은 부르는 쪽이 '낯선 사람'이라 쓴다). 옛 판은 실명 그대로(real 이 오면 그것)."""
+    if bot is None or bot.get("people") is None:
+        return real if real is not None else {o["char"]: (o.get("name") or o.get("job", "동료")) for o in (roster or [])}
+    out = G.people_names(bot)
+    out[bot.get("char")] = bot.get("name") or bot.get("job", "나")
+    return out
+
+
 def _sheet(bot, roster=None):
     """캐릭터 시트를 프롬프트 머리에 붙여 '정체성'을 박는다 — 봇 dict(시트 외부화) 기반.
     roster = 파티 봇 목록(관계·동료를 이름으로 풀이). 선택 필드(name/speech/goal/relationships)는
@@ -757,14 +773,20 @@ def _sheet(bot, roster=None):
                         "%s(막기 +%d)" % (a["name"], a["bonus"]) if a else "기본 무장"))
     names = {o["char"]: (o.get("name") or "모험가 %s" % o["char"])
              for o in (roster or []) if o.get("char") != bot.get("char")}
-    if names:
-        lines.append("- 동료: " + ", ".join("%s(봇%s)" % (names[c], c) for c in sorted(names)))
-    rel = bot.get("relationships") or {}
+    people_on = bot.get("people") is not None   # D85: 시트의 관계 문장은 인물 기록으로 옮겨 갔다(그 사람이 보이거나 이름을 들을 때 떠오른다) —
+    if people_on:                               #   여기는 내가 겪으며 고쳐 쓴 줄(D36 살)만, 호칭은 내 기록 기준
+        mine = G.people_names(bot)
+        names = {c: mine.get(c, "%s" % STRANGER) for c in names}
+    if names and not bot.get("_pf") and not people_on:        # D84(09-19 파트너 "동료에 대한 정보를 자동으로 줄 필요가 없을것 같은데"): 장부 판은 끼워 넣지 않는다 —
+        lines.append("- 동료: " + ", ".join("%s(봇%s)" % (names[c], c) for c in sorted(names)))   #   누가 내 편인지는 길드에서 맺어 정한다(명단 = 내 파티원)
+    rel = {} if people_on else (bot.get("relationships") or {})
     live = bot.get("relations") or {}       # D36: 살(한 줄)이 있으면 시트 문장을 대체한다 — 시트가 초기값,
     for oc in sorted(set(rel) | {c for c, e in live.items() if e.get("line")}):   # 캐릭터가 겹쳐 쓴다
         if oc not in names:
             continue                        # roster 밖 대상(무해 처리) — 죽은/없는 동료 관계는 침묵
         e = live.get(oc) or {}
+        if people_on and e.get("line_src") == "sheet":
+            continue                        # D85: 그 사람이 보이거나 이름을 들을 때 기록으로 떠오른다 — 시트에는 상시로 싣지 않는다
         if e.get("line"):
             src = ("시트" if e.get("line_src") == "sheet"
                    else "네가 %s턴에 남긴 말" % e.get("line_turn", "?"))
@@ -839,6 +861,10 @@ def _witness_prose(w):
         return "%s(%s)가 %s을(를) 사용하는 것을" % (w.get("mon", "?"), w.get("id", "?"), what)
     if k == "ally_give":                    # D47 ②(09-09) 건네기 목격 — 물건이 손을 옮기는 것을
         return "%s가 %s에게 %s을(를) 건네는 것을" % (who, w.get("to_name", "동료"), w.get("what", "?"))
+    if k == "ally_party_ask":               # D84 조각 3 — 길드 구역에서 곁의 사람이 본다(⚠️문구 임시)
+        return "%s가 %s에게 파티 결성을 청하는 것을" % (who, w.get("to_name", "동료"))
+    if k == "ally_party":
+        return "%s와 %s가 파티를 결성하는 것을" % (who, w.get("to_name", "동료"))
     if k == "ally_bond":                    # D47 ② 친목 목격 — 몸짓(형태=자유 문구, 뜻은 안 붙인다)
         return "%s가 %s에게 몸짓하는 것을 — %s" % (who, w.get("to_name", "동료"), w.get("form", "몸짓"))
     if k == "ally_use":                     # D30(09-05) 오브젝트 사용 — 동사는 '사용' 하나(파트너 확정:
@@ -874,7 +900,7 @@ def _last_prose(last, names=None):
         entered = last.get('entered') or {}
         return '스킬에 의해 한 칸 밀려났다' + (' — 함정을 밟았다' if entered.get('trap') else '')
     tgt = str(last.get("target", "") or "")
-    _who = lambda c: "%s(봇%s)" % ((names or {}).get(c, "동료"), c)   # D47 ② 상대 호칭(동료는 이름으로)
+    _who = lambda c: "%s(봇%s)" % ((names or {}).get(c, (names or {}).get("?", "동료")), c)   # D47 ② 상대 호칭(동료는 이름으로) · D85: names["?"] = 모르는 사람의 호칭
     if r == "approaching":
         return "%s — %s 실행 거리까지 접근을 시작했다" % (_tgt_name(tgt, names), t)
     if r == "no_path" and last.get("parent_action_id"):
@@ -913,6 +939,33 @@ def _last_prose(last, names=None):
         return "%s에게서 %s을(를) 받았다%s" % (_who(last.get("from")), last.get("what", "?"), tail)
     if t == "bonded":
         return "%s가 너에게 몸짓을 했다 — %s" % (_who(last.get("from")), last.get("form", "몸짓"))
+    if t == "party_form":                 # D84 조각 3 파티 결성 — 사실만(무엇을 하라는 말은 없다)
+        to = _who(last.get("to"))
+        if r == "party_asked":
+            return "%s에게 파티 결성을 청했다 — %s도 너에게 파티 결성을 하면 맺어진다" % (to, to)
+        if r == "party_formed":
+            return "%s와(과) 파티를 결성했다 — 지금 파티: %s" % (to, "·".join(_who(c) for c in last.get("members") or []))
+        if r == "party_need_guild":
+            return ("파티 결성을 하려 했지만 — %s이(가) 모험가 길드 구역에 없다(파티는 모험가 길드 구역에서 맺는다)" % _who(last["who"])
+                    if last.get("who") else "파티 결성을 하려 했지만 — 여기는 모험가 길드 구역이 아니다(파티는 모험가 길드 구역에서 맺는다)")
+        if r == "party_not_gathered":
+            return ("파티 결성을 하려 했지만 — 맺는 순간에는 파티에 들 사람이 모두 모험가 길드 구역에 있어야 한다. 구역에 없는 사람: %s"
+                    % "·".join(_who(c) for c in last.get("missing") or []))
+        return "파티 결성을 하려 했지만 — " + {"party_already": "%s와(과)는 이미 같은 파티다" % to, "party_asked_already": "%s에게는 이미 청해 두었다" % to,
+                                          "no_target": "상대가 그 자리에 없었다"}.get(r, str(r))
+    if t == "party_leave":
+        if r == "party_left":
+            others = [c for c in (last.get("members") or []) if c != last.get("char")]
+            return "파티에서 탈퇴했다(같이 있던 사람: %s)%s" % ("·".join(_who(c) for c in others) or "없음",
+                                                     " — 남은 사람이 하나라 그 파티는 없어졌다" if last.get("freed") else "")
+        return "파티 탈퇴를 하려 했지만 — " + {"party_none": "너는 파티가 없다", "party_need_guild": "여기는 모험가 길드 구역이 아니다"}.get(r, str(r))
+    if t == "party_asked_by":             # 받은 쪽(hurt 문법 — 남이 내게 한 일)
+        f = _who(last.get("from"))
+        return "%s가 너에게 파티 결성을 청했다 — 너도 %s에게 파티 결성을 하면 맺어진다" % (f, f)
+    if t == "party_joined":
+        return "%s와(과) 파티가 결성됐다 — 지금 파티: %s" % (_who(last.get("from")), "·".join(_who(c) for c in last.get("members") or []))
+    if t == "party_member_left":
+        return "%s가 파티에서 탈퇴했다%s" % (_who(last.get("from")), " — 너 혼자 남아 그 파티는 없어졌다" if last.get("freed") else "")
     if t == "hurt":
         s = "%s(%s)에게 맞았다 — %d 피해, 남은 HP %d" % (
             last.get("by", "?"), last.get("by_id", "?"),
@@ -1105,6 +1158,9 @@ def _last_prose(last, names=None):
                 parts.append("빠진 동료: %s — 기다리거나, 마지막으로 본 자리로 가 보라" % "·".join(nm(c) for c in last["missing"]))
             if last.get("busy"):
                 parts.append("곁의 %s는 하던 일(탐색·다른 목표)이 있다 — 기다리거나 말을 걸어라" % "·".join(nm(c) for c in last["busy"]))
+            if last.get("mates_only"):     # D84: 세는 사람 = 내 파티원(파티가 없으면 혼자 쓴다) — ⚠️문구 임시
+                return ("%s에서 %s 했지만 — 아직 안 모였다. %s은(는) 살아 있는 네 파티원 전원이 곁(3칸 안)에 모이고 하던 일을 마쳐야 함께 쓴다. %s"
+                        % (what, verb, what, " / ".join(parts)))
             return ("%s에서 %s 했지만 — 아직 안 모였다. %s은(는) 살아 있는 일행 전원이 곁(3칸 안)에 모이고 하던 일을 마쳐야 함께 쓴다"
                     "(혼자나 일부만은 안 된다). %s" % (what, verb, what, " / ".join(parts)))
         if r == "chest_loot":
@@ -1300,6 +1356,12 @@ def _parse_to(raw, char, roster=None, obs=None):
     core = re.sub(r"^(봇|b|bot)\s*", "", s, flags=re.I)
     if core.isdigit():
         return core if core in others else None
+    if (obs or {}).get("people") is not None:       # D85: 이름은 내 기록으로만 푼다(적어 둔 적 없는 실명은 통하지 않는다)
+        for pid, e in sorted(((obs or {}).get("people") or {}).items()):
+            nm_, oc = str(e.get("name") or ""), pid[1:]
+            if nm_ and oc in others and (s == nm_ or s.startswith(nm_) or nm_.startswith(s.rstrip("!?.,~ "))):
+                return oc
+        return None
     for o in (roster or []):
         nm_ = str(o.get("name") or "")
         oc = str(o.get("char"))
@@ -1351,6 +1413,8 @@ _WIRE_KEYS = frozenset((
     "zone", "known", "witnessed", "memories", "dry", "last", "trail", "floor", "floors", "history", "dialogue",
     "order", "ascii_view", "legend",
     "sights", "party", "options", "messages", "intent", "notes",   # party: 파티 명단 — 기억 갈래 첫 절(09-08 D44 정정으로 존치)
+    "partyform",   # D84 조각 3 파티의 사실: "## 파티" 절·PARTY 동사 블록·명단 머리가 그린다
+    "people",      # D85 인물 기록: 조건이 맞을 때만(보일 때 · 이름을 들을 때) 그린다 — 통째로 싣지 않는다(활성화가 곧 예산)
     "status",  # 상태 태그(D34): 아래 _wire "## 네 몸 상태" 절이 그린다
     "relations",   # 관계 장부(D36): 뼈 횟수·초대는 _wire, 살(한 줄)은 _sheet 가 그린다
     "book_invite",   # 도감 인식 초대(D55): 해금·갱신 문턱에서 한 줄을 청한다 — 아래 "## 도감" 절
@@ -1382,16 +1446,22 @@ def _wire(obs, names=None, compose=False):
     않는다(사실 주석만 — 리모컨 라벨 문법의 확장). state 번역표 등 프롬프트의 obs
     사용설명서를 이 문장들이 대체한다(프롬프트 다이어트의 짝)."""
     names = names or {}
+    people = obs.get("people")                  # D85 인물 기록(스위치 판에만) — 호칭은 내 기록, 없는 사람은 '낯선 사람'
+    if people is not None:
+        names = {**names, "?": STRANGER}        #   "?" = 모르는 사람의 호칭(_last_prose 도 같은 사전을 본다)
 
     def nm(char):
-        return "%s(봇%s)" % (names.get(char, "동료"), char)
+        return "%s(봇%s)" % (names.get(char, names.get("?", "동료")), char)
 
     def who(char):
         """시야에 든 사람을 뭐라 부르나 — 아는 사람은 '동료 카야', 모르는 사람은 '낯선 사람'.
         솔로 판(로스터 없음)에서 names 가 비어 남남이 된다. 도감의 '낯선 짐승'과 같은 문법:
         모르는 것은 모른다고 쓴다. ⚠️ 이름을 모를 뿐 id(봇2)는 그대로 — 지칭은 돼야
         핑을 걸 수 있고, 이름은 만나서 통성명해야 얻는 것이다(그건 아직 없다)."""
-        label = "동료 %s" % nm(char) if names.get(char) else "낯선 사람(봇%s)" % char
+        if people is not None:                  # D85: '동료'라는 말도 붙이지 않는다 — 아는 사람은 내가 적은 이름, 모르면 낯선 사람
+            label = nm(char)
+        else:
+            label = "동료 %s" % nm(char) if names.get(char) else "낯선 사람(봇%s)" % char
         return label + (" [b%s]" % char if compose else "")
 
     def at(o):
@@ -1618,12 +1688,13 @@ def _wire(obs, names=None, compose=False):
                                              at(f),
                                              " (와 본 자리)" if f.get("visited") else "",
                                              " (new)" if f.get("new") else "",
-                                             (" — %s" % f["about"]) if f.get("about") else "") + G._tagsfx(f))   # D39 태그 접미 · D57 new(아무도 안 걸쳐 본 것) · D75 특징 한 줄
+                                             (" — %s" % f["about"]) if f.get("about") else "") + G._tagsfx(f)   # D39 태그 접미 · D57 new(아무도 안 걸쳐 본 것) · D75 특징 한 줄
+                     + _npc_note_sfx(f, people))   # D85 조각 ②: NPC 도 같은 규칙 — 보일 때 내 기록이 그 줄에 붙는다
         for b in s.get("bots", []):
             L.append("- %s — HP %s/%s%s — %s%s%s"                                    # 09-08 D45: 숫자+태그(겉보기 4단 폐지)
                      % (who(b.get("char", "?")), b.get("hp", "?"), b.get("maxhp", "?"),
                         (" · " + " · ".join(b["status"])) if b.get("status") else "",   # D34 상태
-                        at(b), "",                                                     # (자리 유지)
+                        at(b), _person_sfx(b, people),                                 # D85: 낯선 사람의 겉모습 · 아는 사람이면 내 기록(조건 a — 보일 때 뜬다)
                         _ally_sfx(b, who)))                                            # D27 개정(09-12) 고른 행동 · 몸짓 깃발
         for w in s.get("ways", []):
             L.append("- %s쪽으로 트인 길 — 거리 %d, %s%s"
@@ -1636,21 +1707,35 @@ def _wire(obs, names=None, compose=False):
     pt = obs.get("party") or []
     if pt:                                  # 파티 명단 — **기억 갈래 첫 절**(09-08 D44 정정, 파트너 "파티 명단은 같이 하는 데 필요"):
         M += ["", "## 파티 명단"]           #   함께 온 사람이 누구고(직업 — 동료 직업의 유일한 출처) 살았는지·먼저 내려갔는지·지금 보이는지.
+                                            #   D84 조각 3: 장부 판의 명단은 내 파티원만(엔진이 거른다 — 맺는 순간이 소개다). 파티가 없으면 이 절도 없다.
         for p in pt:                        #   못 본 죽음·하강도 안다 = 시야-온리의 유일한 전지 창(09-06 D22 개정 '구하러 올게' 유령 차단).
             if not p.get("alive"):         #   내가 폐지를 권했다가 파트너 정정으로 존치 — 같이 하기의 재료.
                 st = "죽었다 — 이번 원정에는 돌아오지 않는다"   # D22 개정(09-06): 확정성 전달('구하러 올게' 유령 차단)
             elif p.get("won"):
                 st = "먼저 내려갔다"
+            elif p.get("away") is not None:    # D84: 이 층에 없다 — 어디 있는지는 안다(명단 = 시야-온리의 전지 창)
+                st = "여기 없다 — %s에 있다" % ("마을" if int(p["away"]) == 0 else "지하 %d층" % int(p["away"]))
             elif p.get("visible"):
                 st = "시야 안(관측 목록에 있다)"     # D44 뒤 관측은 기억 뒤에 온다 — '위 목록' 대신 자리 중립 표현
             else:
                 st = "시야 밖 — 말은 안 닿는다. 어디 있는지 모른다(마지막 본 자리만 안다)"   # D18 개정(09-06)
             M.append("- %s, %s — %s" % (nm(p.get("char", "?")), p.get("job", "?"), st))
+        pf = obs.get("partyform")
+        if pf is not None:                  # D84 조각 3 파티의 사실 — 있을 때만 줄이 생긴다(⚠️문구 임시)
+            P = []                          #   내 파티원은 위 '## 파티 명단'이 말한다 — 여기는 열린 청만
+            for c in pf.get("asks_in") or []:
+                P.append("- %s가 너에게 파티 결성을 청해 두었다 — 너도 %s에게 파티 결성을 하면 맺어진다" % (nm(c), nm(c)))
+            for c in pf.get("asks_out") or []:
+                P.append("- 너는 %s에게 파티 결성을 청해 두었다(아직 답이 없다)" % nm(c))
+            if P:
+                M += ["", "## 파티 결성"] + P
 
     rels = [r for r in (obs.get("relations") or [])   # 09-12 관측 정리: 셀 것이 있는 동료만('아직 없음' 줄은 정보 0)
             if r.get("bones") or r.get("acts") or r.get("invite") or r.get("line")]
+    if people is not None:                  # D85: 겪은 것이 있는 사람만 — 빈 줄은 '그런 사람이 있다'는 누설이다
+        rels = [r for r in rels if r.get("bones") or r.get("acts") or r.get("line")]
     if rels:                                # 관계 장부(D36) — 뼈 횟수(사실). 살은 시트에 산다
-        M += ["", "## 동료와 겪은 일 (횟수 — 세계가 센 사실)"]
+        M += ["", "## 사람들과 겪은 일 (횟수 — 세계가 센 사실)" if people is not None else "## 동료와 겪은 일 (횟수 — 세계가 센 사실)"]
         for r in rels:
             bits = ["%s ×%d%s" % (b_.get("label", b_.get("kind", "?")), b_.get("n", 0),
                                  (" (%s)" % ago(b_["last"])) if b_.get("last") is not None else "")
@@ -1817,6 +1902,9 @@ def _wire(obs, names=None, compose=False):
             mt = m.get("turn")                   # D47 배관: 보관된 말 — 지난 턴보다 오래된 말은 얼마나 전인지 병기
             old = (" — %d턴 전" % (now - mt)) if (now is not None and mt is not None and now - mt >= 2) else ""
             L.append('- %s: "%s"%s%s' % (_npc_name(m.get("from")) or nm(m.get("from", "?")), m.get("text", ""), tag, old))   # D69 NPC 의 말은 이름으로
+    recall = _people_recall(obs)             # D85 조건 (c) — 들은 말에 내가 적어 둔 이름이 나오면 그 기록이 떠오른다(지금 안 보이는 사람만)
+    if recall:
+        L += ["", "## 떠오른 기억 (들은 말에 네가 적어 둔 이름이 나왔다)"] + recall
 
     # ── 조립(09-08 D44, 파트너 네 갈래 "시트=나는 누구인가 · 관측=뭘 보고 있나 · 기억=무엇을 기억하나 · 선택지=지금 주어진 것"):
     #   시트·지침은 claude_brain 이 앞에 붙이고 선택지는 뒤에 붙인다. 여기서는 **기억 → 관측** 순 — 내 선택(임시 가정): 지금 보고
@@ -1873,6 +1961,19 @@ def _wire(obs, names=None, compose=False):
                     (' · %s' % target['effect']) if target.get('effect') else ''))   # D74 축복의 물약: 마시면 무엇이 오르나
         out += ["", "## 행동과 의사소통", "COMMON: " + " / ".join(G.CA.COMMON if obs.get('action_schema') else _compose_types()),
                 "의사소통: 잡담 / 제안"]
+        if obs.get("people") is not None:       # D85 인물 기록 — 세계의 규칙 한 번(⚠️문구 임시)
+            out += ['', 'PEOPLE:',
+                    "- 사람의 이름과 직업은 겉으로 보이지 않는다. 네가 기록해 둔 사람만 그 이름으로 불리고, 나머지는 '낯선 사람'이다.",
+                    '- 기록(선택): 응답 JSON 에 `person_note` {"target": "b<번호> 또는 사람의 id", "name": "부를 이름", "text": "그 사람에 대해 기억해 둘 한 줄"} — '
+                    '지금 보이거나 방금 네게 말한 사람만. 같은 사람을 다시 기록하면 고쳐 쓴다. 기록한 사람이 보이거나 들은 말에 그 이름이 나오면 기록이 떠오른다.']
+        pf = obs.get("partyform")
+        if pf is not None and obs.get('action_schema') and (pf.get("here") or pf.get("mine")):   # D84 조각 3 — ⚠️문구 임시
+            out += ['', 'PARTY:']
+            if pf.get("here"):
+                out.append('- party_form + target(b<번호>): 파티 결성 — 모험가 길드 구역에서만. 상대에게 청하고, 상대도 너에게 같은 행동을 하면 맺어진다. '
+                           '맺는 순간 파티에 들 사람이 모두 이 구역에 있어야 한다. 계단은 파티원끼리 함께 쓰고, 파티가 없으면 혼자 쓴다.')
+            if pf.get("mine"):
+                out.append('- party_leave: 파티 탈퇴 — 너 혼자 떠난다(대상 없음). 남은 사람이 하나면 그 파티는 없어진다.')
         if obs.get('skills'):
             out += ['', 'SKILL:']
             for skill in obs['skills']:
@@ -1985,13 +2086,83 @@ def _exit_state(ex):
     return " — 봉인돼 있다(굳게 닫혀 있다)" if ex.get("sealed") else " — 열려 있다(마을로 통한다)"
 
 
+def _npc_note_sfx(f, people):
+    """보이는 NPC 줄의 꼬리(D85 조각 ②) — 내가 그 NPC 에 남긴 기록이 있으면 한 줄. 세계가 쓴 칸(역할·특징)은 그 줄이 이미 말한다."""
+    if people is None or f.get("type") != "npc":
+        return ""
+    e = people.get("npc:%s" % f.get("name"))
+    return (" — 네 기록: %s「%s」" % (("%s, " % e["name"]) if e.get("name") and e["name"] != f.get("name") else "", e["text"])) if e and e.get("text") else ""
+
+
+def _person_sfx(b, people):
+    """보이는 사람 줄의 꼬리(D85): 기록이 있으면 내 기록 한 줄, 없으면 겉모습. 스위치가 꺼진 판(people None)은 빈 문자열."""
+    if people is None:
+        return ""
+    e = people.get("b%s" % b.get("char"))
+    if e and e.get("text"):
+        return " — 네 기록: 「%s」" % e["text"]
+    if e:
+        return ""
+    return (" — 겉모습: %s" % b["looks"]) if b.get("looks") else ""
+
+
+def _people_recall(obs):
+    """조건 (c) — 들은 말에 내가 적어 둔 이름이 나오면 그 기록이 떠오른다(D85, 로어북의 키워드 활성화). 엔진은 말의 뜻을 읽지 않는다 —
+    글자 일치만 본다. 지금 보이는 사람은 제 줄에 이미 기록이 붙으니 뺀다. 이름은 2자 이상만(한 글자 이름은 아무 말에나 걸린다)."""
+    people = obs.get("people")
+    if people is None:
+        return []
+    sights = obs.get("sights") or {}
+    seen = ({"b%s" % b.get("char") for b in sights.get("bots", [])}
+            | {"npc:%s" % f.get("name") for f in sights.get("features", []) if f.get("type") == "npc"})
+    text = " ".join(str(m.get("text", "")) for m in (obs.get("messages") or []))
+    if not text.strip():
+        return []
+    out, told = [], set()
+    for pid, e in sorted(people.items()):
+        nm_ = str(e.get("name") or "")
+        if pid in seen or len(nm_) < 2 or nm_ not in text:
+            continue
+        told.add(pid)
+        world = _npc_entry(pid[4:]) if pid.startswith("npc:") else None   # 준비된 칸이 있는 사람(NPC)은 그것도 같이
+        out.append("- %s: %s「%s」" % (nm_, ("%s · 네 기록 " % world) if world else "", e.get("text") or "(이름만 적어 두었다)"))
+    for nm_, world in sorted(_npc_book().items()):      # 규칙은 평등하다 — 세계가 미리 써 둔 항목(NPC)도 이름을 들으면 떠오른다
+        pid = "npc:%s" % nm_
+        if pid in seen or pid in told or len(nm_) < 2 or nm_ not in text:
+            continue
+        out.append("- %s: %s" % (nm_, world))
+    return out
+
+
+_NPC_BOOK = None
+
+
+def _npc_book():
+    """미리 준비된 로어북 — NPC 정의(entities/npc)의 {이름: '역할 — 특징 한 줄'}. 세계가 쓴 칸(D85 활성화 표의 '누가 썼나 = 세계').
+    캐릭터의 인물 기록과 같은 조건으로 뜬다: (a) 보일 때는 관측의 피처 줄이 이미 말한다(D69 역할·D75 특징) · (c) 들은 말에 이름이 나올 때."""
+    global _NPC_BOOK
+    if _NPC_BOOK is None:
+        book = {}
+        for d_ in G.ENT.by_kind("npc"):
+            c_ = (d_.get("comps") or {})
+            bits = [x for x in ((c_.get("npc") or {}).get("role"), (c_.get("story") or {}).get("trait")) if x]
+            if d_.get("name") and bits:
+                book[d_["name"]] = " — ".join(bits)
+        _NPC_BOOK = book
+    return _NPC_BOOK
+
+
+def _npc_entry(name):
+    return _npc_book().get(name)
+
+
 def _exit_gather(ex, names=None):
     """모임 규칙을 미리(D66, 09-13 파트너 "팀원이 전부 모여야 계단을 내려갈 수 있다고 가르쳐줘야"): obs exit.gather 가 있으면
     누가 아직 멀고(시야 밖/보임) 누가 하던 일이 있는지 — 시도하기 전에 안다. 사실만(무엇을 하라는 말은 없다)."""
     g = ex.get("gather")
     if not g:
         return ""
-    nm = lambda c: (names or {}).get(c, "봇%s" % c)
+    nm = lambda c: (names or {}).get(c, ("%s(봇%s)" % ((names or {})["?"], c)) if (names or {}).get("?") else "봇%s" % c)   # D85: 모르는 사람 = 낯선 사람(봇N)
     verb = "함께 돌아가려면" if ex.get("gate") else "함께 내려가려면"
     bits = []
     if g.get("missing"):
@@ -2000,7 +2171,7 @@ def _exit_gather(ex, names=None):
                                                          for m in g["missing"])))
     if g.get("busy"):
         bits.append("%s는 하던 일이 있다" % "·".join(nm(c) for c in g["busy"]))
-    return " · %s %s — 일행 전원이 곁(3칸 안)에 모여야 한다" % (verb, ", ".join(bits))
+    return " · %s %s — %s 전원이 곁(3칸 안)에 모여야 한다" % (verb, ", ".join(bits), "네 파티원" if g.get("mates_only") else "일행")   # D84
 
 
 def _safety_blocked(why):
@@ -2072,7 +2243,7 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
         bot = {**h, "char": char, "maxhp": h.get("hp")}
     # D17-3: obs 는 JSON 덤프가 아니라 자기설명 문장(_wire)으로 나간다 — dict 계약은 불변.
     # options 는 _wire 가 렌더하지 않는다: 메뉴 모드=아래 번호 목록이 그것, 자유서술=비노출(순수성).
-    names = {o["char"]: (o.get("name") or o.get("job", "동료")) for o in (roster or [])}
+    names = _names_for(bot, roster)          # D85: 인물 기록이 걸린 몸은 보는 사람 기준(옛 판은 실명 그대로)
     if COMPOSE:
         instructions = COMPOSE_PROMPT_SOLO if solo else COMPOSE_PROMPT
         if obs.get('skills'):
@@ -2204,6 +2375,23 @@ def _parse_decision(raw, why, obs, char, roster):
         bline = (str(obj.get("book_line", "") or "").strip()[:NOTE_LEN] if bi else "")
         if bline:
             rel = {**rel, "book_line": {"key": bi["key"], "text": bline}}   # 발급기(bestiary)가 원장 note 로 남긴다(엔진 불가침)
+        pn = obj.get("person_note")                                          # D85 인물 기록 — 스위치 판에서만, 지금 보이거나 방금 내게 말한 사람만
+        if obs.get("people") is not None and isinstance(pn, dict):
+            ptg = re.sub(r"^(봇|b|bot)\s*", "", str(pn.get("target") or "").strip(), flags=re.I)
+            okc = ({str(b_.get("char")) for b_ in (obs.get("sights") or {}).get("bots", [])}
+                   | {str(m_.get("from")) for m_ in (obs.get("messages") or []) if str(m_.get("from", "")).isdigit()})
+            pname = " ".join(str(pn.get("name") or "").replace('"', "").split())[:PERSON_NAME_LEN]
+            ptext = " ".join(str(pn.get("text") or "").split())[:NOTE_LEN]
+            npc_f = next((f_ for f_ in (obs.get("sights") or {}).get("features", [])        # D85 조각 ②: NPC 도 같은 규칙 — 보이는 NPC(f<id>)나
+                          if f_.get("type") == "npc" and str(pn.get("target") or "").strip() in (f_.get("id"), f_.get("name"))), None)
+            if npc_f is None:                                                                  #   방금 내게 말한 NPC(from 'npc:<이름>')에 대해 적을 수 있다
+                spoke = {str(m_.get("from"))[4:] for m_ in (obs.get("messages") or []) if str(m_.get("from", "")).startswith("npc:")}
+                if str(pn.get("target") or "").strip() in spoke:
+                    npc_f = {"name": str(pn.get("target")).strip()}
+            if npc_f is not None and pname:
+                rel = {**rel, "person_note": {"to": "npc:%s" % npc_f["name"], "name": pname, "text": ptext}}
+            elif ptg in okc and ptg != str(char) and pname:
+                rel = {**rel, "person_note": {"to": ptg, "name": pname, "text": ptext}}
         orc = next((n for n in (obs.get("notices") or [])                   # D61 신탁 응답 — 아직 안 답한 요청이 관측에 있을 때만 받는다
                     if n.get("kind") == "oracle" and n.get("id") and not n.get("replied")), None)
         oline = (str(obj.get("oracle_reply", "") or "").strip()[:120] if orc else "")
@@ -2309,7 +2497,7 @@ def social_all(d, bots, inbox=None):
     def ask(b):
         prompt = _with_context(_sheet(b, roster) + "\n"
                                + (SOCIAL_PROMPT_SOLO if getattr(d, 'solo', False) else SOCIAL_PROMPT)
-                               + "\n\n" + _wire(obss[b['char']], names)
+                               + "\n\n" + _wire(obss[b['char']], _names_for(b, roster, real=names))   # D85: 보는 사람 기준 호칭
                                + "\n\n오직 JSON 한 줄로만 답하라.")
         raw, why = _call_claude(prompt, "haiku")
         obj, _jwhy = _extract(raw)
@@ -2434,6 +2622,11 @@ def think_all(d, bots, inbox=None, on_error=None):
                 rl["to"], {"bones": {}, "total": 0, "line": None, "line_turn": None,
                            "line_src": None, "queue": []})
             e["line"], e["line_turn"], e["line_src"] = rl["line"], d.turn, "self"
+        pn = dec.get("person_note")
+        if pn and by[c].get("people") is not None:   # D85 인물 기록 — 그 사람 항목에 겹쳐 쓴다(옛 줄은 스트림 decisions 에 남는다). 엔진은 내용을 안 읽는다
+            key = pn["to"] if str(pn["to"]).startswith("npc:") else "b%s" % pn["to"]   # 조각 ②: NPC 는 'npc:<이름>'(층을 넘어도 같은 사람 — 피처 id 는 층-로컬)
+            by[c]["people"][key] = {"name": pn["name"], "text": pn.get("text", ""), "turn": d.turn,
+                                    "depth": d.depth, "src": "self"}
         if dec.get("note"):              # D26 의미 기억 — 남긴 한 줄은 그 봇의 기억 로그로(FIFO)
             ns = by[c].setdefault("notes", [])
             ns.append(dec["note"])

@@ -15,6 +15,8 @@ PROFILE = 'compose-v0.5'   # 행동 계약(run_meta.compose_profile) — D48(202
 # 엔진의 follow order(D18 A-5)는 메뉴형(비교용 옛 규칙)·구판 리플레이용으로 남는다 — 조합형 파서만 모르는 동사가 된다.
 COMMON = ('goto', 'explore', 'search', 'attack', 'use', 'give', 'bond', 'wait', 'rest')
 DISTANCE_ACTIONS = ('search', 'attack', 'use', 'give', 'bond')
+PARTY = ('party_form', 'party_leave')   # D84 조각 3(2026-09-19): 파티 장부가 걸린 판(obs.partyform)에서만 읽는 동사 — COMMON 밖(옛 판의 행동 계약은 그대로).
+#   party_form + target(b<번호>) = 파티 결성(길드 구역에서 청하고 맞받는다 — 거리 무관) · party_leave(대상 없음) = 파티 탈퇴
 ITEM_SLOTS = {'i1': 'potion', 'i2': 'weapon', 'i3': 'armor', 'i4': 'boon'}   # i4=축복의 물약(D74, 09-15) — 병 단위, 있을 때만 관측에
 
 
@@ -149,7 +151,7 @@ def plan_step(d, bot, step, bots):
     typ, rid = step['type'], step.get('target')
     remembered = typ == 'goto' and rid in (bot.get('ledger') or {}).get('statics', {})
     refs = bot.get('_plan_refs', bot.get('_target_refs', {}))
-    valid = typ in ('wait', 'rest') or remembered or entity(d, bot, rid, bots, refs)
+    valid = typ in ('wait', 'rest', 'party_leave') or remembered or entity(d, bot, rid, bots, refs)
     if step.get('item'):
         valid = valid and entity(d, bot, step['item'], bots, refs)
     if valid:
@@ -169,9 +171,12 @@ def parse(obj, obs):
         typ = 'use'
     elif typ == 'drink':
         typ, target, item = 'use', 'self', 'i1'
-    if typ not in COMMON and typ not in {s['id'] for s in obs.get('skills', [])}:
+    if (typ not in COMMON and typ not in {s['id'] for s in obs.get('skills', [])}
+            and not (typ in PARTY and obs.get('partyform') is not None)):
         return None, 'invalid_type'
     out = {'type': typ}
+    if typ == 'party_leave':                       # 대상 없는 동사(wait·rest 와 같은 꼴) — 대상을 적어 와도 버린다
+        return out, None
     if not target and typ == 'search':             # 주변 조사라는 기존 문법의 호환 별칭
         target = 'self'
     if typ not in ('wait', 'rest') and not target:
@@ -283,8 +288,12 @@ def execute(d, bot, action, bots):
     """효과를 판정한다. 거리는 Dungeon의 공통 진입점에서 처리한다."""
     typ, rid = action['type'], action.get('target')
     target = entity(d, bot, rid, bots) if rid else None
-    if typ in ('wait', 'rest'):
+    if typ in ('wait', 'rest', 'party_leave'):
         return d._execute_legacy_action(bot, action, bots)
+    if typ == 'party_form':                        # D84 조각 3: 사람만 대상 — 판정(길드 구역·맞받기·전원 모임)은 엔진 한 곳에서
+        if target and target[0] == 'bot' and target[2] is not bot:
+            return d._party_form(bot, rid, bots)
+        return _base(bot, action, 'no_target')
     if not target:
         if typ == 'goto' and rid in (bot.get('ledger') or {}).get('statics', {}):
             return d._execute_legacy_action(bot, action, bots)

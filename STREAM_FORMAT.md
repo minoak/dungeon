@@ -47,6 +47,42 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 이 두 종류는 게임 프레임이 아니다(기존 소비자는 무시). 현재 이어갈 몸은 `/api/status.resume`(요약 json — 피클을 열지 않는다)으로 읽고, 곱게 멈추는 중은 `.stopping`.
 제어 파일 `state/stop.json` 은 임시 통신용. 스냅샷은 러너가 자기 폴더에 쓰고 되읽는 피클이다(사용자 입력 경로 없음 — `snapshot.py` 머리글).
 
+## 파티 결성 판 — 세계마다 제 시계 — 2026-09-19 D84 조각 2 additive (러너 스위치 `DUNGEON_PARTYFORM`, 기본 0 · 마을 판만)
+
+끈 판(기본)은 이 절의 어느 것도 생기지 않는다 — `run_meta` 에 열쇠가 없고 옆 파일도 없으며 스트림은 옛 판과 바이트까지 같다.
+켠 판은 계단을 쓴 **무리만** 층을 옮기고, 남은 사람의 세계는 계속 틱을 돈다("마을은 마을의 시계로, 던전은 던전의 시계로 — 사람이 있는 세계는 다 흐른다").
+같은 층은 같은 세계다: 간 층에 사람이 있으면 그 세계에 합류하고, 비어 있으면 보존된 그대로 복원되고, 처음이면 새로 지어진다. 사람이 없는 세계는 멈춘다.
+
+- `run_meta.partyform: true`(켠 판에만): 이 판의 `tick.bots` 는 '판의 전원'이 아니라 **그 세계에 있는 사람**이다. 파티 장부(누가 누구와 계단을 같이 쓰나)는 엔진 `d.parties`.
+- **본 스트림(`stream.jsonl`)은 한 사람을 좇는다** — 내 캐릭터(첫 번호), 쓰러졌으면 살아 있는 가장 앞 번호. 그 사람이 있는 세계의 틱만 실린다(`turn` 은 여전히 1부터 연속·틱당 하나).
+  좇는 사람이 층을 옮기면 지금과 같은 모양(`descend`|`ascend` → `level`)이고, 그 `level.party` 는 **그 세계에 있는 사람 전부**(먼저 와 있던 사람 포함)다.
+- `depart {turn, to_depth, dir:"up"|"down", party:[char]}`: 좇는 세계에서 **다른 사람들이** 떠났다 — 다음 틱부터 `tick.bots` 에 없다(쓰러진 것이 아니다).
+- `arrive {turn, from_depth, party:[봇 스냅샷]}`: 좇는 세계에 다른 사람들이 왔다 — 다음 틱부터 `tick.bots` 에 있다. 새 `level` 은 없다(층은 그대로).
+- `level.follow: char`(드묾): 좇던 사람이 쓰러져 본 스트림이 다른 세계로 옮겨 갔다 — `descend`/`ascend` 없이 오는 `level`.
+- **옆 파일 `state/stream_side.jsonl`**: 좇지 않는 세계의 기록. 같은 종류의 줄(`tick`·`descend`·`ascend`·`level`)에 `world`(그 세계의 층 — `descend`/`ascend` 는 떠난 층)가 붙는다.
+  좇지 않는 무리가 이미 사람이 있는 세계에 합류하면 옆 파일에 `level` 은 없다(본 스트림 쪽이면 `arrive`). 관전 클라이언트·캠페인·결산은 옆 파일을 읽지 않는다(v0 — 결산은 본 스트림의 투영).
+- 같은 틱 안의 순서: 모든 세계의 틱 → 그 다음에 전이. 옮겨 간 사람은 같은 틱에 두 번 움직이지 않는다. 같은 틱에 길이 갈린 무리(위/아래)는 한 틱에 한 무리씩 옮긴다.
+- 이어가기(D79): 스냅샷에 세계 목록·파티 장부·옆 파일 자리(`side_pos`)가 함께 얼고, 되살릴 때 옆 파일도 그 자리까지 자른다.
+- **파티 결성·탈퇴(조각 3, 같은 스위치)** — 조합형 동사 둘이 COMMON **밖**에 있다(`composed_actions.PARTY` — 장부가 걸린 판의 관측에서만 파서가 읽는다, `compose_profile` 은 그대로): `party_form` + `target:b<char>` = 파티 결성(길드 구역에서 청하고, 상대도 같은 행동을 하면 맺어진다 — 거리 무관·자동 접근 없음) · `party_leave`(대상 없음) = 파티 탈퇴(혼자 떠난다 — 둘이던 파티는 남은 사람도 파티 없는 사람이 된다).
+  - `tick.events[]` 자기 사건: `{type:"party_form", target, result, to, ...}` — result = `party_asked`(청을 열었다) · `party_formed`(`members:[char]`) · `party_need_guild`(길드 구역 밖 — `who` 가 있으면 그 사람이 밖, 없으면 나) · `party_not_gathered`(`missing:[char]` — 맺는 순간 파티에 들 사람이 모두 길드 구역에 있어야 한다) · `party_already` · `party_asked_already` · `no_target`. `{type:"party_leave", result}` — `party_left`(`members` 떠나기 전 파티원 · `freed` 같이 풀린 사람) · `party_none` · `party_need_guild`.
+  - 받은 쪽의 자기 사건(`bot.last`·궤적 — 걷던 걸음은 안 세운다): `party_asked_by{from}` · `party_joined{from, members}` · `party_member_left{from, freed:bool}`. 목격(`witnessed[].kind`): `ally_party_ask{char,to}` · `ally_party{char,to,members}`. 궤적·층 집계의 종류 `party`.
+  - `obs.partyform {mine:[char], here:bool, asks_in:[char], asks_out:[char]}`(장부 판에만): 내 파티원(나 빼고) · 지금 선 곳에서 맺을 수 있나(마을의 길드 구역) · 내게 청한 사람 · 내가 청해 둔 사람. 열린 청은 둘 다 길드 구역에 있는 동안만 열려 있다. **장부 판의 `obs.party[]`(명단)는 내 파티원만이다**(2026-09-19 — 파티를 맺는 순간이 소개다: 파티 밖 사람은 보일 때만 `sights.bots` 에 있고 명단에는 없다 · 파티가 없으면 빈 목록) — 항목에 additive `mate:true` · `away:<depth>`(이 층에 없다 — 러너가 틱마다 거는 `d.elsewhere`). `wait_allies.mates_only` · `exit.gather.mates_only` = 계단이 세는 사람이 '내 파티원'이라는 사실(문장용).
+- 정직 기록(v0 한계): 판의 끝은 옛 규칙 그대로다 — 누구든 길드에 보고하거나 최심층의 아래 계단으로 나가면 다른 세계에 사람이 남아 있어도 판이 닫힌다(`end.remaining` 에 남는다).
+  반응 장부의 층 집계는 좇는 사람의 층 기준이다. 도감 발급기는 세계마다 제 몹 지도를 쓰지만, 옆 파일에서 일어난 획득은 본 스트림만으로는 소급되지 않는다.
+
+## 인물 기록 — "낯선 사람" — 2026-09-19 D85 additive (러너 스위치 `DUNGEON_STRANGERS`, 기본 0 · 파티 결성 판에서만)
+
+끈 판(기본)은 이 절의 어느 것도 생기지 않는다(몸에 `people` 이 없으면 엔진·프롬프트가 옛 길 — 스트림은 옛 판과 바이트까지 같다).
+켠 판은 사람의 이름·직업이 자동으로 주어지지 않는다 — 캐릭터가 겪으며 직접 적은 기록만 그 사람의 호칭과 지식이 된다(도감의 '낯선 짐승 → 고블린'과 같은 구조, HARNESS D85 활성화 규칙 표).
+
+- `run_meta.strangers: true`(켠 판에만). **스트림·관전 화면의 이름은 실명 그대로다**(관전자는 안다) — 달라지는 것은 캐릭터가 받는 프롬프트의 호칭뿐이다(캐릭터마다 다르다).
+- `obs.people {"b<char>": {name, text, turn, depth?, src:"self"|"sheet"|"party"}}`(`stream_obs` 판): 그 캐릭터가 가진 인물 기록 전부. `src` = 내가 적음 | 시트에 작가가 쓴 관계 문장(씨앗) | 파티 결성 때의 소개(이름·직업).
+- `sights.bots[].looks`: 겉으로 보이는 것 한 줄(머리색 · 윗옷색 · 찬 무기 · 걸친 갑옷) — 낯선 사람을 알아볼 재료. 이름·직업은 없다.
+- `decisions[char].person_note {to, name, text}`: 이 결정에서 캐릭터가 남긴 기록(응답 JSON 의 선택 칸 `person_note {target, name, text}` — 지금 보이거나 방금 내게 말한 사람만, 같은 사람은 겹쳐 쓴다). 엔진·러너는 내용을 읽지 않는다 — 들은 대로 적히므로 거짓 이름도 그대로 적힌다.
+- 뜨는 조건(프롬프트): **(a) 그 사람이 보일 때** 그 사람 줄에 `네 기록: 「…」` · **(c) 들은 말(`messages[].text`)에 내가 적어 둔 이름이 글자 그대로 나올 때** `## 떠오른 기억` 절(지금 안 보이는 사람만 · 이름 2자 이상 · 내용 글자는 열쇠가 아니다).
+- **NPC 도 같은 규칙**(2026-09-19 조각 ②): NPC 정의(이름 → 역할 — 특징)는 세계가 미리 써 둔 항목이다 — 보일 때는 피처 줄이 말하고(D69·D75), 들은 말에 그 이름이 나오면 안 보여도 `## 떠오른 기억`에 뜬다. 캐릭터의 기록은 NPC 에도 남는다: `person_note.to` = `"npc:<이름>"`(응답의 target 은 보이는 NPC 의 피처 id 또는 방금 내게 말한 NPC 의 이름), `obs.people` 의 열쇠도 같다.
+- 파티 결성(`party_formed`) = 소개: 맺는 순간 서로의 기록에 이름·직업이 `src:"party"` 로 적힌다(이미 내가 적어 둔 기록은 안 덮는다). 관계 장부(`obs.relations[].name`)·목격(`witnessed[].name/to_name`)·메뉴 라벨의 이름도 보는 사람의 기록 기준이다.
+
 ## 스킬 원정 — 2026-09-10 additive, 2026-09-11 기본 채택
 
 모든 스킬 플래그가 OFF이면 기존 스트림과 동일하다. 활성 판은 `run_meta.alpha`로 식별한다.

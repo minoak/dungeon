@@ -361,6 +361,13 @@ check("⑨ 흩어진 출발 = 서로 다른 구역 · 지형은 전부 보이지
 w9 = brains._wire(o9a, {"1": "두란", "2": "카야"}, compose=True)
 check("⑨ 관측 문장: '같은 구역 안에서만 보이고 들린다' + '지금 있는 곳' · 옛 문장('한눈에') 없음",
       "같은 구역 안에서만 보이고 들린다" in w9 and "지금 있는 곳:" in w9 and "한눈에" not in w9)
+a9l = {**mkbot("1", *s9["1"]), "ledger": G.new_ledger()}       # 09-19 수선: 마을은 지형 전체가 보여도 사람은 같은 구역에서만 — 장부(마지막 본 자리)도 같은 자
+d9.view(a9l, [a9l, b9])
+far9 = "b2" in a9l["ledger"]["moving"]
+b9n = mkbot("2", a9l["x"] + 1, a9l["y"], job="도적")
+d9.view(a9l, [a9l, b9n])
+check("⑨ 다른 구역의 동료는 장부에 '마지막으로 본 자리'가 적히지 않는다(명단의 '어디 있는지 모른다'와 같은 말) · 곁에 오면 적힌다",
+      far9 is False and "b2" in a9l["ledger"]["moving"])
 inbox9, _ = show_runner.deliver_and_hail(d9, [a9, b9], {"1": "카야, 어디 있어?"}, {"1": "2"}, {"1": "잡담"}, {})
 check("⑨ 다른 구역의 말은 배달되지 않는다 · 목격도 안 된다", inbox9["2"] == [] and not d9.hears(b9, a9["x"], a9["y"]))
 b9["x"], b9["y"] = a9["x"] + 1, a9["y"]                        # 곁으로

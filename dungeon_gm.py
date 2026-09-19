@@ -196,6 +196,7 @@ EVENT_KINDS = {
     'wait_allies': True, 'search': True, 'exhausted': True,
     'give': True, 'bond': True, 'received': True, 'bonded': True,   # D47 ② 건네기·친목(한 쪽·받은 쪽)
     'quest': True,                                                   # D69 의뢰 맡음·진행·완수(층 집계에도 센다)
+    'party': True,                                                   # D84 조각 3 파티 결성·탈퇴(청함·청받음·맺어짐·떠남)
     'move': False, 'start': False, 'arrive': False, 'blocked': False, 'swap': False, 'misc': False,
 }
 WITNESS_LABELS = {              # 목격 사건(witnessed kind) → 집계 라벨. 문장은 brains._witness_prose 그대로
@@ -378,6 +379,24 @@ def event_tags(rec, names=None):
                                                    ' — 발밑에 놓임' if rec.get('placed') else ''))]
     if t == 'bonded':
         return [('bonded', '친목 받음', '%s: %s' % (nm(rec.get('from')), rec.get('form', '몸짓')))]
+    if t == 'party_form':                             # D84 조각 3 파티 결성 — 한 쪽의 자기 사건
+        if r == 'party_asked':
+            return [('party', '파티 결성을 청함', nm(rec.get('to')))]
+        if r == 'party_formed':
+            return [('party', '파티 결성', '·'.join(nm(c) for c in rec.get('members') or []))]
+        return [('misc', '파티 결성 안 됨', {'party_need_guild': '모험가 길드 구역 밖', 'party_not_gathered': '길드 구역에 없는 사람: '
+                                        + '·'.join(nm(c) for c in rec.get('missing') or []), 'party_already': '이미 같은 파티',
+                                        'party_asked_already': '이미 청해 두었다', 'no_target': '대상 없음'}.get(r, r))]
+    if t == 'party_leave':
+        if r == 'party_left':
+            return [('party', '파티 탈퇴', '·'.join(nm(c) for c in rec.get('members') or [] if c != rec.get('char')))]
+        return [('misc', '파티 탈퇴 안 됨', {'party_none': '파티가 없다', 'party_need_guild': '모험가 길드 구역 밖'}.get(r, r))]
+    if t == 'party_asked_by':                         # 받은 쪽의 자기 사건(hurt 문법 — 남이 내게 한 일)
+        return [('party', '파티 결성을 청받음', nm(rec.get('from')))]
+    if t == 'party_joined':
+        return [('party', '파티 결성', '·'.join(nm(c) for c in rec.get('members') or []))]
+    if t == 'party_member_left':
+        return [('party', '파티원 탈퇴', nm(rec.get('from')) + (' — 파티가 없어졌다' if rec.get('freed') else ''))]
     if t in ('goto', 'explore', 'follow'):
         who = nm(tgt[1:]) if (tgt[:1] == 'b' and tgt[1:].isdigit()) else place_word(tgt, 'decide')   # 사람 대상 goto(D48 개정)=이름
         if r == 'pathed':
@@ -530,6 +549,37 @@ def party_disband(parties, char):
         parties['of'].pop(c, None)
         parties['asks'].pop(c, None)
     return members
+
+
+def _looks_line(b):
+    import sheetkit                                  # 늦은 import — 엔진은 시트 도구에 기대지 않는다(겉모습 문장만 빌린다)
+    return sheetkit.looks_line(b)
+
+
+def people_names(bot):
+    """보는 사람 기준 호칭 사전(D85) — 내가 이름을 적어 둔 사람만 {char: 이름}. 없는 사람은 부르는 쪽이 '낯선 사람'이라 쓴다.
+    인물 기록 bot['people'] = {'b<char>': {name, text, turn, depth?, src}} — None 이면 옛 판(호칭 = 실명)."""
+    return {k[1:]: e['name'] for k, e in (bot.get('people') or {}).items()
+            if k[:1] == 'b' and isinstance(e, dict) and e.get('name')}
+
+
+def party_leave(parties, char):
+    """char 혼자 파티를 떠난다(D84 조각 3, 2026-09-19 파트너 "해체가 굳이 필요없네 탈퇴를 모두 하면 자연스럽게 해체가 되는거니까") —
+    남의 소속은 건드리지 않는다. 남은 사람이 하나뿐이면 그 사람도 파티 없는 사람이 된다(혼자인 파티는 없다 = 해체는 탈퇴의 결과).
+    반환 (떠나기 전 파티원들[자기 포함, 번호순], 같이 풀린 사람들) — 파티가 없었으면 ([], []). 순수 함수."""
+    members = party_members(parties, char)
+    if not members:
+        return [], []
+    parties['of'].pop(char, None)
+    rest = [c for c in members if c != char]
+    freed = rest if len(rest) <= 1 else []
+    for c in freed:
+        parties['of'].pop(c, None)
+    return members, freed
+
+
+PARTY_ZONE = 'guild_district'    # D84 조각 3: 파티를 맺는 곳 — 구역 id(entities/map·layout regions). 파트너 "파티를 맺을 때에는 모두 길드 구역에 있어야 해"
+PARTY_LEAVE_ANYWHERE = True      # 탈퇴는 어디서나(⚠️임시 가정 — 파트너 답 대기: 떠나는 건 혼자 하는 결정이라 장소·동의가 없다 / False = 길드 구역에서만)
 
 
 def quest_def(qid):
@@ -1977,7 +2027,8 @@ class Dungeon:
             busy = self._gather_busy(bot, [o for o in others if o not in far], 'exit')
             if far or busy:
                 exit_obj['gather'] = {'missing': [{'char': o['char'], 'seen': self._ally_seen(bot, o, seen)} for o in far],   # 09-15: 동료 보임은 단일 판정처(D70 구역 지각 정합 — 파티 명단 '시야 밖'과 모순 수선)
-                                      'busy': [o['char'] for o in busy]}
+                                      'busy': [o['char'] for o in busy],
+                                      **({'mates_only': True} if getattr(self, 'parties', None) is not None else {})}   # D84: 세는 사람 = 내 파티원
         led = bot.get('ledger')            # D17 스위치: 장부 켠 판만 구역 어휘·known 노출
                                            # (끈 판 obs 는 구판과 자구까지 동일 — 게이트 무수정 통과)
         way_keys = (('bearing', 'dist', 'visited', 'zone') if led is not None
@@ -1996,7 +2047,9 @@ class Dungeon:
                    **({'waiting': True} if (self.wait_verb            # 대기중(D25 개정 09-12) — 서 있는 몸도 보인다
                        and b.get('order') == 'wait') else {}),        #   (파트너 "대기중이라는 걸 추가해볼까? 하나씩")
                    **({'doing': dd} if (self.ally_doing                # 고른 행동(D27 개정 09-12) — 몸짓 깃발은 그대로,
-                       and (dd := self._ally_doing(b))) else {})}      #   뜻(무엇을 하러 가는지)을 더한다. 좌표 비노출
+                       and (dd := self._ally_doing(b))) else {}),      #   뜻(무엇을 하러 가는지)을 더한다. 좌표 비노출
+                   **({'looks': lk} if (bot.get('people') is not None    # D85 겉모습(머리색·윗옷색·무기·갑옷) — 인물 기록 판에만.
+                       and (lk := _looks_line(b))) else {})}           #   이름·직업은 겉으로 안 보인다(낯선 사람을 알아볼 재료는 이것뿐)
                   for b in bots
                   if b['alive'] and not b['won'] and b['char'] != bot['char']
                   and self._ally_seen(bot, b, seen)]
@@ -2010,6 +2063,15 @@ class Dungeon:
                  {'char': o['char'], 'job': o['job'], 'alive': o['alive'],
                   'won': o['won'], 'visible': self._ally_seen(bot, o, seen)}
                  for o in bots if o['char'] != bot['char']]
+        if getattr(self, 'parties', None) is not None and not self.solo:   # D84 조각 3(장부가 걸린 판에만 — 옛 판 명단은 글자까지 그대로)
+            # 09-19 파트너 "이제 동료에 대한 정보를 자동으로 줄 필요가 없을것 같은데 … 파티 결성이 되면 … 그 캐릭터에 대한 정보가 추가되는게 맞지 않나":
+            #   명단 = **내 파티원만**. 파티를 맺는 순간이 소개다 — 그때부터 그 사람의 직업·생사·보임(·다른 층에 있음)이 실린다.
+            #   파티 밖 사람은 눈에 보일 때만 관측(sights)에 있고, 안 보이면 있는지도 모른다.
+            mates_ = set(party_members(self.parties, bot['char']))
+            party = [{**p_, 'mate': True} for p_ in party if p_['char'] in mates_]
+            party += [{'char': e_['char'], 'job': e_.get('job', '?'), 'alive': True, 'won': False, 'visible': False,
+                       'away': e_.get('depth'), 'mate': True}
+                      for e_ in (getattr(self, 'elsewhere', None) or []) if e_.get('char') in mates_ and e_.get('char') != bot['char']]   # 다른 층에 가 있는 파티원(러너가 틱마다 건다)
 
         # ── 공간 장부(D17-1) obs 투영: '네가 아는 것' — 시야(sights)와 분리. 좌표는 안 나간다:
         # 항목은 {id?, 종류, 이름, 구역, 목격 turn} 뿐 — 봇은 id 로 지칭하고 좌표 운전은 엔진 몫.
@@ -2251,6 +2313,9 @@ class Dungeon:
         names = ({} if self.solo
                  else {o['char']: (o.get('name') or o['job']) for o in bots})
         _unknown = '낯선 사람' if self.solo else '동료'
+        if bot.get('people') is not None:          # D85(09-19 파트너 "낯선 사람이 맞아 … 로어북처럼"): 호칭은 보는 사람의 기록 기준 —
+            names = people_names(bot)              #   기록이 없는 사람은 메뉴·목격 문장에서도 '낯선 사람'이다(표기의 단일 진실원천)
+            _unknown = '낯선 사람'
         vis_allies = {a['char'] for a in allies}
         for a in allies:
             if a['adj']:
@@ -2410,12 +2475,16 @@ class Dungeon:
                 ent = {'char': oc, 'name': ob.get('name') or ob['job'], 'bones': bones,
                        'line': e.get('line'), 'line_turn': e.get('line_turn'),
                        'line_src': e.get('line_src')}
+                if bot.get('people') is not None:      # D85: 호칭은 내 기록 기준 · 시트에 작가가 쓴 문장은 인물 기록으로 옮겨 갔다(여기 실으면 '그런 사람이 있다'가 샌다)
+                    ent['name'] = people_names(bot).get(oc, '낯선 사람')
+                    if e.get('line_src') == 'sheet':
+                        ent['line'] = ent['line_turn'] = ent['line_src'] = None
                 if e.get('acts'):                      # D47 ② 상세 기록(친목·건네기 형태+상대 반응) — 최근 ACTS_SHOW 건
                     ent['acts'] = [dict(a) for a in e['acts'][-ACTS_SHOW:]]
                 if not invited and e.get('queue'):
                     ent['invite'] = e['queue'].pop(0)   # 결정당 초대 1개 — 나머지는 다음 결정
                     invited = True
-                if bones or ent.get('invite') or e.get('line'):
+                if bones or ent.get('invite') or ent.get('line'):
                     rel_obs.append(ent)
         rid_here = self._room_id_at(cx, cy)
         obs = {'pos': [cx, cy], 'hp': bot['hp'], 'maxhp': bot['maxhp'],
@@ -2458,6 +2527,8 @@ class Dungeon:
                                               #   있을 때만(intent 선례). last 는 그 마지막 항목과 같다
                 **self._floor_obs(bot),       # 층 집계·지난 층 결산(D40 ②) — 있을 때만
                 **({'book_invite': binv} if binv else {}),   # D55 인식 초대 — 대기 중일 때만(결정당 하나)
+                **({'people': {k: dict(v) for k, v in bot['people'].items()}} if bot.get('people') is not None else {}),   # D85 인물 기록(내가 쓴 것 — 스위치 판에만): 호칭·떠오르기의 재료
+                **({'partyform': pf_} if (pf_ := self._party_obs(bot, bots)) is not None else {}),   # D84 조각 3 파티의 사실(장부가 걸린 판에만): 내 파티원·여기서 맺을 수 있나·열린 청
                 'last': bot.get('last'),      # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의
                                               #   결과를 관측할 수 있어야 한다". 자기 경험=시야-온리 무위반
                 'order': ('explore' if str(bot.get('order') or '')[:1] == '@'
@@ -2547,7 +2618,7 @@ class Dungeon:
             aid = 'd%s:t%s:a%s' % (self.depth, self.turn, self._action_serial)
             action['action_id'] = aid             # 실제 접수된 결정에만 부여. 모델이 만드는 값이 아니다
             res = (self._begin_approach(bot, action, bots)
-                   if self.auto_approach and (typ in (CA.DISTANCE_ACTIONS if self.composed_actions else ('attack', 'interact', 'give', 'bond')) or (self.skills and typ not in CA.COMMON))
+                   if self.auto_approach and (typ in (CA.DISTANCE_ACTIONS if self.composed_actions else ('attack', 'interact', 'give', 'bond')) or (self.skills and typ not in CA.COMMON and typ not in CA.PARTY))
                    else None)
         else:
             res = None
@@ -2571,7 +2642,7 @@ class Dungeon:
         if not self.composed_actions:
             return self._execute_legacy_action(bot, action, bots)
         result = (SK.execute(self, bot, action, bots)
-                  if self.skills and action.get('type') not in CA.COMMON
+                  if self.skills and action.get('type') not in CA.COMMON and action.get('type') not in CA.PARTY   # PARTY = D84 조각 3(스킬 아님)
                   else CA.execute(self, bot, action, bots))
         SR.physical(self, bot, action, result, bots)
         return result
@@ -2600,6 +2671,10 @@ class Dungeon:
             res = self._give(bot, tgt, (action or {}).get('item'), bots)   # 건네기(D47 ②) — 곁의 동료에게 소지품
         elif typ == 'bond':
             res = self._bond(bot, tgt, (action or {}).get('form'), bots)   # 친목(D47 ②) — 곁의 동료에게 몸짓
+        elif typ == 'party_form':
+            res = self._party_form(bot, tgt, bots)    # 파티 결성(D84 조각 3) — 길드 구역에서 청하고 맞받는다
+        elif typ == 'party_leave':
+            res = self._party_leave(bot, bots)        # 파티 탈퇴(D84 조각 3) — 혼자 떠난다
         else:
             res = self._set_order(bot, tgt, bots)     # goto(기본)
         return res
@@ -2654,7 +2729,7 @@ class Dungeon:
             return None                           # 기존 무대상 공격 API는 현재 사거리 판정 유지
         base = {'char': bot['char'], **{k: action[k] for k in ('type', 'target', 'item', 'form') if k in action}}
         target = self._approach_target(bot, action, bots)
-        if self.skills and typ not in CA.COMMON:
+        if self.skills and typ not in CA.COMMON and typ not in CA.PARTY:
             why = SK.preflight(self, bot, SK.lookup(self, bot, typ), target)
             if why:
                 return SK.failure(bot, action, why)
@@ -4449,9 +4524,10 @@ class Dungeon:
                 led['moving']['m%d' % m.id] = {'id': 'm%d' % m.id, 'kind': m.kind,
                                                'x': m.x, 'y': m.y,
                                                'zone': self._zone_label(m.x, m.y), 'turn': t}
-        for o in (bots or []):                        # 마지막 목격(동료) — bots 는 view() 가 준다
-            if (o.get('char') != bot.get('char') and o.get('alive') and not o.get('won')
-                    and (o['x'], o['y']) in seen):
+        zone_rule = bool(self.town and getattr(self, 'town_hear', None) == 'zone')   # 09-19 수선: D70(마을 사람 지각 = 구역)은 장부에도 —
+        for o in (bots or []):                        # 마지막 목격(동료) — bots 는 view() 가 준다   칸이 보인다고(마을 = 지형 전체) 사람을 본 게 아니다.
+            if (o.get('char') != bot.get('char') and o.get('alive') and not o.get('won')   #   안 고치면 명단은 '어디 있는지 모른다'인데 기억 절이 매 틱 '방금 봄, S 22칸'을 말한다
+                    and (self._ally_seen(bot, o, seen) if zone_rule else (o['x'], o['y']) in seen)):
                 led['moving']['b%s' % o['char']] = {'id': 'b%s' % o['char'], 'char': o['char'],
                                                     'x': o['x'], 'y': o['y'],
                                                     'zone': self._zone_label(o['x'], o['y']),
@@ -4568,6 +4644,7 @@ class Dungeon:
                 return {**base, 'result': 'wait_allies', 'dir': went,
                         'missing': sorted(o['char'] for o in far),
                         'busy': sorted(o['char'] for o in busy),
+                        **({'mates_only': True} if getattr(self, 'parties', None) is not None else {}),   # D84: 세는 사람 = 내 파티원(문장용 사실)
                         **({'gate': True} if gate else {})}   # D65 워프게이트도 같은 모임 규칙
             group = [bot] + others
             for o in group:                      # 모인 전원이 함께 하강/탈출(보스층: 함께 귀환) — 이 층의 작정도 끝
@@ -4594,7 +4671,8 @@ class Dungeon:
             if far or busy:
                 return {**base, 'result': 'wait_allies', 'dir': 'up',
                         'missing': sorted(o['char'] for o in far),
-                        'busy': sorted(o['char'] for o in busy)}
+                        'busy': sorted(o['char'] for o in busy),
+                        **({'mates_only': True} if getattr(self, 'parties', None) is not None else {})}   # D84
             group = [bot] + others
             for o in group:
                 o['won'], o['went'] = True, 'up'
@@ -5086,6 +5164,123 @@ class Dungeon:
                       {'kind': 'ally_give', 'char': bot['char'], 'to': recv['char'], 'what': what},
                       exclude=(bot['char'], recv['char']))
         return {**base, 'result': 'given', 'to': recv['char'], 'what': what, **extra}
+
+    # ── D84 조각 3: 파티 결성·탈퇴 (2026-09-19 파트너 "조각 3은 (나) 가 맞고 파티를 맺을 때에는 모두 길드 구역에 있어야 해") ──
+    def _zone_id(self, x, y):
+        """이 칸이 속한 구역의 id(_town_zone 과 같은 판정, 이름 대신 id) — 구역이 없으면 None."""
+        res = getattr(self, 'layout_result', None) or {}
+        sp = res.get('spaces')
+        if not sp:
+            return None
+        pad = int(res.get('pad', 0) or 0)
+        lx, ly = x - pad, y - pad
+        for r in sp.get('regions', []):
+            for rx, ry, rw_, rh in r.get('rects', []):
+                if rx <= lx < rx + rw_ and ry <= ly < ry + rh:
+                    return r.get('id')
+        return None
+
+    def _in_party_zone(self, b):
+        """파티를 맺는 곳(마을의 모험가 길드 구역)에 서 있나."""
+        return bool(self.town and b.get('alive') and not b.get('won') and self._zone_id(b['x'], b['y']) == PARTY_ZONE)
+
+    def _party_asks(self, bots):
+        """열린 청 {청한 사람: {청받은 사람: 틱}} — 둘 다 길드 구역에 있는 동안만 열려 있다(한쪽이 구역을 떠나면 닫힌다).
+        닫힌 청은 장부에서 지운다. 마을이 아닌 층은 장부를 건드리지 않고 빈 것을 돌려준다(마을 사람들의 청을 던전이 지우면 안 된다)."""
+        ps = getattr(self, 'parties', None)
+        if ps is None or not self.town:
+            return {}
+        here = {o['char'] for o in (bots or []) if self._in_party_zone(o)}
+        asks = ps['asks']
+        for a in list(asks):
+            for t in list(asks[a]):
+                if a not in here or t not in here:
+                    del asks[a][t]
+            if not asks[a]:
+                del asks[a]
+        return asks
+
+    def _party_obs(self, bot, bots):
+        """관측의 파티 사실(장부가 걸린 판에만, 없으면 None): mine 내 파티원(나 빼고) · here 지금 선 곳에서 파티를 맺을 수 있나 ·
+        asks_in 내게 결성을 청한 사람 · asks_out 내가 청해 둔 사람. 사실만 — 무엇을 하라는 말은 없다."""
+        ps = getattr(self, 'parties', None)
+        if ps is None or self.solo:
+            return None
+        me = bot['char']
+        bot['_pf'] = True                                # 시트 조립(brains._sheet)이 읽는다 — 장부 판은 '- 동료:' 줄을 끼워 넣지 않는다
+        asks = self._party_asks(bots)
+        return {'mine': [c for c in party_members(ps, me) if c != me], 'here': self._in_party_zone(bot),
+                'asks_in': sorted(a for a, m in asks.items() if me in m), 'asks_out': sorted(asks.get(me) or {})}
+
+    def _party_form(self, bot, target_id, bots=None):
+        """파티 결성 — 길드 구역에서 상대에게 청하고, 상대도 나에게 같은 행동을 하면 맺어진다(맞받기). 맺는 순간 파티에 들 사람이
+        모두 길드 구역에 있어야 한다(이미 파티가 있는 쪽의 기존 파티원 포함). 거리는 안 본다(같은 구역 = 보이고 들린다, D70).
+        결과: party_asked(청을 열었다) · party_formed(맺어졌다) · party_need_guild(길드 구역 밖 — who 가 비면 나) · party_not_gathered
+        (missing 이 구역에 없다) · party_already(이미 같은 파티) · party_asked_already(내 청이 이미 열려 있다) · no_target. 한 턴 소모.
+        받은 쪽은 자기 사건(party_asked_by / party_joined)으로 안다 — 걷던 걸음은 안 세운다(친목·건네기와 같은 문법)."""
+        s = str(target_id or '')
+        tid = s if s[:1] == 'b' else 'b%s' % s
+        base = {'char': bot['char'], 'type': 'party_form', 'target': tid}
+        ps = getattr(self, 'parties', None)
+        if ps is None:
+            return {**base, 'result': 'nothing'}
+        me = bot['char']
+        recv = next((o for o in (bots or []) if o['char'] == tid[1:] and o is not bot and o['alive'] and not o['won']), None)
+        if recv is None or self._resolve_target(tid, bots, bot) is None:
+            return {**base, 'result': 'no_target'}
+        to = recv['char']
+        if not self._in_party_zone(bot):
+            return {**base, 'result': 'party_need_guild', 'to': to}
+        if not self._in_party_zone(recv):
+            return {**base, 'result': 'party_need_guild', 'to': to, 'who': to}
+        if to in party_members(ps, me):
+            return {**base, 'result': 'party_already', 'to': to}
+        asks = self._party_asks(bots)
+        if me not in (asks.get(to) or {}):               # 상대의 청이 없다 — 내 청을 연다
+            if to in (asks.get(me) or {}):
+                return {**base, 'result': 'party_asked_already', 'to': to}
+            ps['asks'].setdefault(me, {})[to] = self.turn
+            self._receive(recv, {'char': to, 'type': 'party_asked_by', 'from': me}, bots)
+            self._witness(bots, bot['x'], bot['y'], {'kind': 'ally_party_ask', 'char': me, 'to': to}, exclude=(me, to))
+            return {**base, 'result': 'party_asked', 'to': to}
+        union = sorted(set(party_members(ps, me)) | set(party_members(ps, to)) | {me, to})   # 맞받기 — 맺는 순간 전원이 길드 구역에
+        by_char = {o['char']: o for o in (bots or [])}
+        missing = [c for c in union if not (c in by_char and (not by_char[c]['alive'] or self._in_party_zone(by_char[c])))]
+        if missing:                                      # 쓰러진 파티원은 세지 않는다 · 이 층에 없는 파티원은 '안 모인 사람'
+            return {**base, 'result': 'party_not_gathered', 'to': to, 'missing': missing}
+        party_join(ps, union)
+        members = party_members(ps, me)
+        for c in members:                                # D85: 파티를 맺는 순간이 소개다 — 인물 기록이 걸린 몸은 서로의 이름·직업을 적는다
+            book = by_char[c].get('people') if c in by_char else None   #   (이미 내가 적어 둔 사람은 건드리지 않는다 — 내 기록이 우선)
+            if book is None:
+                continue
+            for oc in members:
+                if oc != c and oc in by_char and ('b%s' % oc) not in book:
+                    book['b%s' % oc] = {'name': by_char[oc].get('name') or by_char[oc]['job'], 'text': by_char[oc]['job'],
+                                        'turn': self.turn, 'depth': self.depth, 'src': 'party'}
+        for c in members:
+            if c != me and c in by_char and by_char[c]['alive']:
+                self._receive(by_char[c], {'char': c, 'type': 'party_joined', 'from': me, 'members': members}, bots)
+        self._witness(bots, bot['x'], bot['y'], {'kind': 'ally_party', 'char': me, 'to': to, 'members': members}, exclude=tuple(members))
+        return {**base, 'result': 'party_formed', 'to': to, 'members': members}
+
+    def _party_leave(self, bot, bots=None):
+        """파티 탈퇴 — 혼자 떠난다(남의 소속은 그대로). 둘이던 파티면 남은 한 사람도 파티 없는 사람이 된다(해체는 탈퇴의 결과).
+        결과: party_left(members 떠나기 전 파티원 · freed 같이 풀린 사람) · party_none(파티가 없다) · party_need_guild. 한 턴 소모."""
+        base = {'char': bot['char'], 'type': 'party_leave'}
+        ps = getattr(self, 'parties', None)
+        if ps is None:
+            return {**base, 'result': 'nothing'}
+        me = bot['char']
+        if not party_members(ps, me):
+            return {**base, 'result': 'party_none'}
+        if not PARTY_LEAVE_ANYWHERE and not self._in_party_zone(bot):
+            return {**base, 'result': 'party_need_guild'}
+        members, freed = party_leave(ps, me)
+        for o in (bots or []):
+            if o['char'] in members and o['char'] != me and o['alive']:
+                self._receive(o, {'char': o['char'], 'type': 'party_member_left', 'from': me, 'freed': o['char'] in freed}, bots)
+        return {**base, 'result': 'party_left', 'members': members, 'freed': freed}
 
     def _bond(self, bot, target_id, form, bots=None):
         """친목(D47 ②, 2026-09-09 파트너 "['대화' '친목' '머리를 쓰다듬기'] … 이건 친목 행위라 일반 대화와는 별개") — 곁의
