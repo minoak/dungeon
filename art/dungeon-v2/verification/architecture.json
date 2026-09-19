@@ -11,7 +11,7 @@
   "concept": {
     "seeds": 1000,
     "uniqueGrids": 1000,
-    "doors": 6884,
+    "doors": 7303,
     "connected": true,
     "deterministic": true,
     "previewMatchesEngine": true,

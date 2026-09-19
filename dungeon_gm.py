@@ -815,6 +815,7 @@ class Zone:
     rooms=생성기의 내부 골격(배치·스폰·구판 어휘용 존치), zones=스캐너가 **격자만 보고** 재구성한
     세계의 실제 짜임 — 손그림(from_ascii)·생성·미래 UGC 맵을 동일 취급(D20 빌더의 접속면).
     분류 규칙: 2×2 바닥 블록에 속한 칸=방, 나머지 바닥=통로(폭 1 길). 직교 연결 컴포넌트가 구역.
+    (블록의 한 변은 프로필 값 Dungeon.ZONE_BLOCK — 기본 2, 넓은 통로 프로필은 4 · D88)
     scan 스위치 켠 판만 만들어진다(기존 게이트 무수정 통과 — D17 장부 스위치 선례)."""
     __slots__ = ('id', 'kind', 'cells', 'x', 'y', 'w', 'h', 'doors', 'junctions', 'deadends')
 
@@ -850,6 +851,18 @@ class Door:
 
 
 class Dungeon:
+    # D88(2026-09-20) 구역 분류 프로필 — 스캐너가 '방'으로 읽는 바닥 블록의 한 변(K×K). 기본 2 = D19 원문
+    #   (2×2 블록=방, 폭 1=통로) 그대로라 옛 판·손그림 장면·마을은 글자 하나 안 바뀐다. 통로 폭이 2~3칸인
+    #   생성 프로필(dungeon_concept.ConceptDungeon)은 4 로 덮어쓴다 — 2×2 로 읽으면 넓은 통로가 방과 한
+    #   구역으로 뭉쳐(0콜 실측: 가장 큰 구역이 바닥 절반 이상인 시드 42/200 · 통로 구역 0개 56/100) 구역
+    #   어휘(크기·가 본 곳·재회·장부 주소)가 뜻을 잃는다. **클래스 속성**인 이유: from_ascii 는 __new__
+    #   경유라 인스턴스 속성은 명시 초기화 함정에 걸리고, 옛 피클 스냅샷(D79)에는 이 값이 없다.
+    ZONE_BLOCK = 2
+    # 구역의 사람말 이름(_zone_name) 임계 — 옛 생성기 크기(방 5~9 × 3~5 · 폭 1 통로) 기준. 프로필이 덮어쓴다(D88).
+    ZONE_BIG_ROOM = 30        # 다 본 방의 bbox 면적이 이 이상이면 '넓은 방'
+    ZONE_SMALL_ROOM = 12      #   이 이하면 '작은 방'
+    ZONE_LONG_CORRIDOR = 10   # 다 본 통로의 길이(_zone_len)가 이 이상이면 '긴 통로'
+
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                  scan=False, n_potions=0, loops=False, selfstop=False,
                  graves=False, events=False, dry_signal=False, hail=False, wait_verb=False,
@@ -1358,17 +1371,38 @@ class Dungeon:
         """격자의 바닥(FLOOR)을 방(2×2 블록)/통로(폭1)로 나눠 직교 연결 컴포넌트로 묶는다 —
         _scan_zones 와 _stamp_doors 가 같은 눈으로 격자를 읽는 공통 심장. 문 타일(+)은 바닥이
         아니므로 컴포넌트가 문에서 끊긴다(문=구역의 경계라는 정의가 격자에서 그대로 성립).
+        D88(09-20): 블록의 한 변은 프로필 값 ZONE_BLOCK(기본 2 = 아래 원문 경로 그대로). K>2 면 '넉넉한 공간'의
+        기준이 K×K 로 커지고(폭 2~3 통로=통로), **홀로 선 기둥**(벽 칸인데 직교 네 이웃이 전부 바닥)은 블록
+        판정 때만 바닥으로 센다 — 안 그러면 기둥 곁 칸들이 어떤 K×K 블록에도 못 들어 방 안에 가짜 '통로'
+        주머니와 가짜 트임 문이 생긴다. 기둥은 여전히 벽이다(구역에 안 들고 · 못 밟고 · 빛을 막는다) —
+        격자만 읽는 계약(D19)은 그대로.
         반환: (comp_at: 칸→컴포넌트 번호, room_cells, comps: [(kind, cells), ...]) — 행 우선 결정론."""
         floors = [(x, y) for y in range(self.h) for x in range(self.w)
                   if self.grid[y][x] == FLOOR]
         fset = set(floors)
         room_cells = set()
-        for (x, y) in floors:          # 2×2 블록 소속 검사 — 넉넉한 공간=방, 외길=통로
-            for ox, oy in ((0, 0), (-1, 0), (0, -1), (-1, -1)):
-                bx, by = x + ox, y + oy
-                if {(bx, by), (bx + 1, by), (bx, by + 1), (bx + 1, by + 1)} <= fset:
-                    room_cells.add((x, y))
-                    break
+        k = self.ZONE_BLOCK
+        if k <= 2:
+            for (x, y) in floors:      # 2×2 블록 소속 검사 — 넉넉한 공간=방, 외길=통로
+                for ox, oy in ((0, 0), (-1, 0), (0, -1), (-1, -1)):
+                    bx, by = x + ox, y + oy
+                    if {(bx, by), (bx + 1, by), (bx, by + 1), (bx + 1, by + 1)} <= fset:
+                        room_cells.add((x, y))
+                        break
+        else:
+            solid = set(fset)          # 블록 판정용 바닥 = 바닥 + 홀로 선 기둥(분류 때만)
+            for y in range(1, self.h - 1):
+                for x in range(1, self.w - 1):
+                    if self.grid[y][x] == WALL and all(
+                            (x + dx, y + dy) in fset for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0))):
+                        solid.add((x, y))
+            for by in range(self.h - k + 1):       # 전부 바닥인 K×K 블록마다 그 안의 바닥 칸 = 방
+                for bx in range(self.w - k + 1):
+                    if all((bx + i, by + j) in solid for j in range(k) for i in range(k)):
+                        for j in range(k):
+                            for i in range(k):
+                                if (bx + i, by + j) in fset:
+                                    room_cells.add((bx + i, by + j))
         comp_at, comps = {}, []
         for c in floors:               # 행 우선 스캔 → 컴포넌트 번호 결정론
             if c in comp_at:
@@ -1465,12 +1499,12 @@ class Dungeon:
 
     def _scan_zones(self):
         """격자만 읽어 구역(Zone)·문(Door)을 재구성한다 — 스캐너의 토대.
-        ① 분류: 2×2 바닥 블록에 속한 칸=방 후보, 나머지 바닥=통로(폭 1 길).
+        ① 분류: 2×2 바닥 블록에 속한 칸=방 후보, 나머지 바닥=통로(폭 1 길). 블록 크기=ZONE_BLOCK(D88, 기본 2).
         ② 구역: 같은 분류의 직교 연결 컴포넌트. id=스캔 순서(행 우선) — 방 r0.., 통로 c0..
         ③ 문: (a) 문 타일(+) — 직교 이웃 바닥이 정확히 두 구역이면 그 사이의 문(격자 실재, 광학 차단)
               (b) 서로 다른 구역의 바닥이 직교로 맞닿는 접경 칸쌍의 묶음(문 없는 트임 —
                  개방 아치·손그림 맵 하위호환. 빛은 안 막는다)
-        ④ 통로 사건: 갈림길(직교 바닥 이웃 3+)·막다른 곳(이웃 1).
+        ④ 통로 사건: 갈림길(직교 바닥 이웃 3+)·막다른 곳(이웃 1) — 폭 1 길 전용(ZONE_BLOCK>2 프로필은 비운다, D88).
         전부 결정론(굴림 없음)·읽기 전용 — 세계를 바꾸지 않는다(시야 엔진 파이프라인 ②구조 조회의 재료)."""
         comp_at, room_cells, comps = self._zone_components()
         fset = set(comp_at)
@@ -1540,6 +1574,10 @@ class Dungeon:
             self.doors[door.id] = door
             self.zones[za].doors.append(door.id)
             self.zones[zb].doors.append(door.id)
+        if self.ZONE_BLOCK > 2:        # D88: 갈림길(직교 이웃 3+)·막다른 곳(이웃 1)은 **폭 1 길**의 정의다 — 폭 2~3
+            return                     #   통로에선 거의 모든 칸이 '갈림길'이 되고 '막다른 곳'은 0 이 돼 obs 의 ends 가
+                                       #   거짓 문장으로 폭주한다. 넓은 통로 프로필은 이 두 명사를 말하지 않는다(빈 목록) —
+                                       #   갈 길은 문·트임(zone.doors)과 방향 탐색(프런티어)이 말한다.
         for z in self.zones.values():  # 통로 사건: 갈림길·막다른 곳(이동 결정이 흐려지는 명사만)
             if z.kind != '통로':
                 continue
@@ -1550,6 +1588,12 @@ class Dungeon:
                     z.junctions.append((x, y))
                 elif deg == 1:
                     z.deadends.append((x, y))
+
+    def _zone_len(self, z):
+        """통로 구역의 길이(칸) — obs '길이 약 Nm'·'긴 통로' 판정의 한 벌. 폭 1 길(기본 프로필)은 칸 수가 곧 길이다.
+        D88: 넓은 통로 프로필(ZONE_BLOCK>2)은 칸 수가 폭만큼 부풀어 거짓이 된다 → bbox 의 긴 변으로 센다
+        (꺾인 통로는 긴 쪽 다리의 길이 — 실제 걸음 수보다 짧게 말하는 쪽으로 어긋난다)."""
+        return len(z.cells) if self.ZONE_BLOCK <= 2 else max(z.w, z.h)
 
     @staticmethod
     def _at_label(z, x, y):
@@ -2206,7 +2250,7 @@ class Dungeon:
                     zone_obs['at'] = self._at_label(zh, cx, cy)
                 if zh.kind == '통로':          # 통로: 길이=다 본 것만, 사건=눈에 든 칸만
                     if full:
-                        zone_obs['len'] = len(zh.cells)
+                        zone_obs['len'] = self._zone_len(zh)   # 폭 1 길=칸 수 · 넓은 통로 프로필=bbox 긴 변(D88)
                     zone_obs['ends'] = (
                         [{'kind': '갈림길', 'bearing': self._bearing(x - cx, y - cy),
                           'dist': max(abs(x - cx), abs(y - cy)), 'been': (x, y) in self.visited}
@@ -4524,9 +4568,9 @@ class Dungeon:
         zseen = (bot.get('zone_seen') or {}).get(zid, set())
         if z.cells <= zseen:                        # 다 본 공간만 크기를 안다("일부만 봤으면 모른다")
             if z.kind == '방':
-                area = z.w * z.h
-                return '넓은 방' if area >= 30 else ('작은 방' if area <= 12 else '방')
-            return '긴 통로' if len(z.cells) >= 10 else '통로'
+                area = z.w * z.h                    # 임계는 프로필 값(D88 — 기본 30/12/10 = 옛 판 그대로)
+                return '넓은 방' if area >= self.ZONE_BIG_ROOM else ('작은 방' if area <= self.ZONE_SMALL_ROOM else '방')
+            return '긴 통로' if self._zone_len(z) >= self.ZONE_LONG_CORRIDOR else '통로'
         return z.kind
 
     def _ledger_note(self, bot, seen, bots=None):
