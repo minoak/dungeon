@@ -13,6 +13,8 @@
      형태는 JSON 폴백으로 정직하게 노출
   ⑦ 프롬프트 조립: 메뉴·자유서술 모두 obs JSON 덤프(```json) 부재(다이어트 실증) +
      메뉴판에만 번호 목록 존재
+  ⑩ (09-20) 마을 장면: 실제 마을(layout·행인·의뢰·안내)의 관측을 메뉴형·조합형 두 직렬화에 — '그 밖의 정보' 0건
+     (③ 의 스윕이 던전만 돌아 마을의 열쇠 여덟이 JSON 으로 한 번 더 새던 것을 못 잡았다) + 문장은 그대로
 (스윕 = dummy 결정론 — LLM 0콜, 초 단위.)
 """
 import os
@@ -289,6 +291,64 @@ def layout_checks():
           and "시트의 성격·말투·목표·관계대로" not in sheet)
 
 
+def town_checks():
+    """⑩ (09-20 누수 수선) 마을 장면 — ③ 의 스윕은 던전만 돌아서, _wire 가 문장으로 그리면서도 _WIRE_KEYS 에 빠져 있던 마을의 열쇠 여덟
+    (boons·town_hear·town_zone·town_zone_about·expedition_returned·quests·floor_notice·town_guide)이 마을의 모든 판단 프롬프트 끝에
+    '## 그 밖의 정보' JSON 으로 한 번 더 실리는 걸 못 잡았다(0콜 확인: 첫 관측은 마을 안내 문단 전체가 JSON 으로 중복).
+    실제 마을(build_town — layout·행인·의뢰·안내)을 지어 메뉴형·조합형 두 직렬화 모두에서 절이 없고 문장은 그대로 있는지 본다."""
+    import tempfile
+    os.environ.setdefault("DUNGEON_STATE_DIR", tempfile.mkdtemp(prefix="wl_wire_"))   # 러너 import 가 state 폴더를 만든다 — 실제 state/ 무접촉
+    import show_runner as R
+
+    def scene(compose, returned=False):
+        q = G.new_quests()
+        d, starts = R.build_town(apart=True, quests=q, walkers=True, guide=True)
+        d.composed_actions = d.auto_approach = compose
+        bots = []
+        for c in "12":
+            b = G.spawn(d, c, bots)
+            b["ledger"] = G.new_ledger()
+            bots.append(b)
+        a = bots[0]
+        a["boons"] = 1                                   # D74 축복의 물약
+        if q is not None and getattr(d, "quest_ids", None):
+            q["accepted"][sorted(d.quest_ids.values())[0]] = {"turn": 1, "by": "1"}   # D69 맡은 의뢰 한 건
+        if returned:
+            d.expedition_returned = True                 # D69 원정에서 돌아온 마을(보고 전)
+        return d, bots, a
+
+    bad, seen_keys = [], set()
+    for compose in (False, True):
+        for returned in (False, True):
+            d, bots, a = scene(compose, returned)
+            for tick in range(1, 25):                    # 첫 관측(진입 한마디·마을 안내) + 걸어 다니는 동안(구역·게시판·이야기 줄)
+                d.turn = tick
+                for b in bots:
+                    if b.get("order"):
+                        d.step_order(b, bots)
+                        continue
+                    obs = d.view(b, bots)
+                    seen_keys |= set(obs)
+                    txt = brains._wire(obs, NAMES, compose=compose)
+                    if "## 그 밖의 정보" in txt:
+                        bad.append((compose, returned, tick, b["char"],
+                                    sorted(k for k in obs if k not in brains._WIRE_KEYS
+                                           and k not in ("action_schema", "actor", "targets", "items", "ways", "social_events", "skills"))))
+                    goal = "exit" if b is a else next((f["id"] for f in obs["sights"]["features"] if f.get("type") == "building"), "exit")
+                    d.act(b, {"type": "goto", "target": goal}, bots)
+    want = {"boons", "town_hear", "town_zone", "town_zone_about", "expedition_returned", "quests", "floor_notice", "town_guide"}
+    check("⑩ 마을 장면: 메뉴형·조합형 × 원정 전·귀환 뒤 — '그 밖의 정보' 0건(누수 %d)" % len(bad), not bad)
+    for x in bad[:3]:
+        print("         누수: %s" % (x,))
+    check("⑩ 표본이 그 열쇠 여덟을 전부 밟았다(%s)" % ",".join(sorted(want - seen_keys)), want <= seen_keys)
+    check("⑩ 여덟 전부 _WIRE_KEYS 에 등재", want <= brains._WIRE_KEYS)
+    d, bots, a = scene(True, returned=True)
+    first = brains._wire(d.view(a, bots), NAMES, compose=True)
+    check("⑩ 문장은 그대로 그린다: 구역·특징 · 축복의 물약 · 맡은 의뢰 · 귀환 · 진입 한마디 · 마을 안내",
+          all(s in first for s in ("지금 있는 곳: ", "축복의 물약 1병", "- 맡은 의뢰: ", "원정에서 돌아온 참이다",
+                                   "## 마을에 들어서며", "## 마을 안내 (처음 한 번만 들린다)")))
+
+
 def prompt_checks():
     obs, bot = fresh_obs()
     roster = [dict(bot, name="두란")]
@@ -339,6 +399,7 @@ def main():
     switch_checks()
     coord_leak_checks()
     layout_checks()
+    town_checks()
     prompt_checks()
     print("=" * 44)
     if C.failed:

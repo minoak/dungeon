@@ -324,7 +324,9 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None):
     """마을 NPC 의 한마디(1콜, 재시도 0 — 실패·차단이면 None 으로 고정 대사가 남는다). 캐릭터가 말을 걸 때만 불린다(NPC 는 먼저 말하지
     않는다 — 콜 폭증 방지). 재료 = NPC 정의(역할·성격) + 세계가 준 사실(facts, 러너가 조립: 의뢰·소문 숫자·파티 상태) + 방금 일어난 일
     (누가 무슨 말을 걸었고 엔진이 뭘 판정했나). **캐릭터 시트는 넣지 않는다**(차단 재료 차단 · NPC 는 시트를 모른다).
-    판정은 엔진이 이미 했다(선물·보고) — 여기서는 문장만. 엔진·러너는 내용을 안 읽는다(수첩·도감평과 같은 살)."""
+    판정은 엔진이 이미 했다(선물·보고) — 여기서는 문장만. 엔진·러너는 내용을 안 읽는다(수첩·도감평과 같은 살).
+    D93(09-20) 되받기: res.result 'npc_say' = 캐릭터가 이 NPC 에게 **말로** 건넸다(use 가 아니다 — 판정 없음). said=그 말, res.prev=그 앞에
+    이 NPC 가 그 캐릭터에게 한 말(있을 때만 — 대화의 앞 줄). 언제 부를지·상한은 러너(show_runner.npc_say_replies)가 정한다."""
     npc = npc or {}
     name = res.get("npc") or npc.get("name") or "마을 사람"
     who = "%s(%s)" % (bot.get("name") or ("모험가 %s" % bot.get("char", "?")), bot.get("job", "모험가"))
@@ -341,6 +343,10 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None):
         scene.append("- %s이(가) 말없이 다가와 네 앞에 섰다" % who)
     if r == "npc_hail":
         pass
+    elif r == "npc_say":                              # D93(09-20) 되받기 — 상대가 (다가와 말을 걸지 않고) 들리는 자리에서 말로 건넸다. 물건·보고의 판정은 없다 ⚠️문구 임시
+        if res.get("prev"):
+            scene.insert(0, '- 조금 전 네가 이 사람에게 한 말: "%s"' % str(res["prev"])[:NPC_LINE_LEN])
+        scene.append("- 세계의 판정: 말만 오갔다 — 물건을 건네거나 원정 보고를 받는 일은 상대가 네 앞에 와서 말을 걸 때 따로 처리된다(지금은 아니다)")
     elif r == "npc_gift":
         scene.append("- 세계의 판정: 너는 %s에게 %s을(를) 건넸다(%s — 이번 원정 몫)"
                      % (who, res.get("item", "?"), "기도의 답, 마시면 공격 능력치가 1 오른다" if res.get("item") == "축복의 물약" else "정해진 원정 물품"))   # D74
@@ -1098,14 +1104,15 @@ def _last_prose(last, names=None):
         who = ", ".join((_npc_name(c) or (names or {}).get(c, "동료")) for c in last.get("froms", [])) or "동료"   # D76: NPC 인사('npc:<이름>')도 여기로
         return "%s의 말에 걸음을 멈췄다 — 걷던 길이었다" % who
     if t == "said":                       # D72(09-14) 말의 결과 — 네 말이 누구에게 들렸나(배달 사실, 판단은 네 몫)
-        nm_ = lambda c: (names or {}).get(str(c), "동료")
+        nm_ = lambda c: _npc_name(c) or (names or {}).get(str(c), "동료")   # D93(09-20): 마을 사람('npc:<이름>')은 그 이름으로
         to = last.get("to")
         heard = [str(c) for c in (last.get("heard") or [])]
         head = '네가 한 말 「%s」(%s)' % (last.get("text", ""), "모두에게" if to == "all" else "%s에게" % nm_(to))
         if not heard:
             return head + " — 들은 사람 없음: 시야 안에 아무도 없어 혼잣말이 됐다"
         if to != "all" and str(to) not in heard:
-            return head + " — %s은(는) 시야 밖이라 못 들었고, %s이(가) 들었다" % (nm_(to), "·".join(nm_(c) for c in heard))
+            return head + " — %s은(는) %s 못 들었고, %s이(가) 들었다" % (nm_(to), "멀어서" if _npc_name(to) else "시야 밖이라",   # ⚠️문구 임시('멀어서' — D93)
+                                                                        "·".join(nm_(c) for c in heard))
         return head + " — %s이(가) 들었다" % "·".join(nm_(c) for c in heard)
     if t == "attack":
         if r == "no_target":
@@ -1274,7 +1281,7 @@ def _dlg_who(m, nm):
     if to == "all":
         return "%s→모두" % who
     if to:
-        return "%s→%s" % (who, "나" if (m.get("to_me") and not m.get("mine")) else nm(to))
+        return "%s→%s" % (who, "나" if (m.get("to_me") and not m.get("mine")) else (_npc_name(to) or nm(to)))   # D93: 마을 사람에게 건 말('npc:<이름>')은 그 이름으로
     return "%s(혼잣말)" % who
 
 
@@ -1355,7 +1362,9 @@ _TO_ALL = ("all", "모두", "다들", "전원", "모두에게", "다같이", "ev
 def _parse_to(raw, char, roster=None, obs=None):
     """말의 상대(D41 `to`, 응답 JSON 정식 필드 — 자유 텍스트 이름 파싱(07-24 기각 뒷문)이 아니다):
     봇 번호('2'·'b2'·'봇2') 또는 이름('카야') → 봇 번호 / all·모두·다들·전원 → 'all' / 자기 자신·미등재·빈 값 → None
-    (=혼잣말). 이름은 로스터(파티)로만 푼다 — 솔로 판(로스터 없음)은 시야 안 번호만 통한다(통성명 안 했으니)."""
+    (=혼잣말). 이름은 로스터(파티)로만 푼다 — 솔로 판(로스터 없음)은 시야 안 번호만 통한다(통성명 안 했으니).
+    D93(09-20): NPC 되받기 판의 마을에서는 내 말이 들리는 마을 사람(obs.npc_ears)의 ID·이름도 받는다 → 'npc:<이름>'
+    (들리지 않는 사람·목록에 없는 사람은 옛 그대로 None). 봇의 `to` 와 달리 아무도 세우지 않는다 — 러너가 그 NPC 의 답 한마디로 받는다."""
     if raw is None:
         return None
     s = str(raw).strip()
@@ -1363,6 +1372,9 @@ def _parse_to(raw, char, roster=None, obs=None):
         return None
     if s.lower() in _TO_ALL:
         return "all"
+    for e in (obs or {}).get("npc_ears") or []:      # D93(09-20) NPC 되받기 판의 마을 — 지금 내 말이 들리는 마을 사람의 ID('f3') 또는 이름 → 'npc:<이름>'
+        if s in (str(e.get("id")), str(e.get("name"))):   #   (inbox 의 from 'npc:<이름>' 과 같은 표기 · 관측에 npc_ears 가 없는 판 = 옛 풀이 그대로)
+            return "npc:%s" % e.get("name")
     others = {str(o.get("char")) for o in (roster or []) if str(o.get("char")) != str(char)}
     if not others:                                   # 솔로: 로스터 없음 → 시야 안 번호
         others = {str(b.get("char")) for b in ((obs or {}).get("sights") or {}).get("bots", [])}
@@ -1434,7 +1446,18 @@ _WIRE_KEYS = frozenset((
     "book_invite",   # 도감 인식 초대(D55): 해금·갱신 문턱에서 한 줄을 청한다 — 아래 "## 도감" 절
     "exhausted",   # 탐색 소진(D19 개정 09-06): '탐색' 어휘 대신 사실 한 줄
     "town",    # 마을(D29): 안전한 층의 사실 한 줄 — 아래 _wire 가 그린다
-    "notices",   # D61 건물 역할 부품: 게시판(의뢰)·신의 요청 — 마을 줄 아래, 문턱 근처에 섰을 때만
+    # 09-20 누수 수선: 아래 여덟은 _wire 가 이미 문장으로 그리는데 여기 등재가 빠져 있었다 — 마을의 모든 판단 프롬프트 끝에
+    #   '## 그 밖의 정보' JSON 으로 한 번 더 실렸다(0콜 확인: 마을 첫 관측은 마을 안내 문단 전체가 JSON 으로 중복). 마을을 도는
+    #   게이트가 없어 verify_wire ③ 이 못 잡았다 → verify_wire ⑩ 마을 장면이 이제 감시한다.
+    "boons",                 # D74 축복의 물약: '네 상태' 줄 · 조합형 소지품 절
+    "town_hear",             # D70 사람 지각 = 구역: 마을 줄의 문장을 고른다
+    "town_zone", "town_zone_about",   # D60 지금 있는 구역 · D75 구역 특징: 마을 줄 끝
+    "expedition_returned",   # D69 원정에서 돌아온 마을(보고 전): 한 줄
+    "quests",                # D69 맡은 의뢰와 진행: 한 줄
+    "floor_notice",          # D65 층에 들어서며 한 번 · D75 마을 진입 한마디 · D79 이어가기 안내: 제 절
+    "town_guide",            # D81 마을 안내 문단(시작 마을의 첫 관측 한 번): 제 절
+    "npc_ears",              # D93(09-20) 내 말이 들리는 마을 사람(NPC 되받기 판의 마을에만): '네 상태' 절의 한 줄 + 응답 `to` 풀이의 재료
+    "notices",   # D61 건물 역할 부품: 게시판(의뢰)·신의 요청 — 마을 줄 아래, 문턱 근처에 섰을 때만 · D90(09-20) 들린 말(kind 'overheard')
     "gear"))   # 장비(07-30): 아는 키지만 wire 는 일부러 안 그린다 — 착용 정보의 표현은
                #   시트(_sheet 차림 줄, 불변 프리픽스=캐싱)가 소유하고, 비교는 입수 메뉴
                #   라벨에만 나온다(파트너 설계: 상시 가변부 미노출). 여기 등재를 빼면
@@ -1538,11 +1561,18 @@ def _wire(obs, names=None, compose=False):
             else:
                 L.append("- %s신의 요청이 들려온다: 「%s」 (요청이지 명령이 아니다 — 따를지는 네가 정한다."
                          " 답하려면 응답 JSON 의 `oracle_reply` 필드, 선택, 120자)" % (where, n.get("text", "")))
+        elif n.get("kind") == "overheard":           # D90(09-20) 들린 말 — 구역에 들어선 첫 관측에 한 번. 들린 사실만(누가 누구에게 한 말인지까지) ⚠️문구 임시
+            L.append("- %s에 들어서며 들린 말(마을 사람들끼리 나누는 말이다 — 네게 한 말이 아니다): 「%s」" % (n.get("zone", "이곳"), n.get("text", "")))
     qs = obs.get("quests")                       # D69 맡은 의뢰(파티 장부) — 어느 층에서나, 진행은 세계가 센 숫자
     if qs:
         L.append("- 맡은 의뢰: " + " · ".join("%s(%s)" % (q.get("title", "?"), "완수" if q.get("done")
                                                           else "%d/%d" % (int(q.get("n") or 0), int(q.get("need") or 1)))
                                               for q in qs))
+    ears = obs.get("npc_ears")                   # D93(09-20) NPC 되받기 판의 마을 — 지금 내 말이 들리는 마을 사람과 세계가 하는 일(사실만, 말을 걸라는 말은 없다) ⚠️문구 임시
+    if ears:
+        L.append("- 지금 네 말이 들리는 마을 사람: %s — 응답 JSON 의 `to` 에 그 ID 를 적어 말하면 그 사람에게 건 말이 되고, 그 사람이 말로 답한다. "
+                 "마을 사람이 네게 건넨 말을 들은 뒤 `to` 없이 한 잡담도 그 사람에게 한 답으로 들린다. 한 사람이 되받는 말은 네가 이번에 마을에 머무는 동안 %d번까지다"
+                 % (" · ".join("%s(%s)" % (e.get("name", "?"), e.get("id", "?")) for e in ears), G.NPC_REPLY_MAX))
     z = obs.get("zone")
     scan = isinstance((z or {}).get("doors"), list)   # D19 구조 조회가 실려 있으면 트리 직렬화
     if z and not scan:
@@ -1911,12 +1941,13 @@ def _wire(obs, names=None, compose=False):
         L += ["", "## 동료가 한 말 (걷는 동안 들린 것까지 — 오래된 것부터. 너를 세운 건 제안뿐이다)"]
         for m in ms:
             to = m.get("to")                     # D41 지목 표식 — 누구에게 한 말인지(혼잣말은 아무도 안 멈춘다)
+            to_nm = (_npc_name(to) or nm(to)) if to else ""   # D93(09-20): 동료가 마을 사람에게 건 말('npc:<이름>')은 그 이름으로
             if m.get("kind") == "제안":          # D47 말의 종류 — 제안만 세운다(대상 없는 제안=회의)
                 tag = (" (모두에게 제안 — 회의)" if to in (None, "all") else " (너에게 제안)" if m.get("to_me")
-                       else " (%s에게 제안)" % nm(to))
+                       else " (%s에게 제안)" % to_nm)
             else:
                 tag = (" (모두에게)" if to == "all" else " (너에게)" if m.get("to_me")
-                       else (" (%s에게)" % nm(to)) if to else " (혼잣말)")
+                       else (" (%s에게)" % to_nm) if to else " (혼잣말)")
             mt = m.get("turn")                   # D47 배관: 보관된 말 — 지난 턴보다 오래된 말은 얼마나 전인지 병기
             old = (" — %d턴 전" % (now - mt)) if (now is not None and mt is not None and now - mt >= 2) else ""
             L.append('- %s: "%s"%s%s' % (_npc_name(m.get("from")) or nm(m.get("from", "?")), m.get("text", ""), tag, old))   # D69 NPC 의 말은 이름으로

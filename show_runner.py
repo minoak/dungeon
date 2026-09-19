@@ -239,6 +239,16 @@ STRANGERS_ON = os.environ.get("DUNGEON_STRANGERS", "0") == "1" and PARTYFORM_ON 
 NPC_BRAIN_ON = os.environ.get("DUNGEON_NPC_BRAIN", "1") != "0"   # D69 마을 NPC 두뇌 — 캐릭터가 말을 걸면 NPC 한마디를 LLM 이 쓴다(1콜,
                                                              #   먼저 말하지 않음·잡담 배달·판정은 엔진·고정 대사=폴백). 러너 기본 1,
                                                              #   더미 두뇌(dummy) 판에선 저절로 꺼진다(콜 0 유지)
+NPC_REPLY_ON = os.environ.get("DUNGEON_NPC_REPLY", "0") == "1" and NPC_BRAIN_ON   # D93(09-20, D82 실측 결함 "캐릭터가 NPC 인사에 말로 답해도 NPC 는
+#   되받지 않는다 — NPC 두뇌는 use 대상일 때만 답한다"의 수선) NPC 되받기 — 캐릭터가 (a) 들리는 마을 사람을 말의 상대(`to` = 그 NPC 의 ID)로 지목해
+#   말했거나 (b) 그 NPC 가 자기에게 건넨 말(먼저 건 인사·앞선 답)을 읽은 결정에서 상대 없이 말했으면, 그 NPC 가 한 번 되받는다(두뇌 1콜 — 기존
+#   brains.npc_reply 재사용, 답은 다음 틱 같은 구역 사람의 inbox 로 'npc:<이름>' 잡담). 상한: 같은 캐릭터-NPC 쌍은 마을 방문당 G.NPC_REPLY_MAX 번 ·
+#   한 틱에 NPC 당 1콜 · 캐릭터가 다시 말해야만 다시 답한다(연쇄 핑퐁 없음). **러너 기본 0**(론처가 켠다 — 게이트가 도는 기본 세계를 바꾸지 않는다) ·
+#   NPC 두뇌가 꺼진 판·더미 두뇌 판에선 저절로 꺼진다(콜 0 유지 — 관측·프롬프트도 옛 그대로).
+TOWN_LIFE_ON = os.environ.get("DUNGEON_TOWN_LIFE", "0") == "1"   # D90(09-20, 파트너 "마을에서 교류하고 여러 상호작용을 하며 실제로 이 마을에서 캐릭터가
+#   살아간다는 걸 보여 주고") 마을 생활 — 이 스위치 하나 뒤에 마을의 생활 부품이 선다(0콜): 구역의 '들린 말'(정의 entities/map 의 overheard 부품 —
+#   구역에 들어선 첫 관측에 한 줄, 메모 §4-4 "거리 분위기 '들린 말' 한 줄 고정 풀") · 마을 오브젝트·새 주민(같은 상수를 build_town 에서 읽는다).
+#   **러너 기본 0**(론처가 켠다) = 끈 판은 옛 판과 비트까지 같다. 세계 지문·run_meta 에는 켠 마을 판에만 적는다. layout 마을만.
 REST_ON = os.environ.get("DUNGEON_REST", "1") != "0"         # 휴식(D35, 09-06) — 러너 기본 1, 엔진
                                                              #   기본 0. 회복이 붙은 wait: 틱마다 HP,
                                                              #   완료 시 상태 태그 소거. 사건이 깨운다
@@ -742,6 +752,14 @@ def _story_of(eid):
         return None
 
 
+def _overheard_of(eid):
+    """D90(09-20) 구역 정의의 overheard 부품(들린 말 문장 목록) — 없으면 None."""
+    try:
+        return ((G.ENT.get(eid) or {}).get("comps") or {}).get("overheard") if eid else None
+    except Exception:
+        return None
+
+
 def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
     """town.json(손그림 고정 맵 — 고향은 랜덤이 아니다) → 마을 Dungeon.
     NPC 는 좌표로 심는다(맵의 '&'는 그림 표기 — from_ascii 는 바닥으로 읽음).
@@ -825,6 +843,13 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
         d.place_story[d._exit_fid] = dict(_story_of("dungeon_gate"))   # D75 던전 입구 소개(입구 피처=건물 정의 dungeon_gate)
     d.town_hear = "zone" if (TOWN_HEAR == "zone" and res.get("spaces")) else None   # D70 구역 지각 — 구역이 있는(layout) 마을만
     d.town_sight = "zone" if (TOWN_SIGHT == "zone" and res.get("spaces")) else None   # D86 시야 = 지금 선 구역 — 같은 조건
+    if NPC_REPLY_ON and brains.backend_name() != "dummy":   # D93(09-20) NPC 되받기 — NPC 두뇌가 실제로 도는 판에만 건다(관측 npc_ears·프롬프트 한 줄이
+        d.npc_reply = True                         #   '그 사람이 말로 답한다'고 말하므로 — 더미 판에 걸면 거짓). 안 걸면 속성 자체가 없다 = 옛 판 그대로
+    if TOWN_LIFE_ON and res.get("spaces"):         # D90(09-20) 마을 생활 — 구역의 들린 말 풀(구역 이름 → 문장들, 정의의 overheard 부품). 켠 판에만 건다
+        oh_ = {r_["name"]: list(_overheard_of(r_.get("entity")))
+               for r_ in res["spaces"].get("regions", []) if r_.get("name") and _overheard_of(r_.get("entity"))}
+        if oh_:
+            d.zone_overheard = oh_
     if res.get("spaces"):                          # D75 구역·마을 소개 — 구역 이름 → story, 마을 전체 history 는 진입 한마디(첫 관측 1회, G.spawn 이 floor_notice 로)
         for r_ in res["spaces"].get("regions", []):
             if r_.get("name") and _story_of(r_.get("entity")):
@@ -966,6 +991,10 @@ def deliver_and_hail(d, bots, says, say_to, say_kind=None, open_props=None):
         if sb is None or not sb["alive"]:
             continue
         heard = [b["char"] for b in bots if b["char"] != oc and any(m["from"] == oc for m in inbox.get(b["char"], []))]
+        if str(say_to[oc]).startswith("npc:"):     # D93(09-20): 마을 사람에게 건 말 — 그 사람이 들었으면 들은 사람에 든다('npc:<이름>', 되받기 판에만 이런 `to` 가 있다)
+            nf_ = next((f for f in d.features.values() if f.type == "npc" and f.name == str(say_to[oc])[4:]), None)
+            if nf_ is not None and d.hears(sb, nf_.x, nf_.y):
+                heard = heard + [say_to[oc]]
         d._trail_add(sb, {"type": "said", "to": say_to[oc], "kind": say_kind.get(oc, "잡담"), "heard": heard,
                           "text": str(t)[:40], "turn": d.turn})
     return inbox, hails
@@ -1181,6 +1210,69 @@ def npc_facts(d, npc_name, bots, fallen, quests):
     return facts
 
 
+def npc_say_targets(d, bots, decisions, inbox_in, spoke=()):
+    """D93(09-20) NPC 되받기 — 이 틱에 어느 NPC 가 누구의 말을 되받나(0콜 · 세계를 바꾸지 않는 판정). 봇 순서대로(결정론):
+    (a) 지목: 이 결정의 말의 상대(`to`)가 'npc:<이름>'(brains._parse_to 가 들리는 마을 사람만 그렇게 푼다) → 경로 'to'
+    (b) 답: 상대를 적지 않은 말인데, 이 결정이 읽은 편지함(inbox_in)에 그 NPC 가 **나에게** 건넨 말(먼저 건 인사 D71 · 앞선 답 D69/D93)이
+        있다 → 가장 최근에 말을 건넨 NPC 가 제게 한 답으로 듣는다 → 경로 'reply'. 모두에게(all)·동료에게 한 말·상대 없는 제안(= 회의, D47)은 해당 없음.
+    거르는 것: 말이 없는 결정·작정 집행(편지함을 안 읽었다)·건너뛴 결정 · 그 NPC 가 지금 그 말을 못 듣는다(단일 판정처 Dungeon.hears — 말한 뒤
+    한 걸음 옮긴 자리 기준) · 이 틱에 그 NPC 가 이미 말했다(spoke — use 로 말을 건 사람에게 답했거나 앞 번호의 말을 되받는다: 한 틱에 NPC 당 1콜) ·
+    같은 캐릭터-NPC 쌍의 되받기가 상한(G.NPC_REPLY_MAX, 방문당 = 봇 dict 수명)에 닿았다. NPC 가 먼저 말을 잇는 일은 없다 — 캐릭터가 다시
+    말해야만 다시 고른다(연쇄 핑퐁 없음). 반환 [{npc, bot, said, via, prev}] — prev = 그 NPC 가 이 캐릭터에게 앞서 한 말(있을 때만, 두뇌 재료)."""
+    out, taken = [], set(spoke)
+    feats = {f.name: f for f in d.features.values() if f.type == "npc"}
+    for b in bots:
+        dec = (decisions or {}).get(b["char"]) or {}
+        said = str(dec.get("say") or "").strip()
+        if not said or not b["alive"] or b["won"] or dec.get("skipped") or dec.get("src") == "plan":
+            continue
+        mine = [m for m in ((inbox_in or {}).get(b["char"]) or [])
+                if str(m.get("from", "")).startswith("npc:") and str(m.get("to")) == str(b["char"])]
+        to = dec.get("to")
+        if str(to or "").startswith("npc:"):
+            name, via = str(to)[4:], "to"
+        elif not to and mine and dec.get("say_kind") != "제안":   # 상대 없는 제안 = 회의(D47 — 시야 안 동료 전원에게 한 말)라 NPC 에게 한 답이 아니다
+            name, via = str(mine[-1]["from"])[4:], "reply"
+        else:
+            continue
+        f = feats.get(name)
+        if f is None or name in taken or not d.hears(b, f.x, f.y):
+            continue
+        if (b.get("npc_replies") or {}).get(name, 0) >= G.NPC_REPLY_MAX:
+            continue
+        taken.add(name)
+        out.append({"npc": name, "bot": b, "said": said, "via": via,
+                    "prev": next((m.get("text") for m in reversed(mine) if str(m["from"])[4:] == name), None)})
+    return out
+
+
+def npc_say_replies(d, bots, decisions, inbox_in, facts_of, spoke=()):
+    """D93 되받기의 두뇌 몫 — 고른 말마다 brains.npc_reply 1콜(결과 어휘 'npc_say' — 판정 없음, 문장만). 상한 장부(bot['npc_replies'][NPC 이름])는
+    **부른 횟수**로 센다(실패한 콜도 센다 = 콜 상한). 실패(None)면 그 NPC 는 말이 없다 — 고정 대사로 메우지 않는다(폴백이 말을 지어내지 않는다).
+    facts_of(NPC 이름) → 그 NPC 가 아는 사실(npc_facts). 반환 [{npc, char, line, via}] — 배달은 D69 NPC 의 답과 같은 길(다음 틱·같은 구역·잡담)."""
+    out = []
+    for t in npc_say_targets(d, bots, decisions, inbox_in, spoke):
+        b, name = t["bot"], t["npc"]
+        cnt = b.setdefault("npc_replies", {})
+        cnt[name] = cnt.get(name, 0) + 1
+        line = brains.npc_reply(b, {"result": "npc_say", "npc": name, **({"prev": t["prev"]} if t["prev"] else {})}, t["said"],
+                                facts_of(name), npc=(getattr(d, "npc_defs", None) or {}).get(name) or {})
+        if line:
+            b.setdefault("npc_hailed", set()).add(name)   # 말을 나눈 사이다 — 그 뒤에 곁을 지나도 '먼저 거는 인사'(D71, 방문당 한 번)를 새로 받지 않는다
+            out.append({"npc": name, "char": b["char"], "line": line, "via": t["via"]})
+    return out
+
+
+def deliver_npc_says(d, bots, inbox, npc_says, turn):
+    """D69 NPC 의 답 배달(09-20 D93 에서 함수로 뺐다 — 몸통은 옛 그대로) — 마을의 잡담으로 들린다: 정지 없음·뼈 없음·사교 콜 없음.
+    다음 틱 편지함(inbox)에 from 'npc:<이름>'(두뇌는 이름으로 표기, 관계 장부는 봇만 센다) · to = 말을 건 봇. D70: NPC 목소리도 같은 구역에서만."""
+    for npc_name, line_, to_c in npc_says:
+        nf = next((f for f in d.features.values() if f.type == "npc" and f.name == npc_name), None)
+        for b in bots:
+            if b["alive"] and not b["won"] and (nf is None or d.hears(b, nf.x, nf.y)):
+                inbox.setdefault(b["char"], []).append({"from": "npc:" + npc_name, "text": line_, "turn": turn, "to": to_c})
+
+
 _WK = ("d", "bots", "inbox", "pending", "open_props", "open_acts")   # D84 세계 하나의 지역 상태(틱 몸통이 머리에서 풀고 나갈 때 되담는다)
 
 
@@ -1192,6 +1284,8 @@ def _world_fingerprint():
             "compose": bool(brains.COMPOSE), "scan": SCAN_ON, "loops": LOOPS_ON, "town_apart": TOWN_APART_ON,
             "town_hear": TOWN_HEAR, "quests": bool(QUESTS_ON and NOTICES_ON), "plan": PLAN_ON,
             **({"partyform": True} if PARTYFORM_ON else {}),   # D84: 켠 판에만 적는다 — 옛 스냅샷의 지문과 글자까지 같게
+            **({"town_life": True} if (TOWN_LIFE_ON and TOWN_ON) else {}),   # D90(09-20): 같은 규율 — 마을의 부품 구성이 다른 판(이어가는 러너가 같아야 한다)
+            **({"npc_reply": True} if (NPC_REPLY_ON and TOWN_ON) else {}),   # D93(09-20): 같은 규율 — 관측(npc_ears)·되받기 장부가 다른 판
             **({"strangers": True} if STRANGERS_ON else {}),   # D85: 같은 규율
             **({"town_sight": "zone"} if (TOWN_SIGHT == "zone" and TOWN_ON) else {}),   # D86: 같은 규율
             **({"arch": DUNGEON_ARCH, "arch_v": dungeon_concept.ARCH_VERSION} if DUNGEON_ARCH else {})}   # D88: 같은 규율 — 생성 규칙이 다른 판의 몸을 이 세계에 놓지 않는다
@@ -1330,6 +1424,7 @@ def main():
         last_oracle_id, quests = snap["last_oracle_id"], snap["quests"]
         parties = snap.get("parties") if PARTYFORM_ON else None
     npc_brain = NPC_BRAIN_ON and brains.backend_name() != "dummy"       # D69 마을 NPC 두뇌 — 더미 판은 콜 0 유지
+    npc_reply_on = bool(NPC_REPLY_ON and npc_brain)                     # D93 NPC 되받기 — NPC 두뇌가 도는 판에만(build_town 의 d.npc_reply 와 같은 조건)
 
     if snap is None:                       # ── 새 판: 세계를 짓고 파티를 놓는다 ──
         if TOWN_ON:                            # 마을 판(D29): 원정은 고향에서 시작한다
@@ -1432,6 +1527,8 @@ def main():
                 **({"arch": DUNGEON_ARCH, "arch_v": dungeon_concept.ARCH_VERSION} if DUNGEON_ARCH else {}),   # D88(09-20 additive, 켠 판에만) 던전 생성 프로필·생성 규칙 버전 — 격자 크기는 아래 w/h. level 줄에 rooms[].art_style · architecture 가 실린다
                 **({"town_sight": "zone"} if (TOWN_SIGHT == "zone" and TOWN_ON) else {}),   # D86(09-19 additive, 켠 판에만) 마을의 시야 = 지금 선 구역 — 시야·정지 물리 메타(town_hear 급)
                 **({"strangers": True} if STRANGERS_ON else {}),   # D85(09-19 additive, 켠 판에만) 인물 기록 판 — 프롬프트의 호칭이 캐릭터마다 다르다(내가 적은 이름|낯선 사람) · decisions.person_note
+                **({"town_life": True} if (TOWN_LIFE_ON and TOWN_ON) else {}),   # D90(09-20 additive, 켠 판에만) 마을 생활 판 — 구역의 들린 말(tick.overheard · 관측 notices kind 'overheard') 등 마을의 생활 부품. 0콜
+                **({"npc_reply": True} if (NPC_REPLY_ON and npc_brain) else {}),   # D93(09-20 additive, 켠 판에만) NPC 되받기 판 — decisions.to 가 'npc:<이름>'일 수 있고 tick.npc_replies 가 실린다(NPC 두뇌가 도는 판에만 — 더미 판은 꺼진 것과 같다)
                 **({"partyform": True} if PARTYFORM_ON else {}),   # D84(09-19 additive, 켠 판에만) 파티 결성 판 — 계단은 내 파티원만·세계마다 제 시계:
                                            #   tick.bots 가 '이 세계에 있는 사람'만이고 depart/arrive 줄이 실린다(다른 세계 = stream_side.jsonl). 판 모양 메타(town 급)
                 seed=DUNGEON_SEED, w=DUNGEON_W, h=DUNGEON_H, depths=DEPTHS,
@@ -1755,6 +1852,12 @@ def main():
                 write_map(d, bots, turn)
                 time.sleep(STEP_DELAY)
 
+        npc_replies = []                     # D93(09-20) 이 틱에 NPC 가 되받은 말 [{npc,char,line,via}] — 지목(to) 또는 그 NPC 의 말에 상대 없이 한 답.
+        if npc_reply_on and getattr(d, "town", False):   #   배달은 D69 NPC 의 답과 한 길(npc_says → 다음 틱·같은 구역·잡담). 이 틱에 use 로 이미 말한 NPC 는 건너뛴다
+            npc_replies = npc_say_replies(d, bots, decisions, inbox_in, lambda nm_: npc_facts(d, nm_, bots, fallen, quests),
+                                          spoke={n_ for n_, _l, _c in npc_says})
+            npc_says += [(r_["npc"], r_["line"], r_["char"]) for r_ in npc_replies]
+
         if reaction_book is not None:
             for char, decision in sorted(decisions.items()):
                 reaction = reaction_book.consume(char, decision, turn)
@@ -1782,12 +1885,15 @@ def main():
         inbox, hails = deliver_and_hail(d, bots, says, say_to, say_kind, open_props)   # 사회층 한 틱(배달·뼈·정지 — D24·D36·D41·D47)
         for c in hails:
             event("   봇%s 멈칫 — %s" % (c, "제안을 받고 돌아본다" if (SAYKIND_ON and SAYTO_ON) else "말을 걸어온 동료 쪽을 돌아본다"))
-        for npc_name, line_, to_c in npc_says:    # D69 NPC 의 답 — 마을의 잡담으로 들린다: 정지 없음·뼈 없음·사교 콜 없음
-            nf = next((f for f in d.features.values() if f.type == "npc" and f.name == npc_name), None)
-            for b in bots:                        #   (from 'npc:<이름>' — 두뇌는 이름으로 표기, 관계 장부는 봇만 센다)
-                if b["alive"] and not b["won"] and (nf is None or d.hears(b, nf.x, nf.y)):   # D70: NPC 목소리도 같은 구역에서만
-                    inbox.setdefault(b["char"], []).append({"from": "npc:" + npc_name, "text": line_, "turn": turn, "to": to_c})
+        deliver_npc_says(d, bots, inbox, npc_says, turn)   # D69 NPC 의 답(· D93 되받은 말) — 마을의 잡담으로 들린다: 정지 없음·뼈 없음·사교 콜 없음
+        for npc_name, line_, to_c in npc_says:
             event('   %s \U0001f4ac "%s"' % (npc_name, line_))
+
+        overheard = list(getattr(d, "overheard_log", None) or [])   # D90(09-20) 이 틱의 관측에 실린 '들린 말'(엔진이 적어 둔 것 — 관측은 스트림에 없으니 여기서 남긴다)
+        if overheard:
+            del d.overheard_log[:]
+            for o_ in overheard:
+                event("   봇%s — %s에 들어서며 들린 말: 「%s」" % (o_["char"], o_["zone"], o_["text"]))
 
         # 스트림 tick — 빈 틱 포함 매 반복(turn 연속 불변식). GM 블록 *앞*에서 emit:
         # 여기서 즉시 직렬화되므로 GM 지연·이후 dict 변경과 독립(공유 오염 방어).
@@ -1800,6 +1906,8 @@ def main():
                     **({"replies": replies} if replies else {}),   # 반응 형태(D47 ②) [{from,to,kind,how}] — additive 계측
                     **({"oracle": oracle_new} if oracle_new else {}),   # D61 개정(09-13 additive) 이 틱에 새로 들린 신의 요청 {id,text}
                     **({"npc_hails": npc_hails} if npc_hails else {}),  # D71(09-14 additive) 이 틱에 NPC 가 먼저 건 인사 [{npc,char,line,key,line_src?}]
+                    **({"npc_replies": npc_replies} if npc_replies else {}),   # D93(09-20 additive) 이 틱에 NPC 가 되받은 말 [{npc,char,line,via 'to'|'reply'}] — 다음 틱 inbox 'npc:' 로 들린다
+                    **({"overheard": overheard} if overheard else {}),   # D90(09-20 additive) 이 틱의 관측에 실린 들린 말 [{char,zone,text}] — 구역에 들어선 첫 관측 한 번(0콜)
                     "events": turn_events,
                     "bots": [G.bot_snapshot(b) for b in bots],
                     "monsters": [m.as_dict() for m in d.monsters],
