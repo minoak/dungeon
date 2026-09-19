@@ -14,7 +14,9 @@
   ⑥ 프롬프트 문장: 마을 줄 · 기억 절 머리 · 직전 결과 · 옛 문장은 끈 판에만
   ⑦ 러너: run_meta.town_sight · 풀런(각본)에서 zone_enter 사건 · 끈 판엔 없음 · 지문은 켠 판에만
   ⑧ 배선(론처·문서)
-(기존 verify 72종은 별도 실행.)
+  ⑨ D87 엮인 사람의 구역 이동: 관계 장부에 적힌 사람(뼈 또는 한 줄)이 다른 구역으로 넘어가는 걸음 한 번에 한 줄 — 나가는 걸 본 사람 ·
+     들어오는 걸 본 사람 · 안 엮인 사람·다른 구역의 사람·넘어간 본인은 안 받는다 · 끈 판엔 없다 · 파티를 맺는 순간의 뼈 · 문장
+(기존 게이트는 별도 실행.)
 """
 import contextlib
 import io
@@ -242,6 +244,94 @@ lp, lh, hd, fmt = text("launcher.py"), text("launcher", "index.html"), text("des
 check("⑧ 론처: 체크박스(기본 끔)·옵션·환경변수", 'id="townSight">' in lh and 'id="townSight" checked' not in lh and "town_sight: $('townSight').checked ? 'zone' : 'all'" in lh
       and 'env["DUNGEON_TOWN_SIGHT"] = "zone" if opts.get("town_sight") == "zone" else "all"' in lp)
 check("⑧ 문서: HARNESS D86 · STREAM_FORMAT(town_sight·zone_enter)", "## [결정] D86." in hd and "DUNGEON_TOWN_SIGHT" in hd and "town_sight" in fmt and "zone_enter" in fmt)
+
+print("── ⑨ D87 엮인 사람의 구역 이동")
+def border(dd, za, zb):
+    """za 구역의 칸과 zb 구역의 칸이 상하좌우로 맞닿은 쌍 하나 — (za 쪽 칸, zb 쪽 칸)."""
+    for x, y in cells(dd, za):
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < dd.w and 0 <= ny < dd.h and dd.grid[ny][nx] == G.FLOOR and dd._zone_id(nx, ny) == zb and not dd.feature_at(nx, ny):
+                return (x, y), (nx, ny)
+    raise AssertionError("no border %s|%s" % (za, zb))
+
+
+def cross(dd, bs, mover, frm, to):
+    """mover 를 frm 칸에 세우고 맞닿은 to 칸으로 한 걸음 — step_order 의 결과."""
+    put(mover, frm)
+    mover["order"], mover["path"] = "@%d,%d" % to, dd.path_to(frm[0], frm[1], to[0], to[1], bs)
+    dd.turn += 1
+    return dd.step_order(mover, bs)
+
+
+def zone_facts(b):
+    return [w for w in (b.get("witnessed") or []) if w.get("kind") == "ally_zone"]
+
+
+def strangers(bs):
+    """기본 파티의 시트에는 서로의 배경 관계가 적혀 있다(= 처음부터 엮인 사람) — 장면마다 남남에서 시작한다."""
+    for b in bs:
+        b["relations"] = {}
+
+
+d9, bots9 = town()
+m1, w2, w3 = bots9
+strangers(bots9)
+frm9, to9 = border(d9, "guild_district", "main_street")
+g9 = [c for c in cells(d9, "guild_district") if max(abs(c[0] - frm9[0]), abs(c[1] - frm9[1])) > 3]
+put(w2, g9[0]); put(w3, g9[-1])
+d9.note_talk(m1, w2)                                     # 1 과 2 는 말을 섞은 사이 · 3 은 남
+res9 = cross(d9, bots9, m1, frm9, to9)
+check("⑨ 나가는 걸 본 엮인 사람(2)에게 한 줄 · 같은 구역의 남(3)은 안 받는다 · 넘어간 본인은 제 걸음의 결과만",
+      res9.get("result") in ("zone_enter", "arrived") and [(w["char"], w["zone"]) for w in zone_facts(w2)] == [("1", "번화가")]
+      and not zone_facts(w3) and not zone_facts(m1), (res9.get("result"), w2.get("witnessed"), w3.get("witnessed")))
+o9 = d9.view(w2, bots9)
+w9 = brains._wire(o9, NAMES, compose=True)
+check("⑨ 다음 결정에 한 번 실린다 — '네 눈으로 봤다: …가 번화가로 이동하는 것을' · 그다음 결정엔 없다",
+      any(w.get("kind") == "ally_zone" for w in o9.get("witnessed") or []) and "네 눈으로 봤다: %s(봇1)가 번화가로 이동하는 것을" % NAMES["1"] in w9
+      and not zone_facts(w2) and not (d9.view(w2, bots9).get("witnessed") or []), [ln for ln in w9.splitlines() if "눈으로" in ln])
+d10, bots10 = town()
+n1, n2, n3 = bots10
+strangers(bots10)
+frm10, to10 = border(d10, "guild_district", "main_street")
+ms10 = [c for c in cells(d10, "main_street") if max(abs(c[0] - to10[0]), abs(c[1] - to10[1])) > 3]
+put(n2, cells(d10, "temple_district")[0]); put(n3, ms10[-1])
+d10.note_talk(n1, n2); d10.note_talk(n1, n3)
+cross(d10, bots10, n1, frm10, to10)
+check("⑨ 들어오는 걸 본 엮인 사람(3, 번화가)은 받는다 · 엮였어도 다른 구역(2, 신전 지구)에 있으면 못 본다",
+      [(w["char"], w["zone"]) for w in zone_facts(n3)] == [("1", "번화가")] and not zone_facts(n2), (n3.get("witnessed"), n2.get("witnessed")))
+d11, bots11 = town()
+s1, s2, s3 = bots11
+strangers(bots11)
+frm11, to11 = border(d11, "guild_district", "main_street")
+g11 = [c for c in cells(d11, "guild_district") if max(abs(c[0] - frm11[0]), abs(c[1] - frm11[1])) > 3]
+put(s2, g11[0]); put(s3, g11[-1])
+d11._rel(s2, "1")["line"] = "어릴 적부터 친구"            # 시트의 배경 관계 — 말을 섞기 전에도 아는 사람
+cross(d11, bots11, s1, frm11, to11)
+check("⑨ 관계 장부에 한 줄만 있어도(시트의 배경 관계) 엮인 사람이다 · 인물 기록(선택 메모)은 안 본다",
+      len(zone_facts(s2)) == 1 and not zone_facts(s3) and s3.get("people") is None)
+d12, bots12 = town("all")
+t1, t2, t3 = bots12
+strangers(bots12)
+frm12, to12 = border(d12, "guild_district", "main_street")
+put(t2, [c for c in cells(d12, "guild_district") if c != frm12][0]); put(t3, cells(d12, "main_street")[-1])
+d12.note_talk(t1, t2); d12.note_talk(t1, t3)
+cross(d12, bots12, t1, frm12, to12)
+check("⑨ 끈 판(town_sight all)에는 없다 — 엮인 사람이 넘어가도 옛 그대로", not zone_facts(t2) and not zone_facts(t3))
+d13, bots13 = town()
+p1, p2, p3 = bots13
+strangers(bots13)
+d13.parties = G.new_parties()
+g13 = cells(d13, "guild_district")
+put(p1, g13[0]); put(p2, g13[1]); put(p3, g13[2])
+d13._party_form(p1, "b2", bots13); d13._party_form(p2, "b1", bots13)
+d13._party_form(p3, "b1", bots13); r13 = d13._party_form(p1, "b3", bots13)
+bone = lambda b, c: (((b.get("relations") or {}).get(c) or {}).get("bones") or {}).get("party", {}).get("n")
+check("⑨ 파티를 맺는 순간도 엮임이다 — 새로 파티원이 된 쌍마다 뼈 '파티를 맺음' 한 번(합쳐져 파티원이 된 2↔3 도 · 이미 파티원이던 1↔2 는 그대로 1)",
+      r13.get("result") == "party_formed" and G.BONES.get("party") == "파티를 맺음"
+      and [bone(p1, "2"), bone(p2, "1"), bone(p1, "3"), bone(p3, "1"), bone(p2, "3"), bone(p3, "2")] == [1, 1, 1, 1, 1, 1],
+      (r13, [bone(p1, "2"), bone(p2, "3"), bone(p3, "2")]))
+check("⑨ 문서: HARNESS D87 · STREAM_FORMAT(ally_zone)", "## [결정] D87." in hd and "ally_zone" in fmt)
 
 print("=" * 44)
 print("ALL PASS — verify_townsight (D86 마을의 시야 = 지금 선 구역: 구역 시야 · 아는 장소 · 새 구역에 들어서면 멈춘다 · 던전 무변화)"

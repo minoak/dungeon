@@ -667,7 +667,10 @@ BONES = {'talk': '이야기를 나눔', 'fought': '함께 싸움', 'waited': '�
          # D47 ②(2026-09-09, 파트너 "건네기를 만들려면 아이템 거래를 넣어야 해" · "['대화' '친목' '머리를 쓰다듬기'] — 친목 행위라
          # 일반 대화와는 별개"): 건네기는 방향이 있고(gave/received), 친목은 쌍이 같이 센다(파트너 초안 §A-5 "두란과 친목행위 3회"
          # — 묶어 표시, 상세는 acts 기록에). ⚠️ 라벨 문구는 세션 임시안 — 파트너 문장 대기.
-         'gave': '물건을 건넴', 'received': '물건을 받음', 'bond': '친목행위'}
+         'gave': '물건을 건넴', 'received': '물건을 받음', 'bond': '친목행위',
+         # D87(2026-09-19, 파트너 "관계형성이나 기본적인 상관관계에 대해서는 태그 시스템을 써도 될것 같아"): 파티를 맺는 순간도 엮임이다 —
+         # 합쳐진 파티에서는 말 한마디 안 섞은 두 사람이 파티원이 된다. 파티 장부가 걸린 판에서만 센다. ⚠️ 라벨 문구 임시.
+         'party': '파티를 맺음'}
 STRONG_BONES = ('rescued', 'at_death')   # 즉시 청한다 — 한 번이 열 번의 잡담보다 무겁다
 ACTS_MAX = 8             # 관계 장부의 상세 기록(D47 ②: 친목·건네기 한 건=형태+상대 반응) 보존 상한 — 상대별
 ACTS_SHOW = 4            # 결정 obs 에 되돌려주는 최근 기록 수(상대별)
@@ -4361,8 +4364,10 @@ class Dungeon:
         """한 칸 진입 = 좌표 갱신 + (보이는) 보물 줍기 + 계단 도착 + 숨은 함정 DEX 판정. 플래그 dict 반환.
         Stage 4: 출구 밟기 = 즉시탈출 아님(at_exit 만) — 하강/탈출은 interact + 파티 조율(_interact)로.
         Stage 3: 드러난 함정을 알고 밟으면 조심 보너스(CAREFUL_BONUS). 경보 함정은 층의 몹을 깨운다."""
+        ox, oy = bot['x'], bot['y']
         bot['x'], bot['y'] = nx, ny
         self.visited.add((nx, ny))
+        self._witness_zone_move(bot, bots, ox, oy, nx, ny)   # D87 — 구역 시야 판의 마을에서만(그 밖에선 아무 일도 없다)
         out = {}
         if (self.status or self.skills) and '출혈' in (bot.get('status') or {}):   # 출혈(D34): 걸음이 피를 낸다 —
             bot['bleed_steps'] = bot.get('bleed_steps', 0) + 1     #   제자리·전투·휴식은 안 낸다(라벨 그대로).
@@ -5085,6 +5090,32 @@ class Dungeon:
                 fact['result'] = result
             self._witness(bots, x, y, fact, exclude=tuple(mm['char'] for mm in movers))
 
+    def _acquainted(self, o, char):
+        """o 에게 char 가 '엮인 적 있는 사람'인가(D87) — 관계 장부(D36)에 뭔가 적힌 사람: 뼈가 하나라도 있거나(말을 섞음·건넴·
+        함께 싸움·파티를 맺음…) 한 줄이 있다(시트의 배경 관계 포함 — 친구는 말을 섞기 전에도 아는 사람이다). 엔진이 세는
+        숫자만 본다 — 에이전트가 무엇을 적었나(인물 기록)는 안 본다(선택 메모에 기능을 걸면 '적는 법'을 가르쳐야 한다)."""
+        e = (o.get('relations') or {}).get(char)
+        return bool(e and (e.get('line') or any((b or {}).get('n') for b in (e.get('bones') or {}).values())))
+
+    def _witness_zone_move(self, bot, bots, ox, oy, nx, ny):
+        """D87 구역 이동 목격 — 구역 시야(D86) 판의 마을에서, 나와 엮인 적 있는 사람(_acquainted)이 다른 구역으로 넘어가는
+        그 한 걸음에 한 줄(witnessed 문법: 다음 결정 1회). 경계라는 물건은 세계에 없다 — 바닥이 구역으로 나뉘어 있을 뿐이라
+        사실은 '~가 (구역)으로 이동'(파트너: "그냥 교집합처럼 인접구역으로 이동 이렇게 보는 편이 더 맞을지도").
+        보는 사람 = 떠난 칸이 닿던 사람(나가는 걸 봤다) ∪ 들어선 칸이 닿는 사람(들어오는 걸 봤다) — 문 칸이 양쪽에서 보이는
+        것과 같은 이치, 문장은 하나. '보이는 사람 전원'이 아닌 이유(파트너: "광장에 10명이 들어오면 모두가 이 메시지를 10번을
+        봐야해 그건 말이 안돼"): 받는 양은 사람 수가 아니라 내 관계의 수로 묶인다. 따라갈지는 본 사람이 정한다."""
+        if not (self.town and self.events and getattr(self, 'town_sight', None) == 'zone'):
+            return
+        z0, z1 = self._zone_id(ox, oy), self._zone_id(nx, ny)
+        if z1 is None or z0 == z1:
+            return
+        fact = {'kind': 'ally_zone', 'char': bot['char'], 'zone': self._town_zone(nx, ny), 'zone_id': z1}
+        for o in bots or ():
+            if o is bot or o['char'] == bot['char'] or not o['alive'] or o['won']:
+                continue
+            if self._acquainted(o, bot['char']) and (self.hears(o, ox, oy) or self.hears(o, nx, ny)):
+                o.setdefault('witnessed', []).append(dict(fact))
+
     def _rel(self, bot, other):
         rel = bot.setdefault('relations', {})
         e = rel.get(other)
@@ -5326,8 +5357,13 @@ class Dungeon:
         missing = [c for c in union if not (c in by_char and (not by_char[c]['alive'] or self._party_zone_of(by_char[c]) == zone))]
         if missing:                                      # 쓰러진 파티원은 세지 않는다 · 이 층에 없는 파티원은 '안 모인 사람'
             return {**base, 'result': 'party_not_gathered', 'to': to, 'missing': missing}
+        before = {c: set(party_members(ps, c)) for c in union}
         party_join(ps, union)
         members = party_members(ps, me)
+        for c in union:                                  # D87: 파티를 맺는 순간도 엮임이다 — 새로 파티원이 된 쌍마다 관계 장부에 한 번
+            for oc in union:                             #   (합쳐진 파티에서는 말을 안 섞은 두 사람도 파티원이 된다)
+                if oc != c and oc not in before[c] and c in by_char:
+                    self._bone(by_char[c], oc, 'party')
         for c in members:                                # D85: 파티를 맺는 순간이 소개다 — 인물 기록이 걸린 몸은 서로의 이름·직업을 적는다
             book = by_char[c].get('people') if c in by_char else None   #   (이미 내가 적어 둔 사람은 건드리지 않는다 — 내 기록이 우선)
             if book is None:

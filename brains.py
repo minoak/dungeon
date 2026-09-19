@@ -868,6 +868,9 @@ def _witness_prose(w):
         return "%s가 %s에게 파티 결성을 청하는 것을" % (who, w.get("to_name", "동료"))
     if k == "ally_party":
         return "%s와 %s가 파티를 결성하는 것을" % (who, w.get("to_name", "동료"))
+    if k == "ally_zone":                    # D87 구역 이동 — 엮인 적 있는 사람이 다른 구역으로 넘어가는 걸음(파트너: "인접구역으로 이동")
+        zone = w.get("zone") or "다른 구역"  #   사실만 — 따라가라는 말은 없다. ⚠️문구 임시
+        return "%s가 %s%s 이동하는 것을" % (who, zone, _ro(zone))
     if k == "ally_bond":                    # D47 ② 친목 목격 — 몸짓(형태=자유 문구, 뜻은 안 붙인다)
         return "%s가 %s에게 몸짓하는 것을 — %s" % (who, w.get("to_name", "동료"), w.get("form", "몸짓"))
     if k == "ally_use":                     # D30(09-05) 오브젝트 사용 — 동사는 '사용' 하나(파트너 확정:
