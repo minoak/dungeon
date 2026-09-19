@@ -369,8 +369,12 @@ function evLine(e, f) {
     if (r === 'fountain_heal') return cls('gold', `샘물을 마셨다 — HP ${e.heal || 0} 회복`);
     if (r === 'fountain_harm') return cls('combat', `샘물이 오염돼 있었다 — ${e.dmg || 0}피해`);
     if (r === 'potion') return cls('gold', '! 회복 물약을 집어 챙겼다');
-    const tag = { too_far: '너무 멀다', nothing: '허탕', no_target: '대상 없음' }[r] || r;
-    return cls('dim', `상호작용 ${esc(resolveTarget(e.target, f))} — ${esc(tag)}`);
+    // D89·D90(09-20) 쓰임 부품·마을 생활 결과 — 옛 뷰어는 꼬리말만 한글로(문장은 game/src/text/evline.ts). ⚠️문구 임시
+    const tag = { too_far: '너무 멀다', nothing: '허탕', no_target: '대상 없음',
+      read: '읽었다', sat: '앉았다', drank: '물을 마셨다', browsed: '둘러봤다', practiced: '연습했다',
+      rummaged: (Array.isArray(e.found) ? e.found.length : e.found) ? '뒤져서 찾았다' : '뒤졌지만 아무것도 없다', lodged: '묵었다', warmed: '불을 쬐었다',
+      used_up: '이미 다 써서 남은 것이 없다' }[r] || r;
+    return cls('dim', `상호작용 ${esc(e.name || resolveTarget(e.target, f))} — ${esc(tag)}`);
   }
   if (t === 'drink') {
     if (e.result === 'drink_heal')

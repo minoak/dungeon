@@ -73,7 +73,22 @@ export interface Trap {
   [k: string]: unknown;
 }
 
-export interface Room { id: number; x: number; y: number; w: number; h: number; type: string; neighbours?: number[] }
+export interface Room { id: number; x: number; y: number; w: number; h: number; type: string; neighbours?: number[];
+  art_style?: string }                           // D88(09-20) 새 생성 프로필의 방 유형(hall·pillared_hall·gallery·two_columns·chamber) — 있을 때만
+
+/** D88(09-20) 새 던전 생성 프로필의 건축 기록 — level 라인에 이 키가 있으면 관전이 그 층을 입체 렌더러로 그린다
+ *  (없으면 옛 그림 — scene/dungeonPrototype.ts 의 dungeonArtFor). 클라이언트는 '있다'만 읽고 안쪽 필드는 그리기에 쓰지 않는다. */
+export interface LevelArchitecture {
+  version?: number; columns?: [number, number][];
+  corridors?: { rooms?: [number, number]; width?: number; horizontal_first?: boolean }[];
+  extra_connections?: number;
+  [k: string]: unknown;
+}
+
+/** D89(09-20) 엔진 소유 바닥 소품 — level.props 가 있으면 클라이언트는 바닥 소품 추첨을 건너뛰고 이 목록을 그대로 그린다
+ *  (벽 부착물·데칼·횃불은 클라이언트 몫 그대로 — scene/dungeonDecor.ts). kind 어휘 = dungeonDecor.PROP_KINDS.
+ *  blocks = 통행을 막는가(시야는 막지 않는다 — 클라이언트의 시야 근사는 '#'·'+' 만 본다). */
+export interface LevelProp { id: number | string; kind: string; x: number; y: number; blocks?: boolean; [k: string]: unknown }
 
 /** 마을 v1(2026-09-11) 시각 레이어 — 엔진은 무시하고 클라이언트만 그린다(art/town-v1/layout.json 유래, 좌표는 오프셋 전). */
 export interface TownVisual {
@@ -107,6 +122,8 @@ export interface LevelLine {
   visual?: TownVisual;                           // 마을 v1 시각 레이어(마을 층만)
   gate?: { sealed: boolean; boss?: number | null };   // D65(09-13) 보스층: 출구=워프게이트(층 시작 때 봉인 여부·보스 id)
   quests?: { id: string; title?: string; n?: number; need?: number; done?: boolean }[];   // D69(09-14) 이 층에 들어서며 채워진 의뢰(층 도달형)
+  architecture?: LevelArchitecture;              // D88(09-20) 새 생성 프로필의 층만 — 있으면 입체 렌더러
+  props?: LevelProp[];                           // D89(09-20) 엔진 소유 바닥 소품 — 있으면 클라이언트 추첨 대신 이 목록
 }
 
 export interface Then { type: string; target?: string }

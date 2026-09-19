@@ -51,6 +51,32 @@ URL 파라미터: `run=`(판 경로, 기본 `state/stream.jsonl`) · `focus=`(�
 새 에셋은 Vite가 빌드에 포함한다. `viewer/tiles.json`은 마을 NPC·미등록 종류의 폴백으로 유지한다.
 숨은 개체 표시 규칙과 원정 데이터는 그대로다. 이 교체는 아래 초기 Phase B 카드의 에셋 범위를 후속 확장한 작업이다.
 
+## 던전 렌더러 고르기 · 엔진 소유 소품 · 마을 표식 (2026-09-20, D88~D90)
+
+**렌더러는 층마다 고른다**(`src/scene/dungeonPrototype.ts` 의 `dungeonArtFor`). 스트림의 `level.architecture`(새 던전 생성 프로필의
+건축 기록)가 있는 층은 입체 렌더러, 없는 층은 옛 그림이다 — 본편 URL 그대로, 옛 판은 옛 그림 그대로 열린다. 마을 층(`town` · `visual`)에서는
+어떤 경우에도 켜지지 않는다. URL `?dungeonArt=` 는 강제 덮어쓰기다: `prototype`(입체) · `flat`(평면 시제품) · `off`(옛 그림).
+실험실([`art/dungeon-v2/compare.html`](../art/dungeon-v2/compare.html))이 같은 스트림을 `prototype|flat` 두 화면에 나란히 놓는 데 쓴다.
+씬의 `preload` 가 판 로드보다 먼저라 입체 에셋 9장(약 200KB)은 늘 싣고, 평면 전용 2장은 `flat` 일 때만 싣는다.
+입체 렌더러에서 문 칸에 캐릭터·몹이 서면 그 문 그림만 28% 로 옅어진다(전에는 닫힌 문 그림에 통째로 가려졌다).
+
+**엔진 소유 소품** `level.props = [{id, kind, x, y, blocks}]` 가 있으면 `planDungeonDecor` 는 바닥 소품 추첨(예약 칸·연결성 검사)을
+건너뛰고 그 목록을 그대로 그린다 — 충돌을 아는 쪽이 자리를 정한다. 벽 부착물(거미줄·깃발)·바닥 데칼·횃불은 전처럼 클라이언트 몫이고
+`props` 가 있든 없든 같은 자리다. `kind` 어휘(`src/scene/dungeonDecor.ts` 의 `PROP_KINDS`): `barrel`(통 둘) · `crate`(나무 상자 더미) ·
+`jar`(항아리 둘) · `rubble`(석재 잔해) · `storage`(통·상자·깨진 도기 더미) · `ruin`(부러진 기둥 밑동). 모르는 `kind` 는 나무 상자로 그린다.
+`blocks: false` 인 소품은 그 칸에 선 이보다 뒤에 그린다. `level.props` 가 없는 판(옛 스트림·실험실)은 지금까지의 추첨 그대로다.
+
+**저작 마을(v4 조감도)의 피처**: 제 그림이 없는 피처 타입은 Kenney 폴백 타일 대신 칸 중앙의 반짝임 표식(`feat-marker-<id>`)으로 그린다 —
+물체는 조감도에 이미 그려져 있다. 이름표(`feat-label-<id>`)는 곁 2칸 안에 산 캐릭터가 있을 때만 보인다. 제 그림이 있는 피처(발밑에 놓인
+물약·장비 등)와 던전의 새 피처 타입은 전과 같다(던전엔 밑그림이 없으니 폴백 타일이 곧 물체다).
+
+**로그 문장**(`src/text/evline.ts`, ⚠️문구 임시): `interact` 결과 `read` · `sat` · `drank` · `browsed` · `practiced` · `rummaged` · `lodged` ·
+`warmed` · `used_up`. 대상 이름은 결과의 `name` 이 먼저, 없으면 `target`(`f<n>` 피처 · `p<n>` 소품)을 푼다. 모르는 결과는 전처럼 `상호작용 {대상} — {result}`.
+
+검사 둘(둘 다 LLM 0콜 · 마지막 줄 `ALL PASS`): `npm run check:props`(`verify/props.mjs` — 브라우저 없이 렌더러 고르기·소품 계획·로그 문장) ·
+`npm run build && npm run check:renderer`(`verify/renderer.mjs` — 헤드리스 Edge 로 자동 선택·URL 강제·문 칸·`level.props`·마을 표식·실험실,
+자료는 `verify/renderer_streams.py` 가 실제 엔진 생성기로 만든 정지 스냅샷). 기준 판 스모크(`npm run smoke`)는 옛 그림 길만 지난다.
+
 ## 구조(Phase A = M1 골격, 2026-09-09)
 
 ```

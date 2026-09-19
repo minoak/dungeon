@@ -5,7 +5,7 @@
 import Phaser from 'phaser';
 import { paintTownPaving } from './townPaving';
 import { paintAuthoredTown } from './townAuthored';
-import { dungeonPrototypeEnabled, projectedDungeonEnabled, queueDungeonPrototype, paintDungeonPrototype, dungeonPrototypeVisual, syncDungeonPrototype, tickDungeonPrototype } from './dungeonPrototype';
+import { dungeonArtFor, queueDungeonPrototype, paintDungeonPrototype, dungeonPrototypeVisual, syncDungeonPrototype, tickDungeonPrototype, type DungeonArt } from './dungeonPrototype';
 import type { App } from '../app';
 import type { Bot, Char, Dir, Feature, Frame, LevelState, Monster, TownVisual } from '../stream/types';
 import { NPC_CELL, NPC_FOOT, npcTexture, npcFrame, npcWalk, queueNpcs, registerNpcAnims } from '../assets/npcs';
@@ -58,8 +58,11 @@ export class DungeonScene extends Phaser.Scene {
   followChar: Char | null = null;
   private seenCache: { levelIdx: number; char: Char; count: number; set: Set<string> } | null = null;
   private townVisual: TownVisual | null = null;   // 마을 v1 시각 레이어(층 라인 visual) — 없으면 기존 타일 규칙
-  private prototypeDungeon = false;
-  get projectedDungeon(): boolean { return this.prototypeDungeon && projectedDungeonEnabled; }
+  private featLabels = new Map<string, Phaser.GameObjects.Text>();   // D90 저작 마을의 피처 표식에 딸린 이름표(키 = feats 와 같다)
+  // D88(09-20) 이 층의 던전 렌더러 — 층마다 고른다(dungeonArtFor: level.architecture 가 있으면 입체 · URL ?dungeonArt= 는 강제 · 마을은 늘 null)
+  private dungeonArt: DungeonArt | null = null;
+  private get prototypeDungeon(): boolean { return this.dungeonArt !== null; }
+  get projectedDungeon(): boolean { return this.dungeonArt === 'projected'; }
 
   constructor() { super('dungeon'); }
 
@@ -83,6 +86,21 @@ export class DungeonScene extends Phaser.Scene {
     configureSdTextures(this.textures, this.atlas);
     registerWorldAnims(this.anims);
     registerNpcAnims(this.anims);
+    if (!this.textures.exists('wl-spark')) {       // D90 피처 표식의 반짝임 점(placeMarker) — 그림 파일 없이 한 번 굽는다
+      // 밝은 돌길 위에서도 읽히게: 옅은 어두운 후광 + 네 갈래 별(크림색, 갈색 테). 저작 마을은 0.5 배 줌이라 한 칸(48px)으로 굽는다.
+      const t = this.textures.createCanvas('wl-spark', 48, 48)!, c = t.context;
+      const halo = c.createRadialGradient(24, 24, 0, 24, 24, 22);
+      halo.addColorStop(0, 'rgba(28,20,6,.5)'); halo.addColorStop(.55, 'rgba(28,20,6,.22)'); halo.addColorStop(1, 'rgba(28,20,6,0)');
+      c.fillStyle = halo; c.fillRect(0, 0, 48, 48);
+      c.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const r = i % 2 ? 4 : 17, a = i * Math.PI / 4 - Math.PI / 2;
+        c[i ? 'lineTo' : 'moveTo'](24 + Math.cos(a) * r, 24 + Math.sin(a) * r);
+      }
+      c.closePath(); c.fillStyle = '#fff3c4'; c.fill(); c.lineWidth = 2; c.strokeStyle = '#8a5a12'; c.stroke();
+      c.fillStyle = '#ffffff'; c.beginPath(); c.arc(24, 24, 3, 0, Math.PI * 2); c.fill();
+      t.refresh();
+    }
     this.footprints = this.add.graphics().setDepth(DEPTH.footprint);
     this.ring = this.add.graphics().setDepth(DEPTH.focusRing);
     const cam = this.cameras.main;
@@ -152,6 +170,22 @@ export class DungeonScene extends Phaser.Scene {
     return this.add.sprite(pos.x, pos.y, art.texture, art.frame).setOrigin(0.5, art.originY)
       .setScale(art.scale).setDepth(this.projectedDungeon && depth === DEPTH.feature ? DEPTH.stand + y * .01 - .004 : depth);
   }
+  /** D90(09-20) 저작 마을(V.art)의 그림 없는 피처 — 조감도에 물체(우물·벤치·노점 …)가 이미 그려져 있으니 폴백 타일을 그 위에 얹지 않고,
+   *  칸 중앙에 은은한 반짝임 점만 둔다. 이름표는 곁(2칸 안)에 캐릭터가 있을 때만 보인다(applyFrame) — 글꼴·색은 마을 v1 소품 이름표,
+   *  배율은 캐릭터 이름표와 같다(저작 마을은 0.5 배 줌으로 본다). */
+  private placeMarker(k: string, ft: Feature): Phaser.GameObjects.Sprite {
+    const c = this.centerOf(ft.x, ft.y);
+    const s = this.add.sprite(c.x, c.y, 'wl-spark').setDepth(DEPTH.feature).setAlpha(0.5).setScale(0.85).setName('feat-marker-' + ft.id);
+    this.tweens.add({ targets: s, alpha: 1, scale: 1.05, duration: 1400, ease: 'Sine.easeInOut', yoyo: true, repeat: -1 });
+    this.featLabels.set(k, this.add.text(c.x, c.y + 20, ft.name, { fontFamily: 'sans-serif', fontSize: '11px', color: '#f4e4bd',
+      backgroundColor: '#17232bcc', padding: { x: 4, y: 2 } }).setOrigin(0.5, 0).setDepth(DEPTH.stand + 5).setResolution(2)
+      .setScale(this.characterScale).setVisible(false).setName('feat-label-' + ft.id));
+    return s;
+  }
+  private dropFeat(k: string, s: Phaser.GameObjects.Sprite): void {
+    this.tweens.killTweensOf(s); s.destroy();
+    this.featLabels.get(k)?.destroy(); this.featLabels.delete(k);
+  }
   /** 현재 프레임에서 그 캐릭터가 보는 칸(마을=전부). 초점이 없으면 null(=전부). */
   visibleSet(char: Char | null): Set<string> | null {
     if (!char || !this.frame) return null;
@@ -212,7 +246,7 @@ export class DungeonScene extends Phaser.Scene {
     this.levelObjs = [];
     for (const s of this.mobs.values()) s.destroy();
     this.mobs.clear();
-    for (const s of this.feats.values()) { this.tweens.killTweensOf(s); s.destroy(); }
+    for (const [k, s] of this.feats) this.dropFeat(k, s);
     this.feats.clear();
     for (const s of this.traps.values()) s.destroy();
     this.traps.clear();
@@ -221,7 +255,7 @@ export class DungeonScene extends Phaser.Scene {
     this.seenCache = null;
 
     const V = L.visual ?? null;                   // 마을 v1(2026-09-11): 바닥·건물·소품은 layout 이 정한다
-    this.prototypeDungeon = dungeonPrototypeEnabled && !ls.town && !V;
+    this.dungeonArt = dungeonArtFor(L, ls.town || !!V);   // D88 층마다 — 마을 층(town · visual)에서는 절대 켜지지 않는다
     const authoredChanged = Boolean(V?.art) !== Boolean(this.townVisual?.art);
     this.townVisual = V;
     if (authoredChanged) this.setZoom(V?.art ? 0.5 : this.pickZoom());
@@ -233,7 +267,7 @@ export class DungeonScene extends Phaser.Scene {
     this.ground = this.map.createLayer(0, tileset!, 0, 0)!.setScale(TILE / TERRAIN_CELL).setDepth(DEPTH.ground);
     if (this.prototypeDungeon) {
       this.ground.setVisible(false);
-      this.levelObjs.push(paintDungeonPrototype(this, L, TILE));
+      this.levelObjs.push(paintDungeonPrototype(this, L, TILE, this.dungeonArt!));
     }
     if (V) {
       const paving = paintTownPaving(this, V, TILE, DEPTH.ground + 1);
@@ -356,21 +390,28 @@ export class DungeonScene extends Phaser.Scene {
         continue;
       }
       let s = this.feats.get(k);
-      const c = this.worldOf(ft.x, ft.y);
+      // D90(09-20): 저작 마을(V.art)에서 제 그림이 없는 피처(= Kenney 폴백 타일이 될 것)는 표식으로 — placeMarker. 제 그림이 있는 것
+      // (건네다 발밑에 놓인 물약·장비 등 wl-props)과 던전의 새 피처 타입은 지금처럼 그린다(던전엔 밑그림이 없으니 폴백 타일이 곧 물체다).
+      const marker = !!this.townVisual?.art && ft.type !== 'npc' && !worldVisual('feat:' + ft.type);
+      const c = marker ? this.centerOf(ft.x, ft.y) : this.worldOf(ft.x, ft.y);
       if (!s) {
         const row = ft.type === 'npc' ? this.townNpcRow(ft.x, ft.y) : -1;   // 마을 v1: NPC 시트(정면 프레임)
         s = row >= 0
           ? this.add.sprite(c.x, c.y, 'wl-town-npcs', row * 4).setOrigin(0.5, TOWN_NPC_FOOT / TOWN_NPC_CELL)
             .setScale(this.characterScale)
             .setDepth(DEPTH.stand + ft.y * 0.01 - 0.005)
+          : marker ? this.placeMarker(k, ft)
           : this.placeObject('feat:' + ft.type, ft.x, ft.y, DEPTH.feature);
         this.feats.set(k, s);
       } else s.setPosition(c.x, c.y);
+      if (marker) {                                // 표식의 밝기는 반짝임 트윈 몫 — 이름표만 곁(2칸 안)에 산 캐릭터가 있을 때 켠다
+        this.featLabels.get(k)?.setText(ft.name).setVisible(cur.bots.some(b => b.alive && !b.won
+          && Math.max(Math.abs(b.x - ft.x), Math.abs(b.y - ft.y)) <= 2));
+        continue;
+      }
       s.setAlpha(canSee(ft.x, ft.y) ? 1 : this.projectedDungeon ? .45 : .7);
     }
-    for (const [k, s] of this.feats) if (!seenFeats.has(k)) {
-      this.tweens.killTweensOf(s); s.destroy(); this.feats.delete(k);
-    }
+    for (const [k, s] of this.feats) if (!seenFeats.has(k)) { this.dropFeat(k, s); this.feats.delete(k); }
 
     // 함정 — 드러난 것만(hidden 은 안 그린다), sprung 은 어둡게
     const seenTraps = new Set<string>();
@@ -567,8 +608,13 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   update(): void {
-    if (this.projectedDungeon) tickDungeonPrototype(this, [...this.actors.values()]
-      .filter(a => a.sprite.visible && a.alive && !a.won).map(a => ({ x: a.sprite.x, y: a.sprite.y })));
+    if (this.projectedDungeon) {
+      const living = new Set((this.frame?.monsters ?? []).filter(m => m.alive).map(m => m.id));
+      tickDungeonPrototype(this, [...this.actors.values()]
+        .filter(a => a.sprite.visible && a.alive && !a.won).map(a => ({ x: a.sprite.x, y: a.sprite.y })),
+        // D88 문 칸 가림 — 문 칸에 선 몹도 문 그림에 가리지 않게(벽 뒤 옅어짐은 전처럼 파티만)
+        [...this.mobs].filter(([id, s]) => s.visible && living.has(id)).map(([, s]) => ({ x: s.x, y: s.y })));
+    }
     for (const a of this.actors.values()) {
       if (!a.label.visible) continue;
       a.label.setPosition(a.sprite.x, a.sprite.y - a.sprite.displayHeight * (a.alive ? a.sprite.originY : 30 / this.atlas.cell) - 2);

@@ -3,18 +3,15 @@ import type Phaser from 'phaser';
 import type { LevelLine } from '../stream/types';
 import { lineOfSight } from '../world/Sight';
 import wallsUrl from '../../../art/dungeon-v2/runtime/walls.png';
-import propsUrl from '../../../art/dungeon-v2/runtime/props.png';
 import floorUrl from '../../../art/dungeon-v2/runtime/floor.png';
-import decorUrl from '../../../art/dungeon-v2/runtime/decor.png';
 import { planDungeonDecor } from './dungeonDecor';
 
-export const dungeonPrototypeEnabled = new URLSearchParams(location.search).get('dungeonArt') === 'flat';
+/** 평면 시제품 전용 2장(벽·바닥)만 싣는다 — URL ?dungeonArt=flat 일 때만 불린다(dungeonPrototype.queueDungeonPrototype).
+ *  D88(09-20): 'dungeon-v2-props'·'dungeon-v2-decor' 는 입체 렌더러가 늘 시트로 싣는 것을 같이 쓴다. 전에는 같은 키 'dungeon-v2-decor' 를
+ *  여기서는 image, 입체에서는 spritesheet 로 실어 한 세션에서 두 렌더러가 섞이면 부딪혔다 — 이 파일은 getSourceImage() 로 원본 그림만 읽으니 어느 쪽이든 같다. */
 export function queueDungeonPrototype(load: Phaser.Loader.LoaderPlugin): void {
-  if (!dungeonPrototypeEnabled) return;
   load.image('dungeon-v2-walls', wallsUrl);
   load.image('dungeon-v2-floor', floorUrl);
-  load.image('dungeon-v2-decor', decorUrl);
-  load.spritesheet('dungeon-v2-props', propsUrl, { frameWidth: 96, frameHeight: 96 });
 }
 export function dungeonPrototypeVisual(key: string): { texture: string; frame: number } | null {
   if (key === 'feat:chest') return { texture: 'dungeon-v2-props', frame: 2 };
