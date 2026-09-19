@@ -28,6 +28,7 @@ import social_reactions as SR
 import skill_core as SK
 import skill_combat as SC
 import entities as ENT           # 엔티티 저장소(D50, 09-11) — 몬스터·함정·오브젝트·NPC 정의(수치·이름·지식 본문)
+import interactables as IA       # 쓰임 부품(D89, 09-20) — 정의의 use{kind} 가 오브젝트·건물 상호작용을 낸다(엔진 무의존 모듈 — 순환 import 없음)
 import town_layout as TL         # 마을 layout(town-layout-v1, 맵 트랙 저작 원본) → 격자 컴파일(엔진 무의존 모듈)
 import math
 import os
@@ -160,13 +161,15 @@ TRAIL_MAX = 12           # 자기 행동 궤적(D38, 09-06) 상한: 마지막 vi
 OBJ_VERBS = {'npc': '말 걸어 봄',   # 오브젝트 태그(D39, 09-06): **쓰고도 남아 있는 오브젝트만**
              'weapon': '착용해 봄', 'armor': '착용해 봄'}   # D57(09-12): 장비는 개체(번호 유지)라 내려놓아도 태그가 남는다
                                     #   (샘·상자·보물·물약·장비는 쓰면 사라져 "×N"이 뜻이 없다. 문·몹은 서랍)
+                                    #   D89(09-20): 쓰임 부품(use)이 있는 피처도 쓰고도 남는다 — 타입이 정의마다 달라 이 사전이
+                                    #   아니라 kind 의 '~해 봄'(IA.tried)에서 온다(Dungeon._obj_verb 가 둘을 잇는다)
 
 
 def _obj_note(res):
     """오브젝트 태그의 마지막 사실 한 마디(D39) — 상호작용 결과에서. 해석 없음(사실만). None=이전 note 유지."""
     if res.get('result') == 'npc_gift':
         return '%s 받음' % res.get('item', '?')
-    return None
+    return IA.obj_note(res)             # D89 뒤지기: 무엇이 나왔나·비었나(그 밖의 결과는 None)
 
 
 def _tagsfx(f):
@@ -317,6 +320,8 @@ def event_tags(rec, names=None):
     if t == 'rest':
         return [('start', '휴식 시작', '')]
     if t == 'interact':
+        if r in IA.RESULTS:                                   # D89 쓰임 부품의 결과(읽음·앉음·뒤짐…) — 꼬리표 어휘는 그 모듈이 소유
+            return IA.event_tags(rec)
         if r == 'exit':
             return [('descend', '하강', '함께' if len(rec.get('party') or []) > 1 else '혼자')]
         if r == 'ascend':
@@ -2030,6 +2035,7 @@ class Dungeon:
                              'visited': (f.x, f.y) in self.visited, **bear(f.x, f.y),
                              **({'role': roles_[f.id]} if roles_.get(f.id) else {}),   # D69(09-14) 역할(있을 때만)
                              **({'about': story_[f.id]['trait']} if (story_.get(f.id) or {}).get('trait') else {}),   # D75 특징 한 줄(있을 때만)
+                             **IA.obs_fact(self, f),            # D89 쓰임 부품 {use:{kind[,heal]}}(정의에 use 가 있는 피처만 — 없으면 옛 obs 그대로)
                              **self._obj_tag_obs(bot, f),       # D39 오브젝트 태그(있을 때만)
                              **({'new': True} if (f.type in ('weapon', 'armor')            # D57: 아무도 착용한 적 없는 장비(객체 사실,
                                                  and not getattr(f, 'worn', None)) else {})})   #   파트너 "진짜 착용한 적이 없는 것만 new")
@@ -2262,9 +2268,11 @@ class Dungeon:
                                                                      (' (보상: %s)' % q_['reward']) if q_.get('reward') else ''))
         for f in feats:
             if f['adj']:
-                if f['type'] == 'building':    # D60(09-12) 마을 관측: 건물은 문턱까지(goto)만 — 안으로 드는 동사는 없다(실내는 후속)
-                    continue
-                if f['type'] == 'stairs_up':   # 마을 복귀(D29) — 라벨이 규칙을 말한다(하강 라벨 대칭)
+                if f['type'] == 'building' and not f.get('use'):   # D60(09-12) 마을 관측: 건물은 문턱까지(goto)만 — 안으로 드는 동사는 없다(실내는 후속)
+                    continue                   #   D89(09-20): 정의에 쓰임 부품(use)이 있는 건물만 문턱에서 그 기능이 어휘가 된다(없는 건물은 옛 줄 그대로)
+                if f.get('use'):               # D89 쓰임 부품 — 줄 머리가 무엇을 하는 줄인지 말한다('읽기'·'앉기'·'묵기' … 말 걸기·장비 선례, 사실만)
+                    _add('interact', f['id'], IA.menu_label(f, _tagsfx(f)))
+                elif f['type'] == 'stairs_up':   # 마을 복귀(D29) — 라벨이 규칙을 말한다(하강 라벨 대칭)
                     _add('interact', f['id'],
                          '계단을 올라 마을로 돌아간다 (규칙: 너 혼자 올라간다)'
                          if self.solo else
@@ -2909,7 +2917,7 @@ class Dungeon:
         태그=지금 참인 사실과 횟수, 궤적=순서"): 이 봇이 그 오브젝트와 상호작용한 횟수와 마지막 사실
         한 마디를 기계가 센다(나↔오브젝트 사이의 사실 — D36 뼈의 오브젝트판. 몸 태그 D34 는 몸 상태로).
         수명=봇 dict(층 재스폰이면 초기화 — shop_served 리듬). 엔진 판정은 절대 안 읽는다(시야 줄·라벨 접미뿐)."""
-        if not getattr(self, 'objtags', False) or f is None or f.type not in OBJ_VERBS:
+        if not getattr(self, 'objtags', False) or f is None or not self._obj_verb(f):
             return
         if res.get('result') in ('no_target', 'too_far'):
             return                                  # 닿지 않은 시도는 상호작용이 아니다
@@ -2937,13 +2945,20 @@ class Dungeon:
 
     def _obj_tag_obs(self, bot, f):
         """view() 용(D39): 피처 항목에 얹을 {'tag': {verb, n, note?}} — 태그 없으면 {} (구판 obs 그대로)."""
-        if not getattr(self, 'objtags', False) or f.type not in OBJ_VERBS:
+        if not getattr(self, 'objtags', False):
             return {}
         e = (bot.get('obj_tags') or {}).get(f.id)
         if not e or not e.get('n'):
             return {}
-        return {'tag': {'verb': OBJ_VERBS[f.type], 'n': int(e['n']),
+        verb = self._obj_verb(f)                    # 센 적 있는 피처만 동사를 찾는다(센 적 없으면 위에서 끝 — 옛 obs 그대로)
+        if not verb:
+            return {}
+        return {'tag': {'verb': verb, 'n': int(e['n']),
                         **({'note': e['note']} if e.get('note') else {})}}
+
+    def _obj_verb(self, f):
+        """D39 태그의 동사 — 타입 사전(OBJ_VERBS: 말 걸어 봄·착용해 봄) 또는 D89 쓰임 부품의 kind('읽어 봄'·'뒤져 봄' …). 없으면 None."""
+        return OBJ_VERBS.get(f.type) or IA.tried(self, f)
 
     def plan_step(self, bot, bots):
         """작정(D16)의 다음 수 활성화 — **착수 시점 재검증**(D16 유일한 신규 규칙).
@@ -4863,6 +4878,12 @@ class Dungeon:
                                'what': '오염된 샘', 'dmg': 1},
                               exclude=(bot['char'],))
             return out
+        # D89(2026-09-20) 쓰임 부품 — 엔진이 제 뜻으로 아는 타입을 다 지난 자리: 정의(오브젝트·건물)에 use{kind} 가 있으면 그 kind 의
+        # 일이 난다(읽기·앉기·마시기·구경·몸 풀기·뒤지기·묵기·불 쬐기 — interactables.py). 부품이 없으면 None → 옛 'nothing' 그대로.
+        # 지목한 피처를 먼저 잡는다(같은 칸에 내려놓인 장비가 있어도 부른 것은 그 오브젝트다). 굴림 없음 — 판정 rng 무접촉.
+        used = IA.handle(self, bot, self._feature_by_target(target_id) or f, bots, target_id)
+        if used is not None:
+            return used
         return {**base, 'result': 'nothing'}
 
     def _attack(self, bot, target_id=None, bots=None):

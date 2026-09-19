@@ -185,7 +185,8 @@ def build(spec):
 def summary(res):
     keep = ("type", "result", "target", "to", "trap", "found", "monsters",
             "roll", "total", "hit", "dmg", "hp", "loot", "why", "missing",
-            "item", "what", "form", "placed", "equipped")   # D47 ② 건네기·친목
+            "item", "what", "form", "placed", "equipped",   # D47 ② 건네기·친목
+            "use_kind", "text", "heal", "wares", "got", "cleared")   # D89(09-20) 쓰임 부품의 결과 칸(읽은 글·오른 HP·진열·나온 것·나은 상태)
     return " ".join("%s=%s" % (k, json.dumps(res[k], ensure_ascii=False))
                     for k in keep if k in res)
 

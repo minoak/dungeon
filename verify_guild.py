@@ -614,7 +614,8 @@ check("⑬ 러너 이월 배선: 재스폰이 boons 와 str/dex 를 실어 나�
 
 print("── ⑭ D75 장소·사람의 이야기(09-15 파트너 '각 장소나 오브젝트에 … 역사나 이야기 그리고 장소의 특징을 정해두는게')")
 defs14 = ENT.load()
-with_story = [k for k, v in defs14.items() if (v["comps"].get("story") or {}) and v["kind"] != "companion"]   # D81(09-17): 동료 프리셋의 story 는 따로 센다(verify_companion) — 여기는 장소·마을 사람 17벌
+with_story = [k for k, v in defs14.items() if (v["comps"].get("story") or {}) and v["kind"] not in ("companion", "object")]   # D81(09-17): 동료 프리셋의 story 는 따로 센다(verify_companion) — 여기는 장소·마을 사람 17벌
+#   D89(09-20): 오브젝트의 story(쓰임 부품이 달린 벤치·우물 …의 특징 한 줄)도 따로 센다(verify_use) — 오브젝트는 JSON 한 장씩 늘어나는 '내용'이고 trait 만 있어도 된다
 check("⑭ 정의: story{trait, history} 27(건물 12종·마을 NPC 6·구역 8종·마을 1) · 검증기가 잘못된 story(빈 trait·모르는 키)를 잡는다",
       len(with_story) == 27 and all(set(defs14[k]["comps"]["story"]) == {"trait", "history"} for k in with_story)
       and bool(ENT._problems([("map/bad.json", {"id": "bad", "name": "b", "kind": "map", "tags": ["town"], "comps": {"space": {"role": "district"}, "story": {"trait": ""}}})], "map"))

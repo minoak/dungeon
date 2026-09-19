@@ -11,6 +11,9 @@
   · 지식: knowledge.deep → Dungeon.lore (옛 lore.json 본문 그대로. 키 = monster:<name> / trap:<id> / feature:<type>)
     D53(09-12): knowledge.brief(처음 알게 된 한 줄)·unlock{event, count}(심층 해금 조건 — 코드가 센다, LLM 0콜)도 같은
     항목에 실린다. 지금 세는 사건은 encounter(개체 하나를 새로 인지한 순간 = aware_of 증분, 몬스터만)뿐 — 나머지 어휘는 자리.
+  · 쓰임(D89, 09-20): 오브젝트·건물의 use{kind, …} — 곁에서 쓰면(use/interact) 무슨 일이 나는가를 정의가 말한다. 엔진은 kind 만 보고
+    (interactables.py 의 kind 별 처리), 새 오브젝트·새 건물 기능은 JSON 한 장이다(D69 결정 ② "정의의 부품이 메뉴를 낸다"). 돈·가격은 없다.
+    오브젝트의 story(trait·history)는 NPC·건물과 같은 꼴 — 배치한 쪽이 place_story 에 걸면 피처 줄 끝의 한 줄(about)이 된다.
 자리만 있고 아직 안 읽는 것: ai.start·ai.concealed(스폰 코드가 명시),
 loot·container·heal·consumable·exit 부품(메모 "부품은 필요할 때 하나씩"). 클라이언트 스프라이트 프레임 번호는
 game/src/assets/world.ts 가 소유 — sprite 필드는 텍스처 참조(wl-<이름>[#프레임])이고 검증은 텍스처 파일 존재까지.
@@ -27,9 +30,10 @@ KINDS = ('monster', 'trap', 'object', 'npc', 'map', 'building', 'quest', 'compan
 #   companion(D81, 09-17): 동료 프리셋 — 파티에 뽑히면 동료 칸의 시트(sheet), 안 뽑히면 마을 주민(npc·story, 2단계)
 COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
          'trap': {'trap', 'knowledge'},
-         'object': {'equipment', 'consumable', 'loot', 'container', 'heal', 'exit', 'knowledge'},
+         'object': {'equipment', 'consumable', 'loot', 'container', 'heal', 'exit', 'knowledge',
+                    'use', 'story'},             # D89(09-20): use=쓰임 부품(곁에서 쓰면 무슨 일이 나는가) · story=D75 와 같은 꼴(오브젝트의 특징 한 줄·이야기)
          'npc': {'npc', 'knowledge', 'story'},   # story=D75(09-15) 장소·사람 소개(trait 한 줄·history 본문) — 도감 지식과 다른 층(해금 없음)
-         'map': {'space', 'story'}, 'building': {'building', 'board', 'oracle', 'story'},   # D61 건물 역할 부품(메모 §4-4 [제안]): 게시판·신탁 · story=D75
+         'map': {'space', 'story'}, 'building': {'building', 'board', 'oracle', 'story', 'use'},   # D61 건물 역할 부품(메모 §4-4 [제안]): 게시판·신탁 · story=D75 · use=D89 문턱에서 쓰는 기능
          'quest': {'quest'},
          'companion': {'sheet', 'npc', 'story'}}   # D81: sheet=파티 시트 칸(능력치 없음 — 직업에서) · npc/story=마을 주민일 때의 말·걸음·소개(NPC 와 같은 꼴)
 UNLOCK_EVENTS = {'encounter', 'kill', 'search_first', 'trap_avoid', 'trap_disarm', 'visit', 'talk'}   # 메모 §2-5 어휘.
@@ -42,6 +46,54 @@ class EntityError(ValueError):
 
 
 QUEST_REQ_KINDS = ('kill', 'reach', 'loot')   # D69(09-14) 의뢰 완료 조건의 종류 — dungeon_gm.QUEST_REQ_KINDS 와 같은 목록
+
+# D89(2026-09-20) 쓰임 부품 use{kind, …} 의 어휘 — 처리는 interactables.py(kind 마다 하나), 여기는 검증기가 아는 꼴.
+#   kind → 그 kind 가 읽는 칸. 공통 칸: once(true = 한 번 쓰면 끝 — 누가 쓰든 세계의 상태, 피처는 남는다)·note(저작 메모).
+#   돈·가격·매매는 없다(D69 에서 제출 뒤로 보류) — browse 는 구경만, rummage 에서 나오는 건 엔진이 이미 아는 소지뿐.
+USE_KINDS = {'read': ('text', 'texts'),      # 적힌 글을 읽는다 — text(한 편) 또는 texts(여러 편: 읽는 사람마다 읽을 때마다 다음 글)
+             'sit': ('heal',),               # 앉아 숨을 돌린다 — heal(기본 1, 상처가 있을 때만 오른다)
+             'drink': ('heal',),             # 물을 마신다 — heal(기본 1)
+             'browse': ('wares',),           # 진열된 것을 구경한다 — wares(이름 목록)
+             'practice': (),                 # 몸을 푼다 — 몸에 남는 효과 없음(한 턴)
+             'rummage': ('loot',),           # 뒤진다 — loot[{item, w}] 가중 추첨(세계 시드·자리에서 정해진다 — 판정 rng 무접촉). 늘 한 번
+             'lodge': (),                    # 묵는다 — HP 전부 + 상태 태그 소거(D34 '지우기는 휴식뿐': 묵기는 휴식이다)
+             'warm': ('heal',)}              # 불을 쬔다 — heal(기본 1)
+USE_LOOT = ('potion', 'treasure', 'nothing')   # rummage 에서 나오는 것 — 물약 수·보물 수(bag)·빈손
+USE_RESERVED_TYPES = ('exit', 'stairs_up', 'npc', 'treasure', 'potion', 'weapon', 'armor', 'chest', 'fountain', 'grave', 'building')
+#   엔진이 이미 제 뜻으로 다루는 피처 type — 오브젝트 정의가 이 type 에 use 를 달면 거절한다(_interact 의 타입 분기가 먼저 잡아
+#   use 가 영영 안 불리는데 관측은 '쓸 수 있다'고 말하게 된다 = 거짓 선택지). 건물의 use 는 건물 정의(kind building)에 단다.
+
+
+def _use_problems(rel, use):
+    """use 부품 한 칸의 꼴 검사(D89) — 모르는 kind·모르는 칸·빈 글·음수 회복·빈 추첨표는 로드 단계에서 죽는다."""
+    if not isinstance(use, dict) or use.get('kind') not in USE_KINDS:
+        return ['%s: use.kind 는 %s 중 하나' % (rel, '|'.join(USE_KINDS))]
+    out, kind = [], use['kind']
+    extra = set(use) - {'kind', 'once', 'note'} - set(USE_KINDS[kind])
+    if extra:
+        out.append('%s: use(%s) 가 모르는 칸 %s' % (rel, kind, sorted(extra)))
+    if use.get('once') is not None and type(use['once']) is not bool:
+        out.append('%s: use.once 는 true|false' % rel)
+    if kind == 'read':
+        one, many = use.get('text'), use.get('texts')
+        ok_one = isinstance(one, str) and bool(one.strip())
+        ok_many = isinstance(many, list) and bool(many) and all(isinstance(t, str) and t.strip() for t in many)
+        if (one is not None and not ok_one) or (many is not None and not ok_many) or (ok_one == ok_many):
+            out.append('%s: use(read) 는 text(글 한 편) 또는 texts(비어 있지 않은 글 목록) 중 하나' % rel)
+    if 'heal' in USE_KINDS[kind] and use.get('heal') is not None and not (type(use['heal']) is int and use['heal'] >= 0):
+        out.append('%s: use.heal 은 정수≥0' % rel)
+    if kind == 'browse':
+        wares = use.get('wares')
+        if not (isinstance(wares, list) and wares and all(isinstance(w, str) and w.strip() for w in wares)):
+            out.append('%s: use(browse).wares 는 비어 있지 않은 이름 목록' % rel)
+    if kind == 'rummage':
+        loot = use.get('loot')
+        if not (isinstance(loot, list) and loot and all(isinstance(e, dict) and e.get('item') in USE_LOOT
+                                                          and type(e.get('w', 1)) is int and e.get('w', 1) >= 1 for e in loot)):
+            out.append('%s: use(rummage).loot 는 [{item: %s, w: 정수≥1}] 목록' % (rel, '|'.join(USE_LOOT)))
+        if use.get('once') is False:                 # 뒤질 때마다 나오면 소지가 끝없이 는다 — 통은 한 번 비면 빈 통이다
+            out.append('%s: use(rummage) 는 늘 한 번이다(once 를 false 로 둘 수 없다)' % rel)
+    return out
 
 
 def _problems(pairs, root):
@@ -95,6 +147,10 @@ def _problems(pairs, root):
         if st is not None and (not isinstance(st, dict) or not st or set(st) - {'trait', 'history'}
                                or not all(isinstance(v, str) and v.strip() for v in st.values())):
             out.append('%s: story 는 trait(특징 한 줄)·history(역사·이야기) 문자열만(하나 이상)' % rel)
+        if comps.get('use') is not None:                     # D89(09-20) 쓰임 부품 — 오브젝트·건물 공용(꼴은 _use_problems)
+            out.extend(_use_problems(rel, comps['use']))
+            if kind == 'object' and d.get('type') in USE_RESERVED_TYPES:
+                out.append('%s: type %r 은(는) 엔진이 이미 제 뜻으로 다룬다 — use 부품을 달 수 없다' % (rel, d.get('type')))
         sp = d.get('sprite')
         if sp:
             tex = str(sp).split('#')[0]

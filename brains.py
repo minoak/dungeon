@@ -1123,6 +1123,8 @@ def _last_prose(last, names=None):
             s += _quest_sfx(last)             # D69: 이 처치가 의뢰를 채웠다(정보)
             return ("기습! " if last.get("surprise") else "") + s
     if t == "interact":
+        if r in G.IA.RESULTS:                # D89(09-20) 쓰임 부품의 결과(읽음·앉음·마심·구경·몸 풀기·뒤짐·묵음·불 쬠·이미 씀) — 문장은 그 모듈이 소유
+            return G.IA.prose(last)          #   사실만: 엔진이 실제로 한 일(읽은 글·오른 HP·나온 것). ⚠️문구 임시(interactables.prose)
         if r == "exit":
             group = last.get("party", [])
             if len(group) == 1:              # 솔로 판 — 혼자 내려갔다. 캐릭터가 읽는 문장이라
@@ -1953,6 +1955,8 @@ def _wire(obs, names=None, compose=False):
                 cur = (obs.get("gear") or {}).get(f["type"])
                 facts.append("- %s %s: %s +%d · %s" % (f["id"], f["name"], effect, G.GEAR_KINDS.get(f["name"], 0),
                                                        ("지금 든 " + _gear_word(cur, f["type"])) if cur else "지금: 기본 무장"))
+            elif f.get("use") and G.IA.fact_line(f):                # D89(09-20) 쓰임 부품: 그 대상을 쓰면 세계가 무엇을 하나 — 정의에서 온 사실 한 줄(⚠️문구 임시)
+                facts.append(G.IA.fact_line(f))
         for m in s.get("monsters", []):
             facts.append("- %s: 현재 자리에서 %s" % (m["id"], "공격 사거리·사선 안" if m.get("in_range") else "공격 범위 밖"))
             if m.get('status'):

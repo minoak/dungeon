@@ -1,0 +1,19 @@
+{
+  "id": "stone_tablet",
+  "name": "석상 받침",
+  "kind": "object",
+  "type": "stone_tablet",
+  "tags": [
+    "object"
+  ],
+  "comps": {
+    "use": {
+      "kind": "read",
+      "text": "절반은 닳아 읽을 수 없다. 남은 줄은 이렇다 — 돌아온 자만이 이야기를 남긴다."
+    },
+    "story": {
+      "trait": "받침돌에 글이 새겨진 석상"
+    }
+  },
+  "note": "D89(2026-09-20) 쓰임 부품의 게이트용 최소 정의(read). 이름·글·trait 는 SilenceBreaker 임시 문장 — 파트너 교정 대기. 배치는 다음 단계(interactables.place)."
+}

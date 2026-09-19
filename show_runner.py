@@ -584,6 +584,8 @@ def act_summary(res):
         return pre + "%s (%s)" % (res.get("to", "?"), tag.get(r, r))
     if t == "interact":
         r = res["result"]
+        if r in G.IA.RESULTS:                      # D89(09-20) 쓰임 부품의 결과(읽음·앉음·뒤짐·묵음 …) — 문장은 interactables 가 소유
+            return G.IA.summary(res)
         if r == "exit":
             group = res.get("party", [])
             if len(group) == 1:                    # 솔로 판 — 혼자 계단을 내려간다. '다 모였다'는

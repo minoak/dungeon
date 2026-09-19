@@ -1,0 +1,33 @@
+{
+  "id": "barrel",
+  "name": "통",
+  "kind": "object",
+  "type": "barrel",
+  "tags": [
+    "object"
+  ],
+  "comps": {
+    "use": {
+      "kind": "rummage",
+      "once": true,
+      "loot": [
+        {
+          "item": "nothing",
+          "w": 3
+        },
+        {
+          "item": "potion",
+          "w": 1
+        },
+        {
+          "item": "treasure",
+          "w": 1
+        }
+      ]
+    },
+    "story": {
+      "trait": "뚜껑이 덜 닫힌 나무통"
+    }
+  },
+  "note": "D89(2026-09-20) 쓰임 부품의 게이트용 최소 정의(rummage). 무엇이 들었나는 세계 시드·층·자리에서 정해진다(판정 rng 무접촉) — 가중치 3:1:1 은 임시. 이름·trait 는 SilenceBreaker 임시 문장 — 파트너 교정 대기. 배치는 다음 단계(interactables.place)."
+}
