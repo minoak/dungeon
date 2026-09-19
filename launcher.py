@@ -19,9 +19,11 @@ API(JSON):
   POST /api/party    {"slots":[{job,traits[],name,sex,background?,persona?,look?} | {"companion":"<동료 프리셋 id>"}, ...]} → sheetkit 조립 →
                      러너의 load_party 로 재검증 → party_custom.json 저장 (실패 400 + 이유 한 줄)
   POST /api/start    {"resume":true, "brain"?, "key"?} → 멈춘 판 이어가기(D79 — 스냅샷+그 판을 시작한 옵션, 같은 기록 파일에 append) 또는
-                     {"map":"normal|big","town":bool,"brain":"gemini_api|claude_cli|anthropic_api|dummy",
-                      "seed":int|null|"random","party":"custom|default","mode":"standard|classic"} → 이전 판 보존(live.bat 규칙)
-                     → 러너 subprocess. 동시 1판(실행 중이면 409)
+                     {"map":"normal|big|concept","town":bool,"brain":"gemini_api|claude_cli|anthropic_api|dummy",
+                      "seed":int|null|"random","party":"custom|default","mode":"standard|classic",
+                      "town_life"?:bool,"npc_reply"?:bool,"floor_life"?:bool,"bestiary_plus"?:bool} → 이전 판 보존(live.bat 규칙)
+                     → 러너 subprocess. 동시 1판(실행 중이면 409). 09-20 밤의 네 스위치(D89~D93)는 옵션이 없으면 끈다 —
+                     화면의 기본 체크는 NIGHT_DEFAULTS(/api/presets.night_defaults)가 정한다
   GET  /api/status   {running,pid,started,seed,party,turn,outcome,viewer,game, stopping, resume:{run_id,seed,turn_last,depth,party,stopped,pages}|null}
   POST /api/stop     {graceful?:bool, pages?:bool} — graceful 이면 러너가 다음 틱 머리에서 (수첩 한 장씩 쓰고) 스스로 닫는다(D79), 아니면 즉시 종료
   POST /api/retry    {pause_id} → 판단 정지 중인 같은 러너에서 모델 재시도
@@ -62,11 +64,24 @@ MAPS = {                                          # 시작 옵션 → 러너 환
     "normal": {},
     "big": {"DUNGEON_W": "80", "DUNGEON_H": "30", "DUNGEON_MONSTERS": "7", "DUNGEON_TRAPS": "4",
             "DUNGEON_LURKERS": "2", "DUNGEON_POTIONS": "1", "DUNGEON_DEPTHS": "1", "DUNGEON_TURNS": "500"},
+    # D88(09-20) 새 던전 생성 프로필 — 넓은 통로·대홀·기둥의 석조 던전. 생성기가 42x34 에서만 검증됐다(1,000 시드)
+    # → 크기를 여기서 같이 준다(부모 env 의 DUNGEON_W/H 를 덮는다). ⚠️키 이름은 바꾸지 않는다 —
+    # 멈춰 둔 판의 run_opts.json 이 이 이름으로 이어간다(D79).
+    "concept": {"DUNGEON_W": "42", "DUNGEON_H": "34", "DUNGEON_ARCH": "concept"},
 }
+# ── 09-20 밤의 기본값(D88~D93) — 화면(launcher/index.html)의 맵 라디오와 고급 설정 체크박스 넷이 처음에 서 있는 자리.
+# 화면은 이 값을 /api/presets.night_defaults 로 받아 맞춘다(index.html 에는 값이 없다 — 공개 서버 server.py 도 같은 본문을 쓴다).
+# 뒤집는 법: 아래 한 줄만 고친다(전부 옛 판 = OLD_DEFAULTS 와 같은 값으로). 론처·서버는 재시작해야 새 값이 나간다.
+# ⚠️이것은 '화면의 기본'이다 — /api/start 에 옵션이 아예 없으면 Runner.start 는 옛 판(맵 normal · 스위치 끔)으로 띄운다:
+#   멈춰 둔 옛 판의 run_opts.json 에는 이 키들이 없고, 그 판은 같은 세계 설정으로 이어가야 한다(D79 세계 지문 대조).
+NIGHT_DEFAULTS = {"map": "concept", "town_life": True, "npc_reply": True, "floor_life": True, "bestiary_plus": True}
+OLD_DEFAULTS = {"map": "normal", "town_life": False, "npc_reply": False, "floor_life": False, "bestiary_plus": False}   # 화면의 '이전 판 설정으로' 버튼이 돌아가는 자리
+OPTIONS_UI_VERSION = 1                            # 09-20 시작 옵션(MAPS·위 스위치)의 판 번호 — 화면이 보내는 옵션을 이 서버가 아는가.
+                                                  #   8000번에 떠 있던 옛 론처를 다시 쓰는 조건(main)과 화면의 '이전 런처' 안내가 이 값을 본다.
+                                                  #   MAPS 에 키를 더하거나 화면이 새 옵션을 보내게 되면 올린다(index.html 의 비교 값도 같이).
 BRAINS = BACKENDS
 TEXT_LIMITS = {"persona": sheetkit.PERSONA_MAX, "persona_total": sheetkit.PERSONA_TOTAL_MAX,
                "background": sheetkit.BACKGROUND_MAX}
-BIG_KEYS = tuple(MAPS["big"])
 GAME_PREFIX = "/game/"                            # 게임 클라이언트(M3/B5): URL 접두 → game/dist/ (vite base '/game/' 와 같다)
 GAME_DIST_PREFIX = "/game/dist/"
 GAME_NO_STORE = ("/game/", "/game/index.html")    # 진입 HTML 만 캐시 금지 — 해시 자산(/game/assets/*)은 기본 캐시
@@ -226,11 +241,15 @@ class Runner:
                 env["DUNGEON_PARTY_FILE"] = party_path
             m = str(opts.get("map") or "normal")
             if m not in MAPS:
-                raise BadRequest("맵은 normal/big")
-            if m == "normal":
-                for k in BIG_KEYS:                  # 이전 호출의 큰 판 값이 부모 env 에 남아 있어도 안 물려준다
-                    env.pop(k, None) if k not in os.environ else None
+                raise BadRequest("맵은 %s 중 하나" % "/".join(MAPS))
+            # normal = 러너 기본 + 부모 env 그대로: 콘솔·.env·게이트가 준 DUNGEON_W/H/TURNS 등은 이 판으로 물려받는다(게이트가
+            # 이 길로 40x16·짧은 판을 만든다). 09-20 수선: 여기 있던 'BIG_KEYS 지우기'는 env 가 os.environ 의 사본이라 부모에 있는 키는
+            # 하나도 못 지웠다(D31 부터 — 주석은 '안 물려준다'였고 동작은 반대). 지우는 척하던 줄을 걷고 사실을 적는다.
             env.update(MAPS[m])
+            # 생성 프로필(D88)만은 물려받지 않는다 — 고른 맵이 정한다. 부모 env(.env · 서비스 환경값)에 DUNGEON_ARCH 가 있어도
+            # 다른 맵을 고른 판은 옛 생성기로 지어야 한다(새 생성기는 42x34 에서만 검증됐다 — 56x20·80x30 은 검증 밖).
+            if "DUNGEON_ARCH" not in MAPS[m]:
+                env.pop("DUNGEON_ARCH", None)
             if mode == "standard":
                 env.update(DUNGEON_DEPTHS="5", DUNGEON_TURNS="600", DUNGEON_SOLO="0")
             if opts.get("town"):
@@ -242,6 +261,12 @@ class Runner:
             env["DUNGEON_PARTYFORM"] = "1" if opts.get("partyform") is True else "0"      # D84 파티 결성(실험) — 화면 기본 끔·옵션 없으면 끔(러너는 마을 판에서만 켠다)
             env["DUNGEON_STRANGERS"] = "1" if opts.get("strangers") is True else "0"      # D85 낯선 사람(실험) — 화면 기본 끔·옵션 없으면 끔(러너는 파티 결성 판에서만 켠다)
             env["DUNGEON_TOWN_SIGHT"] = "zone" if opts.get("town_sight") == "zone" else "all"   # D86 마을 시야 = 구역(실험) — 화면 기본 끔·옵션 없으면 옛 판(전체)
+            # 09-20 밤의 스위치 넷 — 러너 기본은 전부 0 이고 켜는 쪽은 론처다. 화면의 기본 체크는 NIGHT_DEFAULTS, 옵션이 없으면 끈다
+            # (부모 env 값도 덮는다 = 옛 판 · 멈춰 둔 옛 판의 run_opts.json 에는 이 키가 없어 같은 세계로 이어간다).
+            env["DUNGEON_TOWN_LIFE"] = "1" if opts.get("town_life") is True else "0"          # D90 마을 생활(마을의 물건·새 주민·들린 말)
+            env["DUNGEON_NPC_REPLY"] = "1" if opts.get("npc_reply") is True else "0"          # D93 NPC 되받기(NPC 가 말을 되받는다 — LLM 호출이 조금 는다)
+            env["DUNGEON_FLOOR_LIFE"] = "1" if opts.get("floor_life") is True else "0"        # D92 던전의 물건들
+            env["DUNGEON_BESTIARY_PLUS"] = "1" if opts.get("bestiary_plus") is True else "0"  # D92 새 몬스터
             env["DUNGEON_BOSS"] = "1" if opts.get("boss") else "0"   # D65 보스층·귀환 — 화면 기본 켬, 러너 기본 0(옵션 없으면 끔)
             if opts.get("start") == "boss":                          # D67 프리셋: 보스방 앞에서 시작 — 마을 없음·보스 켬(관찰용)
                 env["DUNGEON_START"] = "boss"
@@ -396,8 +421,17 @@ class Ctx:
             return None
 
 
+def _preview_look(look):
+    """기본 파티 시트의 외형 → 화면 미리보기용. 러너와 같은 검증기(sanitize_look)를 거친 값만 싣는다 — 시트에 없거나 깨졌으면 None
+    (그 판의 외형은 러너가 시드로 뽑는다 — 화면은 '랜덤'이라고 말한다)."""
+    try:
+        return sheetkit.sanitize_look(look)
+    except (ValueError, OSError):
+        return None
+
+
 def default_party_preview(root):
-    """party.json 미리보기 — 검증은 러너 몫이라 여기선 읽기만(메타 키 제외)."""
+    """party.json 미리보기 — 검증은 러너 몫이라 여기선 읽기만(메타 키 제외). look(09-20) = 시트에 적힌 외형(없으면 None)."""
     try:
         with io.open(os.path.join(root, "party.json"), encoding="utf-8") as f:
             raw = json.load(f)
@@ -409,7 +443,7 @@ def default_party_preview(root):
         if isinstance(s, dict):
             out.append({"char": c, "name": s.get("name") or ("모험가 %s" % c), "job": s.get("job"),
                         "sex": s.get("sex"), "persona": s.get("persona"), "speech": s.get("speech"),
-                        "goal": s.get("goal"),
+                        "goal": s.get("goal"), "look": _preview_look(s.get("look")),
                         "prompt_chars": sum(len(str(s.get(k) or "")) for k in ("persona", "background", "speech", "goal"))})
     return out
 
@@ -444,6 +478,9 @@ def presets_payload(ctx):
             "brain_failure_policy": run_control.POLICY,
             "model_ui_version": 2,
             "party_ui_version": 1,                 # D81 한 장 화면(내 캐릭터 + 동료 칸)이 기대는 서버 — 화면은 이 값이 없으면 '이전 런처' 안내를 띄운다
+            "options_ui_version": OPTIONS_UI_VERSION,   # 09-20 시작 옵션의 판 번호 — 새 맵·새 스위치를 모르는 옛 서버면 화면이 '이전 런처' 안내를 띄운다
+            "night_defaults": dict(NIGHT_DEFAULTS),     # 09-20 맵 라디오·고급 설정 체크박스 넷의 첫 자리(화면에는 값이 없다 — 여기 한 곳)
+            "old_defaults": dict(OLD_DEFAULTS),         #   '이전 판 설정으로' 버튼이 돌아가는 자리(옛 맵 · 스위치 끔)
             "text_limits": TEXT_LIMITS,
             "custom_saved": os.path.exists(ctx.party_path),
             "default_brain": ctx.default_brain or "gemini_api",
@@ -661,11 +698,14 @@ def main():
     a = ap.parse_args()
     url = "http://%s:%d/launcher/" % (a.host, a.port) + ("?mode=alpha" if a.alpha else "")
     # 메뉴를 다시 골랐을 때 기존 서버를 연다. 바인드 전에 확인해야 Windows에서도 중복 실행을 막는다.
+    # 09-20: 시작 옵션의 판 번호도 같아야 다시 쓴다 — 코드를 고친 뒤 bat 을 다시 눌러도 떠 있던 옛 론처(옛 MAPS)가 새 화면(캐시 금지라
+    # 늘 새 HTML)에 응답하면, 화면이 보낸 새 맵을 옛 서버가 400 으로 거절한다. 번호가 다르면 아래 바인드가 실패해 '그 창을 닫고 다시' 안내가 나간다.
     try:
         with urlopen("http://%s:%d/api/presets" % (a.host, a.port), timeout=2) as response:
             existing = json.load(response)
         if (existing.get("ruleset") == "skills-v1" and existing.get("text_limits") == TEXT_LIMITS
-                and existing.get("brain_failure_policy") == run_control.POLICY):
+                and existing.get("brain_failure_policy") == run_control.POLICY
+                and existing.get("options_ui_version") == OPTIONS_UI_VERSION):
             print("[launcher] 기존 서버에서 연다: " + url)
             if not a.no_browser:
                 webbrowser.open(url)

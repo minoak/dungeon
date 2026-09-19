@@ -112,11 +112,23 @@ class AlphaLauncherTests(unittest.TestCase):
     def test_menu_reuses_existing_launcher_before_binding(self):
         with patch.object(sys, 'argv', ['launcher.py', '--alpha']), patch('launcher.urlopen') as opened, \
                 patch('launcher.json.load', return_value={'ruleset': 'skills-v1', 'text_limits': launcher.TEXT_LIMITS,
-                                                         'brain_failure_policy': launcher.run_control.POLICY}), \
+                                                         'brain_failure_policy': launcher.run_control.POLICY,
+                                                         'options_ui_version': launcher.OPTIONS_UI_VERSION}), \
                 patch('launcher.make_server') as make, patch('launcher.webbrowser.open') as browser:
             self.assertEqual(launcher.main(), 0)
             make.assert_not_called()
             browser.assert_called_once_with('http://127.0.0.1:8000/launcher/?mode=alpha')
+
+    def test_old_launcher_without_new_start_options_is_not_reused(self):
+        # 09-20: 새 맵·새 스위치를 모르는 옛 론처(시작 옵션 판 번호 없음)는 다시 쓰지 않는다 — 새 화면이 보낸 맵을 옛 서버가 거절한다.
+        with patch.object(sys, 'argv', ['launcher.py', '--no-browser']), patch('launcher.urlopen'), \
+                patch('launcher.json.load', return_value={'ruleset': 'skills-v1', 'text_limits': launcher.TEXT_LIMITS,
+                                                         'brain_failure_policy': launcher.run_control.POLICY}), \
+                patch('launcher.make_server', side_effect=OSError('이미 사용 중')) as make, \
+                patch('launcher.webbrowser.open') as browser:
+            self.assertEqual(launcher.main(), 1)
+            make.assert_called_once()
+            browser.assert_not_called()
 
     def test_old_launcher_without_pause_support_is_not_reused(self):
         with patch.object(sys, 'argv', ['launcher.py', '--no-browser']), patch('launcher.urlopen'), \
