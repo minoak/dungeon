@@ -1,0 +1,320 @@
+# -*- coding: utf-8 -*-
+"""쓰임 부품(D89, 2026-09-20) — 오브젝트·건물과의 상호작용을 **정의(JSON)의 부품**이 낸다.
+
+배경: 실판 집계로 마을은 '성직자 → 접수원 → 주점 → 게시판 → 던전 입구' 체크리스트였다. 설계 원장 D83 의 남은 기둥 C =
+"마을에서 할 일의 행동 수단이 없다", D69 결정 ② = "마을 동사를 코드에 하나씩 박지 않고 정의의 부품이 관측 대상·메뉴를 낸다 …
+엔진은 부품만 보고, 새 건물은 JSON 한 장". 이 모듈이 그 뼈대다.
+
+  · 새 동사는 없다 — 전부 기존 `use`(메뉴형 `interact`) 밑이다. Dungeon._interact 가 아는 타입(계단·NPC·보물·상자·샘·장비)을
+    다 지난 마지막 'nothing' 직전에 handle() 한 줄로 이어진다. 메뉴형·조합형이 같은 _interact 를 타므로 두 경로가 한 번에 열린다.
+  · 엔진은 kind 만 본다: 피처 → 정의(오브젝트 = type·이름이 같은 entities/object 정의, 건물 = building_defs 의 정의 id) →
+    comps.use → kind 처리기. 새 오브젝트·새 건물 기능 = JSON 한 장(코드 무수정). 새 kind 만 여기 처리기 하나 + entities.USE_KINDS 한 줄.
+  · 쓰고도 남는다 — 피처를 지우지 않는다(샘·상자의 del 을 따라 하지 않는다). once 로 다 쓴 것은 세계의 상태(d.use_spent)로 남고
+    다시 쓰면 'used_up' 사실이 돌아온다. 스트림의 피처 as_dict 는 그대로다(verify_stream 필드 전수 일치).
+  · 판정 rng(d.rng·d20)를 건드리지 않는다 — 뒤지기의 추첨은 세계 시드·층·피처 자리의 해시다(통에 무엇이 들었나는 세계가 지어질 때
+    이미 정해진 사실이다). 그래서 use 부품이 없는 세계는 옛 판과 바이트가 같다(verify_skill_off).
+  · 돈·가격·매매는 없다(D69 에서 제출 뒤로 보류) — browse 는 구경만이다.
+  · 문장은 사실만(조언·결론·행동 지시 없음) — 엔진이 실제로 한 일만 말한다. ⚠️아래 문장·라벨·태그 낱말은 전부 임시(검토표 등재 대상).
+
+결과 dict 는 기존 interact 결과와 같은 꼴: {char, type:'interact', target, result, what, use_kind, …사실}.
+  kind → result:  read→read{text[,page,pages]} · sit→sat{heal,hp} · drink→drank{heal,hp} · browse→browsed{wares} ·
+                  practice→practiced · rummage→rummaged{got[,potions|bag,quest]} · lodge→lodged{heal,hp,cleared} ·
+                  warm→warmed{heal,hp} · once 로 다 쓴 뒤→used_up
+  (뒤져서 나온 것의 칸 이름이 `found` 가 아니라 `got` 인 까닭: `found` 는 수색 결과의 [{kind,name…}] 목록 계약이라
+   tags.py·bestiary.py 가 모든 이벤트의 found 를 목록으로 돈다 — 문자열을 실으면 그 집계기들이 죽는다.)
+"""
+import hashlib
+
+import entities as ENT
+
+# kind → 표현 재료. label=메뉴형 줄 머리 · tag=조합형 대상의 사실 태그 · tried=D39 오브젝트 태그의 '~해 봄' · seen=목격(ally_use)의 괄호 한 마디
+# ⚠️문구 임시 — 전부 SilenceBreaker 초안(파트너 문장 대기)
+KINDS = {
+    'read':     {'label': '읽기',     'tag': 'readable',  'tried': '읽어 봄',     'seen': '글을 읽었다'},
+    'sit':      {'label': '앉기',     'tag': 'seat',      'tried': '앉아 봄',     'seen': '앉아 쉬었다'},
+    'drink':    {'label': '마시기',   'tag': 'drinkable', 'tried': '마셔 봄',     'seen': '물을 마셨다'},
+    'browse':   {'label': '구경하기', 'tag': 'wares',     'tried': '구경해 봄',   'seen': '구경했다'},
+    'practice': {'label': '몸 풀기',  'tag': 'practice',  'tried': '몸 풀어 봄',  'seen': '몸을 풀었다'},
+    'rummage':  {'label': '뒤지기',   'tag': 'container', 'tried': '뒤져 봄',     'seen': None},      # 목격 한 마디는 나온 것에 따라(아래 _GOT_SEEN)
+    'lodge':    {'label': '묵기',     'tag': 'lodging',   'tried': '묵어 봄',     'seen': '묵었다'},
+    'warm':     {'label': '불 쬐기',  'tag': 'warmth',    'tried': '불 쬐어 봄',  'seen': '불을 쬐었다'},
+}
+assert set(KINDS) == set(ENT.USE_KINDS), '쓰임 kind 어휘는 entities.USE_KINDS 와 같아야 한다(검증기 ↔ 처리기)'
+
+RESULTS = ('read', 'sat', 'drank', 'browsed', 'practiced', 'rummaged', 'lodged', 'warmed', 'used_up')
+_HEAL_KINDS = {'sit': 'sat', 'drink': 'drank', 'warm': 'warmed'}
+_GOT_KR = {'potion': '물약', 'treasure': '보물'}
+_GOT_SEEN = {'potion': '물약을 꺼냈다', 'treasure': '보물을 꺼냈다', 'nothing': '빈손이었다'}
+
+_IDX = {'src': None, 'n': -1, 'by_type': {}}
+
+
+def _by_type():
+    """오브젝트 정의 색인 {피처 type: [use 부품이 있는 정의]} — 정의 사전이 바뀌면(재로드·게이트의 주입) 다시 짓는다."""
+    defs = ENT.load()
+    if _IDX['src'] is not defs or _IDX['n'] != len(defs):
+        idx = {}
+        for df in sorted(defs.values(), key=lambda v: v['id']):
+            if (df.get('kind') == 'object' and df.get('type') and (df.get('comps') or {}).get('use')
+                    and df['type'] not in ENT.USE_RESERVED_TYPES):      # 엔진이 제 뜻으로 아는 type 은 검증기가 이미 거절한다 — 여기서도 안 집는다
+                idx.setdefault(df['type'], []).append(df)
+        _IDX.update(src=defs, n=len(defs), by_type=idx)
+    return _IDX['by_type']
+
+
+def use_of(d, f):
+    """피처 → use 부품(dict) 또는 None. 건물 = 그 문턱 피처의 정의 id(building_defs — build_town 이 둔다),
+    오브젝트 = type 이 같은 정의(같은 type 을 여러 정의가 쓰면 이름이 같은 것 먼저 — 무기 단검·장검과 같은 문법)."""
+    if f is None:
+        return None
+    if f.type == 'building':
+        eid = (getattr(d, 'building_defs', None) or {}).get(f.id)
+        try:
+            return ((ENT.get(eid).get('comps') or {}).get('use') or None) if eid else None
+        except KeyError:
+            return None
+    cands = _by_type().get(f.type)
+    if not cands:
+        return None
+    df = next((c for c in cands if c.get('name') == f.name), cands[0])
+    return df['comps']['use']
+
+
+def _heal_of(use):
+    return int(use.get('heal', 1)) if use.get('heal') is not None else 1
+
+
+def obs_fact(d, f):
+    """view() 용 — 피처 항목에 얹을 {'use': {kind[, heal]}}(쓰임 부품이 있는 피처만 — 없는 피처는 {} = 옛 obs 그대로).
+    메뉴 라벨·조합형 '대상의 현재 사실' 줄·대상 태그가 전부 이 한 칸에서 나온다(건물의 정의는 두뇌 쪽에서 못 찾으므로 여기서 싣는다)."""
+    use = use_of(d, f)
+    if not use:
+        return {}
+    k = use['kind']
+    return {'use': {'kind': k, **({'heal': _heal_of(use)} if k in _HEAL_KINDS else {})}}
+
+
+def tags(fact):
+    """조합형 대상 목록의 사실 태그 — obs 피처의 use 칸 → ['interactable', '<kind 태그>']."""
+    info = KINDS.get((fact or {}).get('kind'))
+    return ['interactable', info['tag']] if info else []
+
+
+def fact_text(fact):
+    """몸에 남는 효과의 사실 한 줄(엔진이 실제로 하는 것만 — 수치는 정의에서). 메뉴 라벨 꼬리·조합형 '대상의 현재 사실' 줄 공용.
+    효과가 없는 kind(읽기·구경·몸 풀기·뒤지기)와 heal 0 은 None — 줄 머리·태그가 이미 말한다. ⚠️문구 임시"""
+    k, heal = (fact or {}).get('kind'), int((fact or {}).get('heal') or 0)
+    if k == 'sit' and heal:
+        return '앉으면 HP +%d (상처가 있을 때)' % heal
+    if k == 'drink' and heal:
+        return '마시면 HP +%d (상처가 있을 때)' % heal
+    if k == 'warm' and heal:
+        return '불을 쬐면 HP +%d (상처가 있을 때)' % heal
+    if k == 'lodge':
+        return '묵으면 HP 가 전부 돌아오고 몸 상태가 낫는다'
+    return None
+
+
+def menu_label(f, sfx=''):
+    """메뉴형 한 줄 — '앉기: 벤치 f6 (발밑/인접) — 앉으면 HP +1 (상처가 있을 때)'. 머리 낱말이 무엇을 하는 줄인지 말하고(말 걸기·장비 선례),
+    몸에 남는 효과가 있는 kind 만 꼬리에 수치를 단다(장비 라벨 '걸치면 피해 +N' 선례 — 사실만, 결론 없음). f = obs 피처 항목."""
+    fact = f.get('use') or {}
+    tail = fact_text(fact)
+    return '%s: %s %s (%s)%s%s' % (KINDS[fact['kind']]['label'], f['name'], f['id'], '문턱' if f.get('type') == 'building' else '발밑/인접',
+                                   (' — ' + tail) if tail else '', sfx)
+
+
+def fact_line(f):
+    """조합형 '## 대상의 현재 사실' 한 줄 — '- f6 벤치: 앉으면 HP +1 (상처가 있을 때)'. 몸에 남는 효과가 있는 kind 만(장비 줄과 같은 자리 —
+    수치가 있는 사실). 읽기·구경·몸 풀기·뒤지기는 대상 태그(readable·wares·practice·container)가 이미 말한다 → None."""
+    txt = fact_text(f.get('use'))
+    return ('- %s %s: %s' % (f.get('id', '?'), f.get('name', '?'), txt)) if txt else None
+
+
+def _spent(d):
+    st = getattr(d, 'use_spent', None)          # from_ascii(__new__)·옛 피클 스냅샷엔 없는 속성 — 처음 쓸 때 만든다
+    if st is None:
+        st = d.use_spent = {}
+    return st
+
+
+def _draw(d, f, loot):
+    """뒤지기의 추첨 — 세계 시드·층·피처 번호·자리의 해시로 가중표에서 하나(결정론, 판정 rng 무접촉).
+    누가 언제 뒤지든 그 통에서 나오는 것은 같다 = 세계가 지어질 때 정해진 사실."""
+    key = '%s|%s|%s|%s|%s' % (getattr(d, 'master_seed', 0), getattr(d, 'depth', 0), f.id, f.x, f.y)
+    n = int.from_bytes(hashlib.sha256(key.encode('utf-8')).digest()[:8], 'big')
+    total = sum(int(e.get('w', 1)) for e in loot)
+    pick = n % total
+    for e in loot:
+        pick -= int(e.get('w', 1))
+        if pick < 0:
+            return e['item']
+    return loot[-1]['item']
+
+
+def handle(d, bot, f, bots=None, target_id=None):
+    """곁의 피처 f 를 쓴다 → 결과 dict, 쓰임 부품이 없으면 None(호출측이 'nothing' 으로 떨어진다). 거리·숨김은 _interact 가 이미 봤다."""
+    use = use_of(d, f) if (f is not None and not getattr(f, 'concealed', False)) else None   # 숨은 건 아직 '없는' 것
+    if not use:
+        return None
+    kind = use['kind']
+    fid = 'f%d' % f.id
+    base = {'char': bot['char'], 'type': 'interact', 'target': target_id or fid, 'what': f.name, 'use_kind': kind}
+    once = bool(use.get('once')) or kind == 'rummage'          # 뒤지기는 늘 한 번(검증기도 once:false 를 거절한다)
+    spent = _spent(d)
+    if once and f.id in spent:
+        d._witness_use(bots, f.x, f.y, [bot], f.name, fid, _GOT_SEEN['nothing'] if kind == 'rummage' else None)
+        return {**base, 'result': 'used_up'}
+    out = None
+    seen = KINDS[kind]['seen']
+    if kind == 'read':
+        pages = list(use['texts']) if use.get('texts') else [use['text']]
+        n = int((bot.get('use_pages') or {}).get(f.id, 0))     # 읽는 사람마다 제 쪽수(봇 dict 수명 = 층 재스폰이면 처음부터 — shop_served 리듬)
+        bot.setdefault('use_pages', {})[f.id] = n + 1
+        out = {**base, 'result': 'read', 'text': pages[n % len(pages)],
+               **({'page': n % len(pages) + 1, 'pages': len(pages)} if len(pages) > 1 else {})}
+    elif kind in _HEAL_KINDS:
+        heal = max(0, min(_heal_of(use), bot['maxhp'] - bot['hp']))
+        bot['hp'] += heal
+        out = {**base, 'result': _HEAL_KINDS[kind], 'heal': heal, 'hp': bot['hp']}
+    elif kind == 'browse':
+        out = {**base, 'result': 'browsed', 'wares': list(use['wares'])}
+    elif kind == 'practice':
+        out = {**base, 'result': 'practiced'}
+    elif kind == 'rummage':
+        got = _draw(d, f, use['loot'])
+        out = {**base, 'result': 'rummaged', 'got': got}
+        if got == 'potion':
+            bot['potions'] = bot.get('potions', 0) + 1
+            out['potions'] = bot['potions']
+        elif got == 'treasure':
+            bot['bag'] = bot.get('bag', 0) + 1
+            out['bag'] = bot['bag']
+            qv = d._quest_event('loot', object='treasure')     # D69: 보물은 어디서 나왔든 획득이다(상자 선례)
+            if qv:
+                out['quest'] = qv
+        seen = _GOT_SEEN[got]
+    elif kind == 'lodge':                                      # D34 '지우기는 휴식뿐' — 묵기는 휴식이다(휴식 완료와 같은 소거)
+        heal = max(0, bot['maxhp'] - bot['hp'])
+        bot['hp'] = bot['maxhp']
+        cleared = sorted(bot.get('status') or {})
+        if cleared:
+            bot['status'], bot['bleed_steps'], bot['slow_beat'] = {}, 0, 0
+        out = {**base, 'result': 'lodged', 'heal': heal, 'hp': bot['hp'], 'cleared': cleared}
+    if out is None:
+        return None
+    if once:
+        spent[f.id] = {'char': bot['char'], 'turn': getattr(d, 'turn', 0)}
+    d._witness_use(bots, f.x, f.y, [bot], f.name, fid, seen)   # 목격 = 기존 ally_use{what,id,result} 그대로(동사는 '사용' 하나 — 파트너 확정)
+    return out
+
+
+# ── 표현 — 결과 dict 하나를 세 군데(자기 문장·궤적 꼬리표·관전 요약)가 읽는다. 전부 사실만. ⚠️문구 임시 ──
+def _hp_sfx(res):
+    return ('(HP +%d)' % res['heal']) if res.get('heal') else ''
+
+
+def _j(word, final, open_):
+    """조사 고르기 — 이름의 끝 글자에 받침이 있으면 final('을'·'은'), 없으면 open_('를'·'는'). 한글이 아니면 '을(를)' 꼴(기존 문장 관례)."""
+    ch = str(word)[-1:]
+    if '가' <= ch <= '힣':
+        return final if (ord(ch) - 0xAC00) % 28 else open_
+    return '%s(%s)' % (final, open_)
+
+
+def prose(last):
+    """직전 결과의 1인칭 사실 문장(brains._last_prose 의 interact 분기가 부른다). 모르는 result 는 None."""
+    r, what = last.get('result'), last.get('what') or '그것'
+    if r == 'read':
+        pg = (' (%d/%d)' % (last['page'], last['pages'])) if last.get('pages') else ''
+        return '%s의 글을 읽었다%s: "%s"' % (what, pg, last.get('text', ''))
+    if r == 'sat':
+        return '%s에 앉아 숨을 돌렸다%s' % (what, _hp_sfx(last))
+    if r == 'drank':
+        return '%s의 물을 마셨다%s' % (what, _hp_sfx(last))
+    if r == 'warmed':
+        return '%s의 불을 쬐었다%s' % (what, _hp_sfx(last))
+    if r == 'browsed':
+        return '%s에 진열된 것을 구경했다: %s' % (what, ', '.join(last.get('wares') or []))
+    if r == 'practiced':
+        return '%s%s 상대로 몸을 풀었다' % (what, _j(what, '을', '를'))
+    if r == 'rummaged':
+        got = last.get('got')
+        if got == 'potion':
+            return '%s%s 뒤졌다 — 물약 하나가 나왔다(소지 물약 %d병)' % (what, _j(what, '을', '를'), last.get('potions', 1))
+        if got == 'treasure':
+            return '%s%s 뒤졌다 — 보물 하나가 나왔다(모은 보물 %d개)' % (what, _j(what, '을', '를'), last.get('bag', 1))
+        return '%s%s 뒤졌다 — 비어 있다' % (what, _j(what, '을', '를'))
+    if r == 'lodged':
+        cl = last.get('cleared') or []
+        if not last.get('heal') and not cl:
+            return '%s에 묵었다 — 나을 상처가 없었다' % what
+        return '%s에 묵었다 — 몸이 다 나았다(HP +%d%s)' % (what, last.get('heal', 0), (', 나은 상태: ' + '·'.join(cl)) if cl else '')
+    if r == 'used_up':
+        if last.get('use_kind') == 'rummage':
+            return '%s%s 이미 비어 있다' % (what, _j(what, '은', '는'))
+        return '%s%s 이미 쓰였다 — 더 나오는 것이 없다' % (what, _j(what, '은', '는'))
+    return None
+
+
+def summary(res):
+    """관전·로그용 한 줄(show_runner.act_summary 의 interact 분기가 부른다) — 주어가 없는 사실 문장이라 1인칭 문장과 같은 소스."""
+    return prose(res)
+
+
+def event_tags(rec):
+    """궤적 꼬리표(D40 사건 사전) — [(키, 라벨, 짧은 사실)]. 새 키는 만들지 않는다(use·loot·misc 재사용 → EVENT_KINDS 무수정)."""
+    r, what = rec.get('result'), rec.get('what') or '?'
+    if r == 'read':
+        return [('use', '읽음', '%s "%s"' % (what, str(rec.get('text') or '')[:30]))]
+    if r in ('sat', 'drank', 'warmed'):
+        return [('use', '사용', '%s +%d (HP %d)' % (what, rec.get('heal', 0), rec.get('hp', 0)))]
+    if r == 'browsed':
+        return [('use', '구경', what)]
+    if r == 'practiced':
+        return [('use', '사용', '%s — 몸 풀기' % what)]
+    if r == 'rummaged':
+        got = rec.get('got')
+        if got == 'potion':
+            return [('loot', '획득', '%s → 물약 (소지 %d)' % (what, rec.get('potions', 0)))]
+        if got == 'treasure':
+            return [('loot', '획득', '%s → 보물' % what)]
+        return [('use', '사용', '%s — 비어 있음' % what)]
+    if r == 'lodged':
+        return [('use', '사용', '%s — 묵음 +%d (HP %d)' % (what, rec.get('heal', 0), rec.get('hp', 0)))]
+    if r == 'used_up':
+        return [('misc', '헛손질', '%s — 이미 %s' % (what, '비어 있음' if rec.get('use_kind') == 'rummage' else '쓰였음'))]
+    return [('misc', '기타', str(r))]
+
+
+def tried(d, f):
+    """D39 오브젝트 태그의 동사('읽어 봄' …) — 쓰임 부품이 있는 피처만(쓰고도 남는 오브젝트라 '×N' 이 뜻이 있다). 없으면 None."""
+    use = use_of(d, f)
+    return KINDS[use['kind']]['tried'] if use else None
+
+
+def obj_note(res):
+    """D39 오브젝트 태그의 마지막 사실 한 마디 — 뒤지기만(무엇이 나왔나·비었나). 나머지는 None(이전 note 유지)."""
+    if res.get('result') == 'rummaged':
+        return ('%s 나옴' % _GOT_KR[res['got']]) if res.get('got') in _GOT_KR else '비어 있음'
+    if res.get('result') == 'used_up' and res.get('use_kind') == 'rummage':
+        return '비어 있음'
+    return None
+
+
+def place(d, eid, x, y):
+    """배치 도우미 — 오브젝트 정의 한 장(eid)을 (x,y) 바닥 칸에 피처로 놓는다 → 피처 번호. build_town·층 생성·장면 저작이 부른다.
+    정의에 story 가 있으면 place_story 에 걸어(D75) 피처 줄 끝의 한 줄(about)·곁 2칸의 이야기가 된다. 바닥이 아니거나 이미 다른
+    피처가 선 칸이면 시작 전에 죽는다(_interact 는 칸의 첫 피처를 집는다 — 한 칸에 하나). rng 를 쓰지 않는다."""
+    df = ENT.get(eid)
+    if df.get('kind') != 'object' or not df.get('type'):
+        raise ValueError('%r 은(는) 오브젝트 정의가 아니다' % eid)
+    if not (0 <= y < d.h and 0 <= x < d.w) or d.grid[y][x] != '.' or d.feature_at(x, y) is not None:
+        raise ValueError('오브젝트 %r 자리 (%d,%d)가 빈 바닥이 아니다' % (eid, x, y))
+    fid = d._add_feature(df['type'], df['name'], x, y)
+    st = (df.get('comps') or {}).get('story')
+    if st:
+        if getattr(d, 'place_story', None) is None:
+            d.place_story = {}
+        d.place_story[fid] = dict(st)
+    return fid

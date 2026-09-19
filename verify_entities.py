@@ -32,9 +32,17 @@ NPC_SHA = 'b6c1e5f26edb42b1e7ad09a6f0db05b8f62d30df43dd846cf67d649f9e8fd1b7'
 
 # ① 로드
 defs = ENT.load()
-check('① 정의 로드 — 마을 v3 공간 정의(맵 9·건물 12, 이전 지도 정의 포함) + 동료 프리셋(D81 — 수는 늘어난다)',
-      {d['kind'] for d in defs.values()} == set(ENT.KINDS) and len(defs) - len(ENT.by_kind('companion')) == 48 and len(ENT.by_kind('companion')) >= 3
-      and len(ENT.by_kind('monster')) == 3 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('object')) == 9 and len(ENT.by_kind('npc')) == 9
+# D89(2026-09-20): 쓰임 부품(use)이 달린 오브젝트는 '내용'이다 — 벤치·우물·표지판처럼 JSON 한 장씩 늘어난다(엔진 무수정이 그 부품의 뜻).
+#   그래서 개수 고정은 엔진이 제 뜻으로 아는 코어 오브젝트(use 없는 9장 — 생성기·장비표·도감이 기대는 것)에만 걸고, 쓰임 오브젝트는
+#   '최소 4장(게이트용) 이상'으로만 본다(동료 프리셋 '수는 늘어난다'와 같은 문법). 쓰임 오브젝트의 꼴·동작은 verify_use 가 본다.
+use_objs = [d for d in ENT.by_kind('object') if d['comps'].get('use')]
+core_objs = {d['id'] for d in ENT.by_kind('object') if not d['comps'].get('use')}
+check('① 정의 로드 — 마을 v3 공간 정의(맵 9·건물 12, 이전 지도 정의 포함) + 동료 프리셋(D81 — 수는 늘어난다) + 쓰임 오브젝트(D89 — 수는 늘어난다)',
+      {d['kind'] for d in defs.values()} == set(ENT.KINDS)
+      and len(defs) - len(ENT.by_kind('companion')) - len(use_objs) == 48 and len(ENT.by_kind('companion')) >= 3
+      and len(ENT.by_kind('monster')) == 3 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('npc')) == 9
+      and core_objs == {'exit', 'treasure', 'chest', 'fountain', 'potion', 'dagger', 'longsword', 'leather_armor', 'chain_mail'}
+      and {'stone_tablet', 'bench', 'well', 'barrel'} <= {d['id'] for d in use_objs}
       and len(ENT.by_kind('map')) == 9 and len(ENT.by_kind('building')) == 12 and len(ENT.by_kind('quest')) == 3)
 
 # ② 엔진 유도값 == 이관 전 리터럴(동작 그대로)

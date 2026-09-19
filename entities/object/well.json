@@ -1,0 +1,19 @@
+{
+  "id": "well",
+  "name": "우물",
+  "kind": "object",
+  "type": "well",
+  "tags": [
+    "object"
+  ],
+  "comps": {
+    "use": {
+      "kind": "drink",
+      "heal": 1
+    },
+    "story": {
+      "trait": "두레박이 걸린 마을 우물"
+    }
+  },
+  "note": "D89(2026-09-20) 쓰임 부품의 게이트용 최소 정의(drink). 던전의 샘(fountain — 한 번 쓰면 사라지는 도박)과 다른 것: 쓰고도 남고 굴림이 없다. 이름·trait 는 SilenceBreaker 임시 문장 — 파트너 교정 대기. 배치는 다음 단계(interactables.place)."
+}
