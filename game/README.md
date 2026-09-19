@@ -71,7 +71,9 @@ URL 파라미터: `run=`(판 경로, 기본 `state/stream.jsonl`) · `focus=`(�
 물약·장비 등)와 던전의 새 피처 타입은 전과 같다(던전엔 밑그림이 없으니 폴백 타일이 곧 물체다).
 
 **로그 문장**(`src/text/evline.ts`, ⚠️문구 임시): `interact` 결과 `read` · `sat` · `drank` · `browsed` · `practiced` · `rummaged` · `lodged` ·
-`warmed` · `used_up`. 대상 이름은 결과의 `name` 이 먼저, 없으면 `target`(`f<n>` 피처 · `p<n>` 소품)을 푼다. 모르는 결과는 전처럼 `상호작용 {대상} — {result}`.
+`warmed` · `used_up`. 대상 이름은 결과의 `name` → `what`(엔진이 피처 이름을 싣는 칸) 순, 없으면 `target`(`f<n>` 피처 · `p<n>` 소품)을 푼다.
+`rummaged` 에서 나온 것은 엔진의 `got`(`potion` · `treasure` · `nothing`)이 먼저다 — `found` 는 수색 결과의 목록 계약이라 `got` 이 없을 때만 본다.
+모르는 결과는 전처럼 `상호작용 {대상} — {result}`.
 
 검사 둘(둘 다 LLM 0콜 · 마지막 줄 `ALL PASS`): `npm run check:props`(`verify/props.mjs` — 브라우저 없이 렌더러 고르기·소품 계획·로그 문장) ·
 `npm run build && npm run check:renderer`(`verify/renderer.mjs` — 헤드리스 Edge 로 자동 선택·URL 강제·문 칸·`level.props`·마을 표식·실험실,

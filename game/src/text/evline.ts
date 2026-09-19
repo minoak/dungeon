@@ -62,6 +62,8 @@ export function resolveTarget(t: unknown, f: Frame, run: Run): string {
 }
 /** D89 바닥 소품 kind(scene/dungeonDecor.PROP_KINDS) → 관전 로그의 이름. 결과에 name 이 실려 오면 그쪽이 먼저다(⚠️문구 임시). */
 const PROP_NAMES: Record<string, string> = { barrel: '통', crate: '나무 상자', jar: '항아리', rubble: '돌무더기', storage: '짐 더미', ruin: '부러진 기둥' };
+/** D89 뒤지기(rummaged)에서 나온 것 — 엔진의 got(entities.USE_LOOT 의 potion·treasure, nothing 은 빈손) → 관전 로그의 이름(⚠️문구 임시). */
+const GOT_NAMES: Record<string, string> = { potion: '회복 물약', treasure: '보물' };
 
 /** D69 결과에 실린 의뢰 진행 [{title,n,need,done}] → ' 📜 의뢰 「…」 2/3'(세계가 센 숫자). 없으면 ''. */
 export function questSfx(e: StreamEvent): string {
@@ -206,9 +208,10 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
     if (r === 'quest_accepted') return L('gold', `📜 의뢰 맡음 — 「${esc(str(e.title, '?'))}」 ${esc(str(e.goal))}${e.reward ? ` (보상: ${esc(str(e.reward))})` : ''}`);   // D69
     if (r === 'quest_already') return L('dim', `📜 이미 맡은 의뢰 — 「${esc(str(e.title, '?'))}」`);
     if (r === 'treasure') return L('gold', '◆ 보물 획득' + questSfx(e));
-    // ── D89 쓰임 부품(오브젝트 상호작용) · D90 마을 생활(09-20) — 결과 필드 {result, target, name?, text?, hp?, found?, wares?}. ⚠️문구 임시(전부)
-    // 대상 이름은 결과의 name 이 먼저(쓰고 사라진 오브젝트는 이 틱 스냅샷에 없다), 없으면 target 을 푼다. 모르는 result 는 아래 폴백 그대로.
-    const what = esc(str(e.name) || tgt());
+    // ── D89 쓰임 부품(오브젝트 상호작용) · D90 마을 생활(09-20) — 결과 필드 {result, target, what?|name?, text?, heal?, hp?, wares?, got?|found?}. ⚠️문구 임시(전부)
+    // 대상 이름은 결과에 실린 이름이 먼저(엔진 interactables.handle 은 `what` 에 피처 이름을 싣는다 · name 은 처음 계약의 이름 —
+    // 둘 다 받는다), 없으면 target 을 푼다. 모르는 result 는 아래 폴백 그대로.
+    const what = esc(str(e.name) || str(e.what) || tgt());
     const hpSfx = (num(e.heal) > 0 ? ` — HP +${num(e.heal)}` : '') + (e.hp != null ? ` (HP ${num(e.hp)})` : '');
     if (r === 'read') return L('notable', `${what}${eul(what)} 읽었다${e.text ? ` — 「${esc(str(e.text))}」` : ''}`);
     if (r === 'sat') return L('dim', `${what}에 앉았다${hpSfx}`);
@@ -219,8 +222,14 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
     }
     if (r === 'practiced') return L('dim', `${what}에서 연습했다${hpSfx}`);
     if (r === 'rummaged') {
-      const found = e.found === true ? '무언가' : namesOf(e.found);
-      return found ? L('gold', `${what}${eul(what)} 뒤졌다 — ${found} 발견`) : L('dim', `${what}${eul(what)} 뒤졌다 — 아무것도 없다`);
+      // 나온 것은 엔진의 `got`("potion"|"treasure"|"nothing" — entities.USE_LOOT)이 먼저다. `found` 는 수색(search) 결과의 목록 계약이라
+      // 엔진은 뒤지기에 그 칸을 쓰지 않는다(found 만 보면 물약·보물을 얻은 통도 '아무것도 없다' 로 찍힌다 — 09-20 수선).
+      // 처음 계약(found)으로 찍힌 줄도 읽도록 뒤에 남긴다. 모르는 got 은 원문 그대로(additive 관용).
+      const found = e.got != null ? (str(e.got) === 'nothing' ? '' : (GOT_NAMES[str(e.got)] ?? esc(str(e.got))))
+        : e.found === true ? '무언가' : namesOf(e.found);
+      const have = e.potions != null ? ` (소지 물약 ${num(e.potions)}병)` : e.bag != null ? ` (모은 보물 ${num(e.bag)}개)` : '';   // 엔진이 센 소지 수(있을 때만)
+      return found ? L('gold', `${what}${eul(what)} 뒤졌다 — ${found} 발견${have}` + questSfx(e))   // 보물은 어디서 나왔든 의뢰가 센다(상자 선례)
+        : L('dim', `${what}${eul(what)} 뒤졌다 — 아무것도 없다`);
     }
     if (r === 'lodged') return L(num(e.heal) > 0 ? 'gold' : 'dim', `${what}에서 묵었다${hpSfx}`);
     if (r === 'warmed') return L('dim', `${what} 곁에서 불을 쬐었다${hpSfx}`);

@@ -1,10 +1,11 @@
 // D88·D89·D90(2026-09-20) 관전 클라이언트의 순수 로직 검사 — 브라우저 없음 · LLM 0콜. 실행: cd game && node verify/props.mjs
 //   ① 렌더러 고르기(dungeonArtFor): level.architecture 가 있으면 입체 · 없으면 옛 그림 · URL ?dungeonArt= 는 강제 · 마을 층은 늘 꺼짐
 //   ② 엔진 소유 소품(level.props): 있으면 바닥 소품 추첨을 건너뛰고 그 목록 그대로 · 벽 부착물은 있든 없든 같은 자리 · 없으면 추첨 그대로
-//   ③ 관전 로그 문장(evline): 새 interact.result 아홉 가지 · 모르는 result 는 옛 폴백 그대로 · 소품 대상(p<n>) 이름 풀기
+//   ③ 관전 로그 문장(evline): 새 interact.result 아홉 가지(뒤지기는 엔진의 got 이 먼저 · 이름은 name → what → target) · 모르는 result 는 옛 폴백 그대로 · 소품 대상(p<n>) 이름 풀기
 // 층 자료는 실험실과 같은 길(art/dungeon-v2/preview_server.stream — 실제 엔진 생성기, 두뇌 미사용)로 만든다. 마지막 줄 'ALL PASS' 가 판정.
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { build } from 'esbuild';
@@ -90,6 +91,19 @@ check('③ practiced', has({ result: 'practiced', name: '훈련대' }, '훈련�
 check('③ rummaged — found 있음(gold)', has({ result: 'rummaged', target: 'p2', found: '회복 물약' }, '통을 뒤졌다', '회복 물약 발견') && line({ result: 'rummaged', target: 'p2', found: '회복 물약' }).cls === 'gold');
 check('③ rummaged — found 없음([] · false · 0 · 없음 = dim)', [[], false, 0, undefined, null].every(v =>
   has({ result: 'rummaged', target: 'p2', found: v }, '통을 뒤졌다', '아무것도 없다') && line({ result: 'rummaged', target: 'p2', found: v }).cls === 'dim'));
+// 엔진(interactables.handle)이 실제로 보내는 꼴 — 나온 것은 got("potion"|"treasure"|"nothing"), 대상 이름은 what. found 만 읽으면 얻은 통도 빈손으로 찍힌다(09-20 수선)
+const eng = { result: 'rummaged', what: '낡은 통', use_kind: 'rummage' };
+check('③ rummaged — got:potion(gold · 소지 수)', has({ ...eng, got: 'potion', potions: 2 }, '낡은 통을 뒤졌다', '회복 물약 발견', '(소지 물약 2병)')
+  && line({ ...eng, got: 'potion', potions: 2 }).cls === 'gold');
+check('③ rummaged — got:treasure(gold · 소지 수 · 의뢰 진행)', has({ ...eng, got: 'treasure', bag: 1, quest: [{ title: '보물 셋', n: 1, need: 3 }] },
+  '낡은 통을 뒤졌다', '보물 발견', '(모은 보물 1개)', '의뢰 「보물 셋」 1/3') && line({ ...eng, got: 'treasure', bag: 1 }).cls === 'gold');
+check('③ rummaged — got:nothing(dim) · found 가 같이 실려도 got 이 먼저', [{}, { found: '회복 물약' }].every(x =>
+  has({ ...eng, got: 'nothing', ...x }, '낡은 통을 뒤졌다', '아무것도 없다') && line({ ...eng, got: 'nothing', ...x }).cls === 'dim'));
+check('③ rummaged — 모르는 got 은 원문 그대로(HTML 로 새지 않는다)', has({ ...eng, got: '<i>gem</i>' }, '&lt;i&gt;gem&lt;/i&gt; 발견'));
+check('③ 대상 이름 — name 이 없으면 what(엔진의 칸) · 둘 다 없으면 target', has({ result: 'sat', what: '긴 의자' }, '긴 의자에 앉았다')
+  && has({ result: 'sat', name: '돌 의자', what: '긴 의자' }, '돌 의자에 앉았다') && has({ result: 'sat' }, '낡은 책장에 앉았다'));
+const oldViewer = readFileSync(path.join(root, 'viewer/index.html'), 'utf8');
+check("③ 옛 뷰어(viewer/index.html)의 rummaged 꼬리말도 got 을 먼저 읽는다", oldViewer.includes("e.got != null ? e.got !== 'nothing'"));
 check('③ lodged · warmed', has({ result: 'lodged', name: '여관', heal: 3, hp: 12 }, '여관에서 묵었다', 'HP +3', '(HP 12)') && has({ result: 'warmed', name: '화덕' }, '화덕 곁에서 불을 쬐었다'));
 check('③ used_up', has({ result: 'used_up', target: 'p5' }, '부러진 기둥', '남은 것이 없다'));
 check('③ 모르는 result 는 옛 폴백 그대로', has({ result: 'zzz_new' }, '상호작용 낡은 책장 — zzz_new') && line({ result: 'zzz_new' }).cls === 'dim');
