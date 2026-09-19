@@ -9,7 +9,8 @@
 
 ```
 entities/
-  monster/goblin.json  shadow_spider.json
+  monster/goblin.json  shadow_spider.json  goblin_chief.json(D65 보스)
+  monster/poison_goblin.json  spiderling.json  goblin_heavy.json          (D92 새 몬스터 풀 — 스위치를 켠 판의 2층부터)
   trap/spike.json  dart.json  alarm.json
   object/exit.json  treasure.json  chest.json  fountain.json  potion.json  dagger.json  longsword.json  leather_armor.json  chain_mail.json
   npc/gear_merchant.json  item_merchant.json  innkeeper.json          (상점 v0 — town-v0.json)
@@ -47,6 +48,8 @@ entities/
 |---|---|---|
 | monster `health.max`, `combat.atk·dmg·ac` | `Monster()` 기본값 | 명시 인자가 우선(장면 저작·게이트). 모르는 종은 기준선 몹(고블린)의 몸 |
 | monster `combat.on_hit` | `MON_STATUS` | 그림자거미 명중 = 둔화 |
+| monster `ai.pace` | `Monster.pace` → `_chase_step` | **D92(2026-09-20)**: 걸음 박자(정수≥1, 없으면 1). 2 면 쫓을 때 한 칸 걷고 한 틱을 선다(기존 `skip_turns` 장부) — 붙은 뒤의 공격은 매 틱. 고블린 중갑병만 2 |
+| monster `ai.spawn{pool, min_depth, pack}` | `entities.plus_monsters()` → `Dungeon._place_plus` | **D92**: 새 몬스터 풀(`pool: "plus"`) — `Dungeon(bestiary_plus=True)`(러너 `DUNGEON_BESTIARY_PLUS=1`, 기본 0)인 층의 `min_depth`(≥2 — 1층은 안 바꾼다)부터 고블린의 절반(올림, 하나는 남김)이 같은 칸·같은 번호로 이 종들이 된다. `pack` = 한 묶음의 마릿수(새끼거미 3 — 층당 묶음 하나, 나머지 개체는 곁의 빈 바닥 칸). 풀의 종은 `entities.lore(plus=False)`(끈 판의 사전)에서 빠진다 |
 | monster `ai.flee.hp_frac·stamina·to·join_range` | `Monster.flee_frac/flee_stamina/flee_to/flee_join_range` | **없으면 도주 안 함**. 고블린만 3·8(옛 전역값), 그림자거미는 없음(파트너 결정 2026-09-11 밤 "도주하는 건 고블린만"). `to: ally` = 근처(BFS `join_range` 걸음) 아무 다른 몹에게 붙어 같이 싸운다(D51) — `away` 는 옛 규칙(봇에게서 멀어짐) |
 | trap `trap.dc·dmg·status` | `TRAP_KINDS` | |
 | object `name` | `_add_feature` 이름 | `'숨은 보물'`은 `treasure`의 숨김 변형 이름(코드 리터럴) |

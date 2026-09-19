@@ -17,7 +17,8 @@ for v in verify_stage1 verify_stage2 verify_stage2b verify_stage3 verify_stream 
          verify_solo verify_gear verify_town verify_launcher verify_character_presets verify_status verify_rest verify_relations \
          verify_npcreply verify_overheard \
          verify_trail verify_objtags verify_floor verify_sayto verify_saykind verify_give verify_bond verify_compose verify_approach verify_action_system verify_reactions \
-         verify_skill_schema verify_skill_effects verify_skill_stream verify_skill_off verify_skill_launcher verify_brain_pause verify_entities verify_summary verify_notebook verify_town_spaces verify_movement_summary verify_degrade verify_boss verify_public verify_api_call_limit verify_guild verify_account verify_campaign verify_resume verify_model_wiring verify_companion verify_partyform verify_worlds verify_people verify_townsight verify_town_v3 verify_town_v4 verify_arch verify_use; do
+         verify_skill_schema verify_skill_effects verify_skill_stream verify_skill_off verify_skill_launcher verify_brain_pause verify_entities verify_summary verify_notebook verify_town_spaces verify_movement_summary verify_degrade verify_boss verify_public verify_api_call_limit verify_guild verify_account verify_campaign verify_resume verify_model_wiring verify_companion verify_partyform verify_worlds verify_people verify_townsight verify_town_v3 verify_town_v4 verify_arch verify_use \
+         verify_mobs; do
   r=$("$PY" "$v.py" 2>&1 | tail -1)
   echo "$v: $r"
   case "$r" in *"ALL PASS"*) ;; *) FAILED=1 ;; esac

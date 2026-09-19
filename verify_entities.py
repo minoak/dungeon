@@ -39,8 +39,8 @@ use_objs = [d for d in ENT.by_kind('object') if d['comps'].get('use')]
 core_objs = {d['id'] for d in ENT.by_kind('object') if not d['comps'].get('use')}
 check('① 정의 로드 — 마을 v3 공간 정의(맵 9·건물 12, 이전 지도 정의 포함) + 동료 프리셋(D81 — 수는 늘어난다) + 쓰임 오브젝트(D89 — 수는 늘어난다)',
       {d['kind'] for d in defs.values()} == set(ENT.KINDS)
-      and len(defs) - len(ENT.by_kind('companion')) - len(use_objs) == 48 and len(ENT.by_kind('companion')) >= 3
-      and len(ENT.by_kind('monster')) == 3 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('npc')) == 9
+      and len(defs) - len(ENT.by_kind('companion')) - len(use_objs) == 51 and len(ENT.by_kind('companion')) >= 3   # D92(09-20): 새 몬스터 셋(48 → 51)
+      and len(ENT.by_kind('monster')) == 6 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('npc')) == 9       #   monster 3 → 6(옛 세 종 + 새 몬스터 풀 셋 — 아래 ⑨)
       and core_objs == {'exit', 'treasure', 'chest', 'fountain', 'potion', 'dagger', 'longsword', 'leather_armor', 'chain_mail'}
       and {'stone_tablet', 'bench', 'well', 'barrel'} <= {d['id'] for d in use_objs}
       and len(ENT.by_kind('map')) == 9 and len(ENT.by_kind('building')) == 12 and len(ENT.by_kind('quest')) == 3)
@@ -52,7 +52,7 @@ check('② TRAP_KINDS 가 정의에서 유도되어 옛 리터럴과 같다',
                        'alarm': {'name': '경보 함정', 'dc': 13, 'dmg': 0}})
 check('② GEAR_KINDS 유도 · GEAR_CYCLE 의 이름은 전부 정의에 있다',
       G.GEAR_KINDS == {'단검': 1, '장검': 2, '가죽 갑옷': 1, '사슬 갑옷': 2} and {n for _, n in G.GEAR_CYCLE} <= set(G.GEAR_KINDS))
-check('② MON_STATUS 유도(그림자거미 명중=둔화, 고블린 무태그)', G.MON_STATUS == {'그림자거미': '둔화'})
+check('② MON_STATUS 유도(그림자거미 명중=둔화, 고블린 무태그 · D92 독칼 고블린 명중=중독)', G.MON_STATUS == {'그림자거미': '둔화', '독칼 고블린': '중독'})
 g = G.Monster(0, 0, mid=0)
 s = G.Monster(0, 0, kind='그림자거미', mid=1)
 u = G.Monster(0, 0, kind='낯선 것', mid=2)
@@ -67,7 +67,7 @@ check('② 명시 수치가 정의보다 우선(장면 저작·게이트 호환)
       G.Monster(0, 0, kind='그림자거미', atk=100, mid=3).atk == 100 and G.Monster(0, 0, hp=1, mid=4).hp == 1)
 
 # ③ 지식 본문 이관 — 옛 lore.json 과 키·본문이 같다(D53 뒤 lore() 항목에 brief·unlock 이 얹히므로 name·lore 투영으로 잰다)
-lo = ENT.lore()
+lo = ENT.lore(plus=False)   # D92(09-20): 옛 본문은 새 몬스터 풀을 뺀 사전으로 잰다(해시 그대로) — 새 종은 아래 ⑨ 가 따로 잰다
 check('③ 지식 본문(옛 lore.json 7건 + D65 보스 1건 = 8건) — 키·이름·본문(deep) 해시 일치',
       canon({k: {'name': v['name'], 'lore': v['lore']} for k, v in lo.items()}) == LORE_SHA
       and set(lo) == {'monster:고블린', 'monster:그림자거미', 'monster:고블린 대장', 'trap:spike', 'trap:dart', 'trap:alarm',
@@ -77,7 +77,7 @@ check('③ 지식 본문(옛 lore.json 7건 + D65 보스 1건 = 8건) — 키·�
 check('⑧ 몬스터 2종 = brief 한 줄 + unlock{encounter, 5} · 보스(D65) = unlock 1 · 함정·오브젝트는 해금 조건 없음(옛 2층 그대로)',
       all(lo[k].get('brief') and lo[k].get('unlock') == {'event': 'encounter', 'count': 5} for k in ('monster:고블린', 'monster:그림자거미'))
       and not any(lo[k].get('unlock') or lo[k].get('brief') for k in lo if not k.startswith('monster:'))
-      and ENT.unlock_rules() == {'monster:고블린': {'event': 'encounter', 'count': 5}, 'monster:그림자거미': {'event': 'encounter', 'count': 5},
+      and {k: v for k, v in ENT.unlock_rules().items() if k in lo} == {'monster:고블린': {'event': 'encounter', 'count': 5}, 'monster:그림자거미': {'event': 'encounter', 'count': 5},
                                   'monster:고블린 대장': {'event': 'encounter', 'count': 1}}   # D65 보스 = 심층 즉시(개체가 하나라 5번 조우가 없다)
       and 'encounter' in ENT.UNLOCK_EVENTS
       and lo['monster:고블린']['brief'] == '겁 많은 소형 마물')   # 메모 §2-2 [제안]의 예시 문구 그대로
@@ -133,5 +133,37 @@ with tempfile.TemporaryDirectory() as tmp:
           rejected and '모르는 부품' in msg and '스프라이트' in msg and '파일명' in msg and '해금 사건' in msg and '중복' in msg
           and 'count(정수≥1)' in msg and '해금할 본문' in msg and 'knowledge.review' in msg)
 check('⑦ 정본 폴더는 재로드해도 같은 정의', ENT.reload() == defs)
+
+# ⑨ D92(09-20) 새 몬스터 풀 — 정의 셋(상태형·무리형·단단한 종). 본문이 바뀌면 PLUS_LORE_SHA 를 같이 옮기고 커밋 메시지에 적는다.
+PLUS_LORE_SHA = '143a8625a691c505d29d61d4f43ab30fd3799a1a630426c893c67557fd7f86c5'
+full = ENT.lore()
+plus_keys = {'monster:독칼 고블린', 'monster:새끼거미', 'monster:고블린 중갑병'}
+check('⑨ 새 몬스터 풀 = 셋(정의 id 순) · 전부 2층부터 · 묶음은 새끼거미 3 · lore(plus=False) 는 이 셋만 뺀다',
+      ENT.plus_monsters() == [{'name': '고블린 중갑병', 'min_depth': 2, 'pack': 1}, {'name': '독칼 고블린', 'min_depth': 2, 'pack': 1},
+                              {'name': '새끼거미', 'min_depth': 2, 'pack': 3}]
+      and set(full) - set(lo) == plus_keys and all(full[k] == lo[k] for k in lo) and ENT.PLUS_MIN_DEPTH == 2)
+check('⑨ 새 종의 지식 본문 해시 · brief 한 줄 + unlock{encounter, 5}(공통 프리셋)',
+      canon({k: {'name': full[k]['name'], 'lore': full[k]['lore']} for k in sorted(plus_keys)}) == PLUS_LORE_SHA
+      and all(full[k].get('brief') and full[k].get('unlock') == {'event': 'encounter', 'count': 5} for k in plus_keys))
+pg, sl, hv = (G.Monster(0, 0, kind=k, mid=9) for k in ('독칼 고블린', '새끼거미', '고블린 중갑병'))
+check('⑨ 수치·습성 — 독칼 고블린(5/2/1/12, 고블린과 같은 도주, 중독) · 새끼거미(2/0/1/10, 도주 없음) · 고블린 중갑병(10/0/2/14, 도주 없음, 걸음 박자 2) · 옛 종은 박자 1',
+      (pg.hp, pg.atk, pg.dmg, pg.ac, pg.flee_frac, pg.flee_stamina, pg.flee_to, pg.pace) == (5, 2, 1, 12, 3, 8, 'ally', 1)
+      and (sl.hp, sl.atk, sl.dmg, sl.ac, sl.flee_frac, sl.pace) == (2, 0, 1, 10, None, 1)
+      and (hv.hp, hv.atk, hv.dmg, hv.ac, hv.flee_frac, hv.pace) == (10, 0, 2, 14, None, 2)
+      and (g.pace, s.pace, u.pace, G.Monster(0, 0, kind=G.BOSS_KIND, mid=8).pace) == (1, 1, 1, 1))
+with tempfile.TemporaryDirectory() as tmp:
+    root = os.path.join(tmp, 'entities')
+    shutil.copytree(ENT.ROOT, root)
+    for name, ai in (('slug', {'pace': 0}), ('moth', {'spawn': {'pool': 'night'}}), ('mite', {'spawn': {'pool': 'plus', 'min_depth': 1}}),
+                     ('gnat', {'spawn': {'pool': 'plus', 'pack': 0}})):
+        with open(os.path.join(root, 'monster', name + '.json'), 'w', encoding='utf-8') as f:
+            json.dump({'id': name, 'name': name, 'kind': 'monster', 'comps': {'health': {'max': 3}, 'combat': {'atk': 1, 'dmg': 1, 'ac': 10}, 'ai': ai}}, f)
+    try:
+        ENT.read(root)
+        msg = ''
+    except ENT.EntityError as e:
+        msg = str(e)
+    check('⑨ 검증기 거절 — ai.pace<1 · 모르는 풀 · min_depth 1(1층은 바꾸지 않는다) · pack<1',
+          all(t in msg for t in ('ai.pace', 'ai.spawn.pool', 'ai.spawn.min_depth', 'ai.spawn.pack')))
 
 print('ALL PASS — verify_entities (%d checks, 실 LLM 0콜)' % checks)
