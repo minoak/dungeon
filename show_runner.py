@@ -1236,6 +1236,10 @@ def npc_say_targets(d, bots, decisions, inbox_in, spoke=()):
         if str(to or "").startswith("npc:"):
             name, via = str(to)[4:], "to"
         elif not to and mine and dec.get("say_kind") != "제안":   # 상대 없는 제안 = 회의(D47 — 시야 안 동료 전원에게 한 말)라 NPC 에게 한 답이 아니다
+            tgt = str(dec.get("target") or "")               # 이 결정이 마을 사람에게 말을 건 것(use)이면 그 말은 그 사람에게 한 말이다 — 앞서 말을 건넨
+            tf = d.features.get(int(tgt[1:])) if tgt[:1] == "f" and tgt[1:].isdigit() else None   #   다른 NPC 에게 한 답으로 듣지 않는다(09-20 리뷰:
+            if dec.get("type") in ("interact", "use") and tf is not None and tf.type == "npc":    #   한 문장에 두 NPC 가 답하고 하나는 엉뚱한 말에 답했다)
+                continue
             name, via = str(mine[-1]["from"])[4:], "reply"
         else:
             continue

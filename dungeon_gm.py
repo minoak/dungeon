@@ -190,6 +190,7 @@ def _tagsfx(f):
 BOSS_KIND = '고블린 대장'   # D65(09-13) 보스층의 보스 — 정의 entities/monster/goblin_chief.json(수치·습성·지식). 랜덤 몹 풀엔 안 든다
 PLUS_PACKS_MAX = 1       # D92(09-20) 새 몬스터 풀: 층당 묶음(무리형) 수 상한 — 총 몹 수를 기존 공식 근처에 둔다(+pack-1 마리). ⚠️값 임시
 PACK_REACH = 3           # D92 묶음의 나머지 개체가 놓이는 범위(첫 개체에서 직교 걸음 수) — '한곳에 모여 있다'의 크기. ⚠️값 임시
+PACK_LEASH = 3           # D92 묶음의 둥지 줄(체비셰프 칸) — 잠든·배회 중 표류가 둥지에서 이만큼을 넘지 않는다(쫓을 땐 줄이 없다). ⚠️값 임시
 PLACE_STORY_RANGE = 2    # D75(09-15) 장소·사람의 이야기(history)가 보이는 거리(체비셰프) — 게시판 range 와 같은 2칸
 BOSS_FLOOR_NOTICE = ("여기는 최심층이다 — 이 층 어딘가에 보스룸이 있다. 보스가 쓰러져야 이 층 출구(워프게이트)의 봉인이 풀려 마을로 돌아갈 수 있다.")
 #   D65 개정(09-13 파트너 "5층 진입시 보스룸이 있다는걸 알려주면 될 것 같아. 최초 진입시 이 한마디만"): 보스층에 들어선 캐릭터의
@@ -1337,8 +1338,11 @@ class Dungeon:
             free.remove(i)
             old = self.monsters[i]
             self.monsters[i] = Monster(old.x, old.y, kind=s['name'], mid=old.id)   # 같은 칸·같은 번호 — 수치·습성은 정의(D50)
+            if s['pack'] > 1:
+                self.monsters[i].den = (old.x, old.y)     # 묶음의 둥지(09-20 리뷰) — 잠든 몹도 표류하므로 줄이 없으면 파티가 닿기 전에 흩어진다
             for x, y in self._pack_cells(old.x, old.y, s['pack'] - 1):
                 self.monsters.append(Monster(x, y, kind=s['name'], mid=len(self.monsters)))   # 이 시점엔 번호 == 목록 자리(보스는 뒤에 온다)
+                self.monsters[-1].den = (old.x, old.y)    #   ('셋씩 모여 산다'는 지식 문장이 만남 시점에도 참이게 — 표류는 둥지에서 PACK_LEASH 칸 안)
 
     def _pack_cells(self, x, y, n):
         """(x, y) 곁의 빈 바닥 칸 n 개 — 묶음의 나머지 개체 자리(D92). 직교 BFS(이웃 순서 고정 = 결정론), PACK_REACH 걸음 안.
@@ -6003,6 +6007,9 @@ class Dungeon:
                 continue                                  # 발각 성패 무관 — FOV 있으면 표류 안 함(막 깸=반응창)
             if self.rng.random() < 0.5:                   # FOV에 봇 없음 → 가끔 표류(외길봉쇄 livelock 방지)
                 wx, wy = self.rng.choice([(0, -1), (0, 1), (1, 0), (-1, 0)])
+                den = getattr(m, 'den', None)             # D92 묶음의 둥지 줄 — 굴림은 그대로(난수 소비 불변), 둥지에서 멀어지는 걸음만 접는다.
+                if den and max(abs(m.x + wx - den[0]), abs(m.y + wy - den[1])) > PACK_LEASH:   #   표류 자체는 남는다(외길 봉쇄 해약 — 위 ⚠️)
+                    continue
                 if self._monster_walkable(m.x + wx, m.y + wy, bots):
                     m.x, m.y = m.x + wx, m.y + wy
                     door = self._mon_door(m, bots)    # 문 타일이면 목격(D30 확장 2차)
