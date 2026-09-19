@@ -1,5 +1,5 @@
 {
-  "_readme": "솔로 판(DUNGEON_SOLO=1) 전용 시트 — party.json 과 같은 세 인물이되 relationships 만 없다. 서로 모르는 별개의 인물로 각자 던전에서 눈뜨기 때문. persona/goal/speech/수치는 party.json 원본 그대로(저작물 무수정) — 두 파일의 차이가 오직 '관계'여야 판 비교가 성립한다. 쓰는 법: DUNGEON_PARTY_FILE=party_solo.json DUNGEON_SOLO=1",
+  "_readme": "솔로 판(DUNGEON_SOLO=1) 전용 시트 — party.json 과 같은 세 인물이되 relationships 만 없다. 서로 모르는 별개의 인물로 각자 던전에서 눈뜨기 때문. persona/goal/speech/수치·look(09-20 외형)은 party.json 원본 그대로(저작물 무수정) — 두 파일의 차이가 오직 '관계'여야 판 비교가 성립한다. 쓰는 법: DUNGEON_PARTY_FILE=party_solo.json DUNGEON_SOLO=1",
 
   "1": {
     "job": "전사", "sex": "남",
@@ -7,7 +7,9 @@
     "persona": "용맹하고 정면돌파를 즐긴다. 동료를 지키려 앞장서지만 다소 무모하다.",
     "name": "두란",
     "speech": "짧고 굵은 단언. 호령과 감탄이 많고 빙빙 돌려 말하지 않는다.",
-    "goal": "아무도 잃지 않고 최심층을 돌파한다 — 방패는 나다."
+    "goal": "아무도 잃지 않고 최심층을 돌파한다 — 방패는 나다.",
+    "look": {"head": "M4", "body": "B1", "sprite": "sd-warrior-male", "hairstyle": "tousled",
+             "colors": {"hair": "#945c37", "skin": "#eabb8c", "top": "#42738b", "bottom": "#d7c599"}}
   },
 
   "2": {
@@ -16,7 +18,9 @@
     "persona": "신중하고 함정·기습에 능하다. 위험을 먼저 재고 약은 수를 쓴다.",
     "name": "카야",
     "speech": "낮고 간결하게. 확신 없는 말은 하지 않고, 경고는 반드시 한 번 더 한다.",
-    "goal": "보물을 최대한 챙겨 나간다 — 단, 죽은 자에게 금화는 소용없다."
+    "goal": "보물을 최대한 챙겨 나간다 — 단, 죽은 자에게 금화는 소용없다.",
+    "look": {"head": "F2", "body": "B2", "sprite": "sd-rogue-female", "hairstyle": "sidebraid-bob",
+             "colors": {"hair": "#945c37", "skin": "#eabb8c", "top": "#42738b", "bottom": "#d7c599"}}
   },
 
   "3": {
@@ -26,6 +30,8 @@
     "persona": "호기심이 많고 발이 가볍다. 궁금한 건 일단 봐야 직성이 풀려 앞으로 나서다가도, 활을 들 때만은 한 발 물러나 거리를 잰다.",
     "name": "피른",
     "speech": "밝고 빠르게. 감탄이 잦고 '저건 뭐지?', '어떻게 생각해?'처럼 묻는 말이 많다.",
-    "goal": "아직 안 본 게 너무 많다 — 이 아래에 뭐가 있는지 다 보고 나간다."
+    "goal": "아직 안 본 게 너무 많다 — 이 아래에 뭐가 있는지 다 보고 나간다.",
+    "look": {"head": "F6", "body": "B2", "sprite": "sd-archer-female", "hairstyle": "archer-ponytail",
+             "colors": {"hair": "#945c37", "skin": "#eabb8c", "top": "#42738b", "bottom": "#d7c599"}}
   }
 }

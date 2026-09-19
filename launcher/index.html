@@ -236,13 +236,24 @@
       <div class="radios" id="mapMode">
         <label class="on"><input type="radio" name="map" value="normal" checked>보통 (56×20)</label>
         <label><input type="radio" name="map" value="big">큰 판 (80×30, 몹 7)</label>
+        <label title="새 던전 생성 방식(D88, 2026-09-20): 넓은 통로 · 큰 홀 · 기둥이 있는 석조 던전. 크기는 42×34 로 고정된다"><input type="radio" name="map" value="concept">석조 던전 (새 건축 · 42×34)</label><!-- D88 ⚠️ 문구 임시 -->
       </div>
+      <!-- 09-20: 맵 라디오와 아래 '09-20 추가' 체크박스 넷의 첫 자리는 이 파일에 없다 — 서버의 NIGHT_DEFAULTS(/api/presets.night_defaults)가 정한다(applyStartDefaults).
+           이 HTML 의 자리(보통 맵 · 넷 다 끔)는 그 값을 받기 전의 모양일 뿐이다 -->
+      <div class="hint"><span id="nightNote"></span><!-- 문장은 applyStartDefaults 가 서버 값으로 쓴다 ⚠️ 문구 임시 -->
+        <button type="button" class="small" id="bOldDefaults" title="09-20 전과 같은 판: 보통 맵 · 아래 '09-20 추가' 넷 다 끔">이전 판 설정으로</button>
+        <button type="button" class="small" id="bNightDefaults" title="이 론처가 처음 열릴 때의 자리로 되돌린다">처음 자리로</button></div>
       <label class="f"><input type="checkbox" id="town" checked> 마을에서 시작 (0층 → 던전 입구, D29)</label>
       <label class="f" title="마을 시작 때 셋이 광장에 붙어 서는 대신 각자 건물(길드·주점·신전) 문턱 곁에서 시작한다 — 각자 볼일을 보다가 만나는 그림(D69, 2026-09-14)"><input type="checkbox" id="townApart" checked> 흩어진 출발 (마을에서 각자 다른 건물 앞에서 시작, D69)</label>
       <label class="f" title="캐릭터가 마을 NPC(접수원·주점 주인·성직자)에게 말을 걸면 NPC 의 한마디를 LLM 이 쓴다(말 걸 때만 1콜, NPC 는 먼저 말하지 않음, 물품·보고 판정은 엔진). 끄면 정해진 대사(D69)"><input type="checkbox" id="npcBrain" checked> 마을 NPC 두뇌 (말을 걸면 NPC 가 LLM 문장으로 답한다 · 1콜, D69)</label>
       <label class="f" title="실험(D84, 2026-09-19 — 기본 끔 · 마을 시작 판만). 켜면 셋이 한 일행으로 출발하지 않는다: 모험가 길드 구역에서 서로 파티 결성을 청하고 맞받아야 파티가 되고, 계단은 파티원끼리만 함께 쓴다(파티가 없으면 혼자). 내려간 사람이 있어도 마을에 남은 사람의 시간은 계속 흐른다 — 관전 화면은 내 캐릭터(1번)가 있는 곳만 비춘다"><input type="checkbox" id="partyform"> 파티 결성 (실험 — 길드 구역에서 파티를 맺고 탈퇴한다 · 계단은 파티원끼리, D84)</label>
       <label class="f" title="실험(D85, 2026-09-19 — 기본 끔 · '파티 결성'을 켠 판에서만). 켜면 캐릭터에게 남의 이름·직업이 자동으로 주어지지 않는다: 기록이 없는 사람은 '낯선 사람'(겉모습만)이고, 캐릭터가 겪으며 직접 적은 기록(이름·한 줄)이 그 사람이 보이거나 이름을 들을 때 떠오른다. NPC 는 정의에 준비된 항목으로 같은 규칙을 탄다. 관전 화면의 이름은 그대로다"><input type="checkbox" id="strangers"> 낯선 사람 (실험 — 이름·직업은 겪어서 알고 직접 적는다 · '파티 결성'을 켠 판에서만, D85)</label>
       <label class="f" title="실험(D86, 2026-09-19 — 기본 끔 · 마을 시작 판만). 켜면 마을에서 지금 서 있는 구역만 보인다(건물·NPC·사람 전부) — 다른 구역의 건물은 어디 있는지 알지만 누가 있는지는 가 봐야 안다. 걷다가 새 구역에 들어서면 멈춰서 다시 판단한다(마을 구간의 판단 횟수가 는다)"><input type="checkbox" id="townSight"> 마을 시야 = 구역 (실험 — 지금 선 구역만 보이고, 새 구역에 들어서면 멈춰 다시 본다, D86)</label>
+      <!-- 09-20 추가 넷(D89~D93) ⚠️ 문구 임시 — 첫 자리(켬/끔)는 서버의 NIGHT_DEFAULTS 가 정한다(여기엔 checked 를 적지 않는다) -->
+      <label class="f" title="09-20 추가(D90). 켜면 러너에 DUNGEON_TOWN_LIFE=1 을 넘긴다: 마을에 물건과 새 주민이 놓이고, 말이 들린다. 끄면 그 전의 마을 그대로"><input type="checkbox" id="townLife"> 마을 생활 (09-20 추가 — 마을의 물건 · 새 주민 · 들린 말, D90)</label>
+      <label class="f" title="09-20 추가(D93). 켜면 러너에 DUNGEON_NPC_REPLY=1 을 넘긴다: NPC 가 캐릭터의 말을 되받는다. LLM 호출이 조금 늘어난다. 끄면 그 전 그대로"><input type="checkbox" id="npcReply"> NPC 가 말을 되받는다 (09-20 추가 — LLM 호출이 조금 늘어난다, D93)</label>
+      <label class="f" title="09-20 추가(D92). 켜면 러너에 DUNGEON_FLOOR_LIFE=1 을 넘긴다: 던전 층에 물건들이 놓인다. 끄면 그 전의 던전 그대로"><input type="checkbox" id="floorLife"> 던전의 물건들 (09-20 추가 — 던전 층에 놓이는 물건, D92)</label>
+      <label class="f" title="09-20 추가(D92). 켜면 러너에 DUNGEON_BESTIARY_PLUS=1 을 넘긴다: 새 몬스터가 나온다. 끄면 그 전의 몬스터 구성 그대로"><input type="checkbox" id="bestiaryPlus"> 새 몬스터 (09-20 추가, D92)</label>
       <label class="f" title="캐릭터 영속은 서빙 단계의 기능 — 지금은 판마다 별개(2026-09-13). 켜면 이 판이 로컬 bestiary.json 을 읽고 쓴다"><input type="checkbox" id="bestiary"> 도감 이월 (캐릭터 영속 — 서빙 전까지 기본 끔, D64)</label>
       <label class="f" title="최심층(설정한 깊이의 마지막 층)에 보스가 서고 출구는 봉인된 워프게이트가 된다. 보스가 쓰러지면 열리고, 게이트를 쓰면 마을로 돌아와 판이 끝난다(2026-09-13 관찰용 첫 판)"><input type="checkbox" id="boss" checked> 보스층·귀환 (최심층 보스를 잡으면 워프게이트로 마을 귀환, D65)</label>
       <label class="f" title="관찰용 프리셋: 판을 최심층에서 바로 시작하고 파티를 보스룸 문 앞에 세운다(마을 없음·보스 켬). 보스전까지 가는 콜을 아낀다"><input type="checkbox" id="startBoss"> 보스방 앞에서 시작 (프리셋 — 최심층·보스 켬·마을 없음, D67)</label>
@@ -362,7 +373,7 @@ function lookBlock(s, lk) {
           ${rows}
           <button type="button" class="small" data-lk-rand title="현재 성별 기준으로 머리·몸통·색을 다시 뽑는다">외형 랜덤</button>
           </div>
-          <a class="lookGallery" href="/art/sprites-v4/" target="_blank" rel="noopener">4방향 움직임 보기 ↗</a>
+          <a class="lookGallery" href="/art/characters-v2/" target="_blank" rel="noopener">4방향 움직임 보기 ↗</a><!-- 09-20: 옛 3종 갤러리(/art/sprites-v4/) → 지금 고를 수 있는 바디 8 × 공용 헤어 14 의 의상실 -->
         </div>
       </div>`;
 }
@@ -630,11 +641,13 @@ async function loadPresets() {
   if (presets) { await refreshCharacters(); return; }
   presets = await api('/api/presets');
   if (!presets.text_limits || presets.ruleset !== 'skills-v1' || presets.brain_failure_policy !== 'retry-pause-v1' || presets.model_ui_version !== 2
-      || presets.party_ui_version !== 1) {                              // D81: 동료 목록(companions)을 모르는 옛 서버면 빈 동료 칸 대신 재시작 안내
+      || presets.party_ui_version !== 1                                 // D81: 동료 목록(companions)을 모르는 옛 서버면 빈 동료 칸 대신 재시작 안내
+      || presets.options_ui_version !== 1) {                            // 09-20: 새 맵·새 스위치를 모르는 옛 서버(떠 있던 옛 론처)면 출발이 400 으로 막힌다 — 먼저 재시작 안내
     presets = null;
     throw new Error(modelUpgradeMessage);
   }
   textLimits = presets.text_limits;
+  applyStartDefaults(presets.night_defaults);                          // 09-20 맵·'09-20 추가' 넷의 첫 자리 = 서버의 NIGHT_DEFAULTS(이 화면에 들어설 때 한 번)
   if (presets.byok) {                                                  // 공개(심사용) 서버 server.py — 키는 심사위원이 판마다 가져온다(D68)
     $('bestiary').checked = !!presets.account; $('bestiary').disabled = true;    // D64/D78 — 익명은 이월 없음, 계정에 들어오면 저장 캐릭터의 도감이 계정에 남는다(서버가 정한다)
   }
@@ -647,9 +660,14 @@ async function loadPresets() {
   if (!matesTouched) mates = defaultMates();                           // D81 첫 화면의 동료 칸은 채워서 시작한다(바로 출발할 수 있게)
   renderCards();
   await refreshCharacters();
-  $('defaultPreview').innerHTML = presets.default_party.map(p =>
-    `<div><b>${esc(p.name)}</b> — ${esc(p.job)}(${esc(p.sex)}) · ${esc(p.persona)}</div>`).join('') +
-    '<div class="muted" style="margin-top:6px">외형은 판마다 랜덤으로 뽑힌다 — 뽑힌 얼굴은 판 기록에 남아 리플레이에서도 같다.</div>';
+  const dp = presets.default_party || [];                              // 09-20 기본 파티도 시트에 외형이 있으면 그 그림을 보여 준다(없는 사람만 러너가 시드로 뽑는다)
+  $('defaultPreview').innerHTML = dp.map((p, i) =>
+    `<div class="look" style="align-items:center;margin-bottom:6px">${p.look ? `<canvas class="lookPrev" data-dp="${i}" width="16" height="16" style="width:64px;height:64px"></canvas>` : ''}` +
+    `<div><b>${esc(p.name)}</b> — ${esc(p.job)}(${esc(p.sex)}) · ${esc(p.persona)}</div></div>`).join('') +
+    '<div class="muted" style="margin-top:6px">' + (dp.length && dp.every(p => p.look)
+      ? '외형은 기본 파티 시트(party.json)에 적힌 그대로다.'
+      : '시트에 외형이 없는 사람은 판마다 랜덤으로 뽑힌다 — 뽑힌 얼굴은 판 기록에 남아 리플레이에서도 같다.') + '</div>';
+  for (const cv of $('defaultPreview').querySelectorAll('canvas[data-dp]')) drawLook(cv, dp[+cv.dataset.dp].look);
 }
 function renderCards() {
   const jobs = Object.keys(presets.jobs);
@@ -986,6 +1004,24 @@ updateMode();
 for (const lab of $('mapMode').querySelectorAll('label')) {
   lab.onclick = (e) => { e.preventDefault(); $('mapMode').querySelectorAll('label').forEach(l => l.classList.toggle('on', l === lab)); };
 }
+/* 09-20 맵 라디오·'09-20 추가' 체크박스 넷의 자리 — 값은 서버가 준다(launcher.py NIGHT_DEFAULTS / OLD_DEFAULTS → /api/presets).
+   이 화면에는 기본값을 적지 않는다: 기본을 뒤집을 때 고칠 곳이 launcher.py 한 줄이게. */
+const NIGHT_BOXES = { town_life: 'townLife', npc_reply: 'npcReply', floor_life: 'floorLife', bestiary_plus: 'bestiaryPlus' };
+const NIGHT_NAMES = { town_life: '마을 생활', npc_reply: 'NPC 되받기', floor_life: '던전의 물건들', bestiary_plus: '새 몬스터' };
+function setStartOptions(d) {                  // d = {map, town_life, npc_reply, floor_life, bestiary_plus} — 모르는 맵 키면 맵은 그대로 둔다
+  if (!d) return;
+  const lab = [...$('mapMode').querySelectorAll('label')].find(l => l.querySelector('input').value === d.map);
+  if (lab) $('mapMode').querySelectorAll('label').forEach(l => l.classList.toggle('on', l === lab));
+  for (const [k, id] of Object.entries(NIGHT_BOXES)) $(id).checked = d[k] === true;
+}
+function applyStartDefaults(d) {               // 화면에 처음 들어설 때 한 번 — 첫 자리를 맞추고, 그 자리가 무엇인지 사실대로 적는다(⚠️문구 임시)
+  setStartOptions(d);
+  const lab = d && [...$('mapMode').querySelectorAll('label')].find(l => l.querySelector('input').value === d.map);
+  const on = d ? Object.keys(NIGHT_BOXES).filter(k => d[k] === true).map(k => NIGHT_NAMES[k]) : [];
+  $('nightNote').textContent = d ? `이 론처의 첫 자리: 맵 = ${lab ? lab.textContent.trim() : d.map} · '09-20 추가' 넷 중 켬 = ${on.length ? on.join(', ') : '없음'}. ` : '';
+}
+$('bOldDefaults').onclick = () => setStartOptions(presets && presets.old_defaults);
+$('bNightDefaults').onclick = () => setStartOptions(presets && presets.night_defaults);
 $('bStart').onclick = async () => {
   $('err2').textContent = ''; $('err2').style.color = '#ff8b7a';
   if (modelUiVersion !== 2) { $('err2').textContent = modelUpgradeMessage; return; }
@@ -997,6 +1033,10 @@ $('bStart').onclick = async () => {
     partyform: $('partyform').checked,    // D84 파티 결성(실험 · 기본 끔) — 마을 시작 판만 뜻이 있다(러너가 마을 판이 아니면 끈다)
     strangers: $('strangers').checked,    // D85 낯선 사람(실험 · 기본 끔) — 파티 결성을 켠 판에서만 뜻이 있다(러너가 아니면 끈다)
     town_sight: $('townSight').checked ? 'zone' : 'all',   // D86 마을 시야 = 구역(실험 · 기본 끔)
+    town_life: $('townLife').checked,          // D90 마을 생활(09-20 추가 · 첫 자리는 서버의 NIGHT_DEFAULTS)
+    npc_reply: $('npcReply').checked,          // D93 NPC 되받기(09-20 추가) — LLM 호출이 조금 늘어난다
+    floor_life: $('floorLife').checked,        // D92 던전의 물건들(09-20 추가)
+    bestiary_plus: $('bestiaryPlus').checked,  // D92 새 몬스터(09-20 추가)
     bestiary: $('bestiary').checked,   // D64 도감 이월(기본 끔) — 켠 판만 로컬 원장에 읽고 쓴다
     boss: $('boss').checked,           // D65 보스층·귀환(기본 켬) — 최심층 보스·봉인 워프게이트·마을 귀환 종료
     start: $('startBoss').checked ? 'boss' : '',   // D67 프리셋 — 보스방 앞에서 시작(마을 없음·보스 켬)
