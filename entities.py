@@ -33,9 +33,10 @@ COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
          'trap': {'trap', 'knowledge'},
          'object': {'equipment', 'consumable', 'loot', 'container', 'heal', 'exit', 'knowledge',
                     'use', 'story'},             # D89(09-20): use=쓰임 부품(곁에서 쓰면 무슨 일이 나는가) · story=D75 와 같은 꼴(오브젝트의 특징 한 줄·이야기)
-         'npc': {'npc', 'knowledge', 'story'},   # story=D75(09-15) 장소·사람 소개(trait 한 줄·history 본문) — 도감 지식과 다른 층(해금 없음)
-         'map': {'space', 'story', 'overheard'}, 'building': {'building', 'board', 'oracle', 'story', 'use'},   # D61 건물 역할 부품(메모 §4-4 [제안]): 게시판·신탁 · story=D75 · use=D89 문턱에서 쓰는 기능
+         'npc': {'npc', 'knowledge', 'story', 'life'},   # story=D75(09-15) 장소·사람 소개(trait 한 줄·history 본문) — 도감 지식과 다른 층(해금 없음)
+         'map': {'space', 'story', 'overheard'}, 'building': {'building', 'board', 'oracle', 'story', 'use', 'life'},   # D61 건물 역할 부품(메모 §4-4 [제안]): 게시판·신탁 · story=D75 · use=D89 문턱에서 쓰는 기능
          #   overheard=D90(09-20) 구역의 '들린 말' 고정 풀(메모 §4-4 "거리 분위기 '들린 말' 한 줄 고정 풀(0콜)") — 문장 목록, 마을 생활 스위치 판에서만 읽는다
+         #   life=D90(09-20) 마을 생활 판에서만 덮어쓸 칸들(아래 LIFE_PARTS) — 끈 판의 문장·바이트는 그대로 두고, 켠 판에서 거짓이 되는 문장만 갈아 끼운다
          'quest': {'quest'},
          'companion': {'sheet', 'npc', 'story'}}   # D81: sheet=파티 시트 칸(능력치 없음 — 직업에서) · npc/story=마을 주민일 때의 말·걸음·소개(NPC 와 같은 꼴)
 UNLOCK_EVENTS = {'encounter', 'kill', 'search_first', 'trap_avoid', 'trap_disarm', 'visit', 'talk'}   # 메모 §2-5 어휘.
@@ -52,7 +53,8 @@ QUEST_REQ_KINDS = ('kill', 'reach', 'loot')   # D69(09-14) 의뢰 완료 조건�
 # D89(2026-09-20) 쓰임 부품 use{kind, …} 의 어휘 — 처리는 interactables.py(kind 마다 하나), 여기는 검증기가 아는 꼴.
 #   kind → 그 kind 가 읽는 칸. 공통 칸: once(true = 한 번 쓰면 끝 — 누가 쓰든 세계의 상태, 피처는 남는다)·note(저작 메모).
 #   돈·가격·매매는 없다(D69 에서 제출 뒤로 보류) — browse 는 구경만, rummage 에서 나오는 건 엔진이 이미 아는 소지뿐.
-USE_KINDS = {'read': ('text', 'texts'),      # 적힌 글을 읽는다 — text(한 편) 또는 texts(여러 편: 읽는 사람마다 읽을 때마다 다음 글)
+USE_KINDS = {'read': ('text', 'texts', 'verb'),   # 적힌 글을 읽는다 — text(한 편) 또는 texts(여러 편: 읽는 사람마다 읽을 때마다 다음 글)
+             #   verb(D90, 선택) = 라벨·문장의 동사만 바꾼다(USE_READ_VERBS) — 글이 아니라 '눈에 보이는 것'을 돌려주는 화단 같은 것. 처리·결과 이름은 read 그대로
              'sit': ('heal',),               # 앉아 숨을 돌린다 — heal(기본 1, 상처가 있을 때만 오른다)
              'drink': ('heal',),             # 물을 마신다 — heal(기본 1)
              'browse': ('wares',),           # 진열된 것을 구경한다 — wares(이름 목록)
@@ -61,6 +63,7 @@ USE_KINDS = {'read': ('text', 'texts'),      # 적힌 글을 읽는다 — text(
              'lodge': (),                    # 묵는다 — HP 전부 + 상태 태그 소거(D34 '지우기는 휴식뿐': 묵기는 휴식이다)
              'warm': ('heal',)}              # 불을 쬔다 — heal(기본 1)
 USE_LOOT = ('potion', 'treasure', 'nothing')   # rummage 에서 나오는 것 — 물약 수·보물 수(bag)·빈손
+USE_READ_VERBS = ('look',)                     # D90(09-20) read 의 동사 변형 — look = '살펴보기'(글이 아닌 것: 화단). 표현은 interactables.VERBS
 USE_RESERVED_TYPES = ('exit', 'stairs_up', 'npc', 'treasure', 'potion', 'weapon', 'armor', 'chest', 'fountain', 'grave', 'building')
 #   엔진이 이미 제 뜻으로 다루는 피처 type — 오브젝트 정의가 이 type 에 use 를 달면 거절한다(_interact 의 타입 분기가 먼저 잡아
 #   use 가 영영 안 불리는데 관측은 '쓸 수 있다'고 말하게 된다 = 거짓 선택지). 건물의 use 는 건물 정의(kind building)에 단다.
@@ -82,6 +85,8 @@ def _use_problems(rel, use):
         ok_many = isinstance(many, list) and bool(many) and all(isinstance(t, str) and t.strip() for t in many)
         if (one is not None and not ok_one) or (many is not None and not ok_many) or (ok_one == ok_many):
             out.append('%s: use(read) 는 text(글 한 편) 또는 texts(비어 있지 않은 글 목록) 중 하나' % rel)
+        if use.get('verb') is not None and use['verb'] not in USE_READ_VERBS:
+            out.append('%s: use(read).verb 는 %s 중 하나' % (rel, '|'.join(USE_READ_VERBS)))
     if 'heal' in USE_KINDS[kind] and use.get('heal') is not None and not (type(use['heal']) is int and use['heal'] >= 0):
         out.append('%s: use.heal 은 정수≥0' % rel)
     if kind == 'browse':
@@ -95,6 +100,34 @@ def _use_problems(rel, use):
             out.append('%s: use(rummage).loot 는 [{item: %s, w: 정수≥1}] 목록' % (rel, '|'.join(USE_LOOT)))
         if use.get('once') is False:                 # 뒤질 때마다 나오면 소지가 끝없이 는다 — 통은 한 번 비면 빈 통이다
             out.append('%s: use(rummage) 는 늘 한 번이다(once 를 false 로 둘 수 없다)' % rel)
+    return out
+
+
+# D90(2026-09-20) 마을 생활 부품 life{<부품 이름>: {덮어쓸 칸}} — 마을 생활 스위치(러너 DUNGEON_TOWN_LIFE)를 켠 판에서만 읽는다.
+#   왜: 건물 아홉 동의 '…서비스는 아직 준비 중이다', 옛 상인의 '아직 손님 받을 준비가 안 됐어' 같은 문장은 켠 판에서 거짓이 된다.
+#   끈 판은 옛 판과 바이트가 같아야 하므로 원래 칸은 그대로 두고, 켠 판용 문장·쓰임을 이 부품에 따로 둔다(comps_of 가 합친다).
+#   덮는 것은 문장과 건물의 쓰임뿐 — 판정에 닿는 칸(선물·보고·걸음)은 여기 둘 수 없다.
+LIFE_PARTS = {'npc': ('npc', 'story'), 'building': ('building', 'story', 'use')}
+LIFE_NPC_KEYS = ('line', 'line_again', 'role', 'persona', 'hail', 'hail_no_potion', 'hail_board', 'hail_return', 'hail_rumor',
+                 'hail_oracle', 'hail_party', 'line_party')
+
+
+def _life_problems(rel, kind, comps):
+    """life 부품의 꼴 검사(D90) — 모르는 부품 이름·판정 칸 덮어쓰기·빈 문장·합친 story/use 의 꼴은 로드 단계에서 죽는다."""
+    life = comps.get('life')
+    if not isinstance(life, dict) or not life or set(life) - set(LIFE_PARTS.get(kind, ())) or not all(isinstance(v, dict) and v for v in life.values()):
+        return ['%s: life 는 {%s} 중 하나 이상의 부품 이름 → 덮어쓸 칸(객체)' % (rel, '|'.join(LIFE_PARTS.get(kind, ())))]
+    out = []
+    texts_ok = lambda part, keys: (not (set(life[part]) - set(keys))   # noqa: E731
+                                   and all(isinstance(v, str) and v.strip() for v in life[part].values()))
+    if 'npc' in life and not texts_ok('npc', LIFE_NPC_KEYS):
+        out.append('%s: life.npc 는 문장 칸(%s)만 — 판정에 닿는 칸(선물·보고·걸음)은 덮어쓸 수 없다' % (rel, '·'.join(LIFE_NPC_KEYS[:5]) + '…'))
+    if 'building' in life and not texts_ok('building', ('role',)):
+        out.append('%s: life.building 은 role(역할 한 줄)만' % rel)
+    if 'story' in life and not texts_ok('story', ('trait', 'history')):
+        out.append('%s: life.story 는 trait·history 문자열만' % rel)
+    if 'use' in life:
+        out.extend(_use_problems(rel + ' life', life['use']))
     return out
 
 
@@ -153,6 +186,10 @@ def _problems(pairs, root):
             out.extend(_use_problems(rel, comps['use']))
             if kind == 'object' and d.get('type') in USE_RESERVED_TYPES:
                 out.append('%s: type %r 은(는) 엔진이 이미 제 뜻으로 다룬다 — use 부품을 달 수 없다' % (rel, d.get('type')))
+        if comps.get('life') is not None:                    # D90(09-20) 마을 생활 판에서만 덮어쓸 칸들 — NPC·건물 공용(꼴은 _life_problems)
+            out.extend(_life_problems(rel, kind, comps))
+        if kind == 'npc' and (comps.get('npc') or {}).get('town_life') is not None and type(comps['npc']['town_life']) is not bool:
+            out.append('%s: npc.town_life 는 true|false(마을 생활 판에서만 나오는 행인 — 러너의 행인 루프가 끈 판에서 건너뛴다)' % rel)
         sp = d.get('sprite')
         if sp:
             tex = str(sp).split('#')[0]
@@ -359,12 +396,25 @@ def feature_tags(ftype):
     return list(d['tags']) if d and d.get('tags') else ['object']
 
 
-def npc(eid):
-    """마을 NPC 정의 → {'name', 'line', 'line_again', 'gift'} (없는 칸은 None)."""
+def comps_of(eid, life=False):
+    """정의의 부품 사전 — life=True(D90 마을 생활 판)면 life 부품의 칸을 제 부품 위에 얹은 사본(칸 단위로 덮는다 · use 는 통째로).
+    life=False 거나 life 부품이 없으면 원래 부품 그대로(끈 판 = 옛 판). 'life' 열쇠 자체는 돌려주는 사전에 남는다(읽는 쪽은 안 본다)."""
+    comps = get(eid).get('comps') or {}
+    over = comps.get('life') if life else None
+    if not over:
+        return comps
+    out = dict(comps)
+    for part, cells in over.items():
+        out[part] = dict(cells) if part == 'use' else {**(comps.get(part) or {}), **cells}
+    return out
+
+
+def npc(eid, life=False):
+    """마을 NPC 정의 → {'name', 'line', 'line_again', 'gift'} (없는 칸은 None). life=True(D90) = 마을 생활 판용 문장을 얹은 것."""
     d = get(eid)
     if d['kind'] != 'npc':
         raise EntityError('%s 은(는) npc 가 아니다' % eid)
-    c = d['comps']['npc']
+    c = comps_of(eid, life)['npc']
     return {'name': d['name'], 'line': c.get('line'), 'line_again': c.get('line_again'), 'gift': c.get('gift'),
             # D69(09-14): 역할 한 줄·성격·보고 역할·보고 대사(전부 선택 — 없으면 None. 판정은 report 만, 나머지는 문장 재료)
             'role': c.get('role'), 'persona': c.get('persona'), 'report': bool(c.get('report')),
