@@ -240,6 +240,7 @@ class Runner:
             env["DUNGEON_TOWN_APART"] = "0" if opts.get("town_apart") is False else "1"   # D69 흩어진 출발 — 화면 기본 켬(옵션 없으면 러너 기본 1)
             env["DUNGEON_NPC_BRAIN"] = "0" if opts.get("npc_brain") is False else "1"     # D69 마을 NPC 두뇌 — 화면 기본 켬(더미 두뇌면 러너가 끈다)
             env["DUNGEON_PARTYFORM"] = "1" if opts.get("partyform") is True else "0"      # D84 파티 결성(실험) — 화면 기본 끔·옵션 없으면 끔(러너는 마을 판에서만 켠다)
+            env["DUNGEON_STRANGERS"] = "1" if opts.get("strangers") is True else "0"      # D85 낯선 사람(실험) — 화면 기본 끔·옵션 없으면 끔(러너는 파티 결성 판에서만 켠다)
             env["DUNGEON_BOSS"] = "1" if opts.get("boss") else "0"   # D65 보스층·귀환 — 화면 기본 켬, 러너 기본 0(옵션 없으면 끔)
             if opts.get("start") == "boss":                          # D67 프리셋: 보스방 앞에서 시작 — 마을 없음·보스 켬(관찰용)
                 env["DUNGEON_START"] = "boss"

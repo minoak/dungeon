@@ -640,6 +640,8 @@ def act_summary(res):
         if res.get("result") == "done":
             return "봇%s에게 친목 — %s" % (res.get("to", "?"), res.get("form", "몸짓"))
         return "친목 — " + {"too_far": "곁에 없다", "no_target": "대상 없음"}.get(res.get("result"), str(res.get("result")))
+    if res.get("result") == "need_party":                      # D84 조각 4 — 던전 입구는 파티를 맺은 사람만
+        return "던전 입구 — 파티가 없어 지나지 못했다"
     if t == "party_form":                                      # 파티 결성(D84 조각 3)
         r_ = res.get("result")
         if r_ == "party_asked":
@@ -1038,6 +1040,23 @@ def arrive_cells(d, ax, ay, k, taken=()):
     return out[:k]
 
 
+PARTYFORM_GATE_TRAIT = "계단 아래가 던전. 파티를 맺은 사람만 내려갈 수 있고, 파티는 3칸 안에 모여야 함께 내려간다. 원정에는 제한 시간이 있다"
+#   D84(09-19): 파티 결성 판의 던전 입구 특징 — 정의의 문장("일행이 3칸 안에 모여야 내려간다")은 이 판에서 거짓이다(세계가 하는 말은 참이어야 한다).
+#   정의(entities/building/dungeon_gate)는 옛 판과 같이 쓰므로 러너가 그 판의 마을에만 갈아 끼운다. ⚠️문구 임시(검토표)
+
+
+def _partyform_town(d):
+    """파티 결성 판의 마을 — 던전 입구의 특징 문장(관측의 입구 줄·마을 안내 문단)을 그 판의 규칙대로."""
+    fid = getattr(d, "_exit_fid", None)
+    st = (getattr(d, "place_story", None) or {}).get(fid)
+    if st and st.get("trait"):
+        st["trait"] = PARTYFORM_GATE_TRAIT
+        for g_ in (getattr(d, "town_guide", None) or []):
+            if g_.get("name") == d.features[fid].name:
+                g_["about"] = PARTYFORM_GATE_TRAIT
+    return d
+
+
 def town_for_run(apart, quests, walkers=False, guide=False):
     """build_town 호출 자리(D69) — 게이트 둘(verify_approach·verify_reactions)이 build_town 을 **인자 없는 스텁**으로 갈아 끼우므로,
     시그니처에 apart 가 없으면 옛 방식으로 부르고 의뢰 장부만 건다(스텁 마을에도 보고·맡기 배관이 죽지 않게)."""
@@ -1294,6 +1313,8 @@ def main():
         d.plan_max = G.PLAN_MAX if PLAN_ON else 0    # 마을(from_layout)도 같은 스위치
         if PARTYFORM_ON:
             d.parties = parties                # D84 파티 장부 — 계단이 '내 파티원'만 센다(파티 없는 캐릭터는 혼자)
+            if TOWN_ON:
+                _partyform_town(d)             #   던전 입구의 특징 문장도 그 규칙대로(옛 문장 '일행이 모여야'는 이 판에서 거짓)
         bots = []
         for c in chars:
             b = G.spawn(d, c, bots, sheet=sheets[c], apart=SOLO_ON)
@@ -1876,6 +1897,8 @@ def main():
             tw = None                     # D84: 간 층에서 지금 흐르고 있는 세계(사람이 있다) — 있으면 합류, 없으면(옛 판은 늘) 새로 연다
             if PARTYFORM_ON:
                 d.parties = parties
+                if nd == 0:
+                    _partyform_town(d)    # 워프 귀환으로 새로 지은 마을도 같은 문장(이미 갈아 끼운 마을은 같은 글이라 무해)
                 saved.setdefault(nd, {"d": d, "mem": {}})
                 tw = next((x for x in worlds if x["d"] is d), None)
             there = tw["bots"] if tw else []

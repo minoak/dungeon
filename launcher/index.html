@@ -241,6 +241,7 @@
       <label class="f" title="마을 시작 때 셋이 광장에 붙어 서는 대신 각자 건물(길드·주점·신전) 문턱 곁에서 시작한다 — 각자 볼일을 보다가 만나는 그림(D69, 2026-09-14)"><input type="checkbox" id="townApart" checked> 흩어진 출발 (마을에서 각자 다른 건물 앞에서 시작, D69)</label>
       <label class="f" title="캐릭터가 마을 NPC(접수원·주점 주인·성직자)에게 말을 걸면 NPC 의 한마디를 LLM 이 쓴다(말 걸 때만 1콜, NPC 는 먼저 말하지 않음, 물품·보고 판정은 엔진). 끄면 정해진 대사(D69)"><input type="checkbox" id="npcBrain" checked> 마을 NPC 두뇌 (말을 걸면 NPC 가 LLM 문장으로 답한다 · 1콜, D69)</label>
       <label class="f" title="실험(D84, 2026-09-19 — 기본 끔 · 마을 시작 판만). 켜면 셋이 한 일행으로 출발하지 않는다: 모험가 길드 구역에서 서로 파티 결성을 청하고 맞받아야 파티가 되고, 계단은 파티원끼리만 함께 쓴다(파티가 없으면 혼자). 내려간 사람이 있어도 마을에 남은 사람의 시간은 계속 흐른다 — 관전 화면은 내 캐릭터(1번)가 있는 곳만 비춘다"><input type="checkbox" id="partyform"> 파티 결성 (실험 — 길드 구역에서 파티를 맺고 탈퇴한다 · 계단은 파티원끼리, D84)</label>
+      <label class="f" title="실험(D85, 2026-09-19 — 기본 끔 · '파티 결성'을 켠 판에서만). 켜면 캐릭터에게 남의 이름·직업이 자동으로 주어지지 않는다: 기록이 없는 사람은 '낯선 사람'(겉모습만)이고, 캐릭터가 겪으며 직접 적은 기록(이름·한 줄)이 그 사람이 보이거나 이름을 들을 때 떠오른다. NPC 는 정의에 준비된 항목으로 같은 규칙을 탄다. 관전 화면의 이름은 그대로다"><input type="checkbox" id="strangers"> 낯선 사람 (실험 — 이름·직업은 겪어서 알고 직접 적는다 · '파티 결성'을 켠 판에서만, D85)</label>
       <label class="f" title="캐릭터 영속은 서빙 단계의 기능 — 지금은 판마다 별개(2026-09-13). 켜면 이 판이 로컬 bestiary.json 을 읽고 쓴다"><input type="checkbox" id="bestiary"> 도감 이월 (캐릭터 영속 — 서빙 전까지 기본 끔, D64)</label>
       <label class="f" title="최심층(설정한 깊이의 마지막 층)에 보스가 서고 출구는 봉인된 워프게이트가 된다. 보스가 쓰러지면 열리고, 게이트를 쓰면 마을로 돌아와 판이 끝난다(2026-09-13 관찰용 첫 판)"><input type="checkbox" id="boss" checked> 보스층·귀환 (최심층 보스를 잡으면 워프게이트로 마을 귀환, D65)</label>
       <label class="f" title="관찰용 프리셋: 판을 최심층에서 바로 시작하고 파티를 보스룸 문 앞에 세운다(마을 없음·보스 켬). 보스전까지 가는 콜을 아낀다"><input type="checkbox" id="startBoss"> 보스방 앞에서 시작 (프리셋 — 최심층·보스 켬·마을 없음, D67)</label>
@@ -990,6 +991,7 @@ $('bStart').onclick = async () => {
     town_apart: $('townApart').checked,   // D69 흩어진 출발(기본 켬) — 마을 판만 뜻이 있다
     npc_brain: $('npcBrain').checked,     // D69 마을 NPC 두뇌(기본 켬) — 더미 두뇌 판에선 저절로 꺼진다
     partyform: $('partyform').checked,    // D84 파티 결성(실험 · 기본 끔) — 마을 시작 판만 뜻이 있다(러너가 마을 판이 아니면 끈다)
+    strangers: $('strangers').checked,    // D85 낯선 사람(실험 · 기본 끔) — 파티 결성을 켠 판에서만 뜻이 있다(러너가 아니면 끈다)
     bestiary: $('bestiary').checked,   // D64 도감 이월(기본 끔) — 켠 판만 로컬 원장에 읽고 쓴다
     boss: $('boss').checked,           // D65 보스층·귀환(기본 켬) — 최심층 보스·봉인 워프게이트·마을 귀환 종료
     start: $('startBoss').checked ? 'boss' : '',   // D67 프리셋 — 보스방 앞에서 시작(마을 없음·보스 켬)

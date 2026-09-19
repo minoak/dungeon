@@ -379,6 +379,8 @@ def event_tags(rec, names=None):
                                                    ' — 발밑에 놓임' if rec.get('placed') else ''))]
     if t == 'bonded':
         return [('bonded', '친목 받음', '%s: %s' % (nm(rec.get('from')), rec.get('form', '몸짓')))]
+    if r == 'need_party':                             # D84 조각 4 — 던전 입구는 파티를 맺은 사람만
+        return [('misc', '던전 입구에서 막힘', '파티가 없다')]
     if t == 'party_form':                             # D84 조각 3 파티 결성 — 한 쪽의 자기 사건
         if r == 'party_asked':
             return [('party', '파티 결성을 청함', nm(rec.get('to')))]
@@ -578,7 +580,9 @@ def party_leave(parties, char):
     return members, freed
 
 
-PARTY_ZONE = 'guild_district'    # D84 조각 3: 파티를 맺는 곳 — 구역 id(entities/map·layout regions). 파트너 "파티를 맺을 때에는 모두 길드 구역에 있어야 해"
+PARTY_ZONES = ('guild_district', 'tavern_district')   # D84 조각 3·4: 파티를 맺는 곳 — 구역 id(entities/map·layout regions). 파트너 "파티를 맺을 때에는 모두 길드 구역에
+#   있어야 해" → 09-19 밤 "파티를 결성하는 사람들이 자주 모이는 곳이 모험가 길드나 주점으로 하면 되잖아". 맺는 순간 파티에 들 사람은 모두 **같은 곳**에 있어야 한다.
+PARTY_ZONE = PARTY_ZONES[0]      # 옛 이름(첫 곳 = 길드)
 PARTY_LEAVE_ANYWHERE = True      # 탈퇴는 어디서나(⚠️임시 가정 — 파트너 답 대기: 떠나는 건 혼자 하는 결정이라 장소·동의가 없다 / False = 길드 구역에서만)
 
 
@@ -2019,6 +2023,9 @@ class Dungeon:
                      **({'gate': True, 'sealed': bool(getattr(self, 'sealed', False))} if gate_on else {}),
                      **bear(ex, ey)}
                     if (ex, ey) in seen else None)
+        if (exit_obj is not None and self.town and getattr(self, 'parties', None) is not None and not getattr(self, 'solo', False)
+                and not party_members(self.parties, bot['char'])):
+            exit_obj['need_party'] = True                     # D84 조각 4: 던전 입구는 파티를 맺은 사람만 — 나는 파티가 없다(사실만)
         if exit_obj is not None and bots and not getattr(self, 'solo', False):
             # D66(09-13 파트너 "팀원이 전부 모여야 계단을 내려갈 수 있다고 가르쳐줘야"): 모임 규칙(EXIT_GATHER·_gather_busy)을
             # 시도하기 전에 관측에 미리 — 09-13 판에서 떨어진 동료를 둔 채 use exit 헛시도 45회/100틱. 사실만(누가 멀고 누가 바쁜가)
@@ -4623,6 +4630,9 @@ class Dungeon:
             gate = bool(getattr(self, 'boss_on', False))   # D65(09-13): 최심층의 출구 = 워프게이트(마을로 상행)
             if gate and getattr(self, 'sealed', False):    #   봉인 — 보스가 살아 있는 동안 열리지 않는다(사실만 돌려준다)
                 return {**base, 'result': 'locked', 'what': '워프게이트'}
+            if (self.town and getattr(self, 'parties', None) is not None and not self.solo
+                    and not party_members(self.parties, bot['char'])):
+                return {**base, 'result': 'need_party'}   # D84 조각 4(09-19 파트너 "던전은 파티를 결성해야 이동할수 있게"): 마을의 던전 입구는 파티를 맺은 사람만
             what = ('던전 입구' if self.town else ('워프게이트' if gate else '계단')) + '(exit)'
             went, result = ('up', 'ascend') if gate else ('down', 'exit')
             extra = {'to_depth': 0, 'gate': True} if gate else {}
@@ -5180,9 +5190,15 @@ class Dungeon:
                     return r.get('id')
         return None
 
+    def _party_zone_of(self, b):
+        """파티를 맺는 곳(마을의 모험가 길드 구역·주점 구역)에 서 있으면 그 구역 id, 아니면 None."""
+        if not (self.town and b.get('alive') and not b.get('won')):
+            return None
+        z = self._zone_id(b['x'], b['y'])
+        return z if z in PARTY_ZONES else None
+
     def _in_party_zone(self, b):
-        """파티를 맺는 곳(마을의 모험가 길드 구역)에 서 있나."""
-        return bool(self.town and b.get('alive') and not b.get('won') and self._zone_id(b['x'], b['y']) == PARTY_ZONE)
+        return self._party_zone_of(b) is not None
 
     def _party_asks(self, bots):
         """열린 청 {청한 사람: {청받은 사람: 틱}} — 둘 다 길드 구역에 있는 동안만 열려 있다(한쪽이 구역을 떠나면 닫힌다).
@@ -5190,11 +5206,11 @@ class Dungeon:
         ps = getattr(self, 'parties', None)
         if ps is None or not self.town:
             return {}
-        here = {o['char'] for o in (bots or []) if self._in_party_zone(o)}
+        here = {o['char']: self._party_zone_of(o) for o in (bots or []) if self._in_party_zone(o)}
         asks = ps['asks']
         for a in list(asks):
             for t in list(asks[a]):
-                if a not in here or t not in here:
+                if a not in here or t not in here or here[a] != here[t]:    # 둘이 같은 곳(길드 또는 주점)에 있는 동안만
                     del asks[a][t]
             if not asks[a]:
                 del asks[a]
@@ -5229,9 +5245,10 @@ class Dungeon:
         if recv is None or self._resolve_target(tid, bots, bot) is None:
             return {**base, 'result': 'no_target'}
         to = recv['char']
-        if not self._in_party_zone(bot):
+        zone = self._party_zone_of(bot)
+        if zone is None:
             return {**base, 'result': 'party_need_guild', 'to': to}
-        if not self._in_party_zone(recv):
+        if self._party_zone_of(recv) != zone:
             return {**base, 'result': 'party_need_guild', 'to': to, 'who': to}
         if to in party_members(ps, me):
             return {**base, 'result': 'party_already', 'to': to}
@@ -5245,7 +5262,7 @@ class Dungeon:
             return {**base, 'result': 'party_asked', 'to': to}
         union = sorted(set(party_members(ps, me)) | set(party_members(ps, to)) | {me, to})   # 맞받기 — 맺는 순간 전원이 길드 구역에
         by_char = {o['char']: o for o in (bots or [])}
-        missing = [c for c in union if not (c in by_char and (not by_char[c]['alive'] or self._in_party_zone(by_char[c])))]
+        missing = [c for c in union if not (c in by_char and (not by_char[c]['alive'] or self._party_zone_of(by_char[c]) == zone))]
         if missing:                                      # 쓰러진 파티원은 세지 않는다 · 이 층에 없는 파티원은 '안 모인 사람'
             return {**base, 'result': 'party_not_gathered', 'to': to, 'missing': missing}
         party_join(ps, union)

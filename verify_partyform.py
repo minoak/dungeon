@@ -29,6 +29,9 @@
      추가되는게 맞지 않나"): 명단 = 내 파티원만(맺는 순간이 소개다 — 파티 밖 사람은 명단에 없다 · 다른 층의 파티원은 away) · 시트에
      '- 동료:' 줄 없음 · '## 파티 결성' 절(열린 청)·PARTY 동사 블록은 길드 구역에 섰을 때/파티가 있을 때만 · 계단 문장이 '네 파티원'
   ⑬ 장부가 없는 판에는 흔적이 없다(obs.partyform·mate·away·mates_only 없음 · 명단 머리 '## 파티 명단' · 파서 invalid_type)
+  ⑭ 조각 4(2026-09-19 파트너 "던전은 파티를 결성해야 이동할수 있게 하고 파티를 결성하는 사람들이 자주 모이는 곳이 모험가 길드나 주점으로
+     하면 되잖아"): 마을의 던전 입구는 파티를 맺은 사람만(need_party · 관측 exit.need_party · 문장) — 던전 안의 계단은 그대로(혼자 남은 사람이
+     갇히지 않는다) · 주점 구역에서도 맺어진다 · 맺는 순간 모두 **같은 곳**에(기존 파티원이 다른 곳이면 party_not_gathered)
 (기존 verify 69종은 별도 실행.)
 """
 import os
@@ -254,7 +257,7 @@ def by_exit(d):
 print("\n⑨ 파티 결성 = 길드 구역에서 청하고 맞받기")
 d, bots, names = town(G.new_parties())
 b1, b2, b3 = bots
-g, t = zone_cells(d, 'guild_district', 3), zone_cells(d, 'tavern_district', 3)
+g, t = zone_cells(d, 'guild_district', 3), zone_cells(d, 'temple_district', 3)   # t = 파티를 맺는 곳이 아닌 구역(신전 — 주점은 조각 4 부터 맺는 곳이다)
 put(b1, g[0]); put(b2, t[0]); put(b3, t[1])
 check("⑨ 다른 구역의 사람은 대상이 아니다(D70 — 안 보인다)", act(d, bots, b1, {'type': 'party_form', 'target': 'b2'}) == {'parse_error': 'invalid_target'})
 r = d._party_form(b2, 'b3', bots)
@@ -364,6 +367,37 @@ put(bots0[0], by_exit(d0))
 r0 = d0._interact(bots0[0], 'exit', bots0)
 check("⑬ 계단 문장은 옛 그대로('일행 전원' · mates_only 없음)", r0['result'] == 'wait_allies' and 'mates_only' not in r0
       and "일행 전원" in brains._last_prose(r0, names0))
+
+print("\n⑭ 던전 입구는 파티를 맺은 사람만 · 맺는 곳 = 길드/주점")
+d, bots, names = town(G.new_parties())
+b1, b2, b3 = bots
+tv = zone_cells(d, 'tavern_district', 3)
+put(b1, by_exit(d)); put(b2, tv[0]); put(b3, tv[1])
+r = d._interact(b1, 'exit', bots)
+o14 = d.view(b1, bots)
+check("⑭ 파티가 없으면 마을의 던전 입구에서 need_party — 내려가지 못한다(won 아님) · 관측 exit.need_party · 문장 둘",
+      r['result'] == 'need_party' and not b1['won'] and o14['sights']['exit'].get('need_party') is True
+      and "파티를 맺은 사람만 지난다 — 너는 파티가 없다" in brains._wire(o14, names=names, compose=True)
+      and "입구는 파티를 맺은 사람만 지난다" in brains._last_prose(r, names))
+r23 = (act(d, bots, b2, {'type': 'party_form', 'target': 'b3'}), act(d, bots, b3, {'type': 'party_form', 'target': 'b2'}))
+check("⑭ 주점 구역에서도 맺어진다(party_asked → party_formed) · PARTY 동사 블록이 주점에서도 보인다",
+      [x['result'] for x in r23] == ['party_asked', 'party_formed'] and G.party_members(d.parties, '2') == ['2', '3'])
+d14, bots14, _ = town(G.new_parties())
+c1, c2, c3 = bots14
+put(c1, tv[0]); put(c2, tv[1]); put(c3, g[0])
+check("⑭ PARTY 블록은 주점 구역에서도 보인다", "- party_form + target" in brains._wire(d14.view(c1, bots14), names=names, compose=True))
+G.party_join(d14.parties, ['1', '3'])                 # 1 의 기존 파티원 3 은 길드에 있다
+act(d14, bots14, c2, {'type': 'party_form', 'target': 'b1'})
+rr = act(d14, bots14, c1, {'type': 'party_form', 'target': 'b2'})
+check("⑭ 맺는 순간 모두 같은 곳에 — 기존 파티원이 다른 곳(길드)에 있으면 party_not_gathered(missing = [3])",
+      rr['result'] == 'party_not_gathered' and rr['missing'] == ['3'])
+put(b2, tv[0]); put(b3, tv[1]); put(b1, by_exit(d))
+check("⑭ 파티가 있는 사람은 입구 규칙을 지나 옛 모임 규칙으로(멀면 wait_allies) — need_party 아님",
+      d._interact(b2, 'exit', bots)['result'] in ('too_far', 'wait_allies') and 'need_party' not in d.view(b2, bots)['sights'].get('exit', {}) if d.view(b2, bots)['sights'].get('exit') else True)
+ps = G.new_parties()
+fl, fbots = scene(ps)
+r = fl._interact(fbots[0], 'exit', fbots)             # 계단 곁의 1 — 장부는 걸려 있고 파티는 없다
+check("⑭ 던전 안의 계단은 그대로 — 파티 없는 사람도 혼자 쓴다(갇히지 않는다)", not fl.town and r['result'] == 'exit' and r['party'] == ['1'])
 
 print("\n" + ("ALL PASS" if not C.failed else "FAILED: %d" % C.failed))
 raise SystemExit(1 if C.failed else 0)

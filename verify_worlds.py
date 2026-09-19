@@ -83,6 +83,7 @@ def play(party, crash_at=None, resume=False, say_at=None, form=False):
         p = _new_parties()
         if not form:                                 # form=True 면 빈 장부 — 각본이 길드에서 직접 맺는다(조각 3)
             G.party_join(p, party)
+            G.party_join(p, [loner])                 # 조각 4: 던전 입구는 파티를 맺은 사람만 — 혼자인 사람은 '한 사람짜리 무리'로 세워 둔다(세계가 갈라졌다 합쳐지는 장면용 장치)
         return p
 
     def scripted(obs, char="?"):
@@ -90,7 +91,7 @@ def play(party, crash_at=None, resume=False, say_at=None, form=False):
         pf = obs.get("partyform") or {}
         if form and char in party and obs.get("town") and not pf.get("mine"):   # 아직 파티가 없다 — 길드 구역으로 가서 청하고 맞받는다
             mate = next(c for c in party if c != char)
-            if pf.get("here"):
+            if pf.get("here") and obs.get("town_zone") == "모험가 길드 지구":   # 조각 4 부터 주점도 맺는 곳 — 각본은 길드에서 만나기로 한다(주점에서 시작한 사람이 거기서 기다리면 엇갈린다)
                 seen = any(b.get("char") == mate for b in obs["sights"].get("bots") or [])
                 if seen and mate not in (pf.get("asks_out") or []):
                     return {"type": "party_form", "target": "b" + mate}
@@ -310,8 +311,20 @@ check("⑧ 맺기 전에는 아무도 '네 파티원'이 아니다 — 맺은 �
           any(p.get("mate") for p in ((tk["decisions"].get(c) or {}).get("obs") or {}).get("party") or [])
           for c in ("1", "2") if (tk["decisions"].get(c) or {}).get("obs")))(
           next((r for r in ticks(main8) if r["turn"] == formed[0][0] + 1), None)))
+gate8 = [f.get("about") for r in ticks(main8)[:3] for d_ in (r.get("decisions") or {}).values()
+         for f in [((d_.get("obs") or {}).get("sights") or {}).get("exit") or {}] if f.get("about")]
+guide8 = [g_.get("about") for r in ticks(main8)[:3] for d_ in (r.get("decisions") or {}).values()
+          for g_ in (((d_.get("obs") or {}).get("town_guide") or {}).get("places") or []) if g_.get("name") == "던전 입구"]
+check("⑧ 세계가 하는 말도 그 판의 규칙대로: 던전 입구의 특징 문장이 '파티를 맺은 사람만 내려갈 수 있고 …' — 옛 문장('일행이 3칸 안에 모여야 내려간다')이 어디에도 없다",
+      (gate8 or guide8) and all(a == show_runner.PARTYFORM_GATE_TRAIT for a in gate8 + guide8)
+      and not any("일행이 3칸 안에 모여야 내려간다" in json.dumps(r, ensure_ascii=False) for r in ticks(main8)[:5]), (gate8[:1], guide8[:1]))
 town8 = [r for r in ticks(side8, 0) if desc8 and r["turn"] > desc8[0]["turn"]]
 obs3 = [o for r in town8 for o in [(((r.get("decisions") or {}).get("3") or {}).get("obs"))] if o]
+np8 = [(t_, e) for t_, e in ev8 if e.get("result") == "need_party"]
+check("⑧ 조각 4: 파티가 없는 3 은 던전 입구에서 need_party — 끝까지 마을에 남는다(어느 층 기록에도 3 의 하강이 없다)",
+      np8 and all(e.get("char") == "3" for _, e in np8)
+      and not any("3" in [p_["char"] if isinstance(p_, dict) else p_ for p_ in (r.get("party") or [])] for r in main8 + side8 if r["kind"] == "descend"),
+      np8[:1])
 check("⑧ 3 은 마을에 남아 계속 흐른다 · 파티 밖의 3 에게는 떠난 둘이 자동으로 실리지 않는다(명단 없음) · 파티원 둘의 명단엔 서로만",
       town8 and obs3 and all(o.get("party") == [] for o in obs3)
       and (lambda tk: tk is not None and all(

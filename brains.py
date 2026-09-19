@@ -939,6 +939,8 @@ def _last_prose(last, names=None):
         return "%s에게서 %s을(를) 받았다%s" % (_who(last.get("from")), last.get("what", "?"), tail)
     if t == "bonded":
         return "%s가 너에게 몸짓을 했다 — %s" % (_who(last.get("from")), last.get("form", "몸짓"))
+    if r == "need_party":                 # D84 조각 4 — 던전 입구는 파티를 맺은 사람만(⚠️문구 임시)
+        return "던전 입구로 내려가려 했지만 — 입구는 파티를 맺은 사람만 지난다. 너는 파티가 없다(파티는 모험가 길드 구역이나 주점 구역에서 맺는다)"
     if t == "party_form":                 # D84 조각 3 파티 결성 — 사실만(무엇을 하라는 말은 없다)
         to = _who(last.get("to"))
         if r == "party_asked":
@@ -946,10 +948,10 @@ def _last_prose(last, names=None):
         if r == "party_formed":
             return "%s와(과) 파티를 결성했다 — 지금 파티: %s" % (to, "·".join(_who(c) for c in last.get("members") or []))
         if r == "party_need_guild":
-            return ("파티 결성을 하려 했지만 — %s이(가) 모험가 길드 구역에 없다(파티는 모험가 길드 구역에서 맺는다)" % _who(last["who"])
-                    if last.get("who") else "파티 결성을 하려 했지만 — 여기는 모험가 길드 구역이 아니다(파티는 모험가 길드 구역에서 맺는다)")
+            return ("파티 결성을 하려 했지만 — %s이(가) 너와 같은 곳에 없다(파티는 모험가 길드 구역이나 주점 구역에서, 같은 곳에 있는 사람끼리 맺는다)" % _who(last["who"])
+                    if last.get("who") else "파티 결성을 하려 했지만 — 여기서는 맺을 수 없다(파티는 모험가 길드 구역이나 주점 구역에서 맺는다)")
         if r == "party_not_gathered":
-            return ("파티 결성을 하려 했지만 — 맺는 순간에는 파티에 들 사람이 모두 모험가 길드 구역에 있어야 한다. 구역에 없는 사람: %s"
+            return ("파티 결성을 하려 했지만 — 맺는 순간에는 파티에 들 사람이 모두 같은 곳에 있어야 한다. 여기 없는 사람: %s"
                     % "·".join(_who(c) for c in last.get("missing") or []))
         return "파티 결성을 하려 했지만 — " + {"party_already": "%s와(과)는 이미 같은 파티다" % to, "party_asked_already": "%s에게는 이미 청해 두었다" % to,
                                           "no_target": "상대가 그 자리에 없었다"}.get(r, str(r))
@@ -1614,7 +1616,7 @@ def _wire(obs, names=None, compose=False):
         ex = s.get("exit")
         if ex:
             put(ex.get("bearing"), ex.get("dist", 0),
-                "%s %dm — 눈에 보인다%s%s" % (_exit_label(ex), ex.get("dist", 0), _exit_state(ex), _exit_gather(ex, names)))   # D65 워프게이트·봉인 · D66 모임
+                "%s %dm — 눈에 보인다%s%s" % (_exit_label(ex), ex.get("dist", 0), _exit_state(ex), _exit_gather(ex, names) + _exit_need_party(ex)))   # D65 워프게이트·봉인 · D66 모임
         for m in s.get("monsters", []):
             put(m.get("bearing"), m.get("dist", 0),
                 "%s, %dm%s" % (G._mfact(m), m.get("dist", 0),
@@ -1675,7 +1677,7 @@ def _wire(obs, names=None, compose=False):
         n0 = len(L)
         ex = s.get("exit")
         if ex:
-            L.append("- %s — %s%s%s" % (_exit_label(ex), at(ex), _exit_state(ex), _exit_gather(ex, names)))   # D65 봉인 · D66 모임(사실만)
+            L.append("- %s — %s%s%s" % (_exit_label(ex), at(ex), _exit_state(ex), _exit_gather(ex, names) + _exit_need_party(ex)))   # D65 봉인 · D66 모임(사실만)
         for m in s.get("monsters", []):
             L.append("- %s — %s" % (G._mfact(m), at(m)))
             if m.get("lore") or m.get("deep_progress"):   # D53: 심층 전엔 한 줄 + 진행도 접미
@@ -1970,8 +1972,8 @@ def _wire(obs, names=None, compose=False):
         if pf is not None and obs.get('action_schema') and (pf.get("here") or pf.get("mine")):   # D84 조각 3 — ⚠️문구 임시
             out += ['', 'PARTY:']
             if pf.get("here"):
-                out.append('- party_form + target(b<번호>): 파티 결성 — 모험가 길드 구역에서만. 상대에게 청하고, 상대도 너에게 같은 행동을 하면 맺어진다. '
-                           '맺는 순간 파티에 들 사람이 모두 이 구역에 있어야 한다. 계단은 파티원끼리 함께 쓰고, 파티가 없으면 혼자 쓴다.')
+                out.append('- party_form + target(b<번호>): 파티 결성 — 모험가 길드 구역이나 주점 구역에서만. 상대에게 청하고, 상대도 너에게 같은 행동을 하면 맺어진다. '
+                           '맺는 순간 파티에 들 사람이 모두 여기 있어야 한다. 던전 입구는 파티를 맺은 사람만 지나고, 계단은 파티원끼리 함께 쓴다.')
             if pf.get("mine"):
                 out.append('- party_leave: 파티 탈퇴 — 너 혼자 떠난다(대상 없음). 남은 사람이 하나면 그 파티는 없어진다.')
         if obs.get('skills'):
@@ -2172,6 +2174,11 @@ def _exit_gather(ex, names=None):
     if g.get("busy"):
         bits.append("%s는 하던 일이 있다" % "·".join(nm(c) for c in g["busy"]))
     return " · %s %s — %s 전원이 곁(3칸 안)에 모여야 한다" % (verb, ", ".join(bits), "네 파티원" if g.get("mates_only") else "일행")   # D84
+
+
+def _exit_need_party(ex):
+    """D84 조각 4 — 마을의 던전 입구 줄 꼬리: 파티가 없는 사람에게만(사실만)."""
+    return " · 파티를 맺은 사람만 지난다 — 너는 파티가 없다" if ex.get("need_party") else ""
 
 
 def _safety_blocked(why):

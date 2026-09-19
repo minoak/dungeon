@@ -235,6 +235,12 @@ def spawn8(dd, char, bs, **k):
 G.spawn = spawn8
 _dummy = G.dummy_brain
 G.dummy_brain = lambda obs, char="?": ({"type": "search"} if obs.get("town") and obs.get("turn", 0) < 3 else _dummy(obs, char))
+_np8 = G.new_parties
+def preset8():                                       # 조각 4: 던전 입구는 파티를 맺은 사람만 — 층을 옮기는 장면을 보려면 맺어 둔 파티가 있어야 한다
+    p = _np8()
+    G.party_join(p, ["1", "2"])
+    return p
+G.new_parties = preset8
 try:
     with contextlib.redirect_stdout(io.StringIO()):
         try:
@@ -242,7 +248,7 @@ try:
         except SystemExit:
             pass
 finally:
-    G.spawn, G.dummy_brain = _spawn, _dummy
+    G.spawn, G.dummy_brain, G.new_parties = _spawn, _dummy, _np8
 with open(os.path.join(STATE, "stream.jsonl"), encoding="utf-8") as f:
     rows8 = [json.loads(ln) for ln in f if ln.strip()]
 mine8 = [(dep, b) for dep, b in cap if b["char"] == "1"]
@@ -318,6 +324,10 @@ check("⑨ 겉모습 한 줄에 찬 무기·걸친 갑옷이 실린다", sheetki
 def text(*p):
     with open(os.path.join(HERE, *p), encoding="utf-8") as f:
         return f.read()
+lp9, lh9 = text("launcher.py"), text("launcher", "index.html")
+check("⑨ 론처: 고급 설정의 체크박스(기본 끔)·옵션·러너 환경변수 — 옵션이 없으면 끈다",
+      'id="strangers">' in lh9 and 'id="strangers" checked' not in lh9 and "strangers: $('strangers').checked" in lh9
+      and 'env["DUNGEON_STRANGERS"] = "1" if opts.get("strangers") is True else "0"' in lp9)
 hd, fmt = text("design", "HARNESS_DESIGN.md"), text("STREAM_FORMAT.md")
 check("⑨ HARNESS D85(활성화 규칙 표·조건 a·c) · STREAM_FORMAT(strangers·person_note·obs.people·looks)",
       "## [결정] D85." in hd and "DUNGEON_STRANGERS" in hd and "(c) 들은 말에 내가 적어 둔 이름이 나올 때" in hd
