@@ -161,6 +161,15 @@ check("② 프롬프트: 사실 한 줄(들리는 사람·id·`to`·상한 3) ·
       ("지금 네 말이 들리는 마을 사람: " in w and "%s(f%d)" % (RECEPTION, rec.id) in w and "`to` 에 그 ID 를 적어 말하면" in w
        and "3번까지" in w and "## 그 밖의 정보" not in w))
 check("② 끈 판 프롬프트에는 그 줄이 없다", "지금 네 말이 들리는 마을 사람" not in brains._wire(o0, NAMES, compose=True))
+dm, botsm = town()
+dm.composed_actions = dm.auto_approach = False       # 메뉴형 관측(리모컨) — 같은 줄이 같은 자리에
+put(botsm[0], beside(dm, npc(dm, RECEPTION)))
+om = dm.view(botsm[0], botsm)
+wm = brains._wire(om, NAMES)
+check("② 메뉴형도 같다: 관측 npc_ears · 사실 한 줄 · 누수 없음 · `to` 풀이",
+      [e["name"] for e in om.get("npc_ears") or []] == [e["name"] for e in o.get("npc_ears") or []]
+      and "지금 네 말이 들리는 마을 사람: " in wm and "## 그 밖의 정보" not in wm
+      and brains._parse_to("f%d" % npc(dm, RECEPTION).id, "1", botsm, om) == "npc:" + RECEPTION)
 check("② `to` 풀이: id·이름 → 'npc:<이름>' · 안 들리는 사람(주점 주인)·모르는 id → None · 봇 번호·all 은 옛 그대로",
       brains._parse_to("f%d" % rec.id, "1", bots, o) == "npc:" + RECEPTION and brains._parse_to(RECEPTION, "1", bots, o) == "npc:" + RECEPTION
       and brains._parse_to("f%d" % keep.id, "1", bots, o) is None and brains._parse_to(KEEPER, "1", bots, o) is None
@@ -177,6 +186,8 @@ check("③ 지목한 말 → 그 NPC 가 한 번 되받는다(경로 to) · 두�
       and calls[0]["res"] == {"result": "npc_say", "npc": RECEPTION} and calls[0]["said"] == "의뢰가 어떤 게 있나요?"
       and calls[0]["facts"] == ["사실 — " + RECEPTION] and calls[0]["npc"].get("role"), (out, calls))
 check("③ 되받기 장부: bot['npc_replies'][NPC 이름] = 1", a.get("npc_replies") == {RECEPTION: 1})
+check("③ 말을 나눈 NPC 는 그 뒤에 '먼저 거는 인사'(D71)를 새로 건네지 않는다 · 아직 말을 안 나눈 NPC 의 인사는 그대로",
+      RECEPTION not in {h[0] for h in d.npc_greetings([a])} and KEEPER in {h[0] for h in d.npc_greetings([b2])})
 
 print("── ④ 발생 조건 (b) 답")
 d4, bots4 = town()

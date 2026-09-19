@@ -1237,6 +1237,7 @@ def npc_say_replies(d, bots, decisions, inbox_in, facts_of, spoke=()):
         line = brains.npc_reply(b, {"result": "npc_say", "npc": name, **({"prev": t["prev"]} if t["prev"] else {})}, t["said"],
                                 facts_of(name), npc=(getattr(d, "npc_defs", None) or {}).get(name) or {})
         if line:
+            b.setdefault("npc_hailed", set()).add(name)   # 말을 나눈 사이다 — 그 뒤에 곁을 지나도 '먼저 거는 인사'(D71, 방문당 한 번)를 새로 받지 않는다
             out.append({"npc": name, "char": b["char"], "line": line, "via": t["via"]})
     return out
 
