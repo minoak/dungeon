@@ -529,13 +529,25 @@ class PublicHandler(Handler):
             return self._json(200, self._me())
         return super().do_GET()
 
+    def _drain(self):
+        """몸을 읽기 전에 거절하는 POST 는 응답 전에 몸을 비운다(상한 256KB = _body 와 같다) — 안 읽은 몸을 둔 채 닫으면 Windows 에서 응답보다
+        끊김이 먼저 닿는다(09-20 실측: 600번에 26번 ConnectionAbortedError = verify_public ① '상한 밖 POST → 404' 의 일시 실패 원인)."""
+        try:
+            n = min(int(self.headers.get("Content-Length") or 0), 256 * 1024)
+        except ValueError:
+            n = 0
+        if n > 0:
+            self.rfile.read(n)
+
     def do_POST(self):
         p = urlparse(self.path).path
         if not p.startswith("/api/"):
+            self._drain()
             return self._json(404, {"error": "없는 경로"})
         try:
             self._session(create=True)
         except Conflict as e:
+            self._drain()
             return self._json(429, {"error": str(e)})
         if p in ACCOUNT_POSTS:
             return self._account_post(p)                              # D77 계정 — 키는 함수 안에서만 산다
