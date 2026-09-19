@@ -184,6 +184,8 @@ def _tagsfx(f):
 # 궤적(D38)·층 집계·결산이 **같은 사전**을 센다(STATUS_KINDS·BONES 선례 — 사전 하나). 값=(집계 여부).
 # 문장형 서술(_last_prose·act_summary·_witness_prose)은 관전·스트림·목격 줄에 남는다 — 캐릭터 자기 궤적만 꼬리표다.
 BOSS_KIND = '고블린 대장'   # D65(09-13) 보스층의 보스 — 정의 entities/monster/goblin_chief.json(수치·습성·지식). 랜덤 몹 풀엔 안 든다
+PLUS_PACKS_MAX = 1       # D92(09-20) 새 몬스터 풀: 층당 묶음(무리형) 수 상한 — 총 몹 수를 기존 공식 근처에 둔다(+pack-1 마리). ⚠️값 임시
+PACK_REACH = 3           # D92 묶음의 나머지 개체가 놓이는 범위(첫 개체에서 직교 걸음 수) — '한곳에 모여 있다'의 크기. ⚠️값 임시
 PLACE_STORY_RANGE = 2    # D75(09-15) 장소·사람의 이야기(history)가 보이는 거리(체비셰프) — 게시판 range 와 같은 2칸
 BOSS_FLOOR_NOTICE = ("여기는 최심층이다 — 이 층 어딘가에 보스룸이 있다. 보스가 쓰러져야 이 층 출구(워프게이트)의 봉인이 풀려 마을로 돌아갈 수 있다.")
 #   D65 개정(09-13 파트너 "5층 진입시 보스룸이 있다는걸 알려주면 될 것 같아. 최초 진입시 이 한마디만"): 보스층에 들어선 캐릭터의
@@ -715,6 +717,7 @@ class Monster:
         self.atk, self.dmg, self.ac = atk, dmg, ac
         self.flee_frac, self.flee_stamina = ENT.monster_flee(kind)   # ai.flee — 없으면 (None, None)=도주 안 함
         self.flee_to, self.flee_join_range = ENT.monster_flee_mode(kind)   # D51: 'ally'=근처 다른 몹에게 붙어 같이 싸운다
+        self.pace = ENT.monster_pace(kind)   # D92(09-20) 걸음 박자(정의 ai.pace) — 1=매 틱 걷는다(옛 그대로). 읽는 쪽은 getattr(옛 피클의 몹엔 없다)
         self.alive = True
         self.id = mid
         self.state = 'SLEEPING'      # 2b: 발각굴림으로 HUNTING 전이, LOS 상실로 WANDERING 강등. 3: 저HP→FLEEING
@@ -856,6 +859,7 @@ class Dungeon:
                  motion=False, ally_sight=False, social=False, solo=False, n_gear=0,
                  town=False, status=False, rest_verb=False, relations=False, trail=False,
                  objtags=False, floor=False, explore_dirs=False, give_verb=False, bond_verb=False,
+                 bestiary_plus=False,   # D92(09-20) 새 몬스터 풀 — 전부 키워드로 부르는 자리라 가운데 줄에 둔다(다른 갈래의 끝줄 추가와 안 부딪치게)
                  auto_approach=False, composed_actions=False, skills=False, trpg_combat=False, random_skill=False,
                  ally_doing=False, boss=False, plan_max=None):
         # 시드 RNG 스트림 일원화 — 전역 random 대신 전용 인스턴스. 모든 '굴림'은 여기 경유.
@@ -988,6 +992,9 @@ class Dungeon:
                                          #   러너가 DUNGEON_POTIONS(기본 1)로 켠다(scan 승격 전 선례)
                             n_gear)      # 장비(07-30)도 같은 규율 — 개수 파라미터·엔진 기본 0
                                          #   (스위치 아님 = from_ascii 명시 초기화 함정 자체가 없다)
+        self.bestiary_plus = bool(bestiary_plus)   # D92(09-20) 새 몬스터 풀 — 기본 꺼짐(기존 판 비트 동일: 굴림도 안 한다). 러너가
+        if self.bestiary_plus:                     #   DUNGEON_BESTIARY_PLUS(러너 기본도 0 — 론처가 켠다)로 켠다. 기본 배치가 끝난 뒤·보스 배치 앞
+            self._place_plus()                     #   (보스 id = len(monsters) 라 묶음이 늘어도 번호가 안 겹친다). 1층은 켜도 그대로다
         self._assign_room_types()  # entrance/exit/standard 타입 부여 (출구 배치 후)
         self.boss_on = bool(boss)  # D65(09-13): 최심층 보스·워프게이트 — 러너가 depth == DEPTHS 일 때 켠다. 엔진 기본 0(기존 판 비트 동일)
         self.boss = None           #   보스 개체(Monster) — 출구 방(보스룸)에 선다
@@ -1075,6 +1082,7 @@ class Dungeon:
         d.give_verb = d.bond_verb = False   # 건네기·친목(D47 ②, 09-09) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.boss_on, d.boss, d.sealed = False, None, False   # 보스층·워프게이트(D65, 09-13) — 손그림 장면도 기본 꺼짐(호출측이 켠다)
         d.plan_max = PLAN_MAX      # 작정 수 상한(D66, 09-13) — 손그림 장면은 엔진 기본(호출측이 0 으로 끈다)
+        d.bestiary_plus = False    # 새 몬스터 풀(D92, 09-20) — 손그림 장면은 배치를 장면이 정한다(새 종도 monsters 템플릿의 kind 로 직접)
         d.auto_approach = False
         d.composed_actions = False
         d.skills = d.trpg_combat = d.random_skill = False
@@ -1268,6 +1276,72 @@ class Dungeon:
                 x, y = pool.pop()             #   장검이 깔려 한 층 안에서 '더 좋은 것' 비교가 생긴다
                 slot, name = GEAR_CYCLE[i % len(GEAR_CYCLE)]
                 self._add_feature(slot, name, x, y)
+
+    def _place_plus(self):
+        """D92(2026-09-20 파트너 "던전에 추가 오브젝트나 몬스터 혹은 이벤트를 넣는 것만 하면 될 것 같아" · 메모 §4-3 "요구하는 대응이
+        다른 종류 — 원거리형·무리형·상태형"): 새 몬스터 풀(정의 ai.spawn.pool 'plus')을 **기본 배치가 끝난 자리 위에** 얹는다.
+        · 1층은 그대로다(PLUS_MIN_DEPTH — 의뢰 goblin_cull 과 주점 소문이 1층의 실측에 걸려 있다). 굴림도 하지 않는다.
+        · 2층부터: 이 층의 고블린(매복자·보스 제외) 가운데 절반(올림, 하나는 남긴다)이 같은 칸·같은 번호로 새 종이 된다 —
+          총 몹 수는 기존 공식 그대로이고, 늘어나는 건 묶음(pack)뿐이다(층당 묶음 하나 = +pack-1 마리).
+        · 종 고르기: 풀을 한 번 섞어 차례로(한 층에 여러 종이 섞이게). 묶음 종은 방 안의 자리를 먼저 받고, 나머지 개체는 그 곁
+          바닥 칸(같은 방 먼저, 가까운 순)에 놓인다 — 빈 칸이 모자라면 놓인 만큼만.
+        · 굴림은 전부 self.rng — 끈 판은 이 함수를 부르지 않으므로 난수 소비가 옛 판과 같다(verify_skill_off).
+        ⚠️임시 가정(파트너 미답): 바뀌는 수 = 고블린의 절반(올림) · 층당 묶음 하나 · 풀의 모든 종이 2층부터."""
+        if self.depth < ENT.PLUS_MIN_DEPTH:
+            return
+        pool = [s for s in ENT.plus_monsters() if self.depth >= s['min_depth']]
+        base = [i for i, m in enumerate(self.monsters) if m.kind == ENT.BASELINE_MONSTER and not m.concealed]
+        n_swap = min((len(base) + 1) // 2, len(base) - 1)
+        if not pool or n_swap < 1:
+            return
+        order = list(pool)
+        self.rng.shuffle(order)
+        specs, packs = [], 0
+        for j in range(n_swap + len(order)):          # 풀을 돌며 n_swap 개를 고른다 — 묶음 종은 PLUS_PACKS_MAX 까지만(넘으면 건너뛴다)
+            if len(specs) >= n_swap:
+                break
+            s = order[j % len(order)]
+            if s['pack'] > 1:
+                if packs >= PLUS_PACKS_MAX:
+                    continue
+                packs += 1
+            specs.append(s)
+        specs.sort(key=lambda s: s['pack'] <= 1)      # 묶음 종이 먼저 자리를 고른다(안정 정렬 — 나머지 순서는 그대로)
+        free = list(base)
+        for s in specs:
+            cands = free
+            if s['pack'] > 1:                         # 묶음은 방 안에 선 고블린의 자리를 받는다(한 방에 모여 있게) — 방 안의 고블린이 없으면 아무 자리
+                cands = [k for k in free if self._room_id_at(self.monsters[k].x, self.monsters[k].y) is not None] or free
+            i = self.rng.choice(cands)
+            free.remove(i)
+            old = self.monsters[i]
+            self.monsters[i] = Monster(old.x, old.y, kind=s['name'], mid=old.id)   # 같은 칸·같은 번호 — 수치·습성은 정의(D50)
+            for x, y in self._pack_cells(old.x, old.y, s['pack'] - 1):
+                self.monsters.append(Monster(x, y, kind=s['name'], mid=len(self.monsters)))   # 이 시점엔 번호 == 목록 자리(보스는 뒤에 온다)
+
+    def _pack_cells(self, x, y, n):
+        """(x, y) 곁의 빈 바닥 칸 n 개 — 묶음의 나머지 개체 자리(D92). 직교 BFS(이웃 순서 고정 = 결정론), PACK_REACH 걸음 안.
+        같은 방의 칸을 먼저 쓰고 모자라면 방 밖(통로)까지. 피처·함정·몹이 있는 칸과 문 타일에는 놓지 않는다(지나가기만 한다)."""
+        if n < 1:
+            return []
+        taken = ({(f.x, f.y) for f in self.features.values()} | {(m.x, m.y) for m in self.monsters}
+                 | {(t.x, t.y) for t in self.traps})
+        rid = self._room_id_at(x, y)
+        seen, frontier, near = {(x, y)}, deque([((x, y), 0)]), []
+        while frontier:
+            (cx, cy), dist = frontier.popleft()
+            if dist >= PACK_REACH:
+                continue
+            for dx, dy in ((0, -1), (0, 1), (1, 0), (-1, 0)):
+                c = (cx + dx, cy + dy)
+                if c in seen or not (0 <= c[0] < self.w and 0 <= c[1] < self.h) or self.grid[c[1]][c[0]] != FLOOR:
+                    continue
+                seen.add(c)
+                frontier.append((c, dist + 1))
+                if c not in taken:
+                    near.append(c)
+        same = [c for c in near if rid is not None and self._room_id_at(*c) == rid]
+        return (same + [c for c in near if c not in same])[:n]
 
     def _place_boss(self):
         """D65(2026-09-13 파트너 "5층에 보스몹을 두고 클리어 시 보스룸 뒤로 보물상자와 워프게이트를 설치해서 마을로 이동" →
@@ -5691,6 +5765,8 @@ class Dungeon:
             nx, ny = m.x + sx, m.y + sy
             if self._monster_walkable(nx, ny, bots):
                 m.x, m.y = nx, ny
+                if getattr(m, 'pace', 1) > 1:         # D92 걸음이 느린 종(정의 ai.pace): 쫓아 한 칸 걸으면 pace-1 틱을 선다 —
+                    m.skip_turns = m.pace - 1         #   기존 '행동 스킵' 장부(skip_turns)를 그대로 쓴다. 굴림 없음(옛 종은 pace 1 = 무접촉)
                 door = self._mon_door(m, bots)        # 문 타일이면 목격(D30 확장 2차)
                 live = [o for o in bots if o['alive'] and not o['won']]
                 if any((nx, ny) in self.visible_cells(o['x'], o['y'], MON_SIGHT) for o in live):

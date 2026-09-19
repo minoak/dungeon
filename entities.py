@@ -5,6 +5,8 @@
 정의(Def) = 바뀌지 않는 것: id·name·kind·tags·sprite·comps(부품). 인스턴스(게임 중 바뀌는 것 — 좌표·hp·상태)는
 지금처럼 엔진의 Monster/Trap/Feature 객체가 든다. 엔진은 여기서 수치·이름·지식 본문을 읽는다:
   · 몬스터: health.max / combat.atk·dmg·ac·on_hit(명중 시 태그) / ai.flee.hp_frac·stamina(없으면 도주 안 함)·to·join_range(D51: ally=근처 몹에게 합류)
+    D92(09-20): ai.pace(쫓을 때 한 칸 걷고 pace-1 틱을 선다 — 없으면 1=매 틱) · ai.spawn{pool:'plus', min_depth, pack}(새 몬스터 풀 —
+    Dungeon(bestiary_plus=True) 인 층의 min_depth 부터 기존 고블린 일부와 바뀌어 놓인다. pack=한 묶음의 마릿수, 없으면 1)
   · 함정: trap.dc·dmg·status → dungeon_gm.TRAP_KINDS
   · 오브젝트: type(엔진 피처 type)·name → _add_feature 이름 / equipment.slot·bonus → GEAR_KINDS / tags → 조합형 관측 태그
   · NPC: npc.line·line_again·gift → show_runner.build_town (town.json 은 배치=id·좌표만)
@@ -35,6 +37,8 @@ COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
 UNLOCK_EVENTS = {'encounter', 'kill', 'search_first', 'trap_avoid', 'trap_disarm', 'visit', 'talk'}   # 메모 §2-5 어휘.
 #   코드가 세는 건 encounter 뿐(bestiary.Issuer, D53) — 나머지는 검증기만 아는 예약어(정의에 적어도 아직 안 센다).
 BASELINE_MONSTER = '고블린'   # 모르는 종(장면 저작의 임의 이름)은 기준선 몹의 몸 — 낯선 짐승도 몸은 있다
+SPAWN_POOLS = ('plus',)       # D92(09-20) ai.spawn.pool 어휘 — plus = 새 몬스터 풀(스위치 DUNGEON_BESTIARY_PLUS 를 켠 판에만 놓인다)
+PLUS_MIN_DEPTH = 2            # D92 새 몬스터가 놓이기 시작하는 층 — 1층은 의뢰(goblin_cull)·주점 소문의 실측이 걸려 있어 바꾸지 않는다
 
 
 class EntityError(ValueError):
@@ -114,6 +118,17 @@ def _problems(pairs, root):
                     out.append('%s: ai.flee.to 는 away|ally (%r)' % (rel, fl.get('to')))
                 if fl.get('to') == 'ally' and not (isinstance(fl.get('join_range'), int) and fl['join_range'] >= 1):
                     out.append('%s: ai.flee.to=ally 는 join_range(정수≥1) 필요' % rel)
+            ai = comps.get('ai') or {}                       # D92(09-20) 걸음 박자·새 몬스터 풀 — 둘 다 선택
+            if ai.get('pace') is not None and not (type(ai['pace']) is int and ai['pace'] >= 1):
+                out.append('%s: ai.pace 는 정수≥1(쫓을 때 한 칸 걷고 pace-1 틱을 선다)' % rel)
+            spawn = ai.get('spawn')
+            if spawn is not None:
+                if not isinstance(spawn, dict) or spawn.get('pool') not in SPAWN_POOLS:
+                    out.append('%s: ai.spawn.pool 은 %s 중 하나' % (rel, '|'.join(SPAWN_POOLS)))
+                elif not (type(spawn.get('min_depth', PLUS_MIN_DEPTH)) is int and spawn.get('min_depth', PLUS_MIN_DEPTH) >= PLUS_MIN_DEPTH):
+                    out.append('%s: ai.spawn.min_depth 는 정수≥%d(1층은 바꾸지 않는다)' % (rel, PLUS_MIN_DEPTH))
+                elif not (type(spawn.get('pack', 1)) is int and spawn.get('pack', 1) >= 1):
+                    out.append('%s: ai.spawn.pack 은 정수≥1(한 묶음의 마릿수)' % rel)
         if kind == 'trap':
             for k in ('dc', 'dmg'):
                 if not isinstance((comps.get('trap') or {}).get(k), int):
@@ -268,6 +283,27 @@ def monster_flee_mode(kind_name):
     return (fl.get('to', 'away'), int(fl.get('join_range') or 0))
 
 
+def monster_pace(kind_name):
+    """걸음 박자(D92, ai.pace) — 쫓을 때 한 칸 걷고 pace-1 틱을 선다. 정의에 없거나 모르는 종은 1(매 틱 걷는다 = 옛 그대로)."""
+    d = monster(kind_name)
+    return int(((d or {}).get('comps', {}).get('ai') or {}).get('pace') or 1)
+
+
+def _in_plus_pool(d):
+    return d['kind'] == 'monster' and ((d['comps'].get('ai') or {}).get('spawn') or {}).get('pool') == 'plus'
+
+
+def plus_monsters():
+    """새 몬스터 풀(D92) [{name, min_depth, pack}] — ai.spawn.pool == 'plus' 인 종, 정의 id 순(결정론).
+    엔진(Dungeon._place_plus)이 bestiary_plus 를 켠 층에서만 읽는다 — 끈 판은 이 목록을 부르지도 않는다."""
+    out = []
+    for d in sorted(by_kind('monster'), key=lambda d: d['id']):
+        if _in_plus_pool(d):
+            sp = d['comps']['ai']['spawn']
+            out.append({'name': d['name'], 'min_depth': int(sp.get('min_depth') or PLUS_MIN_DEPTH), 'pack': int(sp.get('pack') or 1)})
+    return out
+
+
 def mon_status():
     """몬스터 명중 시 태그 {kind 이름: 태그} — combat.on_hit 이 있는 종만."""
     return {d['name']: d['comps']['combat']['on_hit'] for d in by_kind('monster') if d['comps']['combat'].get('on_hit')}
@@ -320,15 +356,17 @@ def companions():
     return {d['id']: d for d in sorted(by_kind('companion'), key=lambda d: d['id'])}
 
 
-def lore():
+def lore(plus=True):
     """Dungeon.lore 꼴 {종키: {name, lore, brief?, unlock?}} — knowledge.deep 이 있는 정의만(옛 lore.json 과 같은 키·본문).
     D53: brief(처음 알게 된 한 줄)·unlock({event, count} — 심층 해금 조건)은 있을 때만 실린다. 둘 다 없으면 옛 2층
-    (모름/앎)이라 등재 즉시 본문(lore) 전체가 주입된다 — 함정·상자·샘이 지금 그렇다(몬스터만 3층, 파트너 결정 09-12)."""
+    (모름/앎)이라 등재 즉시 본문(lore) 전체가 주입된다 — 함정·상자·샘이 지금 그렇다(몬스터만 3층, 파트너 결정 09-12).
+    D92(09-20): plus=False 면 새 몬스터 풀(ai.spawn.pool 'plus')의 종을 뺀다 — 러너가 스위치를 끈 판의 사전(run_meta.bestiary_defs·
+    도감 창의 카드)을 옛 판과 같게 두려고 쓴다. 기본(True)은 정의 전부."""
     out = {}
     for d in load().values():
         kn = d['comps'].get('knowledge') or {}
         deep = kn.get('deep')
-        if not deep:
+        if not deep or (not plus and _in_plus_pool(d)):
             continue
         key = {'monster': 'monster:' + d['name'], 'trap': 'trap:' + d['id'],
                'object': 'feature:' + d.get('type', d['id']), 'npc': 'npc:' + d['id']}[d['kind']]

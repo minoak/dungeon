@@ -1,0 +1,38 @@
+{
+  "id": "spiderling",
+  "name": "새끼거미",
+  "kind": "monster",
+  "tags": [
+    "monster",
+    "small",
+    "swarm"
+  ],
+  "sprite": "wl-spider",
+  "note": "⚠️문구 임시(2026-09-20 D92) — 이름·brief·deep 은 파트너 문장 대기. 무리형: 약한 개체 셋이 한 묶음으로 놓인다(ai.spawn.pack). 숨지 않고 상태도 안 건다 — 그림자거미와 다른 점. 도주 없음. 하나하나는 가장 약한 몸(HP 2·명중 0·피해 1·AC 10) — 셋이 한꺼번에 무는 것이 위험이다.",
+  "comps": {
+    "health": {
+      "max": 2
+    },
+    "combat": {
+      "atk": 0,
+      "dmg": 1,
+      "ac": 10
+    },
+    "ai": {
+      "start": "sleeping",
+      "spawn": {
+        "pool": "plus",
+        "min_depth": 2,
+        "pack": 3
+      }
+    },
+    "knowledge": {
+      "brief": "셋씩 모여 사는 작은 거미",
+      "deep": "셋씩 모여 사는 작은 거미. 하나하나는 고블린보다 약하다. 숨어 있지 않고 눈에 보이는 곳에 있다. 달아나지 않는다.",
+      "unlock": {
+        "event": "encounter",
+        "count": 5
+      }
+    }
+  }
+}

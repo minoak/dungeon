@@ -1,0 +1,38 @@
+{
+  "id": "goblin_heavy",
+  "name": "고블린 중갑병",
+  "kind": "monster",
+  "tags": [
+    "monster",
+    "armored",
+    "slow"
+  ],
+  "sprite": "wl-goblin",
+  "note": "⚠️문구 임시(2026-09-20 D92) — 이름·brief·deep 은 파트너 문장 대기. 단단한 종: AC·HP 가 높고 걸음이 느리다(ai.pace 2 = 쫓을 때 한 칸 걷고 한 틱을 선다 — 걸어서 떨어뜨릴 수 있다). 틱당 기대 피해는 고블린보다 낮다(명중 0·피해 2) — 싸움이 길어질 뿐. 도주 없음. 수치 근거 = 더미 두뇌 3인 파티 2~4층 120판에서 전사 수가 끈 판과 같은 자릿수(50→43/360, 0콜 실측 09-20).",
+  "comps": {
+    "health": {
+      "max": 10
+    },
+    "combat": {
+      "atk": 0,
+      "dmg": 2,
+      "ac": 14
+    },
+    "ai": {
+      "start": "sleeping",
+      "pace": 2,
+      "spawn": {
+        "pool": "plus",
+        "min_depth": 2
+      }
+    },
+    "knowledge": {
+      "brief": "쇠붙이를 두른 느린 고블린",
+      "deep": "쇠붙이를 온몸에 두른 고블린. 공격이 잘 들어가지 않고 오래 버틴다. 대신 걸음이 느려서, 쫓아올 때 한 칸 걷고 나면 다음 한 틱은 서 있다. 달아나지 않는다.",
+      "unlock": {
+        "event": "encounter",
+        "count": 5
+      }
+    }
+  }
+}

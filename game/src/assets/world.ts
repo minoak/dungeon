@@ -31,7 +31,41 @@ export const TERRAIN_CELL = 48;
 export const TOWN_PROP_CELL = 144, TOWN_PROP_FOOT = 138, TOWN_NPC_CELL = 96, TOWN_NPC_FOOT = 91;   // art/town-v1/runtime/manifest.json
 export const TOWN_TERRAIN = ['plaza_a', 'plaza_b', 'alley', 'earth', 'grass', 'wood_floor', 'plaster_wall', 'teal_roof'];
 const DIRECTIONS: Dir[] = ['front', 'right', 'back', 'left'];
-const MONSTERS: Record<string, string> = { '고블린': 'wl-goblin', '그림자거미': 'wl-spider', '고블린 대장': 'wl-goblin' };   // D65 보스=같은 시트(크기만 키움)
+const MONSTERS: Record<string, string> = { '고블린': 'wl-goblin', '그림자거미': 'wl-spider', '고블린 대장': 'wl-goblin',   // D65 보스=같은 시트(크기만 키움)
+  // D92(09-20) 새 몬스터 — 새 도트가 없어 기존 시트에 색조만 입힌 사본(TINTED)을 쓴다(⚠️전용 도트는 다음). 사본을 못 만들면 원본 시트 그대로.
+  '독칼 고블린': 'wl-goblin-venom', '새끼거미': 'wl-spider-pale', '고블린 중갑병': 'wl-goblin-steel' };
+const TINTED: Record<string, { base: string; tint: string }> = {
+  'wl-goblin-venom': { base: 'wl-goblin', tint: '#8fe070' },    // 독칼 고블린 — 독빛 초록
+  'wl-spider-pale': { base: 'wl-spider', tint: '#f0dc9c' },     // 새끼거미 — 옅은 모래빛
+  'wl-goblin-steel': { base: 'wl-goblin', tint: '#9db6e6' },    // 고블린 중갑병 — 쇠붙이의 푸른 회색
+};
+const tintedReady = new Set<string>();                           // 만들어진 사본만 — 없으면 monsterTexture 가 원본 시트로 돌린다
+function monsterTexture(key: string): string { return TINTED[key] && !tintedReady.has(key) ? TINTED[key].base : key; }
+
+/** 원본 몬스터 시트를 캔버스에 복사해 색을 곱하고(투명 칸은 원본 알파로 도려낸다) 같은 칸 나눔으로 프레임을 단다. 실패하면 조용히 원본을 쓴다. */
+function makeTinted(textures: Phaser.Textures.TextureManager): void {
+  for (const [key, v] of Object.entries(TINTED)) {
+    try {
+      if (!textures.exists(key)) tintedReady.delete(key);          // 게임을 새로 띄운 경우 — 모듈은 남고 텍스처는 사라졌다
+      if (tintedReady.has(key) || !textures.exists(v.base) || textures.exists(key)) continue;
+      const img = textures.get(v.base).getSourceImage() as HTMLImageElement;
+      const tex = textures.createCanvas(key, img.width, img.height);
+      if (!tex) continue;
+      const ctx = tex.getContext();
+      ctx.drawImage(img, 0, 0);
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = v.tint;
+      ctx.fillRect(0, 0, img.width, img.height);
+      ctx.globalCompositeOperation = 'destination-in';
+      ctx.drawImage(img, 0, 0);
+      ctx.globalCompositeOperation = 'source-over';
+      const cols = Math.floor(img.width / WORLD_CELL), rows = Math.floor(img.height / WORLD_CELL);
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) tex.add(r * cols + c, 0, c * WORLD_CELL, r * WORLD_CELL, WORLD_CELL, WORLD_CELL);
+      tex.refresh();
+      tintedReady.add(key);
+    } catch { /* 색조 사본은 장식이다 — 못 만들면 원본 시트로 그린다 */ }
+  }
+}
 const PROPS: Record<string, number> = {
   door: 0, exit: 1, 'feat:exit': 1, 'feat:stairs_up': 1,
   'feat:chest': 2, 'feat:fountain': 3, 'feat:treasure': 4,
@@ -45,7 +79,7 @@ export function worldVisual(key: string): WorldVisual | null {
   if (PROPS[key] !== undefined) return { texture: 'wl-props', frame: PROPS[key] };
   if (TRAPS[key] !== undefined) return { texture: 'wl-traps', frame: TRAPS[key] };
   const monster = key.startsWith('mob:') ? MONSTERS[key.slice(4)] : undefined;
-  return monster ? { texture: monster, frame: 0 } : null;
+  return monster ? { texture: monsterTexture(monster), frame: 0 } : null;
 }
 
 export function queueWorld(load: Phaser.Loader.LoaderPlugin): void {
@@ -70,7 +104,10 @@ export function queueWorld(load: Phaser.Loader.LoaderPlugin): void {
 export function monsterFrame(dir: Dir): number { return DIRECTIONS.indexOf(dir) * 3; }
 export function monsterWalk(texture: string, dir: Dir): string { return `${texture}-walk-${dir}`; }
 export function registerWorldAnims(anims: Phaser.Animations.AnimationManager): void {
-  for (const texture of Object.values(MONSTERS)) for (const dir of DIRECTIONS) {
+  // D92: 색조 사본은 시트가 다 실린 뒤(씬 create)에야 만들 수 있다 — 텍스처 관리자는 애니메이션 관리자가 들고 있는 것을 빌린다(타입 선언만 protected).
+  const textures = (anims as unknown as { textureManager?: Phaser.Textures.TextureManager }).textureManager;
+  if (textures) makeTinted(textures);
+  for (const texture of new Set(Object.values(MONSTERS).map(monsterTexture))) for (const dir of DIRECTIONS) {
     const key = monsterWalk(texture, dir), first = monsterFrame(dir);
     if (!anims.exists(key)) anims.create({ key, frames: [first + 1, first, first + 2, first].map(frame => ({ key: texture, frame })),
       frameRate: 8, repeat: -1 });

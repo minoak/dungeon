@@ -353,7 +353,7 @@ check("⑫ 1판 run_meta.bestiary_progress = {}(첫 원정) · 원장 n 은 전�
       and all(int(r.get('n', 0)) >= 1 for n, v in led.items() if not n.startswith('_') for r in v.values()))
 defs1 = meta1.get("bestiary_defs") or {}
 check("⑭ run_meta.bestiary_defs = entities.lore()(D63 additive — 도감·수첩 창의 본문: 고블린 brief·lore·unlock 5, 판정 무접촉)",
-      defs1 == entities.lore() and "monster:고블린" in defs1 and bool(defs1["monster:고블린"].get("brief"))
+      defs1 == entities.lore(plus=False) and "monster:고블린" in defs1 and bool(defs1["monster:고블린"].get("brief"))   # D92(09-20): 새 몬스터 풀을 끈 판(이 게이트)의 사전엔 그 종들이 없다 — 켠 판은 verify_mobs
       and bool(defs1["monster:고블린"].get("lore")) and (defs1["monster:고블린"].get("unlock") or {}).get("count") == 5)
 
 recs2 = run_once()
