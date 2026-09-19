@@ -1,0 +1,93 @@
+{
+  "assertionsPassed": true,
+  "date": "2026-09-20",
+  "surface": "Codex in-app browser via cua_repl",
+  "url": "http://127.0.0.1:4228/art/dungeon-v2/compare.html?seed=322274042&profile=concept",
+  "conceptDimensions": [
+    42,
+    34
+  ],
+  "seedSequence": [
+    {
+      "seed": 42,
+      "profile": "concept",
+      "walls": 266,
+      "doors": 7,
+      "children": 454,
+      "textures": 244
+    },
+    {
+      "seed": 7,
+      "profile": "concept",
+      "walls": 264,
+      "doors": 9,
+      "children": 427,
+      "textures": 262
+    },
+    {
+      "seed": 7,
+      "profile": "original",
+      "walls": 286,
+      "doors": 17,
+      "children": 485,
+      "textures": 270
+    },
+    {
+      "seed": 42,
+      "profile": "concept",
+      "walls": 266,
+      "doors": 7,
+      "children": 454,
+      "textures": 244
+    }
+  ],
+  "sameGridInBothViews": true,
+  "sameCameraPositionAndZoom": true,
+  "groundObjectsPerView": 1,
+  "levelTexturesPerView": 1,
+  "actorsPerView": 3,
+  "missingTextures": 0,
+  "repeatSeedRestoresObjectAndTextureCounts": true,
+  "finalSeedVisibility": {
+    "seed": 322274042,
+    "unknownCells": 672,
+    "visibleCells": 57,
+    "hiddenArtParts": 377,
+    "visibleUnknownArtParts": 0,
+    "unknownExitVisible": false,
+    "fogStatsEqualInBothViews": true,
+    "rememberedFixtureParts": 34,
+    "maximumRememberedAlpha": 0.45
+  },
+  "columnOcclusion": {
+    "behind": {
+      "alpha": 0.28,
+      "actorDepth": 20.12,
+      "wallDepth": 20.133
+    },
+    "inFront": {
+      "alpha": 1,
+      "actorDepth": 20.14,
+      "wallDepth": 20.133
+    },
+    "originalFrameRestored": true
+  },
+  "defaultRenderer": {
+    "seed": 42,
+    "projected": false,
+    "prototypeGroundObjects": 0,
+    "prototypeTextures": 0,
+    "fogDepth": 60,
+    "actors": 3,
+    "missingTextures": 0
+  },
+  "consoleObservations": {
+    "unattributedErrors": 2,
+    "message": "Failed to execute 'observe' on 'MutationObserver': parameter 1 is not of type 'Node'.",
+    "sourceUrl": null,
+    "note": "Captured earlier in the tab; origin unresolved. No claim of a clean console."
+  },
+  "visualReview": "Reviewed compact overview, central hall, satellite room, directional doors, source-material floor, continuous wall lighting, ivy, exterior rocks, old/new art toggle and character sight.",
+  "llmGameplayCalls": 0,
+  "scope": "Stationary engine snapshots plus controlled render fixtures. Not an autonomous moving playthrough, town regression, or furnishing-collision test."
+}

@@ -1,0 +1,9 @@
+Use case: stylized-concept
+Asset type: transparent pixel-art sprite atlas for a top-down fantasy dungeon game.
+Input image 1 is the approved visual style reference. Closely match its subtle low-saturation worn grey stone, small irregular masonry, warm dark wood, restrained pixel clusters and overhead three-quarter camera. Do not redesign the style.
+Generate one square image, exact 2 by 2 equal square cells, with generous clear transparent space around each object. Real transparent alpha background, no coloured matte, no labels, no cell separator lines. All four objects must be entirely inside their own cells.
+Top left: a complete front-facing closed medieval oak door set in a thick rounded grey stone arch. Broad square foot blocks, small roughly hewn arch voussoirs, worn iron bands, warm brown aged wood, softly chipped edges. Designed to be 58 pixels wide and 88 pixels tall in the game.
+Top right: the matching narrow side-facing doorway, attached to a north-south wall, opening faces screen-left. A low-oblique top-down RPG side-view, much narrower silhouette than the frontal door, with visible stone thickness and recessed dark wood. Designed 32 pixels wide, 88 pixels tall.
+Bottom left: a broken stone pillar stump with several fallen masonry blocks and sparse muted olive moss at its base, small ruin cluster, 58 pixels wide and 50 pixels tall.
+Bottom right: an organic storage cluster of two aged barrels, a wooden crate and a little broken pottery, asymmetric grouping with objects slightly overlapping, 64 pixels wide and 53 pixels tall.
+All sprites share the same overhead lighting from upper left. Crisp detailed 2D pixel art, sharp pixels, clean silhouettes, no photographic rendering, no thick cartoon outlines, no neon, no gold trim, no baked torch glow or large cast shadows, no floor patch under the objects, no characters. Match the reference closely.

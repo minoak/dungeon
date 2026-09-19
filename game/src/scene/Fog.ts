@@ -112,6 +112,8 @@ export function installFog(app: App): void {
   }
 
   function redraw(): void {
+    // Elevated dungeon surfaces own their visibility; fog covers only the ground below them.
+    g.setDepth(scene.projectedDungeon ? DEPTH.footprint + 1 : DEPTH.fog);
     const run = app.run, f = scene.frame;
     const ls = run && f ? run.levels[f.levelIdx] : undefined;
     if (!run || !f || !ls) { clearFog(-1, 0, app.focus.char, false, `${gen}|none`); return; }

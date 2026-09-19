@@ -5,6 +5,7 @@
 import Phaser from 'phaser';
 import { paintTownPaving } from './townPaving';
 import { paintAuthoredTown } from './townAuthored';
+import { dungeonPrototypeEnabled, projectedDungeonEnabled, queueDungeonPrototype, paintDungeonPrototype, dungeonPrototypeVisual, syncDungeonPrototype, tickDungeonPrototype } from './dungeonPrototype';
 import type { App } from '../app';
 import type { Bot, Char, Dir, Feature, Frame, LevelState, Monster, TownVisual } from '../stream/types';
 import { NPC_CELL, NPC_FOOT, npcTexture, npcFrame, npcWalk, queueNpcs, registerNpcAnims } from '../assets/npcs';
@@ -47,7 +48,7 @@ export class DungeonScene extends Phaser.Scene {
   private feats = new Map<string, Phaser.GameObjects.Sprite>();
   private traps = new Map<string, Phaser.GameObjects.Sprite>();
   private levelObjs: Phaser.GameObjects.GameObject[] = [];   // 문·출구 표식 등 층 고정물
-  private exitObj: Phaser.GameObjects.Sprite | null = null;  // D65 보스층 워프게이트 표식(봉인 상태 색 — 보스가 죽으면 초록)
+  private exitObj: Phaser.GameObjects.Sprite | null = null;  // 계단 시야와 D65 워프게이트 봉인 상태
   private footprints!: Phaser.GameObjects.Graphics;
   private ring!: Phaser.GameObjects.Graphics;
   frame: Frame | null = null;
@@ -57,6 +58,8 @@ export class DungeonScene extends Phaser.Scene {
   followChar: Char | null = null;
   private seenCache: { levelIdx: number; char: Char; count: number; set: Set<string> } | null = null;
   private townVisual: TownVisual | null = null;   // 마을 v1 시각 레이어(층 라인 visual) — 없으면 기존 타일 규칙
+  private prototypeDungeon = false;
+  get projectedDungeon(): boolean { return this.prototypeDungeon && projectedDungeonEnabled; }
 
   constructor() { super('dungeon'); }
 
@@ -69,6 +72,7 @@ export class DungeonScene extends Phaser.Scene {
     this.load.spritesheet('tiny', ROOT + 'viewer/' + this.ts.sheet, { frameWidth: this.ts.tile, frameHeight: this.ts.tile });
     queueSdSheets(this.load, this.atlas);
     queueWorld(this.load);
+    queueDungeonPrototype(this.load);
     queueNpcs(this.load);
   }
 
@@ -138,7 +142,7 @@ export class DungeonScene extends Phaser.Scene {
   tileFrame(key: string): number { return tileIndex(this.ts, this.cols, key); }
   /** 새 에셋을 우선 사용하고, 아직 없는 종류는 기존 타일로 표시한다. */
   visualOf(key: string): { texture: string; frame: number; scale: number; originY: number } {
-    const art = worldVisual(key);
+    const art = (this.prototypeDungeon ? dungeonPrototypeVisual(key) : null) ?? worldVisual(key);
     return art ? { ...art, scale: 1, originY: WORLD_FOOT / WORLD_CELL }
       : { texture: 'tiny', frame: this.tileFrame(key), scale: TILE / this.ts.tile, originY: 0.9 };
   }
@@ -146,7 +150,7 @@ export class DungeonScene extends Phaser.Scene {
   private placeObject(key: string, x: number, y: number, depth: number): Phaser.GameObjects.Sprite {
     const art = this.visualOf(key), pos = this.worldOf(x, y);
     return this.add.sprite(pos.x, pos.y, art.texture, art.frame).setOrigin(0.5, art.originY)
-      .setScale(art.scale).setDepth(depth);
+      .setScale(art.scale).setDepth(this.projectedDungeon && depth === DEPTH.feature ? DEPTH.stand + y * .01 - .004 : depth);
   }
   /** 현재 프레임에서 그 캐릭터가 보는 칸(마을=전부). 초점이 없으면 null(=전부). */
   visibleSet(char: Char | null): Set<string> | null {
@@ -217,6 +221,7 @@ export class DungeonScene extends Phaser.Scene {
     this.seenCache = null;
 
     const V = L.visual ?? null;                   // 마을 v1(2026-09-11): 바닥·건물·소품은 layout 이 정한다
+    this.prototypeDungeon = dungeonPrototypeEnabled && !ls.town && !V;
     const authoredChanged = Boolean(V?.art) !== Boolean(this.townVisual?.art);
     this.townVisual = V;
     if (authoredChanged) this.setZoom(V?.art ? 0.5 : this.pickZoom());
@@ -226,13 +231,17 @@ export class DungeonScene extends Phaser.Scene {
     const tex = V ? 'wl-town-terrain' : 'wl-terrain';
     const tileset = this.map.addTilesetImage(tex, tex, TERRAIN_CELL, TERRAIN_CELL, 0, 0);
     this.ground = this.map.createLayer(0, tileset!, 0, 0)!.setScale(TILE / TERRAIN_CELL).setDepth(DEPTH.ground);
+    if (this.prototypeDungeon) {
+      this.ground.setVisible(false);
+      this.levelObjs.push(paintDungeonPrototype(this, L, TILE));
+    }
     if (V) {
       const paving = paintTownPaving(this, V, TILE, DEPTH.ground + 1);
       if (paving) this.levelObjs.push(paving);
     }
 
     // 북쪽 벽 아래와 서쪽 벽 옆에 얕은 접촉 그림자. 지형을 다시 그릴 때만 만든다(마을 v1 은 건물·소품 그림이 벽선을 덮는다 — 없음).
-    if (!V) {
+    if (!V && !this.prototypeDungeon) {
       const shade = this.add.graphics().setDepth(DEPTH.ground + 1);
       shade.fillStyle(0x10131e, 0.3);
       for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) if (L.grid[y][x] === '.') {
@@ -243,13 +252,14 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     // 문 타일 · 출구
-    for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) if (L.grid[y][x] === '+') {
+    for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) if (L.grid[y][x] === '+' && !this.projectedDungeon) {
       this.levelObjs.push(this.placeObject('door', x, y, DEPTH.feature));
     }
     const [ex, ey] = L.exit;
     const exitObj = this.placeObject('exit', ex, ey, DEPTH.feature);
     this.levelObjs.push(exitObj);
-    this.exitObj = L.gate ? exitObj.setTint(L.gate.sealed ? 0x8fa3ff : 0x9cffc8) : null;   // D65 워프게이트: 봉인=파랑, 열림=초록(⚠️전용 그림은 다음)
+    this.exitObj = exitObj;
+    if (L.gate) exitObj.setTint(L.gate.sealed ? 0x8fa3ff : 0x9cffc8);   // D65 워프게이트: 봉인=파랑, 열림=초록
     if (V) this.placeTownVisual(V);
 
     const m = TILE * 2;
@@ -313,6 +323,9 @@ export class DungeonScene extends Phaser.Scene {
     for (const b of cur.bots) {
       present.add(b.char);
       this.updateActor(this.ensureActor(b), b, cur, snap);
+      if (this.projectedDungeon && !canSee(b.x, b.y)) {
+        const actor = this.actors.get(b.char)!; actor.sprite.setVisible(false); actor.label.setVisible(false);
+      }
     }
     for (const [c, a] of this.actors) if (!present.has(c)) { a.sprite.setVisible(false); a.label.setVisible(false); }
 
@@ -353,7 +366,7 @@ export class DungeonScene extends Phaser.Scene {
           : this.placeObject('feat:' + ft.type, ft.x, ft.y, DEPTH.feature);
         this.feats.set(k, s);
       } else s.setPosition(c.x, c.y);
-      s.setAlpha(canSee(ft.x, ft.y) ? 1 : 0.7);
+      s.setAlpha(canSee(ft.x, ft.y) ? 1 : this.projectedDungeon ? .45 : .7);
     }
     for (const [k, s] of this.feats) if (!seenFeats.has(k)) {
       this.tweens.killTweensOf(s); s.destroy(); this.feats.delete(k);
@@ -370,9 +383,14 @@ export class DungeonScene extends Phaser.Scene {
         s = this.placeObject('trap:' + tr.kind, tr.x, tr.y, DEPTH.trap).setName('trap-' + k);
         this.traps.set(k, s);
       }
-      s.setAlpha(tr.sprung ? 0.55 : 0.95);
+      s.setAlpha((tr.sprung ? 0.55 : 0.95) * (this.projectedDungeon && !canSee(tr.x, tr.y) ? .55 : 1));
     }
     for (const [k, s] of this.traps) if (!seenTraps.has(k)) { s.destroy(); this.traps.delete(k); }
+    if (this.projectedDungeon) {
+      syncDungeonPrototype(this, vis, seen);
+      const [x, y] = cur.level.exit;
+      this.exitObj?.setVisible(known(x, y)).setAlpha(canSee(x, y) ? 1 : .45);
+    }
 
     // 카메라 — 시킹·새 층은 즉시 맞춘다(따라가기 lerp 가 지도를 가로지르지 않게)
     if (this.followChar && (snap || newLevel)) {
@@ -395,7 +413,7 @@ export class DungeonScene extends Phaser.Scene {
 
   /** The authored town's wide composition needs more readable people. Keep feet
    * anchored to the same cells, and restore normal scale when leaving this map. */
-  private get characterScale(): number { return this.townVisual?.art ? 2 : 1; }
+  private get characterScale(): number { return this.townVisual?.art ? 2 : this.projectedDungeon ? .8 : 1; }
 
   private ensureActor(b: Bot): Actor {
     let a = this.actors.get(b.char);
@@ -549,6 +567,8 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   update(): void {
+    if (this.projectedDungeon) tickDungeonPrototype(this, [...this.actors.values()]
+      .filter(a => a.sprite.visible && a.alive && !a.won).map(a => ({ x: a.sprite.x, y: a.sprite.y })));
     for (const a of this.actors.values()) {
       if (!a.label.visible) continue;
       a.label.setPosition(a.sprite.x, a.sprite.y - a.sprite.displayHeight * (a.alive ? a.sprite.originY : 30 / this.atlas.cell) - 2);

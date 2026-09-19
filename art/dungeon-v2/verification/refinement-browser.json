@@ -1,0 +1,15 @@
+{
+  "passedRenderingChecks": true,
+  "seed": 42,
+  "decorations": 23,
+  "decorationFrames": [0, 1, 2, 3, 4, 5],
+  "allDecorationsInWallCells": true,
+  "torchOverlaps": 0,
+  "prototypeLevelTextures": 1,
+  "baselineDecorations": 0,
+  "baselinePrototypeLevelTextures": 0,
+  "visualReview": "Large continuous flagstones and wall recess furnishings visible in actual Phaser scene.",
+  "browserLogObservation": "One earlier MutationObserver.observe non-Node exception was captured without a source URL. The bundle contains Vite's standard module-preload polyfill, which observes document; origin of the exception was not established. A fresh reload with Runtime.exceptionThrown observation through completed scene loading captured no exceptions.",
+  "freshReloadRuntimeExceptions": [],
+  "llmGameplayCalls": 0
+}

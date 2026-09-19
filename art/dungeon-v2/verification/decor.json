@@ -1,0 +1,30 @@
+{
+  "passed": true,
+  "seeds": 200,
+  "profiles": [
+    "original",
+    "concept"
+  ],
+  "seedsPerProfile": 100,
+  "placements": 7699,
+  "furnishingTypes": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "attachedPiers": 848,
+  "previousRuleAttachedPiers": 13052,
+  "unchangedEngineSnapshots": true,
+  "floorPlacements": 6536,
+  "wallAccents": 1163,
+  "connectedWithFurnitureAsObstacles": true,
+  "engineCollisionChanged": false,
+  "blockedDoorApproaches": 0,
+  "torchOverlaps": 0,
+  "duplicatePlacements": 0,
+  "deterministic": true,
+  "llmCalls": 0
+}

@@ -1,0 +1,11 @@
+{
+  "seed": 322274042,
+  "materialScale": 0.5,
+  "stoneFragments": 35,
+  "wallSupportsInsideWallCells": true,
+  "engineGridMatchesBaseline": true,
+  "levelTextureCount": 1,
+  "buildPassed": true,
+  "visuallyInspected": true,
+  "tallerWallGeometryImplemented": false
+}

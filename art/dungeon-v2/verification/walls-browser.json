@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "seeds": [42, 7],
+  "wallSupportCounts": [86, 85],
+  "supportsOnlyInWallCells": true,
+  "duplicateSupports": false,
+  "supportKinds": ["corner", "pier", "door-jamb", "torch-pier"],
+  "floorDecorCounts": [24, 31],
+  "wallTexturesPrototypeAndBaseline": [true, false],
+  "engineGridsMatch": true,
+  "camerasMatch": true,
+  "visualInspection": "Seed 42 room 5 and seed 7 room 6: larger beveled masonry, coping, footings and attached supports; existing floor furnishings remain in place.",
+  "buildPassed": true,
+  "decor100SeedRegressionPassed": true,
+  "llmGameplayCalls": 0,
+  "imageGeneration": "built-in imagegen, one new wall atlas"
+}

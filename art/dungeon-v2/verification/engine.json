@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "seeds": 100,
+  "uniqueGrids": 100,
+  "connected": true,
+  "deterministic": true,
+  "previewMatchesEngine": true,
+  "brainImported": false,
+  "llmCalls": 0
+}

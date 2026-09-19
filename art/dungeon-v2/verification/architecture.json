@@ -1,0 +1,49 @@
+{
+  "original": {
+    "seeds": 100,
+    "uniqueGrids": 100,
+    "doors": 1928,
+    "connected": true,
+    "deterministic": true,
+    "previewMatchesEngine": true,
+    "columnsBlockMovement": false
+  },
+  "concept": {
+    "seeds": 1000,
+    "uniqueGrids": 1000,
+    "doors": 6884,
+    "connected": true,
+    "deterministic": true,
+    "previewMatchesEngine": true,
+    "columnsBlockMovement": true,
+    "roomCounts": {
+      "7": 261,
+      "8": 204,
+      "6": 277,
+      "5": 258
+    },
+    "columnCounts": {
+      "0": 567,
+      "4": 340,
+      "2": 39,
+      "8": 24,
+      "6": 29,
+      "10": 1
+    },
+    "roomStyles": {
+      "hall": 391,
+      "chamber": 4128,
+      "gallery": 1403,
+      "pillared_hall": 418,
+      "two_columns": 71
+    },
+    "uniqueConnectionGraphs": 938,
+    "passageWidths": [
+      2,
+      3
+    ]
+  },
+  "passed": true,
+  "brainImported": false,
+  "llmCalls": 0
+}

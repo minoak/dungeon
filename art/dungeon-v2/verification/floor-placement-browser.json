@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "seeds": [7, 42],
+  "seed7": {"floor":31,"wall":10},
+  "seed42": {"floor":24,"wall":7},
+  "surfacesValid": true,
+  "torchOverlaps": 0,
+  "cameraMatchesSelectedRoomAfterLoadAndSeedChange": true,
+  "prototypeAndBaselineTextureCounts": [1, 0],
+  "sameEngineGrid": true,
+  "visualCheck": "Seed 42 room 5: pottery, barrels and crates stand on flagstones; banners remain on walls.",
+  "engineCollisionChanged": false,
+  "consoleNote": "One source-less MutationObserver.observe error was logged during browser inspection; rendering and seed transitions completed. No claim of an error-free browser console."
+}
