@@ -114,6 +114,48 @@ def compile_layout(layout):
         for connection in spaces['connections']:
             if any(tuple(p) not in seen for p in connection['cells']):
                 raise ValueError('구역 연결이 막혔다: %s → %s' % (connection['from'], connection['to']))
+    # D90(2026-09-20) 마을 생활 배치(선택 필드) — 그림 속 고정물 곁의 오브젝트(life_objects)와 새 정착 주민(life_npcs).
+    #   격자(map)에는 아무것도 찍지 않는다 — 끈 판의 격자·결과가 옛 판과 같아야 한다. 여기서는 검증만 하고 pad 적용 좌표를 결과에 싣는다.
+    #   세우는 것은 러너(build_town)가 마을 생활 스위치를 켠 판에서만 한다. 검사: 바닥·다른 배치(문턱·출발·NPC·입구)와 안 겹침·서로 안 겹침·
+    #   구역 연결 칸이 아님·출발점 1에서 도달. 주민은 통행을 막는 몸이므로 세운 뒤에도 남은 바닥이 전부 이어져 있어야 한다(외길을 막지 않는다).
+    life = {}
+    if layout.get('life_objects') is not None or layout.get('life_npcs') is not None:
+        conn_cells = {tuple(p) for c in layout.get('connections', []) for p in c.get('cells', [])}
+        taken = set(special)
+        for key, need in (('life_objects', ('id', 'entity', 'cell')), ('life_npcs', ('id', 'cell'))):
+            items = layout.get(key) or []
+            unique(items, key)
+            out = []
+            for item in items:
+                label = '%s:%s' % (key, item['id'])
+                if any(k not in item for k in need) or (key == 'life_objects' and (not isinstance(item['entity'], str) or not item['entity'])):
+                    raise ValueError('%s: %s 필요' % (label, '·'.join(need)))
+                x, y = xy(item['cell'], label)
+                if not walkable(x, y) or (x, y) in taken:
+                    raise ValueError('%s: 벽 또는 다른 배치와 겹친다 %s' % (label, item['cell']))
+                if (x, y) in conn_cells:
+                    raise ValueError('%s: 구역 연결 칸에는 둘 수 없다 %s' % (label, item['cell']))
+                if (x, y) not in seen:
+                    raise ValueError('출발점 1에서 도달할 수 없다: ' + label)
+                taken.add((x, y))
+                out.append({'id': item['id'], **({'entity': item['entity']} if key == 'life_objects' else {}),
+                            **({'row': int(item['row'])} if item.get('row') is not None else {}), 'x': x + pad, 'y': y + pad})
+            life[key] = out
+
+        def open_cells(blocked):
+            if start in blocked:
+                return set()
+            got, todo = {start}, deque([start])
+            while todo:
+                cx, cy = todo.popleft()
+                for nx, ny in ((cx-1,cy),(cx+1,cy),(cx,cy-1),(cx,cy+1)):
+                    if walkable(nx, ny) and (nx, ny) not in got and (nx, ny) not in blocked:
+                        got.add((nx, ny)); todo.append((nx, ny))
+            return got
+        bodies = {tuple(n['cell']) for n in layout['npcs']}
+        more = {(n['x'] - pad, n['y'] - pad) for n in life.get('life_npcs', [])}
+        if open_cells(bodies) - more != open_cells(bodies | more):
+            raise ValueError('life_npcs: 새 주민이 길을 막는다(세운 뒤 닿지 못하는 바닥이 생긴다)')
     fullw = w + 2 * pad
     walker_rects = layout.get('walker_rects', {})
     for eid, rect in walker_rects.items():
@@ -127,6 +169,7 @@ def compile_layout(layout):
             'starts': shifted_starts, 'npcs': npcs, 'dungeon_entry': entry,
             'entrances': [{**e, 'cell': [e['cell'][0]+pad, e['cell'][1]+pad]} for e in entrances],
             'reachable_cells': len(seen), 'walker_rects': walker_rects,
+            **life,                                    # D90 life_objects·life_npcs — layout 에 그 필드가 있을 때만(없는 layout 의 결과는 옛 그대로)
             **({'spaces': spaces} if spaces else {})}
 
 

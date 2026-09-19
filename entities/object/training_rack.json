@@ -1,0 +1,19 @@
+{
+  "id": "training_rack",
+  "name": "훈련대",
+  "kind": "object",
+  "type": "training_rack",
+  "tags": [
+    "object"
+  ],
+  "comps": {
+    "use": {
+      "kind": "practice"
+    },
+    "story": {
+      "trait": "목검과 창이 걸린 훈련대. 몸을 풀 수 있다",
+      "history": "던전 입구로 가는 길목에 있다. 길드가 세워 둔 것이라 누구나 쓴다."
+    }
+  },
+  "note": "D90(2026-09-20) 마을 생활 — 마을 v4 그림 속 고정물 곁에 서는 오브젝트(배치 = art/town-v4 layout 의 life_objects, 마을 생활 스위치 판에서만). 몸 풀기는 몸에 남는 효과가 없다(한 턴) — trait 은 되는 것만 말한다. 이름·글·trait·history 전부 SilenceBreaker 임시 문장(2026-09-20 D90 마을 생활) — 파트너 교정 대기."
+}

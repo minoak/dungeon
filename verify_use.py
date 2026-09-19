@@ -21,6 +21,8 @@
   ⑫ 배치 도우미 place(): 이름·type·story 등록 · 바닥 아님/이미 찬 칸/오브젝트 아님 = ValueError
   ⑬ 배선: _interact 훅 한 곳 · decorate 의 used_up · 러너 생성 세 자리 무접촉 · _run_gates.sh 등록
   ⑭ 진짜 마을(build_town): 부품 없는 건물 문턱엔 줄이 없고, 정의(메모리)에 use 를 달면 '묵기 … (문턱)'이 열린다 — 떼면 다시 없다
+  ⑮ 다 쓴 것은 다 쓴 것으로 보인다(09-20 리뷰 수선): once 로 다 쓴 뒤 **다른 봇**의 관측 use 칸 = {kind, spent} · 메뉴 라벨·조합형 사실 줄에
+     효과 수치가 없고 '이미 쓰였다'만 · 안 쓴 것은 옛 줄 그대로 · read 의 동사 변형(verb look = 살펴보기 — 라벨·태그·문장·꼬리표, 결과 이름은 read)
 (기존 verify 는 별도 실행 — 'use 부품이 없는 세계는 옛 판과 바이트 동일'의 본 검사는 verify_skill_off.)
 """
 import os
@@ -448,6 +450,67 @@ else:
     check("⑭ 부품 없는 건물(%s)의 문턱엔 상호작용 줄이 없다(D60) → 정의에 use 를 달면 '묵기: … (문턱)' 이 열리고 묵어진다 → 떼면 다시 없다" % ft.name,
           before == [] and len(after) == 1 and after[0].startswith("묵기: %s f%d (문턱)" % (ft.name, fid_t))
           and rt["result"] == "lodged" and bt["hp"] == bt["maxhp"] and head() == [])
+
+print("── ⑮ 다 쓴 것은 다 쓴 것으로 보인다 + read 의 동사 변형")
+inject(odef("t_flask", "약수 병", {"kind": "drink", "heal": 3, "once": True}))
+inject(odef("t_bed", "꽃밭", {"kind": "read", "verb": "look", "texts": ["꽃이 피어 있다.", "벌이 오간다."]}))
+d15, _ = menu_scene()
+f15, f15b, f15c = IA.place(d15, "t_flask", 4, 2), IA.place(d15, "t_crate_p", 6, 2), IA.place(d15, "well", 8, 2)
+a15, o15 = mkbot("1", 4, 1, hp=5), mkbot("2", 4, 3, hp=5)
+
+
+def lab15(b_):
+    return [o["label"] for o in d15.view(b_, [a15, o15])["options"] if o["type"] == "interact"]
+
+
+def use15(b_, fid):
+    return next(f["use"] for f in d15.view(b_, [a15, o15])["sights"]["features"] if f["id"] == "f%d" % fid)
+
+
+before15 = lab15(o15)
+check("⑮ 쓰기 전 — 다른 봇의 라벨에 효과 수치('마시면 HP +3')가 있고 use 칸은 {kind, heal}",
+      ("마시기: 약수 병 f%d (발밑/인접) — 마시면 HP +3 (상처가 있을 때)" % f15) in before15 and use15(o15, f15) == {"kind": "drink", "heal": 3})
+r15 = d15.act(a15, {"type": "interact", "target": "f%d" % f15}, [a15, o15])
+after15 = lab15(o15)
+check("⑮ 두란이 다 쓴 뒤 — 카야(다른 봇)의 라벨에 효과 수치가 없다: '… — 이미 쓰였다 — 더 나오는 것이 없다' · use 칸 = {kind, spent}(heal 없음)",
+      r15["result"] == "drank" and ("마시기: 약수 병 f%d (발밑/인접) — 이미 쓰였다 — 더 나오는 것이 없다" % f15) in after15
+      and not any("약수 병" in l and "HP +" in l for l in after15) and use15(o15, f15) == {"kind": "drink", "spent": True})
+a15["x"], o15["x"] = 6, 6
+d15.act(a15, {"type": "interact", "target": "f%d" % f15b}, [a15, o15])
+a15["x"] = 8
+twice15 = [d15.act(a15, {"type": "interact", "target": "f%d" % f15c}, [a15, o15])["result"] for _ in range(2)]
+check("⑮ 뒤진 통 — 다른 봇의 라벨 '뒤지기: … — 이미 비어 있다' · once 가 아닌 우물은 몇 번을 써도 옛 칸 그대로(수치 유지)",
+      ("뒤지기: 물약 궤짝 f%d (발밑/인접) — 이미 비어 있다" % f15b) in lab15(o15)
+      and twice15 == ["drank", "drank"] and use15(o15, f15c) == {"kind": "drink", "heal": 1}
+      and IA.fact_text({"kind": "drink", "heal": 1}) == "마시면 HP +1 (상처가 있을 때)")
+SC15 = {"map": ["##############", "#1..........>#", "#............#", "#2...........#", "##############"], "seed": 7,
+        "bots": {"1": {"hp": 5}, "2": {"hp": 5}},
+        "features": [{"type": "t_flask", "name": "약수 병", "x": 2, "y": 2}, {"type": "t_bed", "name": "꽃밭", "x": 4, "y": 2}]}
+dc15, bc15 = scenario.build(SC15)
+ca15, cb15 = bc15[0], bc15[1]
+ca15["x"], ca15["y"], cb15["x"], cb15["y"] = 2, 1, 2, 3
+fidc = {f.name: "f%d" % f.id for f in dc15.features.values()}
+w15a = brains._wire(dc15.view(cb15, bc15), {"1": "두란", "2": "카야"}, compose=True)
+dc15.act(ca15, CA.parse({"type": "use", "target": fidc["약수 병"]}, dc15.view(ca15, bc15))[0], bc15)
+w15b = brains._wire(dc15.view(cb15, bc15), {"1": "두란", "2": "카야"}, compose=True)
+check("⑮ 조합형 '대상의 현재 사실' — 쓰기 전 '마시면 HP +3 …' → 두란이 다 쓴 뒤 카야의 프롬프트엔 '이미 쓰였다 …'만(효과 수치 없음)",
+      ("- %s 약수 병: 마시면 HP +3 (상처가 있을 때)" % fidc["약수 병"]) in w15a
+      and ("- %s 약수 병: 이미 쓰였다 — 더 나오는 것이 없다" % fidc["약수 병"]) in w15b and "HP +3" not in w15b)
+ca15["x"] = 4
+o15l = dc15.view(ca15, bc15)
+tg15 = {t["id"]: t["tags"] for t in o15l["targets"] if t["kind"] == "feature"}
+r15l = dc15.act(ca15, CA.parse({"type": "use", "target": fidc["꽃밭"]}, o15l)[0], bc15)
+dm15, _ = menu_scene()
+fm15 = IA.place(dm15, "t_bed", 4, 2)
+bm15 = mkbot("1", 4, 1)
+check("⑮ read 의 동사 변형(verb look) — 메뉴 줄 머리 '살펴보기' · 조합형 태그 lookable · 결과 이름은 read(+verb) · 문장 '꽃밭을 살펴보았다: …' · 꼬리표 [살펴봄]",
+      ("살펴보기: 꽃밭 f%d (발밑/인접)" % fm15) in [o["label"] for o in dm15.view(bm15, [bm15])["options"]]
+      and tg15[fidc["꽃밭"]] == ["object", "interactable", "lookable"]
+      and r15l["result"] == "read" and r15l["verb"] == "look" and brains._last_prose(r15l) == "꽃밭을 살펴보았다: 꽃이 피어 있다."
+      and G.event_tags(r15l)[0][:2] == ("use", "살펴봄") and "verb" not in res3["stone_tablet"])
+check("⑮ 검증기 — 모르는 동사는 거절 · read 가 아닌 kind 에 verb 는 모르는 칸",
+      any("verb" in p_ for p_ in problems(odef("b13", "x", {"kind": "read", "text": "a", "verb": "sniff"})))
+      and any("모르는 칸" in p_ for p_ in problems(odef("b14", "x", {"kind": "sit", "verb": "look"}))))
 
 print("── ⑬ 배선")
 gm, ca, sr = src("dungeon_gm.py"), src("composed_actions.py"), src("show_runner.py")

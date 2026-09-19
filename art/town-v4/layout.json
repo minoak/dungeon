@@ -2998,6 +2998,186 @@
       52
     ]
   },
+  "life_objects": [
+    {
+      "id": "fountain",
+      "entity": "town_fountain",
+      "cell": [
+        44,
+        29
+      ]
+    },
+    {
+      "id": "well",
+      "entity": "well",
+      "cell": [
+        20,
+        48
+      ]
+    },
+    {
+      "id": "statue",
+      "entity": "town_statue",
+      "cell": [
+        11,
+        15
+      ]
+    },
+    {
+      "id": "guild_board",
+      "entity": "guild_noticeboard",
+      "cell": [
+        55,
+        16
+      ]
+    },
+    {
+      "id": "temple_bench",
+      "entity": "bench",
+      "cell": [
+        28,
+        19
+      ]
+    },
+    {
+      "id": "guild_bench",
+      "entity": "bench",
+      "cell": [
+        56,
+        18
+      ]
+    },
+    {
+      "id": "guild_bench_east",
+      "entity": "bench",
+      "cell": [
+        82,
+        18
+      ]
+    },
+    {
+      "id": "tavern_table",
+      "entity": "tavern_table",
+      "cell": [
+        32,
+        33
+      ]
+    },
+    {
+      "id": "east_stall",
+      "entity": "produce_stall",
+      "cell": [
+        50,
+        27
+      ]
+    },
+    {
+      "id": "south_stall",
+      "entity": "sundries_stall",
+      "cell": [
+        55,
+        34
+      ]
+    },
+    {
+      "id": "forge",
+      "entity": "forge_hearth",
+      "cell": [
+        72,
+        34
+      ]
+    },
+    {
+      "id": "training_rack",
+      "entity": "training_rack",
+      "cell": [
+        66,
+        53
+      ]
+    },
+    {
+      "id": "training_crate",
+      "entity": "training_crate",
+      "cell": [
+        71,
+        53
+      ]
+    },
+    {
+      "id": "camp_tent",
+      "entity": "camp_tent",
+      "cell": [
+        86,
+        53
+      ]
+    },
+    {
+      "id": "flowerbed",
+      "entity": "flowerbed",
+      "cell": [
+        25,
+        51
+      ]
+    }
+  ],
+  "life_npcs": [
+    {
+      "id": "innkeeper",
+      "cell": [
+        30,
+        51
+      ],
+      "row": 2
+    },
+    {
+      "id": "gear_merchant",
+      "cell": [
+        83,
+        35
+      ],
+      "row": 2
+    },
+    {
+      "id": "item_merchant",
+      "cell": [
+        37,
+        30
+      ],
+      "row": 1
+    },
+    {
+      "id": "smith",
+      "cell": [
+        71,
+        34
+      ],
+      "row": 2
+    },
+    {
+      "id": "flower_elder",
+      "cell": [
+        22,
+        49
+      ],
+      "row": 0
+    },
+    {
+      "id": "fountain_child",
+      "cell": [
+        41,
+        27
+      ],
+      "row": 1
+    },
+    {
+      "id": "retired_adventurer",
+      "cell": [
+        34,
+        32
+      ],
+      "row": 2
+    }
+  ],
   "connections": [
     {
       "from": "temple_district",

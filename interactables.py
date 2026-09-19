@@ -15,6 +15,9 @@
     이미 정해진 사실이다). 그래서 use 부품이 없는 세계는 옛 판과 바이트가 같다(verify_skill_off).
   · 돈·가격·매매는 없다(D69 에서 제출 뒤로 보류) — browse 는 구경만이다.
   · 문장은 사실만(조언·결론·행동 지시 없음) — 엔진이 실제로 한 일만 말한다. ⚠️아래 문장·라벨·태그 낱말은 전부 임시(검토표 등재 대상).
+  · 다 쓴 것은 다 쓴 것으로 보인다(09-20 리뷰 수선) — once 로 다 쓴 피처는 관측의 use 칸에 spent 가 실리고, 메뉴 라벨·조합형
+    '대상의 현재 사실' 줄이 효과 꼬리('마시면 HP +3') 대신 '이미 쓰였다'는 사실만 말한다(남이 다 쓴 뒤의 다른 캐릭터에게도 — 세계의 상태).
+  · 마을 생활 판(D90, d.town_life)의 건물은 정의의 life.use 를 쓴다(entities.comps_of) — 끈 판의 건물은 옛 판 그대로 쓰임이 없다.
 
 결과 dict 는 기존 interact 결과와 같은 꼴: {char, type:'interact', target, result, what, use_kind, …사실}.
   kind → result:  read→read{text[,page,pages]} · sit→sat{heal,hp} · drink→drank{heal,hp} · browse→browsed{wares} ·
@@ -40,6 +43,16 @@ KINDS = {
     'warm':     {'label': '불 쬐기',  'tag': 'warmth',    'tried': '불 쬐어 봄',  'seen': '불을 쬐었다'},
 }
 assert set(KINDS) == set(ENT.USE_KINDS), '쓰임 kind 어휘는 entities.USE_KINDS 와 같아야 한다(검증기 ↔ 처리기)'
+# D90(09-20) read 의 동사 변형(use.verb) — 처리·결과 이름은 read 그대로이고 말만 바뀐다(글이 아니라 눈에 보이는 것을 돌려주는 화단 같은 것).
+# ⚠️문구 임시
+VERBS = {'look': {'label': '살펴보기', 'tag': 'lookable', 'tried': '살펴봄', 'seen': '살펴보았다'}}
+assert set(VERBS) == set(ENT.USE_READ_VERBS), 'read 동사 어휘는 entities.USE_READ_VERBS 와 같아야 한다(검증기 ↔ 처리기)'
+
+
+def _info(use):
+    """쓰임(정의의 use 부품 또는 관측의 use 칸) → 표현 재료 — read 에 verb 가 있으면 그 동사의 말, 아니면 kind 의 말. 모르면 None."""
+    use = use or {}
+    return VERBS.get(use.get('verb')) if (use.get('kind') == 'read' and use.get('verb')) else KINDS.get(use.get('kind'))
 
 RESULTS = ('read', 'sat', 'drank', 'browsed', 'practiced', 'rummaged', 'lodged', 'warmed', 'used_up')
 _HEAL_KINDS = {'sit': 'sat', 'drink': 'drank', 'warm': 'warmed'}
@@ -69,8 +82,8 @@ def use_of(d, f):
         return None
     if f.type == 'building':
         eid = (getattr(d, 'building_defs', None) or {}).get(f.id)
-        try:
-            return ((ENT.get(eid).get('comps') or {}).get('use') or None) if eid else None
+        try:                                     # D90: 마을 생활 판(d.town_life — build_town 이 켠 판에만 건다)이면 정의의 life.use 를 얹어 읽는다
+            return (ENT.comps_of(eid, life=bool(getattr(d, 'town_life', False))).get('use') or None) if eid else None
         except KeyError:
             return None
     cands = _by_type().get(f.type)
@@ -85,25 +98,30 @@ def _heal_of(use):
 
 
 def obs_fact(d, f):
-    """view() 용 — 피처 항목에 얹을 {'use': {kind[, heal]}}(쓰임 부품이 있는 피처만 — 없는 피처는 {} = 옛 obs 그대로).
+    """view() 용 — 피처 항목에 얹을 {'use': {kind[, verb][, heal | spent]}}(쓰임 부품이 있는 피처만 — 없는 피처는 {} = 옛 obs 그대로).
     메뉴 라벨·조합형 '대상의 현재 사실' 줄·대상 태그가 전부 이 한 칸에서 나온다(건물의 정의는 두뇌 쪽에서 못 찾으므로 여기서 싣는다)."""
     use = use_of(d, f)
     if not use:
         return {}
     k = use['kind']
-    return {'use': {'kind': k, **({'heal': _heal_of(use)} if k in _HEAL_KINDS else {})}}
+    spent = (bool(use.get('once')) or k == 'rummage') and f.id in (getattr(d, 'use_spent', None) or {})   # 다 쓴 것 = 세계의 상태(누가 보든)
+    return {'use': {'kind': k, **({'verb': use['verb']} if (k == 'read' and use.get('verb')) else {}),
+                    **({'spent': True} if spent else ({'heal': _heal_of(use)} if k in _HEAL_KINDS else {}))}}   # 다 쓴 것엔 효과 수치를 싣지 않는다(있을 때만)
 
 
 def tags(fact):
     """조합형 대상 목록의 사실 태그 — obs 피처의 use 칸 → ['interactable', '<kind 태그>']."""
-    info = KINDS.get((fact or {}).get('kind'))
+    info = _info(fact)
     return ['interactable', info['tag']] if info else []
 
 
 def fact_text(fact):
     """몸에 남는 효과의 사실 한 줄(엔진이 실제로 하는 것만 — 수치는 정의에서). 메뉴 라벨 꼬리·조합형 '대상의 현재 사실' 줄 공용.
-    효과가 없는 kind(읽기·구경·몸 풀기·뒤지기)와 heal 0 은 None — 줄 머리·태그가 이미 말한다. ⚠️문구 임시"""
+    효과가 없는 kind(읽기·구경·몸 풀기·뒤지기)와 heal 0 은 None — 줄 머리·태그가 이미 말한다. once 로 다 쓴 것(spent)은 kind 와
+    무관하게 그 사실 한 줄만(효과 수치 없음 — 09-20 리뷰: 남이 다 쓴 마시는 곳이 다른 캐릭터에게 '마시면 HP +3' 이라던 자리). ⚠️문구 임시"""
     k, heal = (fact or {}).get('kind'), int((fact or {}).get('heal') or 0)
+    if (fact or {}).get('spent'):                # once 로 다 쓴 것 — 효과 꼬리 대신 그 사실만(직전 결과 used_up 의 문장과 같은 말)
+        return '이미 비어 있다' if k == 'rummage' else '이미 쓰였다 — 더 나오는 것이 없다'
     if k == 'sit' and heal:
         return '앉으면 HP +%d (상처가 있을 때)' % heal
     if k == 'drink' and heal:
@@ -120,13 +138,14 @@ def menu_label(f, sfx=''):
     몸에 남는 효과가 있는 kind 만 꼬리에 수치를 단다(장비 라벨 '걸치면 피해 +N' 선례 — 사실만, 결론 없음). f = obs 피처 항목."""
     fact = f.get('use') or {}
     tail = fact_text(fact)
-    return '%s: %s %s (%s)%s%s' % (KINDS[fact['kind']]['label'], f['name'], f['id'], '문턱' if f.get('type') == 'building' else '발밑/인접',
+    return '%s: %s %s (%s)%s%s' % (_info(fact)['label'], f['name'], f['id'], '문턱' if f.get('type') == 'building' else '발밑/인접',
                                    (' — ' + tail) if tail else '', sfx)
 
 
 def fact_line(f):
     """조합형 '## 대상의 현재 사실' 한 줄 — '- f6 벤치: 앉으면 HP +1 (상처가 있을 때)'. 몸에 남는 효과가 있는 kind 만(장비 줄과 같은 자리 —
-    수치가 있는 사실). 읽기·구경·몸 풀기·뒤지기는 대상 태그(readable·wares·practice·container)가 이미 말한다 → None."""
+    수치가 있는 사실). 읽기·구경·몸 풀기·뒤지기는 대상 태그(readable·wares·practice·container)가 이미 말한다 → None.
+    다 쓴 것은 kind 와 무관하게 '- f6 통: 이미 비어 있다' 한 줄(대상 태그는 그대로라 이 줄이 지금의 사실을 말한다)."""
     txt = fact_text(f.get('use'))
     return ('- %s %s: %s' % (f.get('id', '?'), f.get('name', '?'), txt)) if txt else None
 
@@ -166,12 +185,13 @@ def handle(d, bot, f, bots=None, target_id=None):
         d._witness_use(bots, f.x, f.y, [bot], f.name, fid, _GOT_SEEN['nothing'] if kind == 'rummage' else None)
         return {**base, 'result': 'used_up'}
     out = None
-    seen = KINDS[kind]['seen']
+    seen = _info(use)['seen']
     if kind == 'read':
         pages = list(use['texts']) if use.get('texts') else [use['text']]
         n = int((bot.get('use_pages') or {}).get(f.id, 0))     # 읽는 사람마다 제 쪽수(봇 dict 수명 = 층 재스폰이면 처음부터 — shop_served 리듬)
         bot.setdefault('use_pages', {})[f.id] = n + 1
         out = {**base, 'result': 'read', 'text': pages[n % len(pages)],
+               **({'verb': use['verb']} if use.get('verb') else {}),   # D90 동사 변형(살펴보기) — 있을 때만(문장·꼬리표가 읽는다)
                **({'page': n % len(pages) + 1, 'pages': len(pages)} if len(pages) > 1 else {})}
     elif kind in _HEAL_KINDS:
         heal = max(0, min(_heal_of(use), bot['maxhp'] - bot['hp']))
@@ -225,6 +245,8 @@ def _j(word, final, open_):
 def prose(last):
     """직전 결과의 1인칭 사실 문장(brains._last_prose 의 interact 분기가 부른다). 모르는 result 는 None."""
     r, what = last.get('result'), last.get('what') or '그것'
+    if r == 'read' and last.get('verb') == 'look':   # D90 살펴보기 — 글이 아니라 눈에 보인 것(쪽수는 말하지 않는다: 볼 때마다 다른 것이 눈에 든다)
+        return '%s%s 살펴보았다: %s' % (what, _j(what, '을', '를'), last.get('text', ''))
     if r == 'read':
         pg = (' (%d/%d)' % (last['page'], last['pages'])) if last.get('pages') else ''
         return '%s의 글을 읽었다%s: "%s"' % (what, pg, last.get('text', ''))
@@ -266,7 +288,7 @@ def event_tags(rec):
     """궤적 꼬리표(D40 사건 사전) — [(키, 라벨, 짧은 사실)]. 새 키는 만들지 않는다(use·loot·misc 재사용 → EVENT_KINDS 무수정)."""
     r, what = rec.get('result'), rec.get('what') or '?'
     if r == 'read':
-        return [('use', '읽음', '%s "%s"' % (what, str(rec.get('text') or '')[:30]))]
+        return [('use', '살펴봄' if rec.get('verb') == 'look' else '읽음', '%s "%s"' % (what, str(rec.get('text') or '')[:30]))]
     if r in ('sat', 'drank', 'warmed'):
         return [('use', '사용', '%s +%d (HP %d)' % (what, rec.get('heal', 0), rec.get('hp', 0)))]
     if r == 'browsed':
@@ -290,7 +312,7 @@ def event_tags(rec):
 def tried(d, f):
     """D39 오브젝트 태그의 동사('읽어 봄' …) — 쓰임 부품이 있는 피처만(쓰고도 남는 오브젝트라 '×N' 이 뜻이 있다). 없으면 None."""
     use = use_of(d, f)
-    return KINDS[use['kind']]['tried'] if use else None
+    return _info(use)['tried'] if use else None
 
 
 def obj_note(res):

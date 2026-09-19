@@ -1,0 +1,25 @@
+{
+  "id": "produce_stall",
+  "name": "채소 좌판",
+  "kind": "object",
+  "type": "produce_stall",
+  "tags": [
+    "object"
+  ],
+  "comps": {
+    "use": {
+      "kind": "browse",
+      "wares": [
+        "순무",
+        "말린 콩",
+        "절인 양배추",
+        "햇사과"
+      ]
+    },
+    "story": {
+      "trait": "채소와 과일을 늘어놓은 좌판. 구경만 된다(사고팔기는 아직 없다)",
+      "history": "번화가 동쪽, 분수가 보이는 자리. 아침에 제일 먼저 펴고 비가 오면 제일 먼저 걷는다."
+    }
+  },
+  "note": "D90(2026-09-20) 마을 생활 — 마을 v4 그림 속 고정물 곁에 서는 오브젝트(배치 = art/town-v4 layout 의 life_objects, 마을 생활 스위치 판에서만). 돈·가격·매매는 없다(D69 에서 제출 뒤로 보류) — 노점 상인의 '아직 사고팔 수는 없다'와 같은 말. 이름·글·trait·history 전부 SilenceBreaker 임시 문장(2026-09-20 D90 마을 생활) — 파트너 교정 대기."
+}
