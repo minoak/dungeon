@@ -1,0 +1,18 @@
+{
+  "id": "town_residential",
+  "name": "주거구역",
+  "kind": "map",
+  "tags": [
+    "town"
+  ],
+  "comps": {
+    "space": {
+      "role": "district"
+    },
+    "story": {
+      "trait": "주민의 집과 공동 숙소, 여관들이 골목을 나누어 쓰는 구역",
+      "history": "작은 잠자리부터 마당 딸린 숙소까지 건물의 크기와 차림이 다르다."
+    }
+  },
+  "note": "마을 v3(2026-09-19) 공간 정의. 특징·내력은 임시 문구."
+}

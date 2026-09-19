@@ -1,0 +1,27 @@
+{
+  "id": "shared_lodging",
+  "name": "공동 숙소",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        8,
+        6
+      ],
+      "entrance": [
+        4,
+        5
+      ],
+      "texture": "shared_lodging"
+    },
+    "story": {
+      "trait": "여럿이 잠자리를 나누는 작은 숙소",
+      "history": "문턱과 마당이 길에 닿아 있다. 공동 숙소의 서비스는 아직 준비 중이다."
+    }
+  },
+  "note": "마을 v3(2026-09-19): 공간·외형만 연결. 서비스 미구현. 설명은 임시 문구."
+}

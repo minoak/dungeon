@@ -1,0 +1,56 @@
+{
+  "gates": [
+    {
+      "name": "verify_town_v4",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_town_v3",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_partyform",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_people",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_guild",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_townsight",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_town",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_entities",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_launcher",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_worlds",
+      "passed": true,
+      "exit": 0
+    }
+  ],
+  "llmCalls": 0,
+  "indexSnapshot": true
+}

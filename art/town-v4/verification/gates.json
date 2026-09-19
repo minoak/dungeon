@@ -1,0 +1,61 @@
+{
+  "snapshot": "isolated temporary source copy",
+  "gates": [
+    {
+      "name": "verify_town_v4",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_town_v3",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_town_spaces",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_town",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_guild",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_partyform",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_people",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_townsight",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_entities",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_companion",
+      "passed": true,
+      "exit": 0
+    },
+    {
+      "name": "verify_resume",
+      "passed": true,
+      "exit": 0
+    }
+  ],
+  "llmCalls": 0
+}

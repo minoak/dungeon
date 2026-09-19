@@ -64,7 +64,7 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 - 같은 틱 안의 순서: 모든 세계의 틱 → 그 다음에 전이. 옮겨 간 사람은 같은 틱에 두 번 움직이지 않는다. 같은 틱에 길이 갈린 무리(위/아래)는 한 틱에 한 무리씩 옮긴다.
 - 이어가기(D79): 스냅샷에 세계 목록·파티 장부·옆 파일 자리(`side_pos`)가 함께 얼고, 되살릴 때 옆 파일도 그 자리까지 자른다.
 - **파티 결성·탈퇴(조각 3, 같은 스위치)** — 조합형 동사 둘이 COMMON **밖**에 있다(`composed_actions.PARTY` — 장부가 걸린 판의 관측에서만 파서가 읽는다, `compose_profile` 은 그대로): `party_form` + `target:b<char>` = 파티 결성(길드 구역에서 청하고, 상대도 같은 행동을 하면 맺어진다 — 거리 무관·자동 접근 없음) · `party_leave`(대상 없음) = 파티 탈퇴(혼자 떠난다 — 둘이던 파티는 남은 사람도 파티 없는 사람이 된다).
-  - **던전 입구는 파티를 맺은 사람만**(조각 4): 마을의 입구(`exit`)를 파티 없이 쓰면 `result:"need_party"`(내려가지 않는다) — 던전 안의 계단은 그대로. 관측 `sights.exit.need_party:true`(파티가 없는 사람에게만). 파티를 맺는 곳 = 마을의 모험가 길드 구역·주점 구역(`party_need_guild` = 그 밖이거나, 상대·기존 파티원이 나와 같은 곳에 없다).
+  - **던전 입구는 3명이 맺은 파티만**(조각 4·5): 마을의 입구(`exit`)를 파티원 수가 모자란 채 쓰면 `result:"need_party", have, need`(내려가지 않는다 — `need` = 엔진 상수 `PARTY_ENTRY_SIZE` 3, `have` = 장부의 내 파티원 수) — 던전 안의 계단은 그대로. 관측 `sights.exit.need_party:{have, need}`(모자란 사람에게만) · `obs.partyform.need`. 접수원의 인사 열쇠 `hail_party`(`tick.npc_hails[].key`) — 파티가 모자란 사람에게 입구의 규칙을 말해 준다. 파티를 맺는 곳 = 마을의 모험가 길드 구역·주점 구역(`party_need_guild` = 그 밖이거나, 상대·기존 파티원이 나와 같은 곳에 없다).
   - `tick.events[]` 자기 사건: `{type:"party_form", target, result, to, ...}` — result = `party_asked`(청을 열었다) · `party_formed`(`members:[char]`) · `party_need_guild`(길드 구역 밖 — `who` 가 있으면 그 사람이 밖, 없으면 나) · `party_not_gathered`(`missing:[char]` — 맺는 순간 파티에 들 사람이 모두 길드 구역에 있어야 한다) · `party_already` · `party_asked_already` · `no_target`. `{type:"party_leave", result}` — `party_left`(`members` 떠나기 전 파티원 · `freed` 같이 풀린 사람) · `party_none` · `party_need_guild`.
   - 받은 쪽의 자기 사건(`bot.last`·궤적 — 걷던 걸음은 안 세운다): `party_asked_by{from}` · `party_joined{from, members}` · `party_member_left{from, freed:bool}`. 목격(`witnessed[].kind`): `ally_party_ask{char,to}` · `ally_party{char,to,members}`. 궤적·층 집계의 종류 `party`.
   - `obs.partyform {mine:[char], here:bool, asks_in:[char], asks_out:[char]}`(장부 판에만): 내 파티원(나 빼고) · 지금 선 곳에서 맺을 수 있나(마을의 길드 구역) · 내게 청한 사람 · 내가 청해 둔 사람. 열린 청은 둘 다 길드 구역에 있는 동안만 열려 있다. **장부 판의 `obs.party[]`(명단)는 내 파티원만이다**(2026-09-19 — 파티를 맺는 순간이 소개다: 파티 밖 사람은 보일 때만 `sights.bots` 에 있고 명단에는 없다 · 파티가 없으면 빈 목록) — 항목에 additive `mate:true` · `away:<depth>`(이 층에 없다 — 러너가 틱마다 거는 `d.elsewhere`). `wait_allies.mates_only` · `exit.gather.mates_only` = 계단이 세는 사람이 '내 파티원'이라는 사실(문장용).
@@ -83,6 +83,14 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 - 뜨는 조건(프롬프트): **(a) 그 사람이 보일 때** 그 사람 줄에 `네 기록: 「…」` · **(c) 들은 말(`messages[].text`)에 내가 적어 둔 이름이 글자 그대로 나올 때** `## 떠오른 기억` 절(지금 안 보이는 사람만 · 이름 2자 이상 · 내용 글자는 열쇠가 아니다).
 - **NPC 도 같은 규칙**(2026-09-19 조각 ②): NPC 정의(이름 → 역할 — 특징)는 세계가 미리 써 둔 항목이다 — 보일 때는 피처 줄이 말하고(D69·D75), 들은 말에 그 이름이 나오면 안 보여도 `## 떠오른 기억`에 뜬다. 캐릭터의 기록은 NPC 에도 남는다: `person_note.to` = `"npc:<이름>"`(응답의 target 은 보이는 NPC 의 피처 id 또는 방금 내게 말한 NPC 의 이름), `obs.people` 의 열쇠도 같다.
 - 파티 결성(`party_formed`) = 소개: 맺는 순간 서로의 기록에 이름·직업이 `src:"party"` 로 적힌다(이미 내가 적어 둔 기록은 안 덮는다). 관계 장부(`obs.relations[].name`)·목격(`witnessed[].name/to_name`)·메뉴 라벨의 이름도 보는 사람의 기록 기준이다.
+
+## 마을의 시야 = 지금 선 구역 — 2026-09-19 D86 additive (러너 스위치 `DUNGEON_TOWN_SIGHT=zone`, 기본 all · layout 마을만)
+
+끈 판(기본)은 옛 그대로다(마을 전체가 보이고 핑 한 번에 어디든 — 스트림은 옛 판과 바이트까지 같다).
+
+- `run_meta.town_sight: "zone"`(켠 판에만): **시야·정지 물리 메타**(`town_hear` 급) — 마을에서 보이는 것은 지금 선 구역 전부 ∪ 곁 한 칸이다(건물·NPC·사람·입구 모두). `obs.town_sight` 도 같은 값.
+- 아는 장소: 건물과 던전 입구는 공간 장부에 미리 적혀 `obs.known.statics` 에 구역·방위·거리와 함께 실리고(목격 turn 0) 그 id 로 `goto` 가 된다 — NPC·캐릭터는 없다(그 구역에 들어서야 `sights` 에 든다).
+- `tick.events[]` 의 `result:"zone_enter", zone:<구역 이름>`: 자동보행(자동 접근 포함) 중 새 구역에 들어서 멈췄다 — 작정·경로가 비고 다음 틱에 다시 판단한다. 궤적 종류 `enter`.
 
 ## 스킬 원정 — 2026-09-10 additive, 2026-09-11 기본 채택
 
@@ -250,7 +258,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | `turn` | 이 층에 들어선 틱(첫 층=0) |
 | `depth` `w` `h` | 층 번호·크기 |
 | `master_seed` `level_seed` | 마스터 시드와 층별 파생 시드 |
-| `visual?` | (2026-09-11 마을 v1 additive) 마을 층의 시각 레이어 `{schema:'town-visual-v1', tileSize, offset:[x,y], ground[{tile,rect}], buildings[{id,texture,x,footY,width}], props[{frame,x,y}], npcs[{id,row,cell}]}` — `art/town-v1/layout.json` 유래(`town_layout.visual_layer`). 좌표는 오프셋 전(클라이언트가 더한다). 엔진·판정 무관, 던전 층엔 없다 |
+| `visual?` | (2026-09-11 마을 v1 additive) 마을 층의 시각 레이어 `{schema:'town-visual-v1', tileSize, offset:[x,y], ground[{tile,rect,frame?}], buildings[{id,texture,x,footY,width}], props[{frame,x,y,width?,name?}], npcs[{id,row,cell}]}` — 현재 `art/town-v4/layout.json` 유래(`town_layout.visual_layer`). 좌표는 오프셋 전(클라이언트가 더한다). 엔진·판정 무관, 던전 층엔 없다. v3의 소품 `width?`는 원본 타일 기준 표시 너비(px), 없으면 기존 144px; `name?`은 표시 이름. 기존 프레임 0–7 보존 |
 | `grid[]` | h개의 w폭 문자열, **raw 지형만**: `#`(벽) `.`(바닥) `+`(문 타일 — D19 정정 2, 2026-07-15 SCAN 기본 1 승격부터 생성 층에 등장. 벽처럼 빛을 막고 바닥처럼 지나감). tile() 관전 글리프 아님 — 몹·피처·함정은 아래 배열로 별도(겹쳐 그리기는 소비자 몫). 웹이 엔진 없이 렌더 가능 |
 | `exit` | `[x,y]` 계단 좌표 |
 | `gate` | (2026-09-13 D65 additive, 보스층만) `{sealed, boss}` — 이 층의 출구는 워프게이트다: 층 시작 때 봉인 여부·보스 몹 id(`monsters[].boss: true`). 봉인은 틱 중 풀린다(보스 처치 `attack` 결과 `unsealed: true`) |
@@ -396,3 +404,15 @@ decisions(+say) 뿐이다. 따라서:
 - 기계 크로니클: `tick.events` 를 어휘 표대로 문장화(LLM 0콜 — events.log 요약이 원형).
 - 하이라이트 배치(후순위): 게임 종료 후 스트림 전체를 LLM 1콜로 서사화.
 - 웹 리플레이 뷰어: `level.grid` + 틱 스냅샷으로 임의 시점 렌더/스크럽.
+
+### 마을 포장 시각 정보 (2026-09-19)
+
+`level.visual.ground[].frame?`은 지형 아틀라스의 명시적 프레임 번호다. 없으면 기존 `tile` 이름을 사용한다. 기존 지형 프레임 0–7은 보존한다.
+`level.visual.paving?`에는 `edges[{cell:[x,y],side:n/e/s/w,soft,material}]`, `drains[[x,y]]`, `inlays[{cell:[x,y],radius}]`가 있다. 좌표는 테두리 오프셋 적용 전 마을 칸 단위다. 경계석·배수구·광장 문양을 바닥 위, 캐릭터·건물 아래에 그리는 정보이며 이동 판정에는 사용하지 않는다. 이전 기록에는 없으므로 이전 화면은 그대로 그린다.
+
+### 마을 v4 조감도 레이어 (2026-09-19, additive)
+
+`level.visual.art?`는 `{texture, sourceSize:[w,h], size:[cols,rows], occluders:[{id,polygon:[[px,py]],footY}], labels:[{name,x,y}]}`다.
+좌표는 테두리 적용 전 원본 그림 px이며 `size`는 마을 내부 칸 수다. `offset`을 더하고 원본 크기와 칸 크기의 비율로 변환한다.
+이 필드가 있으면 지정 텍스처를 바탕에 그리고 전경 마스크를 캐릭터의 발 높이 순으로 겹친다. 기존 buildings/props 그림은 중복 표시하지 않는다.
+건물·NPC·피처·보행 판정은 기존 격자와 공간 엔티티에 남는다. `art`가 없는 이전 기록은 기존 표시 경로를 유지한다.

@@ -36,7 +36,7 @@ tools/       analyze_run.py analyze_skills.py analyze_social.py report.py make_r
              town_stay_audit.py(09-17 — 마을 체류 틱·마을 판단 이유에 던전 준비 말이 든 비율, 0콜 · 기준선과 논의는 docs/town_plaza_2026-09-17.md)
 scripts/     start.sh live.sh verify.sh watch_map.sh (Linux/WSL 시대 — 전부 `~/dungeon` 을 가정, VPS 서빙 때 손볼 것)
              vm/ setup.sh deploy.sh botpikdun.service Caddyfile README.md (심사용 서버 GCP 서울 VM 배포, 09-13)
-verify_*.py  게이트 72종(루트 — 2단계에서 verify/ 로 이동 예정; verify_people 은 D85 인물 기록(낯선 사람), verify_worlds 는 D84 조각 2 세계마다 제 시계(러너 수술), verify_partyform 은 D84 파티 장부·계단이 세는 사람, verify_companion 은 D81 동료 프리셋·론처 동료 칸·마을 안내, verify_public 은 server.py 게이트, verify_account 는 D77 계정, verify_campaign 은 D78 캠페인, verify_resume 은 D79 이어가기, verify_model_wiring 은 D80 다회사 배선, verify_guild 는 D69 길드 척추)
+verify_*.py  게이트 75종(루트 — 2단계에서 verify/ 로 이동 예정; verify_town_v4 는 현행 조감도 맵의 계약, verify_town_v3 는 이전 맵의 계약, verify_townsight 는 D86 마을의 시야 = 지금 선 구역, verify_people 은 D85 인물 기록(낯선 사람), verify_worlds 는 D84 조각 2 세계마다 제 시계(러너 수술), verify_partyform 은 D84 파티 장부·계단이 세는 사람, verify_companion 은 D81 동료 프리셋·론처 동료 칸·마을 안내, verify_public 은 server.py 게이트, verify_account 는 D77 계정, verify_campaign 은 D78 캠페인, verify_resume 은 D79 이어가기, verify_model_wiring 은 D80 다회사 배선, verify_guild 는 D69 길드 척추)
 entities/    몬스터·함정·오브젝트·NPC·맵·건물·의뢰·동료 프리셋 정의(D50 · companion/ 은 D81 — 파일을 넣으면 론처 동료 칸에 나온다)
 design/      HARNESS_DESIGN.md(D1~D79) · drafts/
 docs/        문서·연대기·데브로그·스크린샷 · PIXEL_DUNGEON_REFERENCE.md(참고 게임 메모)

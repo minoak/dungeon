@@ -1,0 +1,320 @@
+{
+  "objects": [
+    {
+      "id": "anvil",
+      "name": "모루",
+      "cell": [
+        46,
+        23
+      ],
+      "region": "shop_district",
+      "shape": "anvil",
+      "proposed_use": "향후 장착 장비 손질·강화 후보. 수치·비용 미정.",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        46,
+        24
+      ],
+      "frame": 8,
+      "width": 58
+    },
+    {
+      "id": "workbench",
+      "name": "작업대",
+      "cell": [
+        59,
+        23
+      ],
+      "region": "shop_district",
+      "shape": "table",
+      "proposed_use": "향후 제작·수선 작업 후보",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        59,
+        24
+      ],
+      "frame": 13,
+      "width": 96
+    },
+    {
+      "id": "display",
+      "name": "장비 진열대",
+      "cell": [
+        60,
+        28
+      ],
+      "region": "shop_district",
+      "shape": "rack",
+      "proposed_use": "향후 장비 살펴보기·거래 후보",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        60,
+        29
+      ],
+      "frame": 10,
+      "width": 72
+    },
+    {
+      "id": "produce",
+      "name": "식료품 노점",
+      "cell": [
+        17,
+        20
+      ],
+      "region": "main_street",
+      "shape": "stall",
+      "proposed_use": "향후 식료품 거래 후보",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        17,
+        21
+      ],
+      "frame": 11,
+      "width": 96
+    },
+    {
+      "id": "goods",
+      "name": "잡화 노점",
+      "cell": [
+        22,
+        22
+      ],
+      "region": "main_street",
+      "shape": "stall",
+      "proposed_use": "향후 잡화 거래 후보",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        23,
+        22
+      ],
+      "frame": 12,
+      "width": 96
+    },
+    {
+      "id": "table",
+      "name": "주점 바깥 탁자",
+      "cell": [
+        17,
+        25
+      ],
+      "region": "main_street",
+      "shape": "table",
+      "proposed_use": "향후 앉기·식사·대화 후보",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        17,
+        26
+      ],
+      "frame": 13,
+      "width": 96
+    },
+    {
+      "id": "bench_market",
+      "name": "길가 벤치",
+      "cell": [
+        25,
+        25
+      ],
+      "region": "main_street",
+      "shape": "bench",
+      "proposed_use": "향후 앉아서 쉬기 후보",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        25,
+        26
+      ],
+      "frame": 14,
+      "width": 72
+    },
+    {
+      "id": "noticeboard",
+      "name": "길드 게시판 자리",
+      "cell": [
+        28,
+        10
+      ],
+      "region": "guild_district",
+      "shape": "board",
+      "proposed_use": "기존 길드 게시판의 시각 표식. 새 의뢰 기능 없음",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        28,
+        11
+      ],
+      "frame": 15,
+      "width": 72
+    },
+    {
+      "id": "bench_guild",
+      "name": "길드 벤치",
+      "cell": [
+        49,
+        12
+      ],
+      "region": "guild_district",
+      "shape": "bench",
+      "proposed_use": "향후 대기·대화 후보",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        49,
+        13
+      ],
+      "frame": 14,
+      "width": 72
+    },
+    {
+      "id": "memorial",
+      "name": "추모비",
+      "cell": [
+        3,
+        6
+      ],
+      "region": "temple_district",
+      "shape": "stone",
+      "proposed_use": "향후 새겨진 글 읽기 후보",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        3,
+        7
+      ],
+      "frame": 16,
+      "width": 72
+    },
+    {
+      "id": "bench_temple",
+      "name": "정원 벤치",
+      "cell": [
+        15,
+        12
+      ],
+      "region": "temple_district",
+      "shape": "bench",
+      "proposed_use": "향후 앉아서 쉬기 후보",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        15,
+        13
+      ],
+      "frame": 14,
+      "width": 72
+    },
+    {
+      "id": "well",
+      "name": "공동 우물",
+      "cell": [
+        15,
+        40
+      ],
+      "region": "residential_district",
+      "shape": "well",
+      "proposed_use": "향후 물 긷기 후보",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        16,
+        40
+      ],
+      "frame": 17,
+      "width": 72
+    },
+    {
+      "id": "laundry",
+      "name": "빨랫줄",
+      "cell": [
+        4,
+        31
+      ],
+      "region": "residential_district",
+      "shape": "laundry",
+      "proposed_use": "생활 소품. 세탁 기능 미정",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        4,
+        32
+      ],
+      "frame": 18,
+      "width": 96
+    },
+    {
+      "id": "storage",
+      "name": "숙소 보관함",
+      "cell": [
+        33,
+        39
+      ],
+      "region": "residential_district",
+      "shape": "crate",
+      "proposed_use": "향후 물건 보관 후보",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        33,
+        40
+      ],
+      "frame": 19,
+      "width": 72
+    },
+    {
+      "id": "bench_gate",
+      "name": "출발 마당 벤치",
+      "cell": [
+        60,
+        44
+      ],
+      "region": "dungeon_district",
+      "shape": "bench",
+      "proposed_use": "향후 대기·대화 후보",
+      "implemented": false,
+      "solid": true,
+      "interaction_cell": [
+        60,
+        45
+      ],
+      "frame": 14,
+      "width": 72
+    }
+  ],
+  "reserved_exits": [
+    {
+      "id": "outside_reserved",
+      "name": "마을 밖 출구 예정지",
+      "cell": [
+        0,
+        27
+      ],
+      "region": "main_street",
+      "implemented": false,
+      "runtime_feature": null,
+      "note": "경계 밖 전이 없음. dungeon_entry에 넣지 않는다. 바깥 맵 연결은 후속 작업."
+    }
+  ],
+  "lodging_tiers": [
+    {
+      "building": "z_dorm_1",
+      "tier": "공동 잠자리",
+      "price": null
+    },
+    {
+      "building": "z_inn_1",
+      "tier": "일반 객실",
+      "price": null
+    },
+    {
+      "building": "z_garden_inn_1",
+      "tier": "넓은 객실·정원",
+      "price": null
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "scope": "landscaping affected gates",
+  "gates_passed": 8,
+  "gates_total": 8,
+  "llmCalls": 0,
+  "gates": [
+    "verify_town_v3",
+    "verify_town",
+    "verify_guild",
+    "verify_partyform",
+    "verify_people",
+    "verify_worlds",
+    "verify_townsight",
+    "verify_resume"
+  ],
+  "layout_sha256": "09afe75384015cc8d4e8455e8c09a7bef239c5eb1892af19c96057da2a99e06c"
+}

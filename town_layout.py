@@ -115,11 +115,19 @@ def compile_layout(layout):
             if any(tuple(p) not in seen for p in connection['cells']):
                 raise ValueError('구역 연결이 막혔다: %s → %s' % (connection['from'], connection['to']))
     fullw = w + 2 * pad
+    walker_rects = layout.get('walker_rects', {})
+    for eid, rect in walker_rects.items():
+        if not isinstance(rect, list) or len(rect) != 4 or any(type(v) is not int for v in rect):
+            raise ValueError('walker_rects는 정수 [x,y,w,h]: ' + eid)
+        x, y, rw, rh = rect
+        if x < 0 or y < 0 or rw < 1 or rh < 1 or x+rw > w or y+rh > h:
+            raise ValueError('walker_rects가 맵 밖: ' + eid)
     rows = ['#' * fullw] * pad + ['#' * pad + ''.join(r) + '#' * pad for r in cells] + ['#' * fullw] * pad
     return {'map': rows, 'size': [fullw, h + 2 * pad], 'pad': pad,
             'starts': shifted_starts, 'npcs': npcs, 'dungeon_entry': entry,
             'entrances': [{**e, 'cell': [e['cell'][0]+pad, e['cell'][1]+pad]} for e in entrances],
-            'reachable_cells': len(seen), **({'spaces': spaces} if spaces else {})}
+            'reachable_cells': len(seen), 'walker_rects': walker_rects,
+            **({'spaces': spaces} if spaces else {})}
 
 
 def visual_layer(layout, compiled):
@@ -130,6 +138,12 @@ def visual_layer(layout, compiled):
            'ground': [dict(g) for g in layout.get('ground', [])],
            'buildings': [], 'props': [dict(p) for p in layout.get('props', [])],
            'npcs': [{'id': n['id'], 'row': int(n.get('row', 0)), 'cell': list(n['cell'])} for n in layout.get('npcs', [])]}
+    if layout.get('paving'):
+        from copy import deepcopy
+        out['paving'] = deepcopy(layout['paving'])
+    if layout.get('art'):
+        from copy import deepcopy
+        out['art'] = deepcopy(layout['art'])
     if layout.get('guild'):
         g = layout['guild']
         out['buildings'].append({'id': 'guild', 'texture': 'guild', 'x': g['x'], 'footY': g['footY'], 'width': g['width']})

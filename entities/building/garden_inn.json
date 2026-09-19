@@ -1,0 +1,27 @@
+{
+  "id": "garden_inn",
+  "name": "정원 숙소",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        10,
+        6
+      ],
+      "entrance": [
+        5,
+        5
+      ],
+      "texture": "garden_inn"
+    },
+    "story": {
+      "trait": "넓은 객실과 작은 정원을 둔 숙소",
+      "history": "문턱과 마당이 길에 닿아 있다. 정원 숙소의 서비스는 아직 준비 중이다."
+    }
+  },
+  "note": "마을 v3(2026-09-19): 공간·외형만 연결. 서비스 미구현. 설명은 임시 문구."
+}

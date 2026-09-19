@@ -1,4 +1,4 @@
 {
-  "_": "마을 전체 맵 v2 — 여섯 구역과 네 건물의 정의는 entities/map·building, 배치는 art/town-v2/layout.json. 정의와 배치가 충돌 격자·문턱·그림을 함께 만든다. NPC 대사와 선물은 entities/npc. 실내·신탁·의뢰는 후속 작업. 옛 마을과 길드 앞 시안은 town-v0.json·art/town-v1에 보존.",
-  "layout": "art/town-v2/layout.json"
+  "_": "마을 v4 — 최초 조감도 기반의 그림·보행 경계·문턱. 여섯 구역·건물 13동. 신규 생활 서비스는 후속 작업.",
+  "layout": "art/town-v4/layout.json"
 }

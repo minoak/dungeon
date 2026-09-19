@@ -1,0 +1,27 @@
+{
+  "id": "craft_workshop",
+  "name": "공방",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        8,
+        6
+      ],
+      "entrance": [
+        4,
+        5
+      ],
+      "texture": "draft_craft_workshop"
+    },
+    "story": {
+      "trait": "목재와 도구를 놓는 작업 건물",
+      "history": "지도 초안에 마련한 공간. 세부 서비스는 아직 정하지 않았다."
+    }
+  },
+  "note": "초안 전용 건물. draft_ 텍스처는 미리보기의 임시 도형이며 게임 에셋이 아니다."
+}

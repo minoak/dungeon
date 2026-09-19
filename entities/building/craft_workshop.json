@@ -1,0 +1,27 @@
+{
+  "id": "craft_workshop",
+  "name": "공방",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        8,
+        6
+      ],
+      "entrance": [
+        4,
+        5
+      ],
+      "texture": "craft_workshop"
+    },
+    "story": {
+      "trait": "목재와 도구를 놓는 작업 건물",
+      "history": "문턱과 마당이 길에 닿아 있다. 공방의 서비스는 아직 준비 중이다."
+    }
+  },
+  "note": "마을 v3(2026-09-19): 공간·외형만 연결. 서비스 미구현. 설명은 임시 문구."
+}

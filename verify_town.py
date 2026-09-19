@@ -75,8 +75,8 @@ check("① D29 개정(09-06): build_town 이 러너 스위치를 미러링(hail�
       and d.hail and d.wait_verb and d.events and d.trail_on and d.objtags
       and d.selfstop is False and d.dry_signal is False)
 npcs = sorted(f.name for f in d.features.values() if f.type == 'npc')
-check("① 마을 전체 맵 — 공간 엔티티에서 만든 53×39 격자·출발 3·정식 던전 입구",
-      d.town and d.w == 53 and d.h == 39 and len(starts) == 3 and d.exit == (41, 30)
+check("① 마을 전체 맵 — 공간 엔티티에서 만든 98×66 격자·출발 3·정식 던전 입구",
+      d.town and d.w == 98 and d.h == 66 and len(starts) == 3 and d.exit == (77, 53)
       and len(d.layout_result['spaces']['regions']) == 6)
 check("① NPC 3 — 성직자·길드 접수원·주점 주인(entities/npc, 대사는 임시 초안), 전원 인사 보유",
       npcs == ['길드 접수원', '성직자', '주점 주인']
@@ -274,8 +274,8 @@ check("⑤ 재입장 = 같은 1층 — 층 시드·격자 동일 + '<' 보존(�
       and all(any(f['type'] == 'stairs_up' for f in lv['features']) for lv in (d1a, d1b)))
 check("⑤ 마을 level — 정착 NPC 3 실림(관전자 등급 진실; D73 행인은 walker 표식으로 따로)",
       sum(1 for f in levels[0]['features'] if f['type'] == 'npc' and not f.get('walker')) == 3)
-check("⑤ 마을 v1 level 에 시각 레이어(visual: town-visual-v1 — 바닥 사각형·건물·소품·NPC 행) 실림, 던전 층엔 없음",
-      levels[0].get('visual', {}).get('schema') == 'town-visual-v1' and {b['texture'] for b in levels[0]['visual']['buildings']} == {'guild','temple','tavern','gate'}
+check("⑤ 마을 v3 level 에 시각 레이어(visual: town-visual-v1 — 바닥 사각형·건물·소품·NPC 행) 실림, 던전 층엔 없음",
+      levels[0].get('visual', {}).get('schema') == 'town-visual-v1' and {b['texture'] for b in levels[0]['visual']['buildings']} == {'guild','temple','tavern','gate','general_store','blacksmith','craft_workshop','equipment_store','shared_lodging','small_home','ordinary_inn','garden_inn'}
       and len(levels[0]['visual']['npcs']) == 3 and 'visual' not in levels[1])
 check("⑤ 클리어 — 아래 계단으로 전원 하강(outcome=escaped, depth 1)",
       end['kind'] == 'end' and end['outcome'] == 'escaped' and end['depth'] == 1)
@@ -334,16 +334,17 @@ import dungeon_gm as _G
 d8, starts8 = show_runner.build_town()
 blds = {f.name: f for f in d8.features.values() if f.type == 'building'}
 ent_cells = {tuple(e['cell']) for e in d8.layout_result['entrances']}
-check("⑨ 건물 피처 3 = 신전·모험가 길드·주점(던전 입구 건물은 문턱이 '>' 곁이라 제외) · 자리 = 문턱 칸(바닥)",
-      set(blds) == {'신전', '모험가 길드', '주점'}
+check("⑨ 건물 피처 12 = 기존 3 + 신규 시설 9(던전 입구 건물은 문턱이 '>' 곁이라 제외) · 자리 = 문턱 칸(바닥)",
+      set(blds) == {'신전', '모험가 길드', '주점', '잡화점', '대장간', '공방', '장비점', '공동 숙소', '주민의 집', '일반 여관', '정원 숙소'}
+      and sum(f.type == 'building' for f in d8.features.values()) == 12
       and all((f.x, f.y) in ent_cells and d8.grid[f.y][f.x] == _G.FLOOR for f in blds.values())
       and d8.exit not in {(f.x, f.y) for f in blds.values()})
 sx, sy = starts8['1']
 b8 = mkbot('1', sx, sy)
 o8 = d8.view(b8, [b8])
 bf = [f for f in o8['sights']['features'] if f['type'] == 'building']
-check("⑨ 출발 자리 관측: 건물 셋이 방위·거리와 함께 보이고 town_zone='번화가'",
-      {f['name'] for f in bf} == {'신전', '모험가 길드', '주점'} and o8.get('town_zone') == '번화가'
+check("⑨ 출발 자리 관측: 건물이 방위·거리와 함께 보이고 town_zone='번화가'",
+      {f['name'] for f in bf} == set(blds) and o8.get('town_zone') == '번화가'
       and all(f.get('bearing') and isinstance(f.get('dist'), int) and f['dist'] > 0 for f in bf))
 w8 = _brains._wire(o8, {'1': '두란'})
 check("⑨ 렌더: '지금 있는 곳: 번화가' + '신전 f<n>' 줄",

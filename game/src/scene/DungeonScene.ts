@@ -3,6 +3,8 @@
 // 안 그리고, 몹·피처는 초점 캐릭터의 시야 안이거나(피처는) 본 적 있는 자리만. 마을은 전부. 초점이 없으면 전부(관전자).
 // Phase B 카드가 쓰는 공개 API: feetOf/headOf/project/actorOf/turnToward/tileFrame/seenSet/visibleSet/DEPTH/TILE.
 import Phaser from 'phaser';
+import { paintTownPaving } from './townPaving';
+import { paintAuthoredTown } from './townAuthored';
 import type { App } from '../app';
 import type { Bot, Char, Dir, Feature, Frame, LevelState, Monster, TownVisual } from '../stream/types';
 import { NPC_CELL, NPC_FOOT, npcTexture, npcFrame, npcWalk, queueNpcs, registerNpcAnims } from '../assets/npcs';
@@ -19,7 +21,7 @@ import { queueWorld, registerWorldAnims, terrainFrame, TERRAIN_CELL, WORLD_CELL,
 /** 그리기 순서. stand 는 y(타일)마다 +0.01 — 아래 줄이 위에 그려진다. fog(60)는 B4, label 은 이름표. */
 export const DEPTH = { ground: 0, footprint: 5, feature: 10, trap: 12, corpse: 15, focusRing: 19, stand: 20,
                        fx: 50, fog: 60, label: 70 } as const;
-export const ZOOMS = [1, 1.5, 2] as const;
+export const ZOOMS = [0.25, 0.5, 1, 1.5, 2] as const;
 
 export interface Actor {
   char: Char;
@@ -182,6 +184,9 @@ export class DungeonScene extends Phaser.Scene {
   setZoom(z: number): void {
     this.zoom = z;
     this.cameras.main.setZoom(z);
+    for (const o of this.levelObjs) if (o.name === 'town-area-label') {
+      (o as Phaser.GameObjects.Text).setVisible(z <= 0.35);
+    }
   }
   pickZoom(): number { return this.scale.width >= 1100 ? 1.5 : 1; }
 
@@ -202,13 +207,19 @@ export class DungeonScene extends Phaser.Scene {
     this.seenCache = null;
 
     const V = L.visual ?? null;                   // 마을 v1(2026-09-11): 바닥·건물·소품은 layout 이 정한다
+    const authoredChanged = Boolean(V?.art) !== Boolean(this.townVisual?.art);
     this.townVisual = V;
+    if (authoredChanged) this.setZoom(V?.art ? 0.5 : this.pickZoom());
     const data = V ? townTerrainData(V, L.w, L.h)
       : Array.from({ length: L.h }, (_, y) => Array.from({ length: L.w }, (_, x) => terrainFrame(L.grid, x, y, ls.town)));
     this.map = this.make.tilemap({ data, tileWidth: TERRAIN_CELL, tileHeight: TERRAIN_CELL });
     const tex = V ? 'wl-town-terrain' : 'wl-terrain';
     const tileset = this.map.addTilesetImage(tex, tex, TERRAIN_CELL, TERRAIN_CELL, 0, 0);
     this.ground = this.map.createLayer(0, tileset!, 0, 0)!.setScale(TILE / TERRAIN_CELL).setDepth(DEPTH.ground);
+    if (V) {
+      const paving = paintTownPaving(this, V, TILE, DEPTH.ground + 1);
+      if (paving) this.levelObjs.push(paving);
+    }
 
     // 북쪽 벽 아래와 서쪽 벽 옆에 얕은 접촉 그림자. 지형을 다시 그릴 때만 만든다(마을 v1 은 건물·소품 그림이 벽선을 덮는다 — 없음).
     if (!V) {
@@ -237,6 +248,11 @@ export class DungeonScene extends Phaser.Scene {
 
   /** 마을 v1 시각 레이어 — 건물(발 기준 앵커)·소품(발 좌표)을 배우와 같은 y 정렬 깊이로 놓는다. NPC 는 피처 루프가 그린다. */
   private placeTownVisual(V: TownVisual): void {
+    if (V.art) {
+      this.levelObjs.push(...paintAuthoredTown(this, V, TILE, DEPTH.ground + 0.5, DEPTH.stand));
+      this.setZoom(this.zoom);
+      return;
+    }
     const s = TILE / V.tileSize, ox = V.offset[0] * V.tileSize, oy = V.offset[1] * V.tileSize;
     const depthAt = (footPx: number) => DEPTH.stand + (footPx / TILE - 0.92) * 0.01;   // 배우의 발((y+1)*TILE-4)과 같은 자
     for (const b of V.buildings) {
@@ -250,7 +266,9 @@ export class DungeonScene extends Phaser.Scene {
     for (const p of V.props) {
       const x = (p.x + ox) * s, y = (p.y + oy) * s;
       this.levelObjs.push(this.add.sprite(x, y, 'wl-town-props', p.frame).setOrigin(0.5, TOWN_PROP_FOOT / TOWN_PROP_CELL)
-        .setScale(s).setDepth(depthAt(y)));
+        .setScale(s * (p.width ?? TOWN_PROP_CELL) / TOWN_PROP_CELL).setDepth(depthAt(y)));
+      if (p.name) this.levelObjs.push(this.add.text(x, y + 3, p.name, {fontFamily:'sans-serif',fontSize:'11px',color:'#f4e4bd',backgroundColor:'#17232bcc',padding:{x:4,y:2}})
+        .setOrigin(0.5,0).setDepth(DEPTH.stand + 5));
     }
   }
   /** 마을 v1 NPC 외형 행 — layout.npcs 의 칸(오프셋 적용)과 피처 좌표가 맞으면 그 행, 아니면 -1(기존 타일 폴백). */

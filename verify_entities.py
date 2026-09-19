@@ -32,10 +32,10 @@ NPC_SHA = 'b6c1e5f26edb42b1e7ad09a6f0db05b8f62d30df43dd846cf67d649f9e8fd1b7'
 
 # ① 로드
 defs = ENT.load()
-check('① 정의 로드 — 기존 20개와 마을 공간 정의(맵 7·건물 4) + 의뢰 3(D61) + 보스 1(D65) + 행인 3(D73) + 동료 프리셋(D81 — 수는 늘어난다)',
-      {d['kind'] for d in defs.values()} == set(ENT.KINDS) and len(defs) - len(ENT.by_kind('companion')) == 38 and len(ENT.by_kind('companion')) >= 3
+check('① 정의 로드 — 마을 v3 공간 정의(맵 9·건물 12, 이전 지도 정의 포함) + 동료 프리셋(D81 — 수는 늘어난다)',
+      {d['kind'] for d in defs.values()} == set(ENT.KINDS) and len(defs) - len(ENT.by_kind('companion')) == 48 and len(ENT.by_kind('companion')) >= 3
       and len(ENT.by_kind('monster')) == 3 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('object')) == 9 and len(ENT.by_kind('npc')) == 9
-      and len(ENT.by_kind('map')) == 7 and len(ENT.by_kind('building')) == 4 and len(ENT.by_kind('quest')) == 3)
+      and len(ENT.by_kind('map')) == 9 and len(ENT.by_kind('building')) == 12 and len(ENT.by_kind('quest')) == 3)
 
 # ② 엔진 유도값 == 이관 전 리터럴(동작 그대로)
 check('② TRAP_KINDS 가 정의에서 유도되어 옛 리터럴과 같다',

@@ -210,6 +210,9 @@ PARTYFORM_ON = os.environ.get("DUNGEON_PARTYFORM", "0") == "1" and TOWN_ON   # D
 #   층마다 걸고, 계단을 쓴 무리만 옮긴다: 남은 사람의 세계는 그대로 계속 틱을 돈다(같은 층은 같은 세계 — 사람이 있으면 합류, 비었으면 복원).
 #   본 스트림은 내 캐릭터(첫 번호 — 쓰러지면 살아 있는 가장 앞 번호)가 있는 세계만 지금과 같은 모양으로, 다른 세계의 기록은 옆 파일
 #   (state/stream_side.jsonl). 러너 기본 0 = 세계 하나(옛 판과 비트까지 같다 — 같은 틱 몸통을 세계 하나로 도는 것). 마을 판만.
+TOWN_SIGHT = "zone" if os.environ.get("DUNGEON_TOWN_SIGHT", "all") == "zone" else "all"   # D86(09-19 파트너 "구역 내에서는 시야를 전부 주고 이동도 거기에
+#   맞게 하자") 마을의 시야 — 'zone' = 지금 선 구역만 보인다(건물·NPC·사람 전부) · 이동은 보이는 것 + 아는 장소(건물·입구는 장부에 미리)로 핑하고
+#   걷다가 새 구역에 들어서면 멈춰 다시 본다. 'all'(러너 기본) = 옛 판 그대로(마을 전체가 보이고 핑 한 번에 어디든). layout 마을만.
 STRANGERS_ON = os.environ.get("DUNGEON_STRANGERS", "0") == "1" and PARTYFORM_ON   # 파티 결성 판에서만 — 끈 판은 셋이 자동으로 한 일행이라 '모르는 일행'이 된다 · D85(09-19 파트너 "낯선 사람이 맞아 … 말을 걸고 상호작용을 하면서 해당 캐릭터에
 #   대한 지식이 생기고 나면 거기에 대해 따로 저장할수 있게 하자 로어북처럼") 인물 기록 — 켜면 몸마다 bot['people'](내가 쓴 사람 기록)을 건다:
 #   기록이 없는 사람은 '낯선 사람'(+겉모습), 이름·직업은 자동으로 주어지지 않는다. 시트에 작가가 쓴 관계 문장은 미리 채워진 기록이 된다.
@@ -640,6 +643,8 @@ def act_summary(res):
         if res.get("result") == "done":
             return "봇%s에게 친목 — %s" % (res.get("to", "?"), res.get("form", "몸짓"))
         return "친목 — " + {"too_far": "곁에 없다", "no_target": "대상 없음"}.get(res.get("result"), str(res.get("result")))
+    if res.get("result") == "zone_enter":                      # D86 — 걷다가 새 구역에 들어서 멈춤
+        return "%s에 들어섰다 — 걸음을 멈추고 둘러본다" % (res.get("zone") or "다른 구역")
     if res.get("result") == "need_party":                      # D84 조각 4 — 던전 입구는 파티를 맺은 사람만
         return "던전 입구 — 파티가 없어 지나지 못했다"
     if t == "party_form":                                      # 파티 결성(D84 조각 3)
@@ -798,6 +803,7 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
     if _story_of("dungeon_gate"):
         d.place_story[d._exit_fid] = dict(_story_of("dungeon_gate"))   # D75 던전 입구 소개(입구 피처=건물 정의 dungeon_gate)
     d.town_hear = "zone" if (TOWN_HEAR == "zone" and res.get("spaces")) else None   # D70 구역 지각 — 구역이 있는(layout) 마을만
+    d.town_sight = "zone" if (TOWN_SIGHT == "zone" and res.get("spaces")) else None   # D86 시야 = 지금 선 구역 — 같은 조건
     if res.get("spaces"):                          # D75 구역·마을 소개 — 구역 이름 → story, 마을 전체 history 는 진입 한마디(첫 관측 1회, G.spawn 이 floor_notice 로)
         for r_ in res["spaces"].get("regions", []):
             if r_.get("name") and _story_of(r_.get("entity")):
@@ -812,6 +818,8 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
         avoid = {tuple(v) for v in starts.values()}
         for eid in sorted(e for e, dd in G.ENT.load().items() if dd["kind"] == "npc" and (dd["comps"].get("npc") or {}).get("walk")):
             spec_w = G.ENT.npc(eid)
+            if eid in res.get('walker_rects', {}):
+                spec_w = {**spec_w, 'walk': {**spec_w['walk'], 'rect': list(res['walker_rects'][eid])}}
             region = rname.get((spec_w.get("walk") or {}).get("region"))
             if not region:
                 continue
@@ -1040,7 +1048,8 @@ def arrive_cells(d, ax, ay, k, taken=()):
     return out[:k]
 
 
-PARTYFORM_GATE_TRAIT = "계단 아래가 던전. 파티를 맺은 사람만 내려갈 수 있고, 파티는 3칸 안에 모여야 함께 내려간다. 원정에는 제한 시간이 있다"
+PARTYFORM_GATE_TRAIT = ("계단 아래가 던전. %d명이 맺은 파티만 내려갈 수 있고, 파티는 3칸 안에 모여야 함께 내려간다. 원정에는 제한 시간이 있다"
+                        % G.PARTY_ENTRY_SIZE)
 #   D84(09-19): 파티 결성 판의 던전 입구 특징 — 정의의 문장("일행이 3칸 안에 모여야 내려간다")은 이 판에서 거짓이다(세계가 하는 말은 참이어야 한다).
 #   정의(entities/building/dungeon_gate)는 옛 판과 같이 쓰므로 러너가 그 판의 마을에만 갈아 끼운다. ⚠️문구 임시(검토표)
 
@@ -1111,6 +1120,14 @@ def npc_facts(d, npc_name, bots, fallen, quests):
     nd = (getattr(d, "npc_defs", None) or {}).get(npc_name) or {}
     alive = [b for b in bots if b["alive"]]
     facts = ["파티: " + ", ".join("%s(%s, HP %d/%d)" % (b.get("name") or ("모험가 %s" % b["char"]), b["job"], b["hp"], b["maxhp"]) for b in alive)]
+    ps_ = getattr(d, "parties", None)
+    if ps_ is not None:                    # D84 조각 5: 파티 결성 판 — 옛 첫 줄('파티: 전원')은 거짓이다. 맺어진 파티의 크기와 입구의 규칙을 사실로(이름은 인물 기록 판이면 싣지 않는다)
+        sizes = sorted((len(G.party_members(ps_, c)) for c in {min(G.party_members(ps_, b["char"])) for b in alive if G.party_members(ps_, b["char"])}), reverse=True)
+        who_ = ("마을의 모험가 %d명(통성명한 적이 없어 이름은 모른다)" % len(alive) if STRANGERS_ON
+                else "마을의 모험가: " + ", ".join("%s(%s)" % (b.get("name") or ("모험가 %s" % b["char"]), b["job"]) for b in alive))
+        facts[0] = who_ + " · 맺어진 파티: " + (", ".join("%d명" % n for n in sizes) if sizes else "아직 없다")
+        if nd.get("report"):
+            facts.append("던전 입구의 규정: %d명이 맺은 파티만 지나갈 수 있다 · 파티는 모험가 길드나 주점에서, 같은 곳에 있는 사람끼리 맺는다 — 파티가 모자란 사람에게는 이 규정을 알려 준다" % G.PARTY_ENTRY_SIZE)
     if fallen:
         facts.append("이번 원정에서 쓰러진 사람: " + ", ".join(str(c) for c in fallen))
     facts.append("지금은 원정에서 돌아온 뒤다(워프게이트로 귀환)" if getattr(d, "expedition_returned", False)
@@ -1154,7 +1171,8 @@ def _world_fingerprint():
             "compose": bool(brains.COMPOSE), "scan": SCAN_ON, "loops": LOOPS_ON, "town_apart": TOWN_APART_ON,
             "town_hear": TOWN_HEAR, "quests": bool(QUESTS_ON and NOTICES_ON), "plan": PLAN_ON,
             **({"partyform": True} if PARTYFORM_ON else {}),   # D84: 켠 판에만 적는다 — 옛 스냅샷의 지문과 글자까지 같게
-            **({"strangers": True} if STRANGERS_ON else {})}   # D85: 같은 규율
+            **({"strangers": True} if STRANGERS_ON else {}),   # D85: 같은 규율
+            **({"town_sight": "zone"} if (TOWN_SIGHT == "zone" and TOWN_ON) else {})}   # D86: 같은 규율
 
 
 def _preserve_stream(src):
@@ -1389,6 +1407,7 @@ def main():
                 **alpha_metadata(),
                 **({"resume_failed": resume_fail} if resume_fail else {}),   # D79(09-16 additive) 이어가기를 청했으나 못 함 — 새 판을 열었다(사유·대피한 옛 기록·들고 온 수첩)
                 **({'reaction': True, 'reaction_schema': 'social-v0.4'} if reaction_book is not None else {}),
+                **({"town_sight": "zone"} if (TOWN_SIGHT == "zone" and TOWN_ON) else {}),   # D86(09-19 additive, 켠 판에만) 마을의 시야 = 지금 선 구역 — 시야·정지 물리 메타(town_hear 급)
                 **({"strangers": True} if STRANGERS_ON else {}),   # D85(09-19 additive, 켠 판에만) 인물 기록 판 — 프롬프트의 호칭이 캐릭터마다 다르다(내가 적은 이름|낯선 사람) · decisions.person_note
                 **({"partyform": True} if PARTYFORM_ON else {}),   # D84(09-19 additive, 켠 판에만) 파티 결성 판 — 계단은 내 파티원만·세계마다 제 시계:
                                            #   tick.bots 가 '이 세계에 있는 사람'만이고 depart/arrive 줄이 실린다(다른 세계 = stream_side.jsonl). 판 모양 메타(town 급)

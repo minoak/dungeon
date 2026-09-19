@@ -1,0 +1,18 @@
+{
+  "id": "town_guild",
+  "name": "모험가 길드 구역",
+  "kind": "map",
+  "tags": [
+    "town"
+  ],
+  "comps": {
+    "space": {
+      "role": "district"
+    },
+    "story": {
+      "trait": "길드 건물과 게시판, 모험자들이 모이는 앞마당",
+      "history": "여행에서 돌아온 사람과 동료를 찾는 사람이 앞마당에서 만난다."
+    }
+  },
+  "note": "지도 초안 문구. 런타임 미적용."
+}

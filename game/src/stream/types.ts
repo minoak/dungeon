@@ -78,10 +78,20 @@ export interface Room { id: number; x: number; y: number; w: number; h: number; 
 /** 마을 v1(2026-09-11) 시각 레이어 — 엔진은 무시하고 클라이언트만 그린다(art/town-v1/layout.json 유래, 좌표는 오프셋 전). */
 export interface TownVisual {
   schema: string; tileSize: number; offset: [number, number];
-  ground: { tile: string; rect: [number, number, number, number] }[];
+  art?: {
+    texture: string; sourceSize: [number, number]; size: [number, number];
+    occluders: { id: string; polygon: [number, number][]; footY: number }[];
+    labels: { name: string; x: number; y: number }[];
+  };
+  ground: { tile: string; frame?: number; rect: [number, number, number, number] }[];
+  paving?: {
+    edges: { cell: [number, number]; side: 'n' | 'e' | 's' | 'w'; soft: boolean; material: number }[];
+    drains: [number, number][];
+    inlays: { cell: [number, number]; radius: number }[];
+  };
   buildings: { id: string; name?: string; texture: string; x: number; footY: number; width: number }[];
   spaces?: { id: string; name: string; regions: { id: string; name: string; role: string; rects: [number, number, number, number][] }[] };
-  props: { frame: number; x: number; y: number }[];
+  props: { frame: number; x: number; y: number; width?: number; name?: string }[];
   npcs: { id: string; row: number; cell: [number, number] }[];
 }
 

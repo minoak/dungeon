@@ -1,0 +1,18 @@
+{
+  "id": "town_dungeon",
+  "name": "던전 입구 구역",
+  "kind": "map",
+  "tags": [
+    "town"
+  ],
+  "comps": {
+    "space": {
+      "role": "district"
+    },
+    "story": {
+      "trait": "던전으로 내려가는 입구와 출발 전 머무는 마당",
+      "history": "계단 앞의 돌바닥에는 오가는 이들의 발자국이 겹친다."
+    }
+  },
+  "note": "지도 초안 문구. 런타임 미적용."
+}

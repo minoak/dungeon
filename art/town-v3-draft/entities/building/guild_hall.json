@@ -1,0 +1,37 @@
+{
+  "id": "guild_hall",
+  "name": "모험가 길드",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        12,
+        7
+      ],
+      "entrance": [
+        6,
+        6
+      ],
+      "texture": "guild",
+      "role": "의뢰 게시판 · 원정 물품 · 귀환 보고"
+    },
+    "board": {
+      "range": 2,
+      "quests": [
+        "goblin_cull",
+        "reach_floor_2",
+        "lost_trinket"
+      ],
+      "note": "D61(2026-09-12) 의뢰 게시판 — 문턱 2칸 안에 서면 관측에 의뢰 제목·목표·보상. 정보만(맡음·완료·보상 판정 없음)."
+    },
+    "story": {
+      "trait": "게시판 의뢰를 맡고, 접수원에게 원정 물품을 받고, 돌아오면 보고한다",
+      "history": "던전에서 돌아오지 않는 사람이 늘자 마을 사람들이 세운 장부다. 누가 내려갔고 누가 돌아왔는지를 적는 것이 첫 일이었고, 지금도 그 일이 전부다. 의뢰는 마을 사람들이 길드에 맡긴 부탁이다."
+    }
+  },
+  "note": "role 은 관측 한 줄(SilenceBreaker 임시 문구, 2026-09-14 D69 — 파트너 문장 대기). story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md)."
+}

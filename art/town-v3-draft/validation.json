@@ -1,0 +1,150 @@
+{
+  "status": "PASS",
+  "scope": "공간 데이터만 검증. 게임·생산·강화 기능 검증 아님.",
+  "size": [
+    64,
+    48
+  ],
+  "total_cells": 3072,
+  "floor_cells": 2351,
+  "reachable_floor_cells": 2351,
+  "unowned_floor_cells": 0,
+  "overlap_cells": 0,
+  "regions": [
+    {
+      "id": "temple_district",
+      "name": "신전 구역",
+      "rects": [
+        [
+          0,
+          0,
+          20,
+          15
+        ]
+      ],
+      "total_cells": 300,
+      "floor_cells": 243
+    },
+    {
+      "id": "guild_district",
+      "name": "모험가 길드 구역",
+      "rects": [
+        [
+          25,
+          0,
+          39,
+          15
+        ]
+      ],
+      "total_cells": 585,
+      "floor_cells": 500
+    },
+    {
+      "id": "main_street",
+      "name": "번화가",
+      "rects": [
+        [
+          20,
+          0,
+          5,
+          15
+        ],
+        [
+          0,
+          15,
+          40,
+          15
+        ]
+      ],
+      "total_cells": 675,
+      "floor_cells": 535
+    },
+    {
+      "id": "shop_district",
+      "name": "상점가",
+      "rects": [
+        [
+          40,
+          15,
+          24,
+          17
+        ]
+      ],
+      "total_cells": 408,
+      "floor_cells": 258
+    },
+    {
+      "id": "residential_district",
+      "name": "주거구역",
+      "rects": [
+        [
+          0,
+          30,
+          40,
+          18
+        ]
+      ],
+      "total_cells": 720,
+      "floor_cells": 471
+    },
+    {
+      "id": "dungeon_district",
+      "name": "던전 입구 구역",
+      "rects": [
+        [
+          40,
+          32,
+          24,
+          16
+        ]
+      ],
+      "total_cells": 384,
+      "floor_cells": 344
+    }
+  ],
+  "buildings": 14,
+  "dungeon_exit_features": 1,
+  "party_regions": [
+    "guild_district",
+    "main_street"
+  ],
+  "walkers": [
+    {
+      "id": "apprentice_adventurer",
+      "region": "guild_district",
+      "rect": [
+        29,
+        11,
+        17,
+        4
+      ],
+      "candidate_cells": 68
+    },
+    {
+      "id": "wandering_adventurer",
+      "region": "guild_district",
+      "rect": [
+        29,
+        11,
+        17,
+        4
+      ],
+      "candidate_cells": 68
+    },
+    {
+      "id": "street_vendor",
+      "region": "main_street",
+      "rect": null,
+      "candidate_cells": 535
+    }
+  ],
+  "object_approaches": 15,
+  "exterior_exit_reserved_only": true,
+  "source_sha256": {
+    "town_spaces.py": "ff71b5ce97b96e622b90b4615925290adbdfec02324c7b61108e8f0981e94d35",
+    "town_layout.py": "82c67879f4802f9cd6083472a27689c86ba72bf99c451063a6f12194a624b6f3",
+    "entities/npc/apprentice_adventurer.json": "eca62e5a45f9e0febf261cb3c55366c09c53246f494af7b2f20990cbb4ce68b9",
+    "entities/npc/wandering_adventurer.json": "6e8791071266811ce3faf5e2c347414303c174bec929fa57d748f5eac93eab39",
+    "entities/npc/street_vendor.json": "1cf6320f90761a87543918b748a675300bc2a232342a44942ab0cba5af962015"
+  }
+}

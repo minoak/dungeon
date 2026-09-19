@@ -15,6 +15,15 @@ import townNpcsUrl from './world/town-npcs.png';
 import townTempleUrl from './world/town-temple.png';
 import townTavernUrl from './world/town-tavern.png';
 import townGateUrl from './world/town-gate.png';
+import townGeneralStoreUrl from './world/town-general_store.png';
+import townBlacksmithUrl from './world/town-blacksmith.png';
+import townWorkshopUrl from './world/town-craft_workshop.png';
+import townEquipmentStoreUrl from './world/town-equipment_store.png';
+import townSharedLodgingUrl from './world/town-shared_lodging.png';
+import townSmallHomeUrl from './world/town-small_home.png';
+import townOrdinaryInnUrl from './world/town-ordinary_inn.png';
+import townGardenInnUrl from './world/town-garden_inn.png';
+import townConceptUrl from './world/town-concept.png';
 
 export const WORLD_CELL = 96;
 export const WORLD_FOOT = 92;
@@ -40,6 +49,7 @@ export function worldVisual(key: string): WorldVisual | null {
 }
 
 export function queueWorld(load: Phaser.Loader.LoaderPlugin): void {
+  load.image('wl-town-concept', townConceptUrl);
   load.spritesheet('wl-terrain', terrainUrl, { frameWidth: TERRAIN_CELL, frameHeight: TERRAIN_CELL });
   for (const [key, url] of [['wl-goblin', goblinUrl], ['wl-spider', spiderUrl], ['wl-props', propsUrl], ['wl-traps', trapsUrl]]) {
     load.spritesheet(key, url, { frameWidth: WORLD_CELL, frameHeight: WORLD_CELL });
@@ -51,6 +61,10 @@ export function queueWorld(load: Phaser.Loader.LoaderPlugin): void {
   load.image('wl-town-temple', townTempleUrl);
   load.image('wl-town-tavern', townTavernUrl);
   load.image('wl-town-gate', townGateUrl);
+  for (const [key, url] of [['general_store', townGeneralStoreUrl], ['blacksmith', townBlacksmithUrl],
+    ['craft_workshop', townWorkshopUrl], ['equipment_store', townEquipmentStoreUrl],
+    ['shared_lodging', townSharedLodgingUrl], ['small_home', townSmallHomeUrl],
+    ['ordinary_inn', townOrdinaryInnUrl], ['garden_inn', townGardenInnUrl]]) load.image('wl-town-' + key, url);
 }
 
 export function monsterFrame(dir: Dir): number { return DIRECTIONS.indexOf(dir) * 3; }
@@ -82,13 +96,13 @@ export function townTerrainData(V: TownVisual, w: number, h: number): number[][]
   const data = Array.from({ length: h }, () => Array.from({ length: w }, () => grass));
   const [ox, oy] = V.offset;
   for (const g of V.ground) {
-    const f = TOWN_TERRAIN.indexOf(g.tile);
+    const f = g.frame ?? TOWN_TERRAIN.indexOf(g.tile);
     if (f < 0) continue;
     const [x, y, rw, rh] = g.rect;
     for (let yy = y; yy < y + rh; yy++) for (let xx = x; xx < x + rw; xx++) {
       const gx = xx + ox, gy = yy + oy;
       if (gy < 0 || gy >= h || gx < 0 || gx >= w) continue;
-      data[gy][gx] = f === 0 && (xx * 37 + yy * 17) % 11 < 3 ? 1 : f;
+      data[gy][gx] = g.frame === undefined && f === 0 && (xx * 37 + yy * 17) % 11 < 3 ? 1 : f;
     }
   }
   return data;

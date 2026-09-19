@@ -1,0 +1,27 @@
+{
+  "id": "small_home",
+  "name": "주민의 집",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        6,
+        5
+      ],
+      "entrance": [
+        3,
+        4
+      ],
+      "texture": "draft_small_home"
+    },
+    "story": {
+      "trait": "작은 현관과 생활 마당이 있는 집",
+      "history": "지도 초안에 마련한 공간. 세부 서비스는 아직 정하지 않았다."
+    }
+  },
+  "note": "초안 전용 건물. draft_ 텍스처는 미리보기의 임시 도형이며 게임 에셋이 아니다."
+}

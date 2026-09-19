@@ -939,8 +939,11 @@ def _last_prose(last, names=None):
         return "%s에게서 %s을(를) 받았다%s" % (_who(last.get("from")), last.get("what", "?"), tail)
     if t == "bonded":
         return "%s가 너에게 몸짓을 했다 — %s" % (_who(last.get("from")), last.get("form", "몸짓"))
+    if r == "zone_enter":                 # D86 — 걷다가 새 구역에 들어서 멈췄다(⚠️문구 임시)
+        return "걷다가 %s에 들어섰다 — 이 구역이 이제 보인다. 가던 길을 이을지는 다시 고른다" % (last.get("zone") or "다른 구역")
     if r == "need_party":                 # D84 조각 4 — 던전 입구는 파티를 맺은 사람만(⚠️문구 임시)
-        return "던전 입구로 내려가려 했지만 — 입구는 파티를 맺은 사람만 지난다. 너는 파티가 없다(파티는 모험가 길드 구역이나 주점 구역에서 맺는다)"
+        return ("던전 입구로 내려가려 했지만 — 입구는 %d명이 맺은 파티만 지난다. %s(파티는 모험가 길드 구역이나 주점 구역에서 맺는다)"
+                % (last.get("need", 3), ("네 파티는 %d명이다" % last["have"]) if last.get("have") else "너는 파티가 없다"))
     if t == "party_form":                 # D84 조각 3 파티 결성 — 사실만(무엇을 하라는 말은 없다)
         to = _who(last.get("to"))
         if r == "party_asked":
@@ -1415,6 +1418,7 @@ _WIRE_KEYS = frozenset((
     "zone", "known", "witnessed", "memories", "dry", "last", "trail", "floor", "floors", "history", "dialogue",
     "order", "ascii_view", "legend",
     "sights", "party", "options", "messages", "intent", "notes",   # party: 파티 명단 — 기억 갈래 첫 절(09-08 D44 정정으로 존치)
+    "town_sight",  # D86 마을의 시야 = 지금 선 구역: 마을 줄·기억 절 머리가 그린다
     "partyform",   # D84 조각 3 파티의 사실: "## 파티" 절·PARTY 동사 블록·명단 머리가 그린다
     "people",      # D85 인물 기록: 조건이 맞을 때만(보일 때 · 이름을 들을 때) 그린다 — 통째로 싣지 않는다(활성화가 곧 예산)
     "status",  # 상태 태그(D34): 아래 _wire "## 네 몸 상태" 절이 그린다
@@ -1492,7 +1496,10 @@ def _wire(obs, names=None, compose=False):
     if obs.get("town"):
         # 마을(D29) — 사실만: 안전·전체 가시. 여기서 뭘 할지는 캐릭터 몫(추천 안 싣는다).
         # D70(09-14 파트너 "구역 단위로 가자"): 장소는 다 알고, 사람과 목소리는 같은 구역 안에서만 — 세계의 사실(⚠️문구 임시)
-        L.append(("- 여기는 마을이다 — 위험한 것이 없고, 길과 건물이 어디 있는지는 다 안다. 사람과 목소리는 같은 구역 안에서만 보이고 들린다"
+        L.append(("- 여기는 마을이다 — 위험한 것이 없고, 어디에 어떤 건물이 있는지는 안다. 보이고 들리는 것은 지금 서 있는 구역 안뿐이다 — "
+                  "다른 구역에 누가 있고 무슨 일이 있는지는 가 봐야 안다"          # D86(09-19 파트너 "구역 내에서는 시야를 전부 주고 이동도 거기에 맞게") ⚠️문구 임시
+                  if obs.get("town_sight") == "zone" else
+                  "- 여기는 마을이다 — 위험한 것이 없고, 길과 건물이 어디 있는지는 다 안다. 사람과 목소리는 같은 구역 안에서만 보이고 들린다"
                   if obs.get("town_hear") == "zone" else
                   "- 여기는 마을이다 — 위험한 것이 없고, 마을 전체가 한눈에 보인다")
                  + ((" · 지금 있는 곳: %s%s" % (obs["town_zone"], (" — %s" % obs["town_zone_about"]) if obs.get("town_zone_about") else ""))
@@ -1749,7 +1756,8 @@ def _wire(obs, names=None, compose=False):
 
     k = obs.get("known")
     if k and (k.get("statics") or k.get("last_seen") or k.get("zones")):
-        M += ["", "## 네가 기억하는 것 (이 층에서 직접 봄 — 지금은 시야 밖)"]
+        M += ["", "## 네가 아는 곳과 기억하는 것 (이 마을의 장소는 원래 안다 · 나머지는 직접 봄 — 지금은 시야 밖)" if obs.get("town_sight") == "zone"   # D86 ⚠️문구 임시
+              else "## 네가 기억하는 것 (이 층에서 직접 봄 — 지금은 시야 밖)"]
         def far(e):                          # 09-06: 얼마나 먼지(방위+직선 칸) — 문(D19)과 같은 자, 좌표 아님
             return (", %s %d칸" % (e["bearing"], e["dist"])) if e.get("bearing") and e.get("dist") is not None else ""
         for e in k.get("statics", []):
@@ -1973,7 +1981,8 @@ def _wire(obs, names=None, compose=False):
             out += ['', 'PARTY:']
             if pf.get("here"):
                 out.append('- party_form + target(b<번호>): 파티 결성 — 모험가 길드 구역이나 주점 구역에서만. 상대에게 청하고, 상대도 너에게 같은 행동을 하면 맺어진다. '
-                           '맺는 순간 파티에 들 사람이 모두 여기 있어야 한다. 던전 입구는 파티를 맺은 사람만 지나고, 계단은 파티원끼리 함께 쓴다.')
+                           '맺는 순간 파티에 들 사람이 모두 여기 있어야 한다. 이미 파티가 있어도 새 사람과 맺으면 한 파티로 합쳐진다. '
+                           '던전 입구는 %d명이 맺은 파티만 지나고, 계단은 파티원끼리 함께 쓴다.' % int(pf.get("need") or 3))
             if pf.get("mine"):
                 out.append('- party_leave: 파티 탈퇴 — 너 혼자 떠난다(대상 없음). 남은 사람이 하나면 그 파티는 없어진다.')
         if obs.get('skills'):
@@ -2178,7 +2187,11 @@ def _exit_gather(ex, names=None):
 
 def _exit_need_party(ex):
     """D84 조각 4 — 마을의 던전 입구 줄 꼬리: 파티가 없는 사람에게만(사실만)."""
-    return " · 파티를 맺은 사람만 지난다 — 너는 파티가 없다" if ex.get("need_party") else ""
+    np_ = ex.get("need_party")
+    if not np_:
+        return ""
+    need, have = (np_.get("need", 3), np_.get("have", 0)) if isinstance(np_, dict) else (3, 0)
+    return " · %d명이 맺은 파티만 지난다 — %s" % (need, ("네 파티는 %d명이다" % have) if have else "너는 파티가 없다")
 
 
 def _safety_blocked(why):

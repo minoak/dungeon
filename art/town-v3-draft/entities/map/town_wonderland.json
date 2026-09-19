@@ -1,0 +1,17 @@
+{
+  "id": "town_wonderland",
+  "name": "원더랜드 마을",
+  "kind": "map",
+  "tags": [
+    "town"
+  ],
+  "comps": {
+    "space": {
+      "role": "town"
+    },
+    "story": {
+      "trait": "여섯 구역의 길과 마당이 이어지는 마을",
+      "history": "일하는 자리와 쉬는 자리, 여행을 떠나는 자리가 함께 있다."
+    }
+  }
+}

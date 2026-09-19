@@ -1,0 +1,69 @@
+{
+  "status": "PASS",
+  "size": [
+    64,
+    48
+  ],
+  "total_cells": 3072,
+  "floor_cells": 2052,
+  "reachable_floor_cells": 2052,
+  "unowned_floor_cells": 0,
+  "overlap_cells": 0,
+  "buildings": 14,
+  "object_approaches": 15,
+  "party_regions": [
+    "guild_district",
+    "main_street"
+  ],
+  "walkers": [
+    {
+      "id": "apprentice_adventurer",
+      "region": "guild_district",
+      "candidate_cells": 68
+    },
+    {
+      "id": "wandering_adventurer",
+      "region": "guild_district",
+      "candidate_cells": 68
+    },
+    {
+      "id": "street_vendor",
+      "region": "main_street",
+      "candidate_cells": 510
+    }
+  ],
+  "dungeon_exit_features": 1,
+  "zone_observations": 6,
+  "regions": [
+    {
+      "id": "temple_district",
+      "name": "신전 지구",
+      "floor_cells": 188
+    },
+    {
+      "id": "guild_district",
+      "name": "모험가 길드 지구",
+      "floor_cells": 450
+    },
+    {
+      "id": "main_street",
+      "name": "번화가",
+      "floor_cells": 510
+    },
+    {
+      "id": "shop_district",
+      "name": "상점가",
+      "floor_cells": 248
+    },
+    {
+      "id": "residential_district",
+      "name": "주거구역",
+      "floor_cells": 392
+    },
+    {
+      "id": "dungeon_district",
+      "name": "던전 입구 지구",
+      "floor_cells": 264
+    }
+  ]
+}

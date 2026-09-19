@@ -1,0 +1,1668 @@
+{
+  "map": [
+    "##################################################################",
+    "#................................................................#",
+    "#................................................................#",
+    "#................................................................#",
+    "#................................................................#",
+    "#...............................############.....................#",
+    "#.....########..................############.....................#",
+    "#...#.########..................############.....................#",
+    "#.....########..................############.....................#",
+    "#.....########..................############.....................#",
+    "#.....########..................############.....................#",
+    "#.....########...............#..######.#####.....................#",
+    "#.....####.###........................&..........................#",
+    "#..........&....#.................................#..............#",
+    "#..........3........................1............................#",
+    "#................................................................#",
+    "#................................................................#",
+    "#................................................................#",
+    "#...........................................########...########..#",
+    "#...........................#########.......########...########..#",
+    "#...############............#########.......########...########..#",
+    "#...############..#.........#########.......########...########..#",
+    "#...############............#########.......########...########..#",
+    "#...############.......#....#########.......####.###...####.###..#",
+    "#...############............####.####..........#............#....#",
+    "#...############.................................................#",
+    "#...######.#####..#.......#.......................#########......#",
+    "#..........&......................................#########......#",
+    "#..........2......................................#########......#",
+    "#.................................................#########..#...#",
+    "#.................................................#########......#",
+    "#.................................................####.####......#",
+    "#....#...........................................................#",
+    "#................................................................#",
+    "#..########...######...#########.................................#",
+    "#..########...######...#########.................................#",
+    "#..########...######...#########.................................#",
+    "#..########...######...#########.................................#",
+    "#..########...###.##...#########....................########.....#",
+    "#..####.###............####.####....................########.....#",
+    "#.................................#.................########.....#",
+    "#...............#...................................########.....#",
+    "#...........................##########..............####.###.....#",
+    "#...######....######........##########..................>........#",
+    "#...######....######........##########...........................#",
+    "#...######....######........##########.......................#...#",
+    "#...######....######........##########...........................#",
+    "#...###.##....###.##........#####.####...........................#",
+    "#................................................................#",
+    "##################################################################"
+  ],
+  "size": [
+    66,
+    50
+  ],
+  "pad": 1,
+  "starts": {
+    "1": [
+      36,
+      14
+    ],
+    "2": [
+      11,
+      28
+    ],
+    "3": [
+      11,
+      14
+    ]
+  },
+  "npcs": [
+    {
+      "id": "guild_receptionist",
+      "x": 38,
+      "y": 12
+    },
+    {
+      "id": "tavern_keeper",
+      "x": 11,
+      "y": 27
+    },
+    {
+      "id": "temple_attendant",
+      "x": 11,
+      "y": 13
+    }
+  ],
+  "dungeon_entry": [
+    56,
+    43
+  ],
+  "entrances": [
+    {
+      "id": "temple_1:entrance",
+      "kind": "threshold",
+      "cell": [
+        10,
+        12
+      ],
+      "building": "temple_1"
+    },
+    {
+      "id": "guild_1:entrance",
+      "kind": "threshold",
+      "cell": [
+        38,
+        11
+      ],
+      "building": "guild_1"
+    },
+    {
+      "id": "tavern_1:entrance",
+      "kind": "threshold",
+      "cell": [
+        10,
+        26
+      ],
+      "building": "tavern_1"
+    },
+    {
+      "id": "gate_1:entrance",
+      "kind": "threshold",
+      "cell": [
+        56,
+        42
+      ],
+      "building": "gate_1"
+    },
+    {
+      "id": "general_1:entrance",
+      "kind": "threshold",
+      "cell": [
+        32,
+        24
+      ],
+      "building": "general_1"
+    },
+    {
+      "id": "smith_1:entrance",
+      "kind": "threshold",
+      "cell": [
+        48,
+        23
+      ],
+      "building": "smith_1"
+    },
+    {
+      "id": "workshop_1:entrance",
+      "kind": "threshold",
+      "cell": [
+        59,
+        23
+      ],
+      "building": "workshop_1"
+    },
+    {
+      "id": "equipment_1:entrance",
+      "kind": "threshold",
+      "cell": [
+        54,
+        31
+      ],
+      "building": "equipment_1"
+    },
+    {
+      "id": "dorm_1:entrance",
+      "kind": "threshold",
+      "cell": [
+        7,
+        39
+      ],
+      "building": "dorm_1"
+    },
+    {
+      "id": "home_1:entrance",
+      "kind": "threshold",
+      "cell": [
+        17,
+        38
+      ],
+      "building": "home_1"
+    },
+    {
+      "id": "inn_1:entrance",
+      "kind": "threshold",
+      "cell": [
+        27,
+        39
+      ],
+      "building": "inn_1"
+    },
+    {
+      "id": "home_2:entrance",
+      "kind": "threshold",
+      "cell": [
+        7,
+        47
+      ],
+      "building": "home_2"
+    },
+    {
+      "id": "home_3:entrance",
+      "kind": "threshold",
+      "cell": [
+        17,
+        47
+      ],
+      "building": "home_3"
+    },
+    {
+      "id": "garden_inn_1:entrance",
+      "kind": "threshold",
+      "cell": [
+        33,
+        47
+      ],
+      "building": "garden_inn_1"
+    }
+  ],
+  "reachable_cells": 2351,
+  "spaces": {
+    "id": "town_wonderland",
+    "name": "원더랜드 마을",
+    "regions": [
+      {
+        "id": "temple_district",
+        "entity": "town_temple",
+        "name": "신전 구역",
+        "rects": [
+          [
+            0,
+            0,
+            20,
+            15
+          ]
+        ],
+        "role": "district"
+      },
+      {
+        "id": "guild_district",
+        "entity": "town_guild",
+        "name": "모험가 길드 구역",
+        "rects": [
+          [
+            25,
+            0,
+            39,
+            15
+          ]
+        ],
+        "role": "district"
+      },
+      {
+        "id": "main_street",
+        "entity": "town_main_street",
+        "name": "번화가",
+        "rects": [
+          [
+            20,
+            0,
+            5,
+            15
+          ],
+          [
+            0,
+            15,
+            40,
+            15
+          ]
+        ],
+        "role": "street"
+      },
+      {
+        "id": "shop_district",
+        "entity": "town_shops",
+        "name": "상점가",
+        "rects": [
+          [
+            40,
+            15,
+            24,
+            17
+          ]
+        ],
+        "role": "district"
+      },
+      {
+        "id": "residential_district",
+        "entity": "town_residential",
+        "name": "주거구역",
+        "rects": [
+          [
+            0,
+            30,
+            40,
+            18
+          ]
+        ],
+        "role": "district"
+      },
+      {
+        "id": "dungeon_district",
+        "entity": "town_dungeon",
+        "name": "던전 입구 구역",
+        "rects": [
+          [
+            40,
+            32,
+            24,
+            16
+          ]
+        ],
+        "role": "district"
+      }
+    ],
+    "buildings": [
+      {
+        "id": "temple_1",
+        "entity": "temple",
+        "cell": [
+          5,
+          5
+        ],
+        "region": "temple_district",
+        "name": "신전",
+        "rect": [
+          5,
+          5,
+          8,
+          7
+        ],
+        "entrance": [
+          9,
+          11
+        ],
+        "texture": "temple",
+        "x": 432.0,
+        "footY": 576,
+        "width": 384
+      },
+      {
+        "id": "guild_1",
+        "entity": "guild_hall",
+        "cell": [
+          31,
+          4
+        ],
+        "region": "guild_district",
+        "name": "모험가 길드",
+        "rect": [
+          31,
+          4,
+          12,
+          7
+        ],
+        "entrance": [
+          37,
+          10
+        ],
+        "texture": "guild",
+        "x": 1776.0,
+        "footY": 528,
+        "width": 576
+      },
+      {
+        "id": "tavern_1",
+        "entity": "tavern",
+        "cell": [
+          3,
+          19
+        ],
+        "region": "main_street",
+        "name": "주점",
+        "rect": [
+          3,
+          19,
+          12,
+          7
+        ],
+        "entrance": [
+          9,
+          25
+        ],
+        "texture": "tavern",
+        "x": 432.0,
+        "footY": 1248,
+        "width": 576
+      },
+      {
+        "id": "gate_1",
+        "entity": "dungeon_gate",
+        "cell": [
+          51,
+          37
+        ],
+        "region": "dungeon_district",
+        "name": "던전 입구",
+        "rect": [
+          51,
+          37,
+          8,
+          5
+        ],
+        "entrance": [
+          55,
+          41
+        ],
+        "texture": "gate",
+        "x": 2640.0,
+        "footY": 2016,
+        "width": 384
+      },
+      {
+        "id": "general_1",
+        "entity": "general_store",
+        "cell": [
+          27,
+          18
+        ],
+        "region": "main_street",
+        "name": "잡화점",
+        "rect": [
+          27,
+          18,
+          9,
+          6
+        ],
+        "entrance": [
+          31,
+          23
+        ],
+        "texture": "draft_general_store",
+        "x": 1512.0,
+        "footY": 1152,
+        "width": 432
+      },
+      {
+        "id": "smith_1",
+        "entity": "blacksmith",
+        "cell": [
+          43,
+          17
+        ],
+        "region": "shop_district",
+        "name": "대장간",
+        "rect": [
+          43,
+          17,
+          8,
+          6
+        ],
+        "entrance": [
+          47,
+          22
+        ],
+        "texture": "draft_blacksmith",
+        "x": 2256.0,
+        "footY": 1104,
+        "width": 384
+      },
+      {
+        "id": "workshop_1",
+        "entity": "craft_workshop",
+        "cell": [
+          54,
+          17
+        ],
+        "region": "shop_district",
+        "name": "공방",
+        "rect": [
+          54,
+          17,
+          8,
+          6
+        ],
+        "entrance": [
+          58,
+          22
+        ],
+        "texture": "draft_craft_workshop",
+        "x": 2784.0,
+        "footY": 1104,
+        "width": 384
+      },
+      {
+        "id": "equipment_1",
+        "entity": "equipment_store",
+        "cell": [
+          49,
+          25
+        ],
+        "region": "shop_district",
+        "name": "장비점",
+        "rect": [
+          49,
+          25,
+          9,
+          6
+        ],
+        "entrance": [
+          53,
+          30
+        ],
+        "texture": "draft_equipment_store",
+        "x": 2568.0,
+        "footY": 1488,
+        "width": 432
+      },
+      {
+        "id": "dorm_1",
+        "entity": "shared_lodging",
+        "cell": [
+          2,
+          33
+        ],
+        "region": "residential_district",
+        "name": "공동 숙소",
+        "rect": [
+          2,
+          33,
+          8,
+          6
+        ],
+        "entrance": [
+          6,
+          38
+        ],
+        "texture": "draft_shared_lodging",
+        "x": 288.0,
+        "footY": 1872,
+        "width": 384
+      },
+      {
+        "id": "home_1",
+        "entity": "small_home",
+        "cell": [
+          13,
+          33
+        ],
+        "region": "residential_district",
+        "name": "주민의 집",
+        "rect": [
+          13,
+          33,
+          6,
+          5
+        ],
+        "entrance": [
+          16,
+          37
+        ],
+        "texture": "draft_small_home",
+        "x": 768.0,
+        "footY": 1824,
+        "width": 288
+      },
+      {
+        "id": "inn_1",
+        "entity": "ordinary_inn",
+        "cell": [
+          22,
+          33
+        ],
+        "region": "residential_district",
+        "name": "일반 여관",
+        "rect": [
+          22,
+          33,
+          9,
+          6
+        ],
+        "entrance": [
+          26,
+          38
+        ],
+        "texture": "draft_ordinary_inn",
+        "x": 1272.0,
+        "footY": 1872,
+        "width": 432
+      },
+      {
+        "id": "home_2",
+        "entity": "small_home",
+        "cell": [
+          3,
+          42
+        ],
+        "region": "residential_district",
+        "name": "주민의 집",
+        "rect": [
+          3,
+          42,
+          6,
+          5
+        ],
+        "entrance": [
+          6,
+          46
+        ],
+        "texture": "draft_small_home",
+        "x": 288.0,
+        "footY": 2256,
+        "width": 288
+      },
+      {
+        "id": "home_3",
+        "entity": "small_home",
+        "cell": [
+          13,
+          42
+        ],
+        "region": "residential_district",
+        "name": "주민의 집",
+        "rect": [
+          13,
+          42,
+          6,
+          5
+        ],
+        "entrance": [
+          16,
+          46
+        ],
+        "texture": "draft_small_home",
+        "x": 768.0,
+        "footY": 2256,
+        "width": 288
+      },
+      {
+        "id": "garden_inn_1",
+        "entity": "garden_inn",
+        "cell": [
+          27,
+          41
+        ],
+        "region": "residential_district",
+        "name": "정원 숙소",
+        "rect": [
+          27,
+          41,
+          10,
+          6
+        ],
+        "entrance": [
+          32,
+          46
+        ],
+        "texture": "draft_garden_inn",
+        "x": 1536.0,
+        "footY": 2256,
+        "width": 480
+      }
+    ],
+    "connections": [
+      {
+        "from": "temple_district",
+        "to": "main_street",
+        "cells": [
+          [
+            19,
+            12
+          ],
+          [
+            20,
+            12
+          ]
+        ]
+      },
+      {
+        "from": "guild_district",
+        "to": "main_street",
+        "cells": [
+          [
+            25,
+            13
+          ],
+          [
+            24,
+            13
+          ]
+        ]
+      },
+      {
+        "from": "guild_district",
+        "to": "shop_district",
+        "cells": [
+          [
+            45,
+            14
+          ],
+          [
+            45,
+            15
+          ]
+        ]
+      },
+      {
+        "from": "main_street",
+        "to": "shop_district",
+        "cells": [
+          [
+            39,
+            27
+          ],
+          [
+            40,
+            27
+          ]
+        ]
+      },
+      {
+        "from": "main_street",
+        "to": "residential_district",
+        "cells": [
+          [
+            21,
+            29
+          ],
+          [
+            21,
+            30
+          ]
+        ]
+      },
+      {
+        "from": "residential_district",
+        "to": "shop_district",
+        "cells": [
+          [
+            39,
+            31
+          ],
+          [
+            40,
+            31
+          ]
+        ]
+      },
+      {
+        "from": "residential_district",
+        "to": "dungeon_district",
+        "cells": [
+          [
+            39,
+            40
+          ],
+          [
+            40,
+            40
+          ]
+        ]
+      },
+      {
+        "from": "shop_district",
+        "to": "dungeon_district",
+        "cells": [
+          [
+            47,
+            31
+          ],
+          [
+            47,
+            32
+          ]
+        ]
+      }
+    ]
+  },
+  "visual": {
+    "schema": "town-visual-v1",
+    "tileSize": 48,
+    "offset": [
+      1,
+      1
+    ],
+    "ground": [
+      {
+        "tile": "grass",
+        "rect": [
+          0,
+          0,
+          64,
+          48
+        ]
+      },
+      {
+        "tile": "plaza_a",
+        "rect": [
+          20,
+          0,
+          5,
+          30
+        ]
+      },
+      {
+        "tile": "plaza_a",
+        "rect": [
+          0,
+          26,
+          64,
+          4
+        ]
+      },
+      {
+        "tile": "plaza_a",
+        "rect": [
+          0,
+          15,
+          64,
+          2
+        ]
+      },
+      {
+        "tile": "plaza_a",
+        "rect": [
+          3,
+          11,
+          14,
+          4
+        ]
+      },
+      {
+        "tile": "plaza_a",
+        "rect": [
+          29,
+          10,
+          20,
+          5
+        ]
+      },
+      {
+        "tile": "plaza_a",
+        "rect": [
+          40,
+          23,
+          24,
+          2
+        ]
+      },
+      {
+        "tile": "plaza_a",
+        "rect": [
+          40,
+          15,
+          3,
+          33
+        ]
+      },
+      {
+        "tile": "plaza_a",
+        "rect": [
+          49,
+          41,
+          12,
+          5
+        ]
+      },
+      {
+        "tile": "earth",
+        "rect": [
+          2,
+          26,
+          14,
+          3
+        ]
+      },
+      {
+        "tile": "earth",
+        "rect": [
+          16,
+          18,
+          9,
+          8
+        ]
+      },
+      {
+        "tile": "earth",
+        "rect": [
+          43,
+          23,
+          19,
+          2
+        ]
+      },
+      {
+        "tile": "earth",
+        "rect": [
+          0,
+          30,
+          40,
+          3
+        ]
+      },
+      {
+        "tile": "earth",
+        "rect": [
+          0,
+          39,
+          40,
+          3
+        ]
+      },
+      {
+        "tile": "earth",
+        "rect": [
+          10,
+          30,
+          3,
+          18
+        ]
+      },
+      {
+        "tile": "earth",
+        "rect": [
+          19,
+          30,
+          3,
+          18
+        ]
+      },
+      {
+        "tile": "earth",
+        "rect": [
+          25,
+          39,
+          14,
+          9
+        ]
+      },
+      {
+        "tile": "alley",
+        "rect": [
+          37,
+          30,
+          6,
+          18
+        ]
+      },
+      {
+        "tile": "alley",
+        "rect": [
+          43,
+          32,
+          21,
+          3
+        ]
+      },
+      {
+        "tile": "alley",
+        "rect": [
+          47,
+          33,
+          3,
+          15
+        ]
+      },
+      {
+        "tile": "alley",
+        "rect": [
+          16,
+          7,
+          5,
+          8
+        ]
+      },
+      {
+        "tile": "alley",
+        "rect": [
+          24,
+          12,
+          5,
+          5
+        ]
+      }
+    ],
+    "buildings": [
+      {
+        "id": "temple_1",
+        "name": "신전",
+        "texture": "temple",
+        "x": 432.0,
+        "footY": 576,
+        "width": 384
+      },
+      {
+        "id": "guild_1",
+        "name": "모험가 길드",
+        "texture": "guild",
+        "x": 1776.0,
+        "footY": 528,
+        "width": 576
+      },
+      {
+        "id": "tavern_1",
+        "name": "주점",
+        "texture": "tavern",
+        "x": 432.0,
+        "footY": 1248,
+        "width": 576
+      },
+      {
+        "id": "gate_1",
+        "name": "던전 입구",
+        "texture": "gate",
+        "x": 2640.0,
+        "footY": 2016,
+        "width": 384
+      },
+      {
+        "id": "general_1",
+        "name": "잡화점",
+        "texture": "draft_general_store",
+        "x": 1512.0,
+        "footY": 1152,
+        "width": 432
+      },
+      {
+        "id": "smith_1",
+        "name": "대장간",
+        "texture": "draft_blacksmith",
+        "x": 2256.0,
+        "footY": 1104,
+        "width": 384
+      },
+      {
+        "id": "workshop_1",
+        "name": "공방",
+        "texture": "draft_craft_workshop",
+        "x": 2784.0,
+        "footY": 1104,
+        "width": 384
+      },
+      {
+        "id": "equipment_1",
+        "name": "장비점",
+        "texture": "draft_equipment_store",
+        "x": 2568.0,
+        "footY": 1488,
+        "width": 432
+      },
+      {
+        "id": "dorm_1",
+        "name": "공동 숙소",
+        "texture": "draft_shared_lodging",
+        "x": 288.0,
+        "footY": 1872,
+        "width": 384
+      },
+      {
+        "id": "home_1",
+        "name": "주민의 집",
+        "texture": "draft_small_home",
+        "x": 768.0,
+        "footY": 1824,
+        "width": 288
+      },
+      {
+        "id": "inn_1",
+        "name": "일반 여관",
+        "texture": "draft_ordinary_inn",
+        "x": 1272.0,
+        "footY": 1872,
+        "width": 432
+      },
+      {
+        "id": "home_2",
+        "name": "주민의 집",
+        "texture": "draft_small_home",
+        "x": 288.0,
+        "footY": 2256,
+        "width": 288
+      },
+      {
+        "id": "home_3",
+        "name": "주민의 집",
+        "texture": "draft_small_home",
+        "x": 768.0,
+        "footY": 2256,
+        "width": 288
+      },
+      {
+        "id": "garden_inn_1",
+        "name": "정원 숙소",
+        "texture": "draft_garden_inn",
+        "x": 1536.0,
+        "footY": 2256,
+        "width": 480
+      }
+    ],
+    "props": [],
+    "npcs": [
+      {
+        "id": "guild_receptionist",
+        "row": 0,
+        "cell": [
+          37,
+          11
+        ]
+      },
+      {
+        "id": "tavern_keeper",
+        "row": 1,
+        "cell": [
+          10,
+          26
+        ]
+      },
+      {
+        "id": "temple_attendant",
+        "row": 2,
+        "cell": [
+          10,
+          12
+        ]
+      }
+    ],
+    "spaces": {
+      "id": "town_wonderland",
+      "name": "원더랜드 마을",
+      "regions": [
+        {
+          "id": "temple_district",
+          "entity": "town_temple",
+          "name": "신전 구역",
+          "rects": [
+            [
+              0,
+              0,
+              20,
+              15
+            ]
+          ],
+          "role": "district"
+        },
+        {
+          "id": "guild_district",
+          "entity": "town_guild",
+          "name": "모험가 길드 구역",
+          "rects": [
+            [
+              25,
+              0,
+              39,
+              15
+            ]
+          ],
+          "role": "district"
+        },
+        {
+          "id": "main_street",
+          "entity": "town_main_street",
+          "name": "번화가",
+          "rects": [
+            [
+              20,
+              0,
+              5,
+              15
+            ],
+            [
+              0,
+              15,
+              40,
+              15
+            ]
+          ],
+          "role": "street"
+        },
+        {
+          "id": "shop_district",
+          "entity": "town_shops",
+          "name": "상점가",
+          "rects": [
+            [
+              40,
+              15,
+              24,
+              17
+            ]
+          ],
+          "role": "district"
+        },
+        {
+          "id": "residential_district",
+          "entity": "town_residential",
+          "name": "주거구역",
+          "rects": [
+            [
+              0,
+              30,
+              40,
+              18
+            ]
+          ],
+          "role": "district"
+        },
+        {
+          "id": "dungeon_district",
+          "entity": "town_dungeon",
+          "name": "던전 입구 구역",
+          "rects": [
+            [
+              40,
+              32,
+              24,
+              16
+            ]
+          ],
+          "role": "district"
+        }
+      ],
+      "buildings": [
+        {
+          "id": "temple_1",
+          "entity": "temple",
+          "cell": [
+            5,
+            5
+          ],
+          "region": "temple_district",
+          "name": "신전",
+          "rect": [
+            5,
+            5,
+            8,
+            7
+          ],
+          "entrance": [
+            9,
+            11
+          ],
+          "texture": "temple",
+          "x": 432.0,
+          "footY": 576,
+          "width": 384
+        },
+        {
+          "id": "guild_1",
+          "entity": "guild_hall",
+          "cell": [
+            31,
+            4
+          ],
+          "region": "guild_district",
+          "name": "모험가 길드",
+          "rect": [
+            31,
+            4,
+            12,
+            7
+          ],
+          "entrance": [
+            37,
+            10
+          ],
+          "texture": "guild",
+          "x": 1776.0,
+          "footY": 528,
+          "width": 576
+        },
+        {
+          "id": "tavern_1",
+          "entity": "tavern",
+          "cell": [
+            3,
+            19
+          ],
+          "region": "main_street",
+          "name": "주점",
+          "rect": [
+            3,
+            19,
+            12,
+            7
+          ],
+          "entrance": [
+            9,
+            25
+          ],
+          "texture": "tavern",
+          "x": 432.0,
+          "footY": 1248,
+          "width": 576
+        },
+        {
+          "id": "gate_1",
+          "entity": "dungeon_gate",
+          "cell": [
+            51,
+            37
+          ],
+          "region": "dungeon_district",
+          "name": "던전 입구",
+          "rect": [
+            51,
+            37,
+            8,
+            5
+          ],
+          "entrance": [
+            55,
+            41
+          ],
+          "texture": "gate",
+          "x": 2640.0,
+          "footY": 2016,
+          "width": 384
+        },
+        {
+          "id": "general_1",
+          "entity": "general_store",
+          "cell": [
+            27,
+            18
+          ],
+          "region": "main_street",
+          "name": "잡화점",
+          "rect": [
+            27,
+            18,
+            9,
+            6
+          ],
+          "entrance": [
+            31,
+            23
+          ],
+          "texture": "draft_general_store",
+          "x": 1512.0,
+          "footY": 1152,
+          "width": 432
+        },
+        {
+          "id": "smith_1",
+          "entity": "blacksmith",
+          "cell": [
+            43,
+            17
+          ],
+          "region": "shop_district",
+          "name": "대장간",
+          "rect": [
+            43,
+            17,
+            8,
+            6
+          ],
+          "entrance": [
+            47,
+            22
+          ],
+          "texture": "draft_blacksmith",
+          "x": 2256.0,
+          "footY": 1104,
+          "width": 384
+        },
+        {
+          "id": "workshop_1",
+          "entity": "craft_workshop",
+          "cell": [
+            54,
+            17
+          ],
+          "region": "shop_district",
+          "name": "공방",
+          "rect": [
+            54,
+            17,
+            8,
+            6
+          ],
+          "entrance": [
+            58,
+            22
+          ],
+          "texture": "draft_craft_workshop",
+          "x": 2784.0,
+          "footY": 1104,
+          "width": 384
+        },
+        {
+          "id": "equipment_1",
+          "entity": "equipment_store",
+          "cell": [
+            49,
+            25
+          ],
+          "region": "shop_district",
+          "name": "장비점",
+          "rect": [
+            49,
+            25,
+            9,
+            6
+          ],
+          "entrance": [
+            53,
+            30
+          ],
+          "texture": "draft_equipment_store",
+          "x": 2568.0,
+          "footY": 1488,
+          "width": 432
+        },
+        {
+          "id": "dorm_1",
+          "entity": "shared_lodging",
+          "cell": [
+            2,
+            33
+          ],
+          "region": "residential_district",
+          "name": "공동 숙소",
+          "rect": [
+            2,
+            33,
+            8,
+            6
+          ],
+          "entrance": [
+            6,
+            38
+          ],
+          "texture": "draft_shared_lodging",
+          "x": 288.0,
+          "footY": 1872,
+          "width": 384
+        },
+        {
+          "id": "home_1",
+          "entity": "small_home",
+          "cell": [
+            13,
+            33
+          ],
+          "region": "residential_district",
+          "name": "주민의 집",
+          "rect": [
+            13,
+            33,
+            6,
+            5
+          ],
+          "entrance": [
+            16,
+            37
+          ],
+          "texture": "draft_small_home",
+          "x": 768.0,
+          "footY": 1824,
+          "width": 288
+        },
+        {
+          "id": "inn_1",
+          "entity": "ordinary_inn",
+          "cell": [
+            22,
+            33
+          ],
+          "region": "residential_district",
+          "name": "일반 여관",
+          "rect": [
+            22,
+            33,
+            9,
+            6
+          ],
+          "entrance": [
+            26,
+            38
+          ],
+          "texture": "draft_ordinary_inn",
+          "x": 1272.0,
+          "footY": 1872,
+          "width": 432
+        },
+        {
+          "id": "home_2",
+          "entity": "small_home",
+          "cell": [
+            3,
+            42
+          ],
+          "region": "residential_district",
+          "name": "주민의 집",
+          "rect": [
+            3,
+            42,
+            6,
+            5
+          ],
+          "entrance": [
+            6,
+            46
+          ],
+          "texture": "draft_small_home",
+          "x": 288.0,
+          "footY": 2256,
+          "width": 288
+        },
+        {
+          "id": "home_3",
+          "entity": "small_home",
+          "cell": [
+            13,
+            42
+          ],
+          "region": "residential_district",
+          "name": "주민의 집",
+          "rect": [
+            13,
+            42,
+            6,
+            5
+          ],
+          "entrance": [
+            16,
+            46
+          ],
+          "texture": "draft_small_home",
+          "x": 768.0,
+          "footY": 2256,
+          "width": 288
+        },
+        {
+          "id": "garden_inn_1",
+          "entity": "garden_inn",
+          "cell": [
+            27,
+            41
+          ],
+          "region": "residential_district",
+          "name": "정원 숙소",
+          "rect": [
+            27,
+            41,
+            10,
+            6
+          ],
+          "entrance": [
+            32,
+            46
+          ],
+          "texture": "draft_garden_inn",
+          "x": 1536.0,
+          "footY": 2256,
+          "width": 480
+        }
+      ],
+      "connections": [
+        {
+          "from": "temple_district",
+          "to": "main_street",
+          "cells": [
+            [
+              19,
+              12
+            ],
+            [
+              20,
+              12
+            ]
+          ]
+        },
+        {
+          "from": "guild_district",
+          "to": "main_street",
+          "cells": [
+            [
+              25,
+              13
+            ],
+            [
+              24,
+              13
+            ]
+          ]
+        },
+        {
+          "from": "guild_district",
+          "to": "shop_district",
+          "cells": [
+            [
+              45,
+              14
+            ],
+            [
+              45,
+              15
+            ]
+          ]
+        },
+        {
+          "from": "main_street",
+          "to": "shop_district",
+          "cells": [
+            [
+              39,
+              27
+            ],
+            [
+              40,
+              27
+            ]
+          ]
+        },
+        {
+          "from": "main_street",
+          "to": "residential_district",
+          "cells": [
+            [
+              21,
+              29
+            ],
+            [
+              21,
+              30
+            ]
+          ]
+        },
+        {
+          "from": "residential_district",
+          "to": "shop_district",
+          "cells": [
+            [
+              39,
+              31
+            ],
+            [
+              40,
+              31
+            ]
+          ]
+        },
+        {
+          "from": "residential_district",
+          "to": "dungeon_district",
+          "cells": [
+            [
+              39,
+              40
+            ],
+            [
+              40,
+              40
+            ]
+          ]
+        },
+        {
+          "from": "shop_district",
+          "to": "dungeon_district",
+          "cells": [
+            [
+              47,
+              31
+            ],
+            [
+              47,
+              32
+            ]
+          ]
+        }
+      ]
+    }
+  }
+}

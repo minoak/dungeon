@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "floor_cells": 1880,
+  "reachable_floor_cells": 1880,
+  "unowned_floor_cells": 0,
+  "overlap_cells": 0,
+  "regions": 6,
+  "buildings": 13,
+  "walkers": [
+    "apprentice_adventurer",
+    "wandering_adventurer",
+    "street_vendor"
+  ],
+  "party_regions": [
+    "guild_district",
+    "main_street"
+  ],
+  "exit_features": 1,
+  "llm_calls": 0
+}

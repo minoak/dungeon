@@ -1,0 +1,27 @@
+{
+  "id": "general_store",
+  "name": "잡화점",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        9,
+        6
+      ],
+      "entrance": [
+        4,
+        5
+      ],
+      "texture": "draft_general_store"
+    },
+    "story": {
+      "trait": "생활용품과 식료품을 진열할 가게",
+      "history": "지도 초안에 마련한 공간. 세부 서비스는 아직 정하지 않았다."
+    }
+  },
+  "note": "초안 전용 건물. draft_ 텍스처는 미리보기의 임시 도형이며 게임 에셋이 아니다."
+}

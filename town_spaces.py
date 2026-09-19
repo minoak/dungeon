@@ -57,6 +57,18 @@ def resolve(layout, definitions=None):
         instance_ids.add(bid)
         d = definition(inst['entity'], 'building')
         b = d['comps']['building']
+        # Authored maps can fit the same building to a painted footprint.
+        # Entity defaults remain unchanged for older maps and recorded runs.
+        if 'footprint' in inst:
+            fp = inst['footprint']
+            if not isinstance(fp, dict) or set(fp) != {'size', 'entrance'}:
+                raise ValueError('footprint는 size와 entrance가 필요하다: ' + bid)
+            if any(not isinstance(fp[k], list) or len(fp[k]) != 2 or any(type(v) is not int for v in fp[k]) for k in fp):
+                raise ValueError('footprint 좌표는 정수 쌍이어야 한다: ' + bid)
+            fw, fh = fp['size']; fx, fy = fp['entrance']
+            if fw < 1 or fh < 1 or not (0 <= fx < fw and 0 <= fy < fh):
+                raise ValueError('footprint 문턱이 점유 영역 밖이다: ' + bid)
+            b = {**b, **fp}
         pos = inst.get('cell')
         if not isinstance(pos, list) or len(pos) != 2 or any(type(v) is not int for v in pos):
             raise ValueError('건물 cell은 정수 [x,y]')

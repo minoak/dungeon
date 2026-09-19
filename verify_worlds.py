@@ -72,6 +72,8 @@ def rows(name):
 
 
 _new_parties, _dummy = G.new_parties, G.dummy_brain
+G.PARTY_ENTRY_SIZE = 1                               # 조각 5: 입구의 인원 규칙(3명)은 verify_partyform ⑮가 본다 — 여기는 세계가 갈라졌다 합쳐지는 장면을 보려고
+#   둘짜리 파티·한 사람짜리 무리가 따로 드나들어야 하므로 1 로 둔다(파티가 아예 없는 사람은 여전히 need_party — ⑧)
 
 
 def play(party, crash_at=None, resume=False, say_at=None, form=False):
@@ -186,9 +188,13 @@ check("② run_meta.partyform True · 첫 하강은 파티 둘만(본 스트림 
       and lvls[1]["depth"] == 1 and sorted(p["char"] for p in lvls[1]["party"]) == ["1", "2"])
 t_down = desc[0]["turn"]
 town_after = [r for r in ticks(side, 0) if r["turn"] > t_down]
+# The scripted NPC makes fresh decisions while waiting until t120. Its later
+# uninterrupted goto legitimately needs no new decision, however long the road.
+town_waiting = [r for r in town_after if r['turn'] < 120]
 check("② 마을은 3 혼자 남은 채 계속 흐른다 — 옆 파일 world=0 틱이 하강 다음 틱부터 끊김 없이 · 3 은 그동안 판단을 계속 받는다",
       town_after and [r["turn"] for r in town_after] == list(range(t_down + 1, t_down + 1 + len(town_after)))
-      and all(chars(r) == ["3"] for r in town_after) and sum(1 for r in town_after if "3" in (r.get("decisions") or {})) >= len(town_after) // 2,
+      and all(chars(r) == ["3"] for r in town_after) and town_waiting
+      and sum(1 for r in town_waiting if "3" in (r.get("decisions") or {})) >= max(1, len(town_waiting) // 2),
       (t_down, len(town_after)))
 s_desc = [r for r in side if r["kind"] == "descend"]
 check("② 3 이 혼자 내려온다(옆 파일 descend world=0, party=[3]) → 같은 1층에 합류: 본 스트림 arrive(from_depth 0, [3]) · 그 틱에 새 level 없음 · 다음 틱부터 tick.bots 에 셋",

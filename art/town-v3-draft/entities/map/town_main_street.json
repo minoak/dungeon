@@ -1,0 +1,18 @@
+{
+  "id": "town_main_street",
+  "name": "번화가",
+  "kind": "map",
+  "tags": [
+    "town"
+  ],
+  "comps": {
+    "space": {
+      "role": "street"
+    },
+    "story": {
+      "trait": "시장 노점과 잡화점, 주점이 큰길을 따라 있는 구역",
+      "history": "물건을 나르는 사람과 쉬어 가는 사람이 오간다. 서쪽 끝에는 마을 밖으로 향하는 길목이 있다."
+    }
+  },
+  "note": "지도 초안 문구. 런타임 미적용."
+}

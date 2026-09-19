@@ -1,0 +1,114 @@
+{
+  "buildings": {
+    "general_store": {
+      "width": 432,
+      "height": 390,
+      "source": "source/buildings.png",
+      "cell": 0
+    },
+    "blacksmith": {
+      "width": 384,
+      "height": 355,
+      "source": "source/buildings.png",
+      "cell": 1
+    },
+    "craft_workshop": {
+      "width": 384,
+      "height": 357,
+      "source": "source/buildings.png",
+      "cell": 2
+    },
+    "equipment_store": {
+      "width": 432,
+      "height": 387,
+      "source": "source/buildings.png",
+      "cell": 3
+    },
+    "shared_lodging": {
+      "width": 384,
+      "height": 317,
+      "source": "source/buildings.png",
+      "cell": 4
+    },
+    "small_home": {
+      "width": 288,
+      "height": 258,
+      "source": "source/buildings.png",
+      "cell": 5
+    },
+    "ordinary_inn": {
+      "width": 432,
+      "height": 369,
+      "source": "source/buildings.png",
+      "cell": 6
+    },
+    "garden_inn": {
+      "width": 480,
+      "height": 424,
+      "source": "source/buildings.png",
+      "cell": 7
+    }
+  },
+  "props": {
+    "anvil": {
+      "frame": 8,
+      "foot": 138,
+      "cell": 144
+    },
+    "workbench": {
+      "frame": 9,
+      "foot": 138,
+      "cell": 144
+    },
+    "rack": {
+      "frame": 10,
+      "foot": 138,
+      "cell": 144
+    },
+    "produce": {
+      "frame": 11,
+      "foot": 138,
+      "cell": 144
+    },
+    "goods": {
+      "frame": 12,
+      "foot": 138,
+      "cell": 144
+    },
+    "table": {
+      "frame": 13,
+      "foot": 138,
+      "cell": 144
+    },
+    "bench": {
+      "frame": 14,
+      "foot": 138,
+      "cell": 144
+    },
+    "board": {
+      "frame": 15,
+      "foot": 138,
+      "cell": 144
+    },
+    "stone": {
+      "frame": 16,
+      "foot": 138,
+      "cell": 144
+    },
+    "well": {
+      "frame": 17,
+      "foot": 138,
+      "cell": 144
+    },
+    "laundry": {
+      "frame": 18,
+      "foot": 138,
+      "cell": 144
+    },
+    "crate": {
+      "frame": 19,
+      "foot": 138,
+      "cell": 144
+    }
+  }
+}

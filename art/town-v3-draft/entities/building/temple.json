@@ -1,0 +1,32 @@
+{
+  "id": "temple",
+  "name": "신전",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        8,
+        7
+      ],
+      "entrance": [
+        4,
+        6
+      ],
+      "texture": "temple",
+      "role": "기도 · 신의 요청"
+    },
+    "oracle": {
+      "range": 2,
+      "note": "D61(2026-09-12) 신탁 소켓 — 론처 /api/oracle 의 사용자 한 줄(state/oracle.json)이 문턱 2칸 안 캐릭터 관측에 '신의 요청'으로. 요청이지 명령이 아니다."
+    },
+    "story": {
+      "trait": "성직자에게 기도하면 축복의 물약을 한 병 받는다. 신의 요청이 들리는 곳",
+      "history": "마을에서 가장 오래된 건물. 어느 신을 모시는지 묻는 이가 없고, 성직자는 \"너희와 계약한 그분\"이라고만 답한다. 벽에는 돌아오지 못한 모험가의 이름이 작게 적혀 있다."
+    }
+  },
+  "note": "role 은 관측 한 줄(SilenceBreaker 임시 문구, 2026-09-14 D69 — 파트너 문장 대기). story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md)."
+}

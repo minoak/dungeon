@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "routes": 31,
+  "toggles": 5,
+  "pointerSelection": true,
+  "regionSelection": true,
+  "mobileWidth": 390,
+  "consoleErrors": [],
+  "gameRuns": 0,
+  "llmCalls": 0
+}

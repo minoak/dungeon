@@ -1,0 +1,18 @@
+{
+  "id": "town_shops",
+  "name": "상점가",
+  "kind": "map",
+  "tags": [
+    "town"
+  ],
+  "comps": {
+    "space": {
+      "role": "district"
+    },
+    "story": {
+      "trait": "대장간과 공방, 장비점이 작업 마당을 둘러싼 구역",
+      "history": "큰길 쪽에는 진열대가, 건물 사이에는 작업장이 놓여 있다."
+    }
+  },
+  "note": "지도 초안 문구. 런타임 미적용."
+}

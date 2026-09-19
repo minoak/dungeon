@@ -67,6 +67,8 @@ export function installControls(app: App): void {
     slider.style.setProperty('--progress', `${pb.last > 0 ? idx / pb.last * 100 : 0}%`);
     $('floorLabel').textContent = cur.level.depth === 0 && app.run?.town ? '모험가의 마을' : `지하 ${cur.level.depth}층`;
     updateCaption();
+    // Scene consumes the same frame after controls; reflect its map-specific zoom.
+    queueMicrotask(() => { $('bZoom').textContent = '확대 ' + app.scene.zoom + '×'; });
   });
   function updateCaption(): void {
     const c = app.focus.char;

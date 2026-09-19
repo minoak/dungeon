@@ -1,0 +1,27 @@
+{
+  "id": "general_store",
+  "name": "잡화점",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        9,
+        6
+      ],
+      "entrance": [
+        4,
+        5
+      ],
+      "texture": "general_store"
+    },
+    "story": {
+      "trait": "생활용품과 식료품을 진열할 가게",
+      "history": "문턱과 마당이 길에 닿아 있다. 잡화점의 서비스는 아직 준비 중이다."
+    }
+  },
+  "note": "마을 v3(2026-09-19): 공간·외형만 연결. 서비스 미구현. 설명은 임시 문구."
+}

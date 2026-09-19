@@ -1,0 +1,82 @@
+{
+  "tree": {
+    "frame": 20,
+    "cell": 144,
+    "foot": 138
+  },
+  "pine": {
+    "frame": 21,
+    "cell": 144,
+    "foot": 138
+  },
+  "hedge": {
+    "frame": 22,
+    "cell": 144,
+    "foot": 138
+  },
+  "flowers": {
+    "frame": 23,
+    "cell": 144,
+    "foot": 138
+  },
+  "stone_wall": {
+    "frame": 24,
+    "cell": 144,
+    "foot": 138
+  },
+  "stone_wall_vertical": {
+    "frame": 25,
+    "cell": 144,
+    "foot": 138
+  },
+  "fence": {
+    "frame": 26,
+    "cell": 144,
+    "foot": 138
+  },
+  "cliff": {
+    "frame": 27,
+    "cell": 144,
+    "foot": 138
+  },
+  "fountain": {
+    "frame": 28,
+    "cell": 144,
+    "foot": 138
+  },
+  "banner_lamp": {
+    "frame": 29,
+    "cell": 144,
+    "foot": 138
+  },
+  "market_red": {
+    "frame": 30,
+    "cell": 144,
+    "foot": 138
+  },
+  "market_blue": {
+    "frame": 31,
+    "cell": 144,
+    "foot": 138
+  },
+  "statue": {
+    "frame": 32,
+    "cell": 144,
+    "foot": 138
+  },
+  "crates": {
+    "frame": 33,
+    "cell": 144,
+    "foot": 138
+  },
+  "cart": {
+    "frame": 34,
+    "cell": 144,
+    "foot": 138
+  },
+  "stairs": {
+    "frame": 35,
+    "cell": 144,
+    "foot": 138
+  }
+}

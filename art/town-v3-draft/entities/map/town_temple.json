@@ -1,0 +1,18 @@
+{
+  "id": "town_temple",
+  "name": "신전 구역",
+  "kind": "map",
+  "tags": [
+    "town"
+  ],
+  "comps": {
+    "space": {
+      "role": "district"
+    },
+    "story": {
+      "trait": "신전과 정원, 추모비가 있는 조용한 구역",
+      "history": "기도하는 사람과 이름을 읽는 사람이 앞뜰을 나누어 쓴다."
+    }
+  },
+  "note": "지도 초안 문구. 런타임 미적용."
+}

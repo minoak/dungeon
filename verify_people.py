@@ -38,7 +38,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = tempfile.mkdtemp(prefix="wl_people_")
 STATE = os.path.join(ROOT, "state")
 os.makedirs(STATE, exist_ok=True)
-BASE_ENV = dict(DUNGEON_GM="0", DUNGEON_STEP_DELAY="0", DUNGEON_TURNS="60", DUNGEON_W="40", DUNGEON_H="16",
+BASE_ENV = dict(DUNGEON_GM="0", DUNGEON_STEP_DELAY="0", DUNGEON_TURNS="160", DUNGEON_W="40", DUNGEON_H="16",
                 DUNGEON_DEPTHS="2", DUNGEON_SEED="7", DUNGEON_MONSTERS="0", DUNGEON_TRAPS="0", DUNGEON_LURKERS="0",
                 DUNGEON_BESTIARY_FILE="", DUNGEON_PARTY_FILE=os.path.join(HERE, "party.json"), DUNGEON_STATE_DIR=STATE,
                 DUNGEON_TOWN="1", DUNGEON_BRAIN_BACKEND="dummy", DUNGEON_BOSS="0", DUNGEON_RUNS_DIR=os.path.join(ROOT, "runs"),
@@ -127,7 +127,7 @@ check("① 관측에 people 없음 · 프롬프트에 '- 동료: 카야(봇2), �
 print("── ② 낯선 사람")
 d, bots = town()
 b1, b2, b3 = bots
-g, t = cells(d, "guild_district"), cells(d, "tavern_district")
+g, t = cells(d, "guild_district"), cells(d, "main_street")
 m = len(g) // 2
 put(b1, g[m]); put(b2, g[m + 2]); put(b3, t[len(t) // 2])
 p1, _, o1 = full_prompt(d, bots, b1)
@@ -238,7 +238,7 @@ G.dummy_brain = lambda obs, char="?": ({"type": "search"} if obs.get("town") and
 _np8 = G.new_parties
 def preset8():                                       # 조각 4: 던전 입구는 파티를 맺은 사람만 — 층을 옮기는 장면을 보려면 맺어 둔 파티가 있어야 한다
     p = _np8()
-    G.party_join(p, ["1", "2"])
+    G.party_join(p, ["1", "2", "3"])                 # 조각 5: 3명이 맺은 파티만 입구를 지난다
     return p
 G.new_parties = preset8
 try:

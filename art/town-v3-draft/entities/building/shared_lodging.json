@@ -1,0 +1,27 @@
+{
+  "id": "shared_lodging",
+  "name": "공동 숙소",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        8,
+        6
+      ],
+      "entrance": [
+        4,
+        5
+      ],
+      "texture": "draft_shared_lodging"
+    },
+    "story": {
+      "trait": "여럿이 잠자리를 나누는 작은 숙소",
+      "history": "지도 초안에 마련한 공간. 세부 서비스는 아직 정하지 않았다."
+    }
+  },
+  "note": "초안 전용 건물. draft_ 텍스처는 미리보기의 임시 도형이며 게임 에셋이 아니다."
+}

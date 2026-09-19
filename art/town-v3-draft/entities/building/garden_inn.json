@@ -1,0 +1,27 @@
+{
+  "id": "garden_inn",
+  "name": "정원 숙소",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        10,
+        6
+      ],
+      "entrance": [
+        5,
+        5
+      ],
+      "texture": "draft_garden_inn"
+    },
+    "story": {
+      "trait": "넓은 객실과 작은 정원을 둔 숙소",
+      "history": "지도 초안에 마련한 공간. 세부 서비스는 아직 정하지 않았다."
+    }
+  },
+  "note": "초안 전용 건물. draft_ 텍스처는 미리보기의 임시 도형이며 게임 에셋이 아니다."
+}

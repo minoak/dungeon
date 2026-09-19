@@ -501,7 +501,7 @@ check("⑫ 행인 3 — 떠돌이 모험자·견습 모험자(길드 지구 앞�
 b12 = mkbot("1", *s12["1"])
 start12 = {n: (f.x, f.y) for n, f in wk.items()}
 moved = 0; bad = 0; traj = []
-YARD = {n: (G.ENT.npc(e).get("walk") or {}).get("rect") for n, e in (("떠돌이 모험자", "wandering_adventurer"), ("견습 모험자", "apprentice_adventurer"),
+YARD = {n: (d12.npc_defs[n].get("walk") or {}).get("rect") for n, e in (("떠돌이 모험자", "wandering_adventurer"), ("견습 모험자", "apprentice_adventurer"),
                                                                        ("노점 상인", "street_vendor"))}   # D82 걷는 자리(앞마당) — 노점 상인은 없음(구역 전체)
 for _ in range(40):
     ev = d12.walk_npcs([b12])
@@ -615,14 +615,14 @@ check("⑬ 러너 이월 배선: 재스폰이 boons 와 str/dex 를 실어 나�
 print("── ⑭ D75 장소·사람의 이야기(09-15 파트너 '각 장소나 오브젝트에 … 역사나 이야기 그리고 장소의 특징을 정해두는게')")
 defs14 = ENT.load()
 with_story = [k for k, v in defs14.items() if (v["comps"].get("story") or {}) and v["kind"] != "companion"]   # D81(09-17): 동료 프리셋의 story 는 따로 센다(verify_companion) — 여기는 장소·마을 사람 17벌
-check("⑭ 정의: story{trait, history} 17(건물 4·마을 NPC 6·구역 6·마을 1) · 검증기가 잘못된 story(빈 trait·모르는 키)를 잡는다",
-      len(with_story) == 17 and all(set(defs14[k]["comps"]["story"]) == {"trait", "history"} for k in with_story)
+check("⑭ 정의: story{trait, history} 27(건물 12종·마을 NPC 6·구역 8종·마을 1) · 검증기가 잘못된 story(빈 trait·모르는 키)를 잡는다",
+      len(with_story) == 27 and all(set(defs14[k]["comps"]["story"]) == {"trait", "history"} for k in with_story)
       and bool(ENT._problems([("map/bad.json", {"id": "bad", "name": "b", "kind": "map", "tags": ["town"], "comps": {"space": {"role": "district"}, "story": {"trait": ""}}})], "map"))
       and bool(ENT._problems([("map/bad2.json", {"id": "bad2", "name": "b", "kind": "map", "tags": ["town"], "comps": {"space": {"role": "district"}, "story": {"lore": "x"}}})], "map")))
 d14, s14 = show_runner.build_town(apart=True, walkers=True)
 pr14 = by_name(d14, "npc", "성직자"); tp14 = by_name(d14, "building", "신전")
-check("⑭ 엔진: place_story 에 건물 3·던전 입구·정착 NPC 3·행인 3 = 10 · zone_story 6 · town_notice = 마을 정의 history",
-      len(d14.place_story) == 10 and d14._exit_fid in d14.place_story and pr14.id in d14.place_story and tp14.id in d14.place_story
+check("⑭ 엔진: place_story 에 건물 12·던전 입구·정착 NPC 3·행인 3 = 19 · zone_story 6 · town_notice = 마을 정의 history",
+      len(d14.place_story) == 19 and d14._exit_fid in d14.place_story and pr14.id in d14.place_story and tp14.id in d14.place_story
       and len(d14.zone_story) == 6 and d14.town_notice == ENT.get("town_wonderland")["comps"]["story"]["history"])
 far_xy = next((x, y) for y in range(d14.h) for x in range(d14.w)
               if d14.grid[y][x] == G.FLOOR and d14.feature_at(x, y) is None and d14._town_zone(x, y)

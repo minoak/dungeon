@@ -1,0 +1,969 @@
+{
+  "schema": "town-layout-v1",
+  "id": "town-full-v3",
+  "space": "town_wonderland",
+  "label": "원더랜드 마을",
+  "size": [
+    64,
+    48
+  ],
+  "tileSize": 48,
+  "border": 1,
+  "regions": [
+    {
+      "id": "temple_district",
+      "entity": "town_temple",
+      "name": "신전 지구",
+      "rects": [
+        [
+          0,
+          0,
+          20,
+          15
+        ]
+      ]
+    },
+    {
+      "id": "guild_district",
+      "entity": "town_guild",
+      "name": "모험가 길드 지구",
+      "rects": [
+        [
+          25,
+          0,
+          39,
+          15
+        ]
+      ]
+    },
+    {
+      "id": "main_street",
+      "entity": "town_main_street",
+      "name": "번화가",
+      "rects": [
+        [
+          20,
+          0,
+          5,
+          15
+        ],
+        [
+          0,
+          15,
+          40,
+          15
+        ]
+      ]
+    },
+    {
+      "id": "shop_district",
+      "entity": "town_shops",
+      "name": "상점가",
+      "rects": [
+        [
+          40,
+          15,
+          24,
+          17
+        ]
+      ]
+    },
+    {
+      "id": "residential_district",
+      "entity": "town_residential",
+      "name": "주거구역",
+      "rects": [
+        [
+          0,
+          30,
+          40,
+          18
+        ]
+      ]
+    },
+    {
+      "id": "dungeon_district",
+      "entity": "town_dungeon",
+      "name": "던전 입구 지구",
+      "rects": [
+        [
+          40,
+          32,
+          24,
+          16
+        ]
+      ]
+    }
+  ],
+  "buildings": [
+    {
+      "id": "temple_1",
+      "entity": "temple",
+      "cell": [
+        5,
+        5
+      ],
+      "region": "temple_district"
+    },
+    {
+      "id": "guild_1",
+      "entity": "guild_hall",
+      "cell": [
+        31,
+        4
+      ],
+      "region": "guild_district"
+    },
+    {
+      "id": "tavern_1",
+      "entity": "tavern",
+      "cell": [
+        3,
+        19
+      ],
+      "region": "main_street"
+    },
+    {
+      "id": "gate_1",
+      "entity": "dungeon_gate",
+      "cell": [
+        51,
+        37
+      ],
+      "region": "dungeon_district"
+    },
+    {
+      "id": "z_general_1",
+      "entity": "general_store",
+      "cell": [
+        27,
+        18
+      ],
+      "region": "main_street"
+    },
+    {
+      "id": "z_smith_1",
+      "entity": "blacksmith",
+      "cell": [
+        43,
+        17
+      ],
+      "region": "shop_district"
+    },
+    {
+      "id": "z_workshop_1",
+      "entity": "craft_workshop",
+      "cell": [
+        54,
+        17
+      ],
+      "region": "shop_district"
+    },
+    {
+      "id": "z_equipment_1",
+      "entity": "equipment_store",
+      "cell": [
+        49,
+        25
+      ],
+      "region": "shop_district"
+    },
+    {
+      "id": "z_dorm_1",
+      "entity": "shared_lodging",
+      "cell": [
+        2,
+        33
+      ],
+      "region": "residential_district"
+    },
+    {
+      "id": "z_home_1",
+      "entity": "small_home",
+      "cell": [
+        13,
+        33
+      ],
+      "region": "residential_district"
+    },
+    {
+      "id": "z_inn_1",
+      "entity": "ordinary_inn",
+      "cell": [
+        22,
+        33
+      ],
+      "region": "residential_district"
+    },
+    {
+      "id": "z_home_2",
+      "entity": "small_home",
+      "cell": [
+        3,
+        42
+      ],
+      "region": "residential_district"
+    },
+    {
+      "id": "z_home_3",
+      "entity": "small_home",
+      "cell": [
+        13,
+        42
+      ],
+      "region": "residential_district"
+    },
+    {
+      "id": "z_garden_inn_1",
+      "entity": "garden_inn",
+      "cell": [
+        27,
+        41
+      ],
+      "region": "residential_district"
+    }
+  ],
+  "ground": [
+    {
+      "tile": "grass",
+      "rect": [
+        0,
+        0,
+        64,
+        48
+      ]
+    },
+    {
+      "tile": "plaza_a",
+      "rect": [
+        20,
+        0,
+        5,
+        30
+      ]
+    },
+    {
+      "tile": "plaza_a",
+      "rect": [
+        0,
+        26,
+        64,
+        4
+      ]
+    },
+    {
+      "tile": "plaza_a",
+      "rect": [
+        0,
+        15,
+        64,
+        2
+      ]
+    },
+    {
+      "tile": "plaza_a",
+      "rect": [
+        3,
+        11,
+        14,
+        4
+      ]
+    },
+    {
+      "tile": "plaza_a",
+      "rect": [
+        29,
+        10,
+        20,
+        5
+      ]
+    },
+    {
+      "tile": "plaza_a",
+      "rect": [
+        40,
+        23,
+        24,
+        2
+      ]
+    },
+    {
+      "tile": "plaza_a",
+      "rect": [
+        40,
+        15,
+        3,
+        33
+      ]
+    },
+    {
+      "tile": "plaza_a",
+      "rect": [
+        49,
+        41,
+        12,
+        5
+      ]
+    },
+    {
+      "tile": "earth",
+      "rect": [
+        2,
+        26,
+        14,
+        3
+      ]
+    },
+    {
+      "tile": "earth",
+      "rect": [
+        16,
+        18,
+        9,
+        8
+      ]
+    },
+    {
+      "tile": "earth",
+      "rect": [
+        43,
+        23,
+        19,
+        2
+      ]
+    },
+    {
+      "tile": "earth",
+      "rect": [
+        0,
+        30,
+        40,
+        3
+      ]
+    },
+    {
+      "tile": "earth",
+      "rect": [
+        0,
+        39,
+        40,
+        3
+      ]
+    },
+    {
+      "tile": "earth",
+      "rect": [
+        10,
+        30,
+        3,
+        18
+      ]
+    },
+    {
+      "tile": "earth",
+      "rect": [
+        19,
+        30,
+        3,
+        18
+      ]
+    },
+    {
+      "tile": "earth",
+      "rect": [
+        25,
+        39,
+        14,
+        9
+      ]
+    },
+    {
+      "tile": "alley",
+      "rect": [
+        37,
+        30,
+        6,
+        18
+      ]
+    },
+    {
+      "tile": "alley",
+      "rect": [
+        43,
+        32,
+        21,
+        3
+      ]
+    },
+    {
+      "tile": "alley",
+      "rect": [
+        47,
+        33,
+        3,
+        15
+      ]
+    },
+    {
+      "tile": "alley",
+      "rect": [
+        16,
+        7,
+        5,
+        8
+      ]
+    },
+    {
+      "tile": "alley",
+      "rect": [
+        24,
+        12,
+        5,
+        5
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "temple_district",
+      "to": "main_street",
+      "cells": [
+        [
+          19,
+          12
+        ],
+        [
+          20,
+          12
+        ]
+      ]
+    },
+    {
+      "from": "guild_district",
+      "to": "main_street",
+      "cells": [
+        [
+          25,
+          13
+        ],
+        [
+          24,
+          13
+        ]
+      ]
+    },
+    {
+      "from": "guild_district",
+      "to": "shop_district",
+      "cells": [
+        [
+          45,
+          14
+        ],
+        [
+          45,
+          15
+        ]
+      ]
+    },
+    {
+      "from": "main_street",
+      "to": "shop_district",
+      "cells": [
+        [
+          39,
+          27
+        ],
+        [
+          40,
+          27
+        ]
+      ]
+    },
+    {
+      "from": "main_street",
+      "to": "residential_district",
+      "cells": [
+        [
+          21,
+          29
+        ],
+        [
+          21,
+          30
+        ]
+      ]
+    },
+    {
+      "from": "residential_district",
+      "to": "shop_district",
+      "cells": [
+        [
+          39,
+          31
+        ],
+        [
+          40,
+          31
+        ]
+      ]
+    },
+    {
+      "from": "residential_district",
+      "to": "dungeon_district",
+      "cells": [
+        [
+          39,
+          40
+        ],
+        [
+          40,
+          40
+        ]
+      ]
+    },
+    {
+      "from": "shop_district",
+      "to": "dungeon_district",
+      "cells": [
+        [
+          47,
+          31
+        ],
+        [
+          47,
+          32
+        ]
+      ]
+    }
+  ],
+  "blocked_rects": [
+    {
+      "id": "prop:anvil",
+      "rect": [
+        46,
+        23,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:workbench",
+      "rect": [
+        59,
+        23,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:display",
+      "rect": [
+        60,
+        28,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:produce",
+      "rect": [
+        17,
+        20,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:goods",
+      "rect": [
+        22,
+        22,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:table",
+      "rect": [
+        17,
+        25,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:bench_market",
+      "rect": [
+        25,
+        25,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:noticeboard",
+      "rect": [
+        28,
+        10,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:bench_guild",
+      "rect": [
+        49,
+        12,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:memorial",
+      "rect": [
+        3,
+        6,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:bench_temple",
+      "rect": [
+        15,
+        12,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:well",
+      "rect": [
+        15,
+        40,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:laundry",
+      "rect": [
+        4,
+        31,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:storage",
+      "rect": [
+        33,
+        39,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "prop:bench_gate",
+      "rect": [
+        60,
+        44,
+        1,
+        1
+      ]
+    }
+  ],
+  "entrances": [],
+  "starts": {
+    "1": [
+      21,
+      27
+    ],
+    "2": [
+      10,
+      27
+    ],
+    "3": [
+      10,
+      13
+    ]
+  },
+  "dungeon_entry": {
+    "cell": [
+      55,
+      42
+    ]
+  },
+  "npcs": [
+    {
+      "id": "guild_receptionist",
+      "cell": [
+        38,
+        12
+      ],
+      "row": 1
+    },
+    {
+      "id": "tavern_keeper",
+      "cell": [
+        10,
+        26
+      ],
+      "row": 2
+    },
+    {
+      "id": "temple_attendant",
+      "cell": [
+        10,
+        12
+      ],
+      "row": 0
+    }
+  ],
+  "props": [
+    {
+      "frame": 8,
+      "x": 2232.0,
+      "y": 1152,
+      "width": 58
+    },
+    {
+      "frame": 13,
+      "x": 2856.0,
+      "y": 1152,
+      "width": 96
+    },
+    {
+      "frame": 10,
+      "x": 2904.0,
+      "y": 1392,
+      "width": 72
+    },
+    {
+      "frame": 11,
+      "x": 840.0,
+      "y": 1008,
+      "width": 96
+    },
+    {
+      "frame": 12,
+      "x": 1080.0,
+      "y": 1104,
+      "width": 96
+    },
+    {
+      "frame": 13,
+      "x": 840.0,
+      "y": 1248,
+      "width": 96
+    },
+    {
+      "frame": 14,
+      "x": 1224.0,
+      "y": 1248,
+      "width": 72
+    },
+    {
+      "frame": 15,
+      "x": 1368.0,
+      "y": 528,
+      "width": 72
+    },
+    {
+      "frame": 14,
+      "x": 2376.0,
+      "y": 624,
+      "width": 72
+    },
+    {
+      "frame": 16,
+      "x": 168.0,
+      "y": 336,
+      "width": 72
+    },
+    {
+      "frame": 14,
+      "x": 744.0,
+      "y": 624,
+      "width": 72
+    },
+    {
+      "frame": 17,
+      "x": 744.0,
+      "y": 1968,
+      "width": 72
+    },
+    {
+      "frame": 18,
+      "x": 216.0,
+      "y": 1536,
+      "width": 96
+    },
+    {
+      "frame": 19,
+      "x": 1608.0,
+      "y": 1920,
+      "width": 72
+    },
+    {
+      "frame": 14,
+      "x": 2904.0,
+      "y": 2160,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 216.0,
+      "y": 624,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 696.0,
+      "y": 624,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 1464.0,
+      "y": 576,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 2136.0,
+      "y": 576,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 1272.0,
+      "y": 1200,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 1752.0,
+      "y": 1200,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 2040.0,
+      "y": 1200,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 3000.0,
+      "y": 1200,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 2328.0,
+      "y": 1536,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 2808.0,
+      "y": 1536,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 72.0,
+      "y": 1920,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 504.0,
+      "y": 1920,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 1032.0,
+      "y": 1920,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 1560.0,
+      "y": 1920,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 1272.0,
+      "y": 2304,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 1848.0,
+      "y": 2304,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 2424.0,
+      "y": 2112,
+      "width": 72
+    },
+    {
+      "frame": 3,
+      "x": 2904.0,
+      "y": 2112,
+      "width": 72
+    },
+    {
+      "frame": 0,
+      "x": 72.0,
+      "y": 1248,
+      "width": 96
+    },
+    {
+      "frame": 0,
+      "x": 936.0,
+      "y": 816,
+      "width": 96
+    },
+    {
+      "frame": 0,
+      "x": 1272.0,
+      "y": 816,
+      "width": 96
+    },
+    {
+      "frame": 0,
+      "x": 1896.0,
+      "y": 1440,
+      "width": 96
+    },
+    {
+      "frame": 0,
+      "x": 2136.0,
+      "y": 1584,
+      "width": 96
+    },
+    {
+      "frame": 0,
+      "x": 2328.0,
+      "y": 2208,
+      "width": 96
+    },
+    {
+      "frame": 15,
+      "x": 24.0,
+      "y": 1344,
+      "width": 72,
+      "name": "마을 밖 · 닫힌 길"
+    }
+  ],
+  "interiors": false,
+  "note": "마을 v3: 여섯 구역·건물 14동. 새 생활 시설은 공간과 외형만 있으며 거래·제작·숙박은 아직 지원하지 않는다. 서쪽 바깥 길은 닫힌 예약 자리다."
+}

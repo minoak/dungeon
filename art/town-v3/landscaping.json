@@ -1,0 +1,2882 @@
+{
+  "details": [
+    {
+      "id": "detail:fountain:0",
+      "kind": "fountain",
+      "cell": [
+        22,
+        19
+      ],
+      "rect": [
+        21,
+        18,
+        3,
+        2
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:market_red:1",
+      "kind": "market_red",
+      "cell": [
+        26,
+        27
+      ],
+      "rect": [
+        25,
+        27,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:market_blue:2",
+      "kind": "market_blue",
+      "cell": [
+        18,
+        23
+      ],
+      "rect": [
+        18,
+        23,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:cart:3",
+      "kind": "cart",
+      "cell": [
+        28,
+        25
+      ],
+      "rect": [
+        28,
+        25,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:crates:4",
+      "kind": "crates",
+      "cell": [
+        15,
+        21
+      ],
+      "rect": [
+        15,
+        21,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:crates:5",
+      "kind": "crates",
+      "cell": [
+        24,
+        23
+      ],
+      "rect": [
+        24,
+        23,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:6",
+      "kind": "stone_wall",
+      "cell": [
+        2,
+        1
+      ],
+      "rect": [
+        1,
+        1,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:7",
+      "kind": "stone_wall",
+      "cell": [
+        5,
+        1
+      ],
+      "rect": [
+        4,
+        1,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:8",
+      "kind": "stone_wall",
+      "cell": [
+        8,
+        1
+      ],
+      "rect": [
+        7,
+        1,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:9",
+      "kind": "stone_wall",
+      "cell": [
+        11,
+        1
+      ],
+      "rect": [
+        10,
+        1,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:10",
+      "kind": "stone_wall",
+      "cell": [
+        14,
+        1
+      ],
+      "rect": [
+        13,
+        1,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:11",
+      "kind": "stone_wall",
+      "cell": [
+        17,
+        1
+      ],
+      "rect": [
+        16,
+        1,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:12",
+      "kind": "stone_wall",
+      "cell": [
+        2,
+        14
+      ],
+      "rect": [
+        1,
+        14,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:13",
+      "kind": "stone_wall",
+      "cell": [
+        5,
+        14
+      ],
+      "rect": [
+        4,
+        14,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:14",
+      "kind": "stone_wall",
+      "cell": [
+        14,
+        14
+      ],
+      "rect": [
+        13,
+        14,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:15",
+      "kind": "stone_wall",
+      "cell": [
+        17,
+        14
+      ],
+      "rect": [
+        16,
+        14,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall_vertical:16",
+      "kind": "stone_wall_vertical",
+      "cell": [
+        18,
+        4
+      ],
+      "rect": [
+        18,
+        2,
+        1,
+        3
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall_vertical:17",
+      "kind": "stone_wall_vertical",
+      "cell": [
+        18,
+        7
+      ],
+      "rect": [
+        18,
+        5,
+        1,
+        3
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall_vertical:18",
+      "kind": "stone_wall_vertical",
+      "cell": [
+        18,
+        10
+      ],
+      "rect": [
+        18,
+        8,
+        1,
+        3
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:19",
+      "kind": "stone_wall",
+      "cell": [
+        27,
+        14
+      ],
+      "rect": [
+        26,
+        14,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:20",
+      "kind": "stone_wall",
+      "cell": [
+        49,
+        14
+      ],
+      "rect": [
+        48,
+        14,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:21",
+      "kind": "stone_wall",
+      "cell": [
+        52,
+        14
+      ],
+      "rect": [
+        51,
+        14,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:22",
+      "kind": "stone_wall",
+      "cell": [
+        55,
+        14
+      ],
+      "rect": [
+        54,
+        14,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:23",
+      "kind": "stone_wall",
+      "cell": [
+        58,
+        14
+      ],
+      "rect": [
+        57,
+        14,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:24",
+      "kind": "stone_wall",
+      "cell": [
+        61,
+        14
+      ],
+      "rect": [
+        60,
+        14,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:25",
+      "kind": "stone_wall",
+      "cell": [
+        1,
+        30
+      ],
+      "rect": [
+        0,
+        30,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:26",
+      "kind": "stone_wall",
+      "cell": [
+        4,
+        30
+      ],
+      "rect": [
+        3,
+        30,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:27",
+      "kind": "stone_wall",
+      "cell": [
+        7,
+        30
+      ],
+      "rect": [
+        6,
+        30,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:28",
+      "kind": "stone_wall",
+      "cell": [
+        13,
+        30
+      ],
+      "rect": [
+        12,
+        30,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:29",
+      "kind": "stone_wall",
+      "cell": [
+        16,
+        30
+      ],
+      "rect": [
+        15,
+        30,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:30",
+      "kind": "stone_wall",
+      "cell": [
+        28,
+        30
+      ],
+      "rect": [
+        27,
+        30,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:31",
+      "kind": "stone_wall",
+      "cell": [
+        31,
+        30
+      ],
+      "rect": [
+        30,
+        30,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:32",
+      "kind": "stone_wall",
+      "cell": [
+        34,
+        30
+      ],
+      "rect": [
+        33,
+        30,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:33",
+      "kind": "stone_wall",
+      "cell": [
+        37,
+        30
+      ],
+      "rect": [
+        36,
+        30,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:fence:34",
+      "kind": "fence",
+      "cell": [
+        3,
+        41
+      ],
+      "rect": [
+        2,
+        41,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:fence:35",
+      "kind": "fence",
+      "cell": [
+        7,
+        41
+      ],
+      "rect": [
+        6,
+        41,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:fence:36",
+      "kind": "fence",
+      "cell": [
+        15,
+        41
+      ],
+      "rect": [
+        14,
+        41,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:37",
+      "kind": "stone_wall",
+      "cell": [
+        3,
+        47
+      ],
+      "rect": [
+        2,
+        47,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:38",
+      "kind": "stone_wall",
+      "cell": [
+        28,
+        47
+      ],
+      "rect": [
+        27,
+        47,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall_vertical:39",
+      "kind": "stone_wall_vertical",
+      "cell": [
+        39,
+        34
+      ],
+      "rect": [
+        39,
+        32,
+        1,
+        3
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall_vertical:40",
+      "kind": "stone_wall_vertical",
+      "cell": [
+        39,
+        37
+      ],
+      "rect": [
+        39,
+        35,
+        1,
+        3
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall_vertical:41",
+      "kind": "stone_wall_vertical",
+      "cell": [
+        39,
+        43
+      ],
+      "rect": [
+        39,
+        41,
+        1,
+        3
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall_vertical:42",
+      "kind": "stone_wall_vertical",
+      "cell": [
+        39,
+        46
+      ],
+      "rect": [
+        39,
+        44,
+        1,
+        3
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:43",
+      "kind": "stone_wall",
+      "cell": [
+        45,
+        32
+      ],
+      "rect": [
+        44,
+        32,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:44",
+      "kind": "stone_wall",
+      "cell": [
+        51,
+        32
+      ],
+      "rect": [
+        50,
+        32,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:45",
+      "kind": "stone_wall",
+      "cell": [
+        57,
+        32
+      ],
+      "rect": [
+        56,
+        32,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:46",
+      "kind": "stone_wall",
+      "cell": [
+        60,
+        32
+      ],
+      "rect": [
+        59,
+        32,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:47",
+      "kind": "stone_wall",
+      "cell": [
+        63,
+        32
+      ],
+      "rect": [
+        62,
+        32,
+        2,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:48",
+      "kind": "stone_wall",
+      "cell": [
+        45,
+        47
+      ],
+      "rect": [
+        44,
+        47,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:49",
+      "kind": "stone_wall",
+      "cell": [
+        48,
+        47
+      ],
+      "rect": [
+        47,
+        47,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:50",
+      "kind": "stone_wall",
+      "cell": [
+        59,
+        47
+      ],
+      "rect": [
+        58,
+        47,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stone_wall:51",
+      "kind": "stone_wall",
+      "cell": [
+        62,
+        47
+      ],
+      "rect": [
+        61,
+        47,
+        3,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:statue:52",
+      "kind": "statue",
+      "cell": [
+        2,
+        8
+      ],
+      "rect": [
+        2,
+        8,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:53",
+      "kind": "flowers",
+      "cell": [
+        3,
+        3
+      ],
+      "rect": [
+        3,
+        3,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:54",
+      "kind": "flowers",
+      "cell": [
+        15,
+        4
+      ],
+      "rect": [
+        15,
+        4,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:55",
+      "kind": "flowers",
+      "cell": [
+        15,
+        7
+      ],
+      "rect": [
+        15,
+        7,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:56",
+      "kind": "flowers",
+      "cell": [
+        2,
+        11
+      ],
+      "rect": [
+        2,
+        11,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:57",
+      "kind": "flowers",
+      "cell": [
+        16,
+        13
+      ],
+      "rect": [
+        16,
+        13,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:58",
+      "kind": "flowers",
+      "cell": [
+        27,
+        11
+      ],
+      "rect": [
+        27,
+        11,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:59",
+      "kind": "flowers",
+      "cell": [
+        46,
+        11
+      ],
+      "rect": [
+        46,
+        11,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:60",
+      "kind": "flowers",
+      "cell": [
+        15,
+        18
+      ],
+      "rect": [
+        15,
+        18,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:61",
+      "kind": "flowers",
+      "cell": [
+        25,
+        17
+      ],
+      "rect": [
+        25,
+        17,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:62",
+      "kind": "flowers",
+      "cell": [
+        38,
+        25
+      ],
+      "rect": [
+        38,
+        25,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:63",
+      "kind": "flowers",
+      "cell": [
+        43,
+        25
+      ],
+      "rect": [
+        43,
+        25,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:64",
+      "kind": "flowers",
+      "cell": [
+        61,
+        25
+      ],
+      "rect": [
+        61,
+        25,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:65",
+      "kind": "flowers",
+      "cell": [
+        44,
+        29
+      ],
+      "rect": [
+        44,
+        29,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:66",
+      "kind": "flowers",
+      "cell": [
+        62,
+        29
+      ],
+      "rect": [
+        62,
+        29,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:67",
+      "kind": "flowers",
+      "cell": [
+        1,
+        37
+      ],
+      "rect": [
+        1,
+        37,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:68",
+      "kind": "flowers",
+      "cell": [
+        13,
+        38
+      ],
+      "rect": [
+        13,
+        38,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:69",
+      "kind": "flowers",
+      "cell": [
+        21,
+        38
+      ],
+      "rect": [
+        21,
+        38,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:70",
+      "kind": "flowers",
+      "cell": [
+        31,
+        39
+      ],
+      "rect": [
+        31,
+        39,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:71",
+      "kind": "flowers",
+      "cell": [
+        1,
+        45
+      ],
+      "rect": [
+        1,
+        45,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:72",
+      "kind": "flowers",
+      "cell": [
+        25,
+        46
+      ],
+      "rect": [
+        25,
+        46,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:73",
+      "kind": "flowers",
+      "cell": [
+        37,
+        46
+      ],
+      "rect": [
+        37,
+        46,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:74",
+      "kind": "flowers",
+      "cell": [
+        50,
+        44
+      ],
+      "rect": [
+        50,
+        44,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:flowers:75",
+      "kind": "flowers",
+      "cell": [
+        60,
+        42
+      ],
+      "rect": [
+        60,
+        42,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:76",
+      "kind": "hedge",
+      "cell": [
+        3,
+        4
+      ],
+      "rect": [
+        3,
+        4,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:77",
+      "kind": "hedge",
+      "cell": [
+        15,
+        5
+      ],
+      "rect": [
+        15,
+        5,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:78",
+      "kind": "hedge",
+      "cell": [
+        16,
+        9
+      ],
+      "rect": [
+        16,
+        9,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:79",
+      "kind": "hedge",
+      "cell": [
+        27,
+        8
+      ],
+      "rect": [
+        27,
+        8,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:80",
+      "kind": "hedge",
+      "cell": [
+        46,
+        8
+      ],
+      "rect": [
+        46,
+        8,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:81",
+      "kind": "hedge",
+      "cell": [
+        49,
+        9
+      ],
+      "rect": [
+        49,
+        9,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:82",
+      "kind": "hedge",
+      "cell": [
+        52,
+        10
+      ],
+      "rect": [
+        52,
+        10,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:83",
+      "kind": "hedge",
+      "cell": [
+        56,
+        10
+      ],
+      "rect": [
+        56,
+        10,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:84",
+      "kind": "hedge",
+      "cell": [
+        59,
+        10
+      ],
+      "rect": [
+        59,
+        10,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:85",
+      "kind": "hedge",
+      "cell": [
+        1,
+        29
+      ],
+      "rect": [
+        1,
+        29,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:86",
+      "kind": "hedge",
+      "cell": [
+        15,
+        29
+      ],
+      "rect": [
+        15,
+        29,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:87",
+      "kind": "hedge",
+      "cell": [
+        27,
+        29
+      ],
+      "rect": [
+        27,
+        29,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:88",
+      "kind": "hedge",
+      "cell": [
+        1,
+        40
+      ],
+      "rect": [
+        1,
+        40,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:89",
+      "kind": "hedge",
+      "cell": [
+        14,
+        40
+      ],
+      "rect": [
+        14,
+        40,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:90",
+      "kind": "hedge",
+      "cell": [
+        18,
+        41
+      ],
+      "rect": [
+        18,
+        41,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:91",
+      "kind": "hedge",
+      "cell": [
+        26,
+        41
+      ],
+      "rect": [
+        26,
+        41,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:92",
+      "kind": "hedge",
+      "cell": [
+        2,
+        46
+      ],
+      "rect": [
+        2,
+        46,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:93",
+      "kind": "hedge",
+      "cell": [
+        44,
+        36
+      ],
+      "rect": [
+        44,
+        36,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:94",
+      "kind": "hedge",
+      "cell": [
+        45,
+        42
+      ],
+      "rect": [
+        45,
+        42,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:hedge:95",
+      "kind": "hedge",
+      "cell": [
+        62,
+        43
+      ],
+      "rect": [
+        62,
+        43,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:96",
+      "kind": "banner_lamp",
+      "cell": [
+        19,
+        8
+      ],
+      "rect": [
+        19,
+        8,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:97",
+      "kind": "banner_lamp",
+      "cell": [
+        25,
+        8
+      ],
+      "rect": [
+        25,
+        8,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:98",
+      "kind": "banner_lamp",
+      "cell": [
+        19,
+        14
+      ],
+      "rect": [
+        19,
+        14,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:99",
+      "kind": "banner_lamp",
+      "cell": [
+        25,
+        14
+      ],
+      "rect": [
+        25,
+        14,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:100",
+      "kind": "banner_lamp",
+      "cell": [
+        15,
+        26
+      ],
+      "rect": [
+        15,
+        26,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:101",
+      "kind": "banner_lamp",
+      "cell": [
+        27,
+        26
+      ],
+      "rect": [
+        27,
+        26,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:102",
+      "kind": "banner_lamp",
+      "cell": [
+        39,
+        17
+      ],
+      "rect": [
+        39,
+        17,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:103",
+      "kind": "banner_lamp",
+      "cell": [
+        39,
+        28
+      ],
+      "rect": [
+        39,
+        28,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:104",
+      "kind": "banner_lamp",
+      "cell": [
+        9,
+        31
+      ],
+      "rect": [
+        9,
+        31,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:105",
+      "kind": "banner_lamp",
+      "cell": [
+        23,
+        31
+      ],
+      "rect": [
+        23,
+        31,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:106",
+      "kind": "banner_lamp",
+      "cell": [
+        23,
+        41
+      ],
+      "rect": [
+        23,
+        41,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:107",
+      "kind": "banner_lamp",
+      "cell": [
+        43,
+        33
+      ],
+      "rect": [
+        43,
+        33,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:108",
+      "kind": "banner_lamp",
+      "cell": [
+        48,
+        42
+      ],
+      "rect": [
+        48,
+        42,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:109",
+      "kind": "banner_lamp",
+      "cell": [
+        61,
+        42
+      ],
+      "rect": [
+        61,
+        42,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:banner_lamp:110",
+      "kind": "banner_lamp",
+      "cell": [
+        9,
+        46
+      ],
+      "rect": [
+        9,
+        46,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:stairs:111",
+      "kind": "stairs",
+      "cell": [
+        26,
+        13
+      ],
+      "rect": null,
+      "solid": false
+    },
+    {
+      "id": "detail:stairs:112",
+      "kind": "stairs",
+      "cell": [
+        50,
+        13
+      ],
+      "rect": null,
+      "solid": false
+    },
+    {
+      "id": "detail:stairs:113",
+      "kind": "stairs",
+      "cell": [
+        14,
+        28
+      ],
+      "rect": null,
+      "solid": false
+    },
+    {
+      "id": "detail:stairs:114",
+      "kind": "stairs",
+      "cell": [
+        29,
+        28
+      ],
+      "rect": null,
+      "solid": false
+    },
+    {
+      "id": "detail:stairs:115",
+      "kind": "stairs",
+      "cell": [
+        11,
+        40
+      ],
+      "rect": null,
+      "solid": false
+    },
+    {
+      "id": "detail:stairs:116",
+      "kind": "stairs",
+      "cell": [
+        23,
+        40
+      ],
+      "rect": null,
+      "solid": false
+    },
+    {
+      "id": "detail:stairs:117",
+      "kind": "stairs",
+      "cell": [
+        46,
+        34
+      ],
+      "rect": null,
+      "solid": false
+    },
+    {
+      "id": "detail:pine:118",
+      "kind": "pine",
+      "cell": [
+        1,
+        2
+      ],
+      "rect": [
+        1,
+        2,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:119",
+      "kind": "tree",
+      "cell": [
+        4,
+        3
+      ],
+      "rect": [
+        4,
+        3,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:120",
+      "kind": "tree",
+      "cell": [
+        15,
+        2
+      ],
+      "rect": [
+        15,
+        2,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:121",
+      "kind": "tree",
+      "cell": [
+        26,
+        2
+      ],
+      "rect": [
+        26,
+        2,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:122",
+      "kind": "tree",
+      "cell": [
+        29,
+        2
+      ],
+      "rect": [
+        29,
+        2,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:123",
+      "kind": "pine",
+      "cell": [
+        44,
+        3
+      ],
+      "rect": [
+        44,
+        3,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:124",
+      "kind": "tree",
+      "cell": [
+        47,
+        2
+      ],
+      "rect": [
+        47,
+        2,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:125",
+      "kind": "tree",
+      "cell": [
+        51,
+        3
+      ],
+      "rect": [
+        51,
+        3,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:126",
+      "kind": "pine",
+      "cell": [
+        54,
+        2
+      ],
+      "rect": [
+        54,
+        2,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:127",
+      "kind": "tree",
+      "cell": [
+        58,
+        3
+      ],
+      "rect": [
+        58,
+        3,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:128",
+      "kind": "tree",
+      "cell": [
+        62,
+        2
+      ],
+      "rect": [
+        62,
+        2,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:129",
+      "kind": "pine",
+      "cell": [
+        1,
+        6
+      ],
+      "rect": [
+        1,
+        6,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:130",
+      "kind": "tree",
+      "cell": [
+        1,
+        12
+      ],
+      "rect": [
+        1,
+        12,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:131",
+      "kind": "tree",
+      "cell": [
+        1,
+        18
+      ],
+      "rect": [
+        1,
+        18,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:132",
+      "kind": "pine",
+      "cell": [
+        1,
+        23
+      ],
+      "rect": [
+        1,
+        23,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:133",
+      "kind": "tree",
+      "cell": [
+        1,
+        31
+      ],
+      "rect": [
+        1,
+        31,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:134",
+      "kind": "pine",
+      "cell": [
+        27,
+        5
+      ],
+      "rect": [
+        27,
+        5,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:135",
+      "kind": "tree",
+      "cell": [
+        27,
+        9
+      ],
+      "rect": [
+        27,
+        9,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:136",
+      "kind": "tree",
+      "cell": [
+        46,
+        6
+      ],
+      "rect": [
+        46,
+        6,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:137",
+      "kind": "pine",
+      "cell": [
+        49,
+        5
+      ],
+      "rect": [
+        49,
+        5,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:138",
+      "kind": "tree",
+      "cell": [
+        52,
+        7
+      ],
+      "rect": [
+        52,
+        7,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:139",
+      "kind": "tree",
+      "cell": [
+        55,
+        5
+      ],
+      "rect": [
+        55,
+        5,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:140",
+      "kind": "pine",
+      "cell": [
+        59,
+        6
+      ],
+      "rect": [
+        59,
+        6,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:141",
+      "kind": "tree",
+      "cell": [
+        62,
+        5
+      ],
+      "rect": [
+        62,
+        5,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:142",
+      "kind": "tree",
+      "cell": [
+        47,
+        9
+      ],
+      "rect": [
+        47,
+        9,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:143",
+      "kind": "pine",
+      "cell": [
+        50,
+        8
+      ],
+      "rect": [
+        50,
+        8,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:144",
+      "kind": "tree",
+      "cell": [
+        54,
+        10
+      ],
+      "rect": [
+        54,
+        10,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:145",
+      "kind": "tree",
+      "cell": [
+        57,
+        9
+      ],
+      "rect": [
+        57,
+        9,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:146",
+      "kind": "pine",
+      "cell": [
+        61,
+        9
+      ],
+      "rect": [
+        61,
+        9,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:147",
+      "kind": "tree",
+      "cell": [
+        62,
+        13
+      ],
+      "rect": [
+        62,
+        13,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:148",
+      "kind": "tree",
+      "cell": [
+        63,
+        18
+      ],
+      "rect": [
+        63,
+        18,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:149",
+      "kind": "pine",
+      "cell": [
+        63,
+        23
+      ],
+      "rect": [
+        63,
+        23,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:150",
+      "kind": "tree",
+      "cell": [
+        63,
+        29
+      ],
+      "rect": [
+        63,
+        29,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:151",
+      "kind": "tree",
+      "cell": [
+        34,
+        33
+      ],
+      "rect": [
+        34,
+        33,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:152",
+      "kind": "pine",
+      "cell": [
+        35,
+        37
+      ],
+      "rect": [
+        35,
+        37,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:153",
+      "kind": "tree",
+      "cell": [
+        1,
+        42
+      ],
+      "rect": [
+        1,
+        42,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:154",
+      "kind": "pine",
+      "cell": [
+        10,
+        43
+      ],
+      "rect": [
+        10,
+        43,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:155",
+      "kind": "tree",
+      "cell": [
+        20,
+        44
+      ],
+      "rect": [
+        20,
+        44,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:156",
+      "kind": "tree",
+      "cell": [
+        24,
+        46
+      ],
+      "rect": [
+        24,
+        46,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:157",
+      "kind": "pine",
+      "cell": [
+        38,
+        45
+      ],
+      "rect": [
+        38,
+        45,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:158",
+      "kind": "tree",
+      "cell": [
+        45,
+        35
+      ],
+      "rect": [
+        45,
+        35,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:159",
+      "kind": "tree",
+      "cell": [
+        48,
+        36
+      ],
+      "rect": [
+        48,
+        36,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:160",
+      "kind": "pine",
+      "cell": [
+        45,
+        39
+      ],
+      "rect": [
+        45,
+        39,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:161",
+      "kind": "tree",
+      "cell": [
+        46,
+        45
+      ],
+      "rect": [
+        46,
+        45,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:tree:162",
+      "kind": "tree",
+      "cell": [
+        63,
+        39
+      ],
+      "rect": [
+        63,
+        39,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:163",
+      "kind": "pine",
+      "cell": [
+        63,
+        46
+      ],
+      "rect": [
+        63,
+        46,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:cliff:164",
+      "kind": "cliff",
+      "cell": [
+        50,
+        36
+      ],
+      "rect": [
+        49,
+        35,
+        2,
+        2
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:cliff:165",
+      "kind": "cliff",
+      "cell": [
+        53,
+        35
+      ],
+      "rect": [
+        52,
+        34,
+        2,
+        2
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:cliff:166",
+      "kind": "cliff",
+      "cell": [
+        56,
+        35
+      ],
+      "rect": [
+        55,
+        34,
+        2,
+        2
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:cliff:167",
+      "kind": "cliff",
+      "cell": [
+        59,
+        36
+      ],
+      "rect": [
+        58,
+        35,
+        2,
+        2
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:cliff:168",
+      "kind": "cliff",
+      "cell": [
+        62,
+        35
+      ],
+      "rect": [
+        61,
+        34,
+        2,
+        2
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:cliff:169",
+      "kind": "cliff",
+      "cell": [
+        47,
+        40
+      ],
+      "rect": [
+        46,
+        39,
+        2,
+        2
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:cliff:170",
+      "kind": "cliff",
+      "cell": [
+        62,
+        40
+      ],
+      "rect": [
+        61,
+        39,
+        2,
+        2
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:cliff:171",
+      "kind": "cliff",
+      "cell": [
+        44,
+        45
+      ],
+      "rect": [
+        43,
+        44,
+        2,
+        2
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:172",
+      "kind": "pine",
+      "cell": [
+        48,
+        34
+      ],
+      "rect": [
+        48,
+        34,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:173",
+      "kind": "pine",
+      "cell": [
+        52,
+        33
+      ],
+      "rect": [
+        52,
+        33,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:174",
+      "kind": "pine",
+      "cell": [
+        57,
+        33
+      ],
+      "rect": [
+        57,
+        33,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:175",
+      "kind": "pine",
+      "cell": [
+        60,
+        34
+      ],
+      "rect": [
+        60,
+        34,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:176",
+      "kind": "pine",
+      "cell": [
+        45,
+        38
+      ],
+      "rect": [
+        45,
+        38,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:pine:177",
+      "kind": "pine",
+      "cell": [
+        61,
+        37
+      ],
+      "rect": [
+        61,
+        37,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:crates:178",
+      "kind": "crates",
+      "cell": [
+        52,
+        23
+      ],
+      "rect": [
+        52,
+        23,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:crates:179",
+      "kind": "crates",
+      "cell": [
+        61,
+        24
+      ],
+      "rect": [
+        61,
+        24,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:crates:180",
+      "kind": "crates",
+      "cell": [
+        48,
+        30
+      ],
+      "rect": [
+        48,
+        30,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:crates:181",
+      "kind": "crates",
+      "cell": [
+        49,
+        44
+      ],
+      "rect": [
+        49,
+        44,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:crates:182",
+      "kind": "crates",
+      "cell": [
+        59,
+        44
+      ],
+      "rect": [
+        59,
+        44,
+        1,
+        1
+      ],
+      "solid": true
+    },
+    {
+      "id": "detail:cart:183",
+      "kind": "cart",
+      "cell": [
+        35,
+        32
+      ],
+      "rect": [
+        35,
+        32,
+        1,
+        1
+      ],
+      "solid": true
+    }
+  ],
+  "skipped": [
+    [
+      "stone_wall",
+      46,
+      14
+    ],
+    [
+      "fence",
+      28,
+      41
+    ],
+    [
+      "fence",
+      32,
+      41
+    ],
+    [
+      "fence",
+      36,
+      41
+    ],
+    [
+      "stone_wall",
+      7,
+      47
+    ],
+    [
+      "stone_wall",
+      15,
+      47
+    ],
+    [
+      "stone_wall",
+      18,
+      47
+    ],
+    [
+      "stone_wall",
+      32,
+      47
+    ],
+    [
+      "stone_wall",
+      36,
+      47
+    ],
+    [
+      "stone_wall_vertical",
+      39,
+      40
+    ],
+    [
+      "stone_wall",
+      48,
+      32
+    ],
+    [
+      "stone_wall",
+      54,
+      32
+    ],
+    [
+      "flowers",
+      27,
+      14
+    ],
+    [
+      "flowers",
+      14,
+      41
+    ],
+    [
+      "hedge",
+      30,
+      30
+    ],
+    [
+      "hedge",
+      33,
+      30
+    ],
+    [
+      "hedge",
+      36,
+      30
+    ],
+    [
+      "hedge",
+      16,
+      46
+    ],
+    [
+      "hedge",
+      28,
+      47
+    ],
+    [
+      "hedge",
+      36,
+      47
+    ],
+    [
+      "pine",
+      18,
+      3
+    ],
+    [
+      "tree",
+      0,
+      39
+    ],
+    [
+      "pine",
+      0,
+      46
+    ],
+    [
+      "tree",
+      17,
+      33
+    ],
+    [
+      "tree",
+      17,
+      36
+    ],
+    [
+      "tree",
+      24,
+      34
+    ],
+    [
+      "cliff",
+      46,
+      35
+    ],
+    [
+      "crates",
+      44,
+      22
+    ],
+    [
+      "crates",
+      26,
+      38
+    ],
+    [
+      "crates",
+      33,
+      40
+    ]
+  ],
+  "floor_cells": 2052
+}

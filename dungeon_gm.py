@@ -379,6 +379,8 @@ def event_tags(rec, names=None):
                                                    ' — 발밑에 놓임' if rec.get('placed') else ''))]
     if t == 'bonded':
         return [('bonded', '친목 받음', '%s: %s' % (nm(rec.get('from')), rec.get('form', '몸짓')))]
+    if r == 'zone_enter':                             # D86 — 걷다가 새 구역에 들어서 멈춤
+        return [('enter', '구역 진입', str(rec.get('zone') or '?'))]
     if r == 'need_party':                             # D84 조각 4 — 던전 입구는 파티를 맺은 사람만
         return [('misc', '던전 입구에서 막힘', '파티가 없다')]
     if t == 'party_form':                             # D84 조각 3 파티 결성 — 한 쪽의 자기 사건
@@ -583,6 +585,11 @@ def party_leave(parties, char):
 PARTY_ZONES = ('guild_district', 'tavern_district')   # D84 조각 3·4: 파티를 맺는 곳 — 구역 id(entities/map·layout regions). 파트너 "파티를 맺을 때에는 모두 길드 구역에
 #   있어야 해" → 09-19 밤 "파티를 결성하는 사람들이 자주 모이는 곳이 모험가 길드나 주점으로 하면 되잖아". 맺는 순간 파티에 들 사람은 모두 **같은 곳**에 있어야 한다.
 PARTY_ZONE = PARTY_ZONES[0]      # 옛 이름(첫 곳 = 길드)
+PARTY_BUILDINGS = ('guild_hall', 'tavern')   # 09-19 밤(파트너 "지금 마을 맵은 전체적으로 재구성 중이야"): 맺는 곳은 구역 id 가 아니라 **그 건물이 놓인 구역**으로 찾는다 —
+#   맵이 바뀌어 구역 이름·구성이 달라져도 길드·주점 건물(엔티티 id)만 있으면 따라온다. layout 에 건물 정보가 없을 때만 PARTY_ZONES(옛 id)로 돌아간다.
+PARTY_ENTRY_SIZE = 3             # D84 조각 5(09-19 밤 파트너 "던전에 들어갈 때 파티원이 3명 필요하다"): 마을의 던전 입구는 이 수 이상이 맺은 파티만 지난다.
+#   발단 = 파트너 실판: 동료 둘이 맺고 내려가자 내 캐릭터(미나)만 마을에 남아 판이 사실상 끝났다(입구는 파티가 필요한데 맺을 사람이 없다).
+#   세는 것은 장부의 파티원 수(쓰러진 사람 포함 — 한 명을 잃고 돌아온 파티가 다시 못 들어가 막다른 길이 되지 않게. ⚠️임시 가정)
 PARTY_LEAVE_ANYWHERE = True      # 탈퇴는 어디서나(⚠️임시 가정 — 파트너 답 대기: 떠나는 건 혼자 하는 결정이라 장소·동의가 없다 / False = 길드 구역에서만)
 
 
@@ -1895,6 +1902,8 @@ class Dungeon:
         마을(D29): 전체가 보인다 — 고향은 다 아는 곳(파트너 확정 07-30). 여기가 유일한 조임목이라
         obs·메뉴·목격·say 배달·정지 전부가 한 줄로 따라온다. 시야 엔진=던전 전용 긴장 장치."""
         if self.town:
+            if getattr(self, 'town_sight', None) == 'zone':   # D86(09-19 파트너 "구역 내에서는 시야를 전부 주고 이동도 거기에 맞게 하자"):
+                return self._zone_cells(cx, cy)               #   지금 선 구역 전체 + 발밑 곁 한 칸(경계에 나란히 선 사람 — hears 와 같은 자)
             return {(x, y) for y in range(self.h) for x in range(self.w)}
         cells = set()
         for dy in range(-r, r + 1):
@@ -1903,6 +1912,19 @@ class Dungeon:
                 if 0 <= x < self.w and 0 <= y < self.h and not self._sight_blocked(cx, cy, x, y):
                     cells.add((x, y))
         return cells
+
+    def _zone_cells(self, cx, cy):
+        """(cx,cy)가 속한 마을 구역의 칸 전부 ∪ 곁 한 칸(D86). 구역은 layout regions 의 사각형들 — 구역마다 한 번 계산해 둔다.
+        구역 정보가 없는 마을(옛 손그림)은 옛 규칙(전체)."""
+        zid = self._zone_id(cx, cy)
+        if not ((getattr(self, 'layout_result', None) or {}).get('spaces') or {}).get('regions'):
+            return {(x, y) for y in range(self.h) for x in range(self.w)}     # 구역 정보가 아예 없는 마을(옛 손그림) = 옛 규칙
+        cache = self.__dict__.setdefault('_zone_cell_cache', {})               # 구역들 사이의 빈틈(zid None)도 제 구역처럼 센다 — 빈틈에 섰다고 마을 전체가 보이면 누설(맵 재구성 대비)
+        if zid not in cache:
+            cache[zid] = frozenset((x, y) for y in range(self.h) for x in range(self.w) if self._zone_id(x, y) == zid)
+        near = {(cx + dx, cy + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                if 0 <= cx + dx < self.w and 0 <= cy + dy < self.h}
+        return set(cache[zid]) | near
 
     def view(self, bot, bots, r=SIGHT):
         """봇 obs = '지각된 오브젝트 목록'(시야-온리). 칸 운전 어휘(frontier/directions/room_info) 폐기.
@@ -2024,8 +2046,8 @@ class Dungeon:
                      **bear(ex, ey)}
                     if (ex, ey) in seen else None)
         if (exit_obj is not None and self.town and getattr(self, 'parties', None) is not None and not getattr(self, 'solo', False)
-                and not party_members(self.parties, bot['char'])):
-            exit_obj['need_party'] = True                     # D84 조각 4: 던전 입구는 파티를 맺은 사람만 — 나는 파티가 없다(사실만)
+                and len(party_members(self.parties, bot['char'])) < PARTY_ENTRY_SIZE):
+            exit_obj['need_party'] = {'have': len(party_members(self.parties, bot['char'])), 'need': PARTY_ENTRY_SIZE}   # D84 조각 4·5: 입구는 3명이 맺은 파티만 — 내 파티는 몇 명인가(사실만)
         if exit_obj is not None and bots and not getattr(self, 'solo', False):
             # D66(09-13 파트너 "팀원이 전부 모여야 계단을 내려갈 수 있다고 가르쳐줘야"): 모임 규칙(EXIT_GATHER·_gather_busy)을
             # 시도하기 전에 관측에 미리 — 09-13 판에서 떨어진 동료를 둔 채 use exit 헛시도 45회/100틱. 사실만(누가 멀고 누가 바쁜가)
@@ -2505,6 +2527,7 @@ class Dungeon:
                    else {}),
                 **({'town_zone_about': za} if (self.town and (za := ((getattr(self, 'zone_story', None) or {}).get(self._town_zone(bot['x'], bot['y'])) or {}).get('trait'))) else {}),   # D75 구역 특징 한 줄
                 **({'town_hear': 'zone'} if (self.town and getattr(self, 'town_hear', None) == 'zone') else {}),   # D70 사람 지각=구역(관측 문장용)
+                **({'town_sight': 'zone'} if (self.town and getattr(self, 'town_sight', None) == 'zone') else {}),   # D86 시야=지금 선 구역(관측 문장용)
                 **({'notices': nts_} if (nts_ := self._notices(bot)) else {}),   # D61 게시판(문턱 근처)·신의 요청(09-13 개정: 어느 층에서나)
                 **({'quests': qs_} if (qs_ := self._quest_obs()) else {}),        # D69(09-14) 맡은 의뢰와 진행(파티 장부 — 정보만)
                 **({'expedition_returned': True} if (self.town and getattr(self, 'expedition_returned', False)
@@ -3256,9 +3279,13 @@ class Dungeon:
         """상황별 인사 고르기 + 자리 채움 — (key, 문장). 문장은 정의(⚠️임시)·숫자는 세계가 센 것."""
         name = bot.get('name') or ('모험가 %s' % bot.get('char', '?'))
         q = getattr(self, 'quests', None)
+        ps = getattr(self, 'parties', None)
         key = 'hail'
         if nd.get('report') and getattr(self, 'expedition_returned', False) and q is not None and q.get('reported') is None and nd.get('hail_return'):
             key = 'hail_return'
+        elif (nd.get('report') and ps is not None and nd.get('hail_party')
+              and len(party_members(ps, bot['char'])) < PARTY_ENTRY_SIZE):
+            key = 'hail_party'                             # D84 조각 5(파트너 "접수원이 말해줘야 한다고 봐"): 입구의 규칙은 접수원이 말해 준다 — 첫 인사가 한 번뿐이라 물약·게시판 인사보다 먼저
         elif nd.get('gift') and not bot.get('potions') and nd.get('hail_no_potion'):
             key = 'hail_no_potion'
         elif nd.get('report') and q is not None and nd.get('hail_board') and \
@@ -3273,7 +3300,7 @@ class Dungeon:
         mons = ', '.join('%s %d마리' % (k, v) for k, v in (r.get('monsters') or {}).items()) or '몬스터'
         fe = r.get('features') or {}
         n_open = sum(1 for qid in (getattr(self, 'quest_ids', None) or {}).values() if q is not None and qid not in q['accepted'])
-        line = (line.replace('{name}', name).replace('{quests}', str(n_open)).replace('{monsters}', mons)
+        line = (line.replace('{name}', name).replace('{party_need}', str(PARTY_ENTRY_SIZE)).replace('{quests}', str(n_open)).replace('{monsters}', mons)
                 .replace('{traps}', str(r.get('traps', 0))).replace('{treasure}', str(fe.get('treasure', 0))))
         return key, line.strip()
 
@@ -3907,8 +3934,15 @@ class Dungeon:
 
     def step_order(self, bot, bots):
         action = bot.get('_active_action')
+        z0 = (self._zone_id(bot['x'], bot['y']) if (self.town and getattr(self, 'town_sight', None) == 'zone') else None)
         res = (self._step_approach(bot, bots) if bot.get('approach') and bot.get('order')
                else self._step_order(bot, bots))
+        if z0 is not None and bot.get('order') and bot.get('alive') and self._zone_id(bot['x'], bot['y']) != z0:
+            # D86: 걷다가 새 구역에 들어섰다 — 거기 있는 사람과 일이 이제 보인다. 멈춰서 다시 본다(가던 길을 이을지는 그 사람이 정한다)
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            bot.pop('approach', None)
+            self._perceive(bot)
+            res = {**res, 'result': 'zone_enter', 'zone': self._town_zone(bot['x'], bot['y'])}
         if self.composed_actions and action:
             res['parent_action_id'] = action['action_id']
             CA.decorate(bot, action, res)
@@ -4503,6 +4537,13 @@ class Dungeon:
         if led is None:
             return
         t = self.turn
+        if self.town and getattr(self, 'town_sight', None) == 'zone' and not led.get('town_known'):
+            led['town_known'] = True                  # D86: 고향의 장소는 아는 것 — 건물과 던전 입구만 미리 장부에(가 본 적 없어도 '돌아가기' 핑이 된다).
+            for f in self.features.values():          #   사람(NPC·캐릭터)은 넣지 않는다 — 그 구역에 들어서야 보인다(지역 → 인물)
+                if f.type in ('building', 'exit') and not f.concealed:
+                    k = 'exit' if f.type == 'exit' else 'f%d' % f.id
+                    led['statics'].setdefault(k, {'id': k, 'type': f.type, 'name': f.name, 'x': f.x, 'y': f.y,
+                                                  'zone': self._zone_label(f.x, f.y), 'turn': 0})
         for k, e in list(led['statics'].items()):     # 교정 먼저 — 이번 시야가 기억을 반증하면 삭제
             if (e['x'], e['y']) not in seen or e['type'] == 'exit':
                 continue
@@ -4631,8 +4672,9 @@ class Dungeon:
             if gate and getattr(self, 'sealed', False):    #   봉인 — 보스가 살아 있는 동안 열리지 않는다(사실만 돌려준다)
                 return {**base, 'result': 'locked', 'what': '워프게이트'}
             if (self.town and getattr(self, 'parties', None) is not None and not self.solo
-                    and not party_members(self.parties, bot['char'])):
-                return {**base, 'result': 'need_party'}   # D84 조각 4(09-19 파트너 "던전은 파티를 결성해야 이동할수 있게"): 마을의 던전 입구는 파티를 맺은 사람만
+                    and len(party_members(self.parties, bot['char'])) < PARTY_ENTRY_SIZE):
+                return {**base, 'result': 'need_party', 'have': len(party_members(self.parties, bot['char'])),
+                        'need': PARTY_ENTRY_SIZE}         # D84 조각 4·5(09-19 파트너 "던전은 파티를 결성해야 이동할수 있게" · "파티원이 3명 필요하다"): 마을의 던전 입구는 3명이 맺은 파티만
             what = ('던전 입구' if self.town else ('워프게이트' if gate else '계단')) + '(exit)'
             went, result = ('up', 'ascend') if gate else ('down', 'exit')
             extra = {'to_depth': 0, 'gate': True} if gate else {}
@@ -4721,10 +4763,10 @@ class Dungeon:
                               {'kind': 'ally_loot', 'char': bot['char'], 'what': given},
                               exclude=(bot['char'],))
                 return {**base, 'result': 'npc_gift', 'npc': f.name, 'item': given,
-                        'line': self.npc_lines.get(f.name, '…')}
+                        'line': self.npc_lines.get(f.name, '…') + self._party_rule_sfx(f.name, bot)}
             line_again = (getattr(self, 'npc_lines_again', None) or {}).get(f.name)
             return {**base, 'result': 'npc_talk', 'npc': f.name,
-                    'line': line_again if (again and line_again) else self.npc_lines.get(f.name, '…'),
+                    'line': (line_again if (again and line_again) else self.npc_lines.get(f.name, '…')) + self._party_rule_sfx(f.name, bot),
                     **({'again': True} if again else {})}    # 스트림 additive — 재방문 계측(부검용)
         if f and f.type == 'treasure':
             del self.features[f.id]; bot['bag'] += 1
@@ -5190,12 +5232,29 @@ class Dungeon:
                     return r.get('id')
         return None
 
+    def _party_rule_sfx(self, npc_name, bot):
+        """접수원의 고정 대사 뒤에 붙는 입구 규칙 한마디(D84 조각 5) — 장부 판 · 보고 역할 NPC · 그 사람의 파티가 모자랄 때만. 문장은 정의의 line_party."""
+        nd = (getattr(self, 'npc_defs', None) or {}).get(npc_name) or {}
+        ps = getattr(self, 'parties', None)
+        if ps is None or not nd.get('report') or not nd.get('line_party') or len(party_members(ps, bot['char'])) >= PARTY_ENTRY_SIZE:
+            return ''
+        return ' ' + str(nd['line_party']).replace('{party_need}', str(PARTY_ENTRY_SIZE))
+
+    def _party_zone_ids(self):
+        """파티를 맺는 구역 id 들 — layout 의 건물 가운데 길드·주점(PARTY_BUILDINGS)이 놓인 구역. 한 번 계산해 둔다."""
+        ids = self.__dict__.get('_party_zone_cache')
+        if ids is None:
+            sp = (getattr(self, 'layout_result', None) or {}).get('spaces') or {}
+            ids = frozenset(b_.get('region') for b_ in sp.get('buildings', []) if b_.get('entity') in PARTY_BUILDINGS and b_.get('region'))
+            self.__dict__['_party_zone_cache'] = ids = (ids or frozenset(PARTY_ZONES))
+        return ids
+
     def _party_zone_of(self, b):
         """파티를 맺는 곳(마을의 모험가 길드 구역·주점 구역)에 서 있으면 그 구역 id, 아니면 None."""
         if not (self.town and b.get('alive') and not b.get('won')):
             return None
         z = self._zone_id(b['x'], b['y'])
-        return z if z in PARTY_ZONES else None
+        return z if z in self._party_zone_ids() else None
 
     def _in_party_zone(self, b):
         return self._party_zone_of(b) is not None
@@ -5225,7 +5284,7 @@ class Dungeon:
         me = bot['char']
         bot['_pf'] = True                                # 시트 조립(brains._sheet)이 읽는다 — 장부 판은 '- 동료:' 줄을 끼워 넣지 않는다
         asks = self._party_asks(bots)
-        return {'mine': [c for c in party_members(ps, me) if c != me], 'here': self._in_party_zone(bot),
+        return {'mine': [c for c in party_members(ps, me) if c != me], 'here': self._in_party_zone(bot), 'need': PARTY_ENTRY_SIZE,
                 'asks_in': sorted(a for a, m in asks.items() if me in m), 'asks_out': sorted(asks.get(me) or {})}
 
     def _party_form(self, bot, target_id, bots=None):

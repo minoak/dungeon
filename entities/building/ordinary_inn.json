@@ -1,0 +1,27 @@
+{
+  "id": "ordinary_inn",
+  "name": "일반 여관",
+  "kind": "building",
+  "tags": [
+    "town",
+    "building"
+  ],
+  "comps": {
+    "building": {
+      "size": [
+        9,
+        6
+      ],
+      "entrance": [
+        4,
+        5
+      ],
+      "texture": "ordinary_inn"
+    },
+    "story": {
+      "trait": "독립 객실을 둘 여관",
+      "history": "문턱과 마당이 길에 닿아 있다. 일반 여관의 서비스는 아직 준비 중이다."
+    }
+  },
+  "note": "마을 v3(2026-09-19): 공간·외형만 연결. 서비스 미구현. 설명은 임시 문구."
+}
