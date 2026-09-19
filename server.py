@@ -645,7 +645,7 @@ def main():
     s = srv.sessions
     print("[server] http://%s:%d/  세션 폴더=%s  계정 폴더=%s  동시 판 상한=%d  IP 시간당 시작=%d  로그인=%d  두뇌=%s"
           % (a.host, a.port, s.dir, s.accounts.dir, s.max_runs, s.starts_per_hour, s.login_per_hour, s.brain))
-    print("[server] 자리 관리(D91): 판단 정지 %d초 · 관전 요청 없는 판 %d초 뒤 멈춤(0 = 끔) — 둘 다 이어가기 가능"
+    print("[server] 자리 관리(D91): 판단 정지 %d초 · 관전 요청 없는 판 %d초 뒤 멈춤(0 = 끔) / 둘 다 이어가기 가능"   # stdout 은 cp949 콘솔일 수 있다 - em dash 금지(기동 직후 UnicodeEncodeError)
           % (s.pause_limit, s.unwatched_limit))
 
     def sweeper():
