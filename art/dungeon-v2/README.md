@@ -27,7 +27,9 @@ Open http://127.0.0.1:4228/art/dungeon-v2/compare.html?seed=322274042&profile=co
 
 The local server listens on 127.0.0.1, generates fixtures in memory, and imports
 no brain backend. It does not run an autonomous playthrough or write run/state files.
-The new room grammar is implemented in `concept_dungeon.py`, a Dungeon subclass;
+The new room grammar is a Dungeon subclass. Since D88 (2026-09-20) its body lives in the
+repository root as `dungeon_concept.py` (resume snapshots pickle the class by module name);
+`concept_dungeon.py` here only re-exports it. The runner selects it with `DUNGEON_ARCH=concept`;
 production generator defaults and character decisions have not been changed.
 
 ## Implemented architecture
