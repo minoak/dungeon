@@ -10,6 +10,9 @@ launcher.py 는 로컬 도구다: 리포 루트 전체를 정적으로 내주고
   3. BYOK — 판 시작 요청의 provider 에 맞는 회사 키 환경변수 하나에만 key 가 들어간다(보관 없는 세션형, D10 서랍, D80).
      디스크·로그·응답에 남기지 않는다. 서버 자체의 키·대체 두뇌는 러너에 물려주지 않는다.
   4. 상한 — 서버 전체 동시 max_runs(기본 3)판 · 세션당 1판(Runner 그대로) · IP 당 시간당 시작 starts_per_hour(기본 12).
+     자리 관리(D91, 2026-09-20 파트너 확정 — 둘 다 10분, "실사용을 보며 수정이 필요할 수도 있다"): 판단 정지가 PAUSE_LIMIT_SEC 이어지면
+     러너가 스스로 닫고, 관전 요청(/api/status·/state/…)이 UNWATCHED_LIMIT_SEC 동안 없는 판은 서버가 곱게 멈춘다(수첩 없음 · 사유
+     'unwatched'). 둘 다 이어가기(D79) 가능한 길 — 돌아온 방문자의 론처 화면에 '멈춘 원정 … 이어가기'가 뜬다. 로컬 론처(launcher.py)에는 없다.
   5. 계정(D77, 2026-09-16 파트너 "api키 자체를 아이디로 쓸 수는 없어?") — **키의 지문이 계정**이다(accounts.py).
      POST /api/login {provider, key, nick?} 이 키의 생존을 해당 회사에 묻고(key_alive — 폐기된 키는 문이 안 열린다 = 킬 스위치), 지문(HMAC)으로
      계정을 찾거나 만들고 번호표를 묶는다. 그 뒤 이 번호표의 Ctx 는 <data>/accounts/<id>/ (state·runs·파티·캐릭터) — 기기가
@@ -20,7 +23,8 @@ launcher.py 는 로컬 도구다: 리포 루트 전체를 정적으로 내주고
 실행:  python server.py --host 127.0.0.1 --port 8000     (외부는 Caddy 가 HTTPS 로 받아 넘긴다 — scripts/vm/)
 환경:  BOTPIKDUN_DATA(세션·계정 폴더 뿌리, 기본 <리포>/state/public) · BOTPIKDUN_MAX_RUNS · BOTPIKDUN_START_PER_HOUR ·
        BOTPIKDUN_LOGIN_PER_HOUR(기본 30) · BOTPIKDUN_SECRET(지문 비밀 — 없으면 <data>/secret 을 첫 기동 때 만든다, 백업 대상) ·
-       BOTPIKDUN_PAUSE_LIMIT_SEC(판단 정지를 기다려 주는 초, 0 = 끝없이) ·
+       BOTPIKDUN_PAUSE_LIMIT_SEC(판단 정지를 기다려 주는 초, 기본 600 · 0 = 끝없이) ·
+       BOTPIKDUN_UNWATCHED_LIMIT_SEC(관전 요청이 없는 판을 멈추기까지의 초, 기본 600 · 0 = 끔) ·
        BOTPIKDUN_BRAIN(기본 gemini_api — 게이트 verify_public·verify_account 만 dummy)
 """
 import argparse
@@ -50,7 +54,9 @@ MAX_SESSIONS = 500                                           # 메모리에 두�
 KEY_MIN, KEY_MAX = 20, 4096
 KEY_LIMITS = {"gemini_api": (20, 512), "anthropic_api": (20, 4096), "openai_api": (1, 4096)}
 LOGIN_PER_HOUR = 30                                          # D77 로그인(=구글 생존 확인) IP 시간당 상한
-PAUSE_LIMIT_SEC = 600                                        # F1(09-18) 판단 정지를 기다려 주는 초 — 넘으면 러너가 스스로 닫는다(이어가기 가능). ⚠️값 임시(파트너 확인 대기)
+PAUSE_LIMIT_SEC = 600                                        # F1(09-18) 판단 정지를 기다려 주는 초 — 넘으면 러너가 스스로 닫는다(이어가기 가능). 값 확정(D91, 09-20 파트너: 10분)
+UNWATCHED_LIMIT_SEC = 600                                    # D91(09-20 파트너: 10분) 관전 요청(/api/status·/state/…)이 이만큼 없는 판은 곱게 멈춘다(이어가기 가능) · 0 = 끔.
+                                                             #   근거(실측): 숨긴 탭도 폴링은 이어지고 탭을 닫으면 바로 끊긴다 — '요청 없음 = 아무도 안 봄'. "실사용을 보며 수정이 필요할 수도 있다"(파트너) — 값은 여기 한 곳
 MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1"
 ACCOUNT_POSTS = ("/api/login", "/api/logout", "/api/keys/link", "/api/keys/unlink", "/api/nick")
 
@@ -100,11 +106,15 @@ class Sessions:
     """번호표(sid) → Ctx. 폴더 = <data>/sessions/<sid>/{state,runs,party_custom.json,character_presets.json}."""
 
     def __init__(self, root, data_dir, brain="gemini_api", max_runs=3, starts_per_hour=12, ttl=SESSION_TTL,
-                 login_per_hour=LOGIN_PER_HOUR, key_check=None, pause_limit=PAUSE_LIMIT_SEC):
+                 login_per_hour=LOGIN_PER_HOUR, key_check=None, pause_limit=PAUSE_LIMIT_SEC,
+                 unwatched_limit=UNWATCHED_LIMIT_SEC):
         self.root, self.brain = root, brain
         self.max_runs, self.starts_per_hour, self.ttl = int(max_runs), int(starts_per_hour), ttl
         self.login_per_hour, self.key_check = int(login_per_hour), key_check
         self.pause_limit = max(0, int(pause_limit))   # F1 러너에 DUNGEON_PAUSE_LIMIT_SEC 로 넘긴다(0 = 끝없이)
+        self.unwatched_limit = max(0, int(unwatched_limit))   # D91 관전 요청이 이만큼 없는 판은 곱게 멈춘다(0 = 끔)
+        self.watcher = None                     # D91 자동 멈춤을 살피는 데몬 스레드(start_watcher — 끔이면 None 그대로)
+        self.closed = threading.Event()         # 서버가 닫힌다(stop_all) — 살피기 스레드를 내린다
         self.dir = os.path.join(data_dir, "sessions")
         os.makedirs(self.dir, exist_ok=True)
         self.accounts = ACC.Accounts(data_dir)   # D77 계정 저장소(<data>/accounts·keyindex·logins·secret)
@@ -158,6 +168,7 @@ class Sessions:
         ctx = Ctx(self.root, os.path.join(d, "party_custom.json"), os.path.join(d, "state"), os.path.join(d, "runs"),
                   self.brain)
         ctx.sid, ctx.dir = sid, d
+        ctx.watched = time.monotonic()          # D91 마지막 관전 요청 시각(touch)
         self.ctx[sid] = ctx
         self.seen[sid] = time.time()
         return ctx
@@ -199,9 +210,54 @@ class Sessions:
             self.sweep_locked(time.time())
 
     def stop_all(self):
+        self.closed.set()                       # D91 살피기 스레드도 내린다
         with self.lock:
             for ctx in list(self.ctx.values()) + list(self.actx.values()):
                 ctx.runner.stop()
+
+    # ── D91(09-20) 관전자 없는 판 자동 멈춤 — 공개 서버만(로컬 론처에는 없다) ──
+    @staticmethod
+    def touch(ctx):
+        """이 Ctx 의 판을 누가 보고 있다 — 상태(/api/status)·판 파일(/state/…) 요청이 올 때마다, 그리고 판을 시작할 때 시계를 다시 잰다.
+        계정 Ctx 는 기기가 여럿이어도 하나라 어느 기기의 요청이든 같은 시계를 만진다."""
+        ctx.watched = time.monotonic()
+
+    def stop_unwatched(self, now=None):
+        """돌고 있는데 unwatched_limit 초 동안 관전 요청이 없던 판을 곱게 멈춘다 → 멈춘 수.
+        사람이 누르는 멈춤과 같은 길(Runner.stop graceful — 다음 틱 머리에서 stopped 줄·스냅샷을 남기고 스스로 닫는다 = 이어가기 가능)이고,
+        수첩은 쓰지 않는다(pages=False — 읽을 사람 없는 자리에서 두뇌 콜을 쓰지 않는다). 사유 'unwatched' 는 러너가 기록에 그대로 적는다."""
+        if not self.unwatched_limit:
+            return 0
+        with self.lock:
+            ctxs = list(self.ctx.values()) + list(self.actx.values())
+        n = 0
+        for ctx in ctxs:                          # 멈춤은 lock 밖에서(러너가 닫히길 기다린다) — 앞 판을 기다리는 사이 돌아온 방문자가 있을 수 있어 판마다 다시 잰다
+            t = time.monotonic() if now is None else now
+            if not hasattr(ctx, "watched"):       # 시계가 없는 Ctx 는 지금부터 잰다(바로 멈추지 않는다)
+                ctx.watched = t
+            if ctx.runner.running() and t - ctx.watched >= self.unwatched_limit:
+                res = ctx.runner.stop(graceful=True, pages=False, reason="unwatched")
+                if res.get("stopped"):
+                    n += 1
+                    print("[server] 관전 요청이 %d초 없던 판을 멈췄다(%s) — 이어가기 가능"
+                          % (self.unwatched_limit, "곱게" if res.get("graceful") else "끊음"), file=sys.stderr)
+        return n
+
+    def start_watcher(self):
+        """자동 멈춤을 살피는 데몬 스레드 하나 — 간격은 제한 시간의 1/4(상한 15초). 끔(0)이면 안 띄운다. 두 번 불러도 하나."""
+        if not self.unwatched_limit or self.watcher is not None:
+            return self.watcher
+        every = min(15.0, max(0.2, self.unwatched_limit / 4.0))
+
+        def loop():
+            while not self.closed.wait(every):
+                try:
+                    self.stop_unwatched()
+                except Exception as e:            # 살피기 실패로 서버가 죽지 않게(sweeper 와 같은 규칙)
+                    print("[server] unwatched: %s" % type(e).__name__, file=sys.stderr)
+        self.watcher = threading.Thread(target=loop, daemon=True)
+        self.watcher.start()
+        return self.watcher
 
     # ── D77 계정 = 키 지문 ──
     def allow_login(self, ip):
@@ -226,6 +282,7 @@ class Sessions:
             ctx = Ctx(self.root, os.path.join(d, "party_custom.json"), os.path.join(d, "state"), os.path.join(d, "runs"),
                       self.brain)
             ctx.sid, ctx.aid, ctx.dir = None, aid, d
+            ctx.watched = time.monotonic()      # D91 마지막 관전 요청 시각(touch)
             self.actx[aid] = ctx
         self.aseen[aid] = time.time()
         return ctx
@@ -457,12 +514,16 @@ class PublicHandler(Handler):
             return self._json(429, {"error": str(e)})
         if (p.startswith("/api/") or p.startswith(SESSION_OK)) and self.ctx is None:
             return self._json(404, {"error": "세션 없음"})
+        if p == "/api/status" or p.startswith("/state/"):              # D91 관전 폴링(론처 화면·관전 클라이언트가 1.5~3초마다) = 이 판을 누가 보고 있다
+            self.sessions.touch(self.ctx)
         if p == "/api/presets":
             obj = launcher.presets_payload(self.ctx)
             obj["model_defaults"] = {p: MODEL_IDS[p]["haiku"] for p in HTTP_BACKENDS}
             obj["openai_base_url"] = openai_base_url()
             obj.update(byok=True, public=True, max_runs=self.sessions.max_runs, running=self.sessions.running_count(),
-                       account=self._me()["account"])                      # D77 화면이 계정 상태를 같이 읽는다
+                       account=self._me()["account"],                      # D77 화면이 계정 상태를 같이 읽는다
+                       pause_limit=self.sessions.pause_limit,              # D91 additive — 화면이 '얼마 뒤 멈추는지'를 말할 수 있게(초 · 0 = 없음)
+                       unwatched_limit=self.sessions.unwatched_limit)
             return self._json(200, obj)
         if p == "/api/me":                                            # D77 계정 상태 — 론처 화면의 계정 카드
             return self._json(200, self._me())
@@ -527,6 +588,7 @@ class PublicHandler(Handler):
                     extra["DUNGEON_LEDGER_IDS_ONLY"] = "1"
                 else:
                     body["bestiary"] = False             # D64 — 익명 세션은 원장 이월 없음(판 안 학습만)
+                self.sessions.touch(self.ctx)            # D91 관전 시계는 판을 시작할 때부터 잰다(이어가기도 같다)
                 return self._json(200, self.ctx.runner.start(body, self.ctx.party_path, self.sessions.brain,
                                                              extra_env=extra))
         except BadRequest as e:
@@ -540,7 +602,7 @@ class PublicHandler(Handler):
 
 
 def make_public_server(host, port, root=HERE, data_dir=None, brain=None, max_runs=None, starts_per_hour=None,
-                       login_per_hour=None, key_check=None, pause_limit=None):
+                       login_per_hour=None, key_check=None, pause_limit=None, unwatched_limit=None):
     sessions = Sessions(root,
                         data_dir or os.environ.get("BOTPIKDUN_DATA") or os.path.join(root, "state", "public"),
                         brain or os.environ.get("BOTPIKDUN_BRAIN") or "gemini_api",
@@ -548,10 +610,13 @@ def make_public_server(host, port, root=HERE, data_dir=None, brain=None, max_run
                         starts_per_hour if starts_per_hour is not None else _env_int("BOTPIKDUN_START_PER_HOUR", 12),
                         login_per_hour=login_per_hour if login_per_hour is not None else _env_int("BOTPIKDUN_LOGIN_PER_HOUR", LOGIN_PER_HOUR),
                         key_check=key_check,
-                        pause_limit=pause_limit if pause_limit is not None else _env_int("BOTPIKDUN_PAUSE_LIMIT_SEC", PAUSE_LIMIT_SEC))
+                        pause_limit=pause_limit if pause_limit is not None else _env_int("BOTPIKDUN_PAUSE_LIMIT_SEC", PAUSE_LIMIT_SEC),
+                        unwatched_limit=(unwatched_limit if unwatched_limit is not None
+                                         else _env_int("BOTPIKDUN_UNWATCHED_LIMIT_SEC", UNWATCHED_LIMIT_SEC)))
     srv = LauncherServer((host, port), partial(PublicHandler, sessions=sessions))
     srv.daemon_threads = True
     srv.sessions = sessions
+    sessions.start_watcher()                      # D91 관전자 없는 판 자동 멈춤(끔이면 스레드 없음)
     return srv
 
 
@@ -568,6 +633,8 @@ def main():
     s = srv.sessions
     print("[server] http://%s:%d/  세션 폴더=%s  계정 폴더=%s  동시 판 상한=%d  IP 시간당 시작=%d  로그인=%d  두뇌=%s"
           % (a.host, a.port, s.dir, s.accounts.dir, s.max_runs, s.starts_per_hour, s.login_per_hour, s.brain))
+    print("[server] 자리 관리(D91): 판단 정지 %d초 · 관전 요청 없는 판 %d초 뒤 멈춤(0 = 끔) — 둘 다 이어가기 가능"
+          % (s.pause_limit, s.unwatched_limit))
 
     def sweeper():
         while True:

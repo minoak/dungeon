@@ -10,6 +10,10 @@
   ⑤ 상한: 동시 판 max_runs 넘으면 429 · 같은 세션 두 번째 시작 409 · IP 시간당 시작 상한 429
   ⑥ 키 미기록: 세션 폴더 전체(runner.out·state·runs)와 서버 로그에 키 문자열 0회
   ⑦ 서버 재시작: 같은 데이터 폴더로 새 서버 → 옛 쿠키로 /api/status·/state/stream.jsonl 이 그대로 읽힌다
+  ⑧ F1 시작 때 키 생존 확인 · ⑨ F5 쓰는 중인 판 파일을 읽어도 죽지 않는다
+  ⑩ D91 자리 관리(2026-09-20): 기본 10분 둘·환경변수(0 = 끔)·로컬 론처엔 없음 · 관전 폴링(/api/status·/state/…)이 이어지면 계속 돌고,
+     끊기면 제한 시간 뒤 러너가 곱게 닫힌다(stopped 줄 reason unwatched·수첩 없음·end 없음) · 돌아온 방문자의 /api/status.resume.stopped =
+     unwatched → 이어가기 200·resume 줄도 같은 사유 · 끊은 판(terminate)에도 사유가 요약에 남는다 · 서버를 닫으면 살피기 스레드도 내려간다
 """
 import http.client
 import io
@@ -27,13 +31,15 @@ os.environ.update(DUNGEON_GM="0", DUNGEON_TURNS="6", DUNGEON_W="40", DUNGEON_H="
                   DUNGEON_MONSTERS="1", DUNGEON_TRAPS="1", DUNGEON_LURKERS="0",
                   DUNGEON_DEPTHS="1", DUNGEON_BESTIARY_FILE="")   # 러너(서브프로세스)가 물려받는 짧은 판 설정
 for k in ("DUNGEON_PARTY_FILE", "DUNGEON_STATE_DIR", "DUNGEON_STREAM_OBS", "BOTPIKDUN_DATA", "BOTPIKDUN_BRAIN",
-          "BOTPIKDUN_MAX_RUNS", "BOTPIKDUN_START_PER_HOUR"):
+          "BOTPIKDUN_MAX_RUNS", "BOTPIKDUN_START_PER_HOUR", "BOTPIKDUN_PAUSE_LIMIT_SEC", "BOTPIKDUN_UNWATCHED_LIMIT_SEC",
+          "DUNGEON_STEP_DELAY", "DUNGEON_RESUME"):
     os.environ.pop(k, None)
 os.environ["DUNGEON_BRAIN_BACKEND"] = "dummy"
 
 import server                                        # noqa: E402
 
 KEY = "AIzaSyTESTKEY-0123456789abcdefghijklmnop"      # 가짜 키(형태만) — 어디에도 남으면 안 된다
+UNWATCHED = 4                                        # ⑩ 관전자 없는 판의 제한 시간(초)을 줄여서 본다 — 서버 기본은 600(살피기 간격 = 1/4 = 1초)
 LOG = io.StringIO()                                  # 서버 로그(Handler.log_message → sys.stderr) 채집
 fails = []
 
@@ -309,6 +315,104 @@ try:
     with open(spath, "wb") as f:
         f.write(whole)
     srv4.shutdown()
+
+    print("── ⑩ D91 자리 관리: 관전자 없는 판 자동 멈춤(제한 시간을 %d초로 줄여서)" % UNWATCHED)
+    check("⑩ 기본값 = 파트너 확정 10분 둘(상수 한 곳씩) · 기본 서버엔 살피기 스레드가 있다",
+          server.PAUSE_LIMIT_SEC == 600 and server.UNWATCHED_LIMIT_SEC == 600 and srv.sessions.unwatched_limit == 600
+          and srv.sessions.watcher is not None, "%s %s" % (server.UNWATCHED_LIMIT_SEC, srv.sessions.unwatched_limit))
+    os.environ["BOTPIKDUN_UNWATCHED_LIMIT_SEC"] = "0"
+    srv_off = server.make_public_server("127.0.0.1", 0, root=HERE, data_dir=os.path.join(TMP, "off"), brain="dummy")
+    os.environ["BOTPIKDUN_UNWATCHED_LIMIT_SEC"] = "77"
+    srv_env = server.make_public_server("127.0.0.1", 0, root=HERE, data_dir=os.path.join(TMP, "env"), brain="dummy")
+    os.environ.pop("BOTPIKDUN_UNWATCHED_LIMIT_SEC", None)
+    check("⑩ 환경변수 BOTPIKDUN_UNWATCHED_LIMIT_SEC: 0 = 끔(스레드 없음) · 77 = 77초",
+          srv_off.sessions.unwatched_limit == 0 and srv_off.sessions.watcher is None and srv_off.sessions.stop_unwatched() == 0
+          and srv_env.sessions.unwatched_limit == 77, "%s %s" % (srv_off.sessions.unwatched_limit, srv_env.sessions.unwatched_limit))
+    for s_ in (srv_off, srv_env):
+        s_.sessions.stop_all()
+        s_.server_close()
+    with io.open(os.path.join(HERE, "launcher.py"), encoding="utf-8") as f:
+        lsrc = f.read()
+    check("⑩ 로컬 론처에는 자동 멈춤이 없다(시계·살피기 없음 — 사유를 받아 적는 길만)",
+          "unwatched_limit" not in lsrc and "stop_unwatched" not in lsrc and "start_watcher" not in lsrc and "reason=None" in lsrc)
+    os.environ.update(DUNGEON_TURNS="400", DUNGEON_STEP_DELAY="0.5")     # 자식 러너가 물려받는다 — 멈출 때까지 끝나지 않는 긴 판(seed 11 = 102틱, 0콜 실측)
+    srv5, port5 = serve(os.path.join(TMP, "unwatched"), max_runs=3, starts_per_hour=5, unwatched_limit=UNWATCHED)
+    G = Judge(port5, "G")
+    pg = G.call("/api/presets")[3]
+    check("⑩ /api/presets 에 두 제한 시간(additive)", pg.get("unwatched_limit") == UNWATCHED and pg.get("pause_limit") == server.PAUSE_LIMIT_SEC,
+          "%s %s" % (pg.get("unwatched_limit"), pg.get("pause_limit")))
+    st, _, _, obj, _ = G.call("/api/start", dict(base, key=KEY, seed=11))
+    ctxG = srv5.sessions.get(G.cookie)
+    sG = os.path.join(ctxG.state_dir, "stream.jsonl")
+    check("⑩ 판 시작 200 · 판 파일이 생긴다", st == 200 and wait_stream(sG) is not None, str(obj))
+    t0, n_poll, t_last = time.time(), 0, time.time()
+    while time.time() - t0 < UNWATCHED * 2 + 1:                         # 보는 동안 — 론처 화면(상태)과 관전 클라이언트(판 파일)의 폴링을 번갈아 흉내
+        t_last = time.time()                                             # 마지막 관전 요청을 보내기 직전(서버의 시계는 이 뒤에 다시 잰다)
+        G.call("/api/status" if n_poll % 2 else "/state/stream.jsonl")
+        n_poll += 1
+        time.sleep(0.4)
+    check("⑩ 관전 폴링이 이어지는 동안은 제한 시간의 두 배가 지나도 돈다", ctxG.runner.running(), "polls %d" % n_poll)
+    while ctxG.runner.running() and time.time() - t_last < 90:          # 이제 아무도 안 본다 — 서버 안에서만 지켜본다(HTTP 로 물으면 그게 관전이다)
+        time.sleep(0.2)
+    gone = time.time() - t_last
+    check("⑩ 폴링이 끊기면 제한 시간 뒤 러너가 닫힌다(그 전에는 아니다)", not ctxG.runner.running() and gone >= UNWATCHED,
+          "%.1fs" % gone)
+    check("⑩ 러너가 스스로 닫혔다(곱게 — 종료 코드 0) · stop.json 은 지워짐", ctxG.runner.proc.returncode == 0
+          and not os.path.exists(os.path.join(ctxG.state_dir, "stop.json")), str(ctxG.runner.proc.returncode))
+    with io.open(sG, encoding="utf-8") as f:
+        recsG = [json.loads(ln) for ln in f if ln.strip()]
+    lastG = recsG[-1] if recsG else {}
+    check("⑩ 기록: 마지막 줄 = stopped(reason unwatched · 수첩 없음) · end 없음",
+          lastG.get("kind") == "stopped" and lastG.get("reason") == "unwatched" and "pages" not in lastG
+          and not any(r.get("kind") == "end" for r in recsG), str(lastG)[:120])
+    stG = G.call("/api/status")[3]
+    rsG = (stG or {}).get("resume") or {}
+    check("⑩ 돌아온 방문자의 /api/status: running false · outcome 없음 · resume(이어갈 몸).stopped = unwatched",
+          stG and stG["running"] is False and stG.get("outcome") is None and rsG.get("stopped") == "unwatched"
+          and rsG.get("turn_last") == lastG.get("turn") and rsG.get("pages") == [], str(rsG)[:160])
+    st, _, _, obj, _ = G.call("/api/start", {"resume": True, "key": KEY})
+    check("⑩ 이어가기 200(같은 판 · 멈춘 틱에서)", st == 200 and obj.get("resumed") is True and obj.get("from_turn") == lastG.get("turn"), str(obj))
+    t2, resumeG = time.time(), []
+    while time.time() - t2 < 30 and not resumeG:                         # 폴링하며 기다린다(= 보고 있다)
+        G.call("/api/status")
+        with io.open(sG, encoding="utf-8", errors="replace") as f:
+            for ln in f:
+                try:
+                    r_ = json.loads(ln)
+                except ValueError:
+                    continue
+                if r_.get("kind") == "resume":
+                    resumeG.append(r_)
+        time.sleep(0.3)
+    check("⑩ resume 줄이 앞 조각의 사유를 말한다(stopped unwatched)", len(resumeG) == 1 and resumeG[0].get("stopped") == "unwatched"
+          and ctxG.runner.running(), str(resumeG)[:160])
+    t3, meta_mid = time.time(), None
+    while time.time() - t3 < 30:                                         # 이어간 러너가 틱을 돌아 요약의 stop 이 다시 비워질 때까지(루프 머리 스냅샷 = stop None)
+        G.call("/api/status")
+        meta_mid = server.launcher.snapshot.read_meta(ctxG.state_dir)
+        if meta_mid and meta_mid.get("stop") is None and (meta_mid.get("turn_last") or 0) > lastG.get("turn", 0):
+            break
+        time.sleep(0.3)
+    check("⑩ 이어간 판이 돈다 — 요약의 stop 은 다시 비었다", bool(meta_mid) and meta_mid.get("stop") is None, str(meta_mid)[:120])
+    res = ctxG.runner.stop(graceful=False, reason="unwatched")           # 곱게 닫힐 틈 없이 끊은 판에도 사유가 남는다(요약만 — 몸은 루프 머리 그대로)
+    rsG2 =(G.call("/api/status")[3] or {}).get("resume") or {}
+    n_stopped = 0
+    with io.open(sG, encoding="utf-8", errors="replace") as f:
+        for ln in f:                                                     # 끊긴 판의 마지막 줄은 반 토막일 수 있다 — 온전한 줄만 센다
+            try:
+                n_stopped += json.loads(ln).get("kind") == "stopped"
+            except ValueError:
+                pass
+    check("⑩ 끊은 판(terminate)도 resume.stopped = unwatched · stopped 줄은 늘지 않는다(러너가 쓴 것만 기록)",
+          res.get("stopped") and not res.get("graceful") and rsG2.get("stopped") == "unwatched" and n_stopped == 1,
+          "%s %s %d" % (res, rsG2.get("stopped"), n_stopped))
+    ctxG.watched -= 10000                                                # 안 도는 판은 아무리 오래 안 봐도 건드리지 않는다
+    check("⑩ 도는 판이 없으면 멈출 것도 없다", srv5.sessions.stop_unwatched() == 0)
+    srv5.sessions.stop_all()
+    check("⑩ 서버를 닫으면 살피기 스레드도 내려간다", (srv5.sessions.watcher.join(5) or True) and not srv5.sessions.watcher.is_alive())
+    srv5.shutdown()
+    os.environ.update(DUNGEON_TURNS="6")
+    os.environ.pop("DUNGEON_STEP_DELAY", None)
 finally:
     sys.stderr = old_err
 

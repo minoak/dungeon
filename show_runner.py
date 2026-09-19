@@ -1519,7 +1519,7 @@ def main():
                                                 RESUME_NOTICE_PAGE if pg else "")
         sw.emit("resume", turn=int(snap["next_turn"]) - 1, started=time.strftime("%Y-%m-%dT%H:%M:%S"), segment=segment,
                 backend=brains.backend_name(), depth=d.depth,
-                stopped=(stop_info.get("reason") or None),          # 앞 조각이 어떻게 끝났나: user(수첩 쓰고 멈춤)·user_paused(판단 정지 중 멈춤)·pause_timeout(F1 판단 정지 제한 시간)·None(끊김·크래시)
+                stopped=(stop_info.get("reason") or None),          # 앞 조각이 어떻게 끝났나: user(수첩 쓰고 멈춤)·user_paused(판단 정지 중 멈춤)·pause_timeout(F1 판단 정지 제한 시간)·unwatched(D91 관전자 없는 판 — 공개 서버)·None(끊김·크래시)
                 **({"pages": pages_prev} if pages_prev else {}),   # 멈출 때 쓴 수첩 장(캐릭터별) — 이어가는 몸이 들고 간다
                 party=[{"char": b["char"], "hp": b["hp"], "alive": b["alive"]} for b in bots])
     run_id = "%s@%s" % (DUNGEON_SEED, run_started)   # 캠페인(D78)의 판 식별자 — 이어가도 같은 판
@@ -1642,7 +1642,9 @@ def main():
             decisions = brains.think_all(d, bots, inbox, on_error=lambda errors: brain_pause.wait(turn, errors))
         except run_control.StopRequested as stop_exc:   # D79: 판단 정지 대기 중 사용자가 멈춤 — 루프 머리 스냅샷(이 틱 전)이 진실. 조용히 닫는다
             # F1(09-18): 제한 시간(PAUSE_LIMIT_SEC) 동안 아무도 재시도를 안 누른 판도 같은 길로 스스로 닫는다 — 사유만 다르다
-            stopped_now = "pause_timeout" if isinstance(stop_exc, run_control.PauseTimeout) else "user_paused"
+            # D91(09-20): 판단 정지 중에 온 멈춤 요청이 사유를 들고 있으면(unwatched = 관전자 없는 판) 그 사유를 그대로 적는다
+            stopped_now = ("pause_timeout" if isinstance(stop_exc, run_control.PauseTimeout)
+                           else run_control.stop_reason(run_control.stop_requested(STATE), "user_paused"))
             snapshot.write_meta(STATE, _snap_meta(turn, {"reason": stopped_now, "pages": {}}))
             if stopped_now == "pause_timeout":
                 event("=== 판단 정지가 제한 시간(%d초)을 넘겨 원정을 멈춘다(t%d 전) — 마지막 기록에서 이어갈 수 있다 ===" % (PAUSE_LIMIT_SEC, turn))
@@ -2052,16 +2054,18 @@ def main():
     for turn in range(first_turn, MAX_TURNS + 1):
         req = run_control.stop_requested(STATE)   # D79 곱게 멈춤(론처 '수첩 쓰고 멈춤') — 이 틱을 시작하기 전에, 지난 틱까지의 기록이 진실
         if req:
+            why = run_control.stop_reason(req)    # D91(09-20): 사람이 누른 멈춤 = "user" · 공개 서버가 관전자 없는 판을 멈춤 = "unwatched" — 길은 같고 사유만 다르다(기록은 누가 멈췄는지 그대로)
             pages = stop_pages(d, bots, names, turn - 1, req)
             for x in worlds:                      # D84: 다른 세계에 있는 사람도 한 장씩(옛 판은 세계가 하나라 돌지 않는다)
                 if x is not W:
                     pages.update(stop_pages(x["d"], x["bots"], names, turn - 1, req))
-            sw.emit("stopped", turn=turn - 1, reason="user", depth=d.depth, **({"pages": pages} if pages else {}))   # D79 additive
-            stop_rec = {"reason": "user", "pages": pages}
+            sw.emit("stopped", turn=turn - 1, reason=why, depth=d.depth, **({"pages": pages} if pages else {}))   # D79 additive
+            stop_rec = {"reason": why, "pages": pages}
             _take_snapshot(sw, {**_snap_core(), "next_turn": turn, "stop": stop_rec}, _snap_meta(turn, stop_rec))
-            event("=== 원정을 멈춘다(t%d, %s) — 마지막 기록에서 이어갈 수 있다%s ==="
-                  % (turn - 1, brains._floor_name(d.depth), " · 수첩 %d장" % len(pages) if pages else ""))
-            stopped_now = "user"
+            event("=== 원정을 멈춘다(t%d, %s) — 마지막 기록에서 이어갈 수 있다%s%s ==="
+                  % (turn - 1, brains._floor_name(d.depth), " · 수첩 %d장" % len(pages) if pages else "",
+                     " · 관전자가 없어 서버가 멈췄다" if why == "unwatched" else ""))
+            stopped_now = why
             break
         _take_snapshot(sw, {**_snap_core(), "next_turn": turn, "stop": None}, _snap_meta(turn))   # 틱마다 — 끊겨도 여기서 이어간다
         flag = None

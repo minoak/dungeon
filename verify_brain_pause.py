@@ -242,6 +242,36 @@ class BrainPauseTests(unittest.TestCase):
             finally:
                 runner.stop()
 
+    def test_stop_reason_survives_a_brain_pause(self):
+        """D91(09-20): 판단 정지 중에 온 멈춤 요청이 사유를 들고 있으면(unwatched = 공개 서버의 관전자 없는 판) 요약에 그 사유가 남는다 —
+        사유 없는 요청(화면의 멈춤 버튼)은 옛 그대로 user_paused. 모르는 사유는 받아 적지 않는다."""
+        self.assertEqual(run_control.stop_reason({'reason': 'unwatched'}), 'unwatched')
+        self.assertEqual(run_control.stop_reason({'reason': 'whatever'}), 'user')
+        self.assertEqual(run_control.stop_reason({}), 'user')
+        self.assertEqual(run_control.stop_reason(None, 'user_paused'), 'user_paused')
+        for reason, expect in (('unwatched', 'unwatched'), (None, 'user_paused')):
+            with tempfile.TemporaryDirectory(prefix='wl_pause_reason_') as temp:
+                state = Path(temp) / 'state'
+                state.mkdir()
+                runner = launcher.Runner(str(ROOT), str(state), str(Path(temp) / 'runs'))
+                with (state / 'runner.out').open('w', encoding='utf-8') as log:
+                    runner.proc = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), '--fixture', str(state)],
+                                                   cwd=ROOT, env={**os.environ, 'PYTHONUTF8': '1'}, stdout=log, stderr=log)
+                try:
+                    deadline = time.monotonic() + 40
+                    while time.monotonic() < deadline and not (state / run_control.PAUSE_FILE).exists():
+                        time.sleep(.05)
+                    self.assertTrue((state / run_control.PAUSE_FILE).exists(), (state / 'runner.out').read_text(encoding='utf-8'))
+                    res = runner.stop(graceful=True, pages=False, wait=30, reason=reason)
+                    self.assertTrue(res['stopped'] and res['graceful'], res)
+                    self.assertEqual(runner.proc.returncode, 0, (state / 'runner.out').read_text(encoding='utf-8'))
+                    self.assertEqual('reason' in res, reason is not None)                # 사유 없는 멈춤의 응답은 옛 모양 그대로(키 없음)
+                    self.assertEqual(runner.resumable(runner.status())['stopped'], expect)
+                    records = [json.loads(line) for line in (state / 'stream.jsonl').read_text(encoding='utf-8').splitlines()]
+                    self.assertFalse(any(r['kind'] in ('end', 'tick', 'stopped') for r in records))   # 세계는 한 틱도 안 갔다(요약만 사유를 안다)
+                finally:
+                    runner.stop()
+
     def test_world_freezes_and_http_retry_resumes_same_run(self):
         with tempfile.TemporaryDirectory(prefix='wl_brain_pause_') as temp:
             state = Path(temp) / 'state'
