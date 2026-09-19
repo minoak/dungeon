@@ -24,7 +24,8 @@
           "top": "#42738b",
           "bottom": "#d7c599"
         },
-        "sprite": "sd-warrior"
+        "sprite": "sd-warrior-male",
+        "hairstyle": "tousled"
       }
     },
     "npc": {
