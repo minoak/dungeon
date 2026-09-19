@@ -8,14 +8,14 @@ cd /d "%~dp0"
 :menu
 echo.
 echo  =============== WONDERLAND ===============
-echo   [L] LOCAL LAUNCHER: characters, models, play and replays
-echo   [S] ONLINE SERVER: account login + saved characters
+echo   [1] LOCAL LAUNCHER: characters, models, play and replays
+echo   [2] ONLINE SERVER: account login + saved characters
 echo   [Q] Quit
 echo  ==========================================
 set "pick="
 set /p pick="pick> "
-if /i "%pick%"=="L" goto launcher
-if /i "%pick%"=="S" goto online
+if /i "%pick%"=="1" goto launcher
+if /i "%pick%"=="2" goto online
 if /i "%pick%"=="Q" exit /b 0
 goto menu
 

@@ -130,10 +130,10 @@ cd ..
 **4. 시작**
 
 ```
-wonderland.bat              ← 더블클릭 → [L] LOCAL LAUNCHER (또는  python launcher.py)
+wonderland.bat              ← 더블클릭 → [1] LOCAL LAUNCHER (또는  python launcher.py)
 ```
 
-실행 메뉴는 **[L] 로컬 런처 · [S] 온라인 서버 · [Q] 종료**다. 캐릭터·모델 설정, 새 판 시작·이어가기·지난 판 보기는 웹 런처에서 한다. 예전 숫자·T·A 실험 메뉴는 제거했다.
+실행 메뉴는 **[1] 로컬 런처 · [2] 온라인 서버 · [Q] 종료**다. 캐릭터·모델 설정, 새 판 시작·이어가기·지난 판 보기는 웹 런처에서 한다. 예전 실험 메뉴(숫자 여럿·T·A)는 제거했다.
 
 ![론처 첫 화면 — 새 원정·지난 판 보기·신탁 입력](docs/screenshot-launcher.png)
 
@@ -152,7 +152,7 @@ wonderland.bat              ← 더블클릭 → [L] LOCAL LAUNCHER (또는  pyt
 ## 검증과 데이터
 
 ```bash
-bash _run_gates.sh                                     # 결정론 게이트 72종 일괄 (Git Bash, LLM 0콜, 라이브 데이터와 격리)
+bash _run_gates.sh                                     # 결정론 게이트 75종 일괄 (Git Bash, LLM 0콜, 라이브 데이터와 격리)
 cd game && npm run smoke                               # 관전 클라이언트 헤드리스 스모크
 python tools/analyze_run.py runs/stream-XXXX.jsonl     # 지난 판 0콜 부검(이동·전투·대화 통계)
 python tools/run_notes.py   runs/stream-XXXX.jsonl     # 도감평·수첩 텍스트 덤프
@@ -160,7 +160,7 @@ python tools/unheard_audit.py runs/stream-XXXX.jsonl   # 동료를 지목한 말
 python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer.html   # 단일 HTML 리플레이
 ```
 
-- 게이트 `verify_*.py` **72종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
+- 게이트 `verify_*.py` **75종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
   도감·수첩·결산·보스층·차단 접기·공개 서버·계정(키 지문)·캠페인(저장 캐릭터의 원정 기록)·이어가기(스냅샷=끊기지 않은 판)·API 호출 상한·길드 척추(의뢰·보고·NPC 두뇌)·파티 장부(계단이 세는 사람)를 LLM 0콜로 검사한다.
 - `runs/`의 판 기록은 실LLM으로 얻은 원본 데이터지만 **개인 플레이 기록이라 로컬에만 보존한다**(`.gitignore`, 2026-09-16). 저장소엔 정적 관전용 데모 판(`game/static-runs.json`)만 남는다. 전부 리플레이 가능하다.
 - 관측 표현 A/B 실험(사전등록): [docs/D19_experiment_summary.md](docs/D19_experiment_summary.md).

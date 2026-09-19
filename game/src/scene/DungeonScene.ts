@@ -109,7 +109,7 @@ export class DungeonScene extends Phaser.Scene {
   /** 캐릭터 머리 위(월드 px) — 말풍선 앵커. */
   headOf(char: Char): { x: number; y: number } | null {
     const a = this.actors.get(char);
-    return a ? { x: a.sprite.x, y: a.sprite.y - FOOT_Y + 6 } : null;
+    return a ? { x: a.sprite.x, y: a.sprite.y - (FOOT_Y - 6) * a.sprite.scaleY } : null;
   }
   /** 마을 NPC 머리 위(월드 px) — 이름으로 찾는다(D69 NPC 말풍선 앵커). 그려져 있지 않으면 null. */
   npcHeadOf(name: string): { x: number; y: number } | null {
@@ -338,6 +338,7 @@ export class DungeonScene extends Phaser.Scene {
         const row = ft.type === 'npc' ? this.townNpcRow(ft.x, ft.y) : -1;   // 마을 v1: NPC 시트(정면 프레임)
         s = row >= 0
           ? this.add.sprite(c.x, c.y, 'wl-town-npcs', row * 4).setOrigin(0.5, TOWN_NPC_FOOT / TOWN_NPC_CELL)
+            .setScale(this.characterScale)
             .setDepth(DEPTH.stand + ft.y * 0.01 - 0.005)
           : this.placeObject('feat:' + ft.type, ft.x, ft.y, DEPTH.feature);
         this.feats.set(k, s);
@@ -382,6 +383,10 @@ export class DungeonScene extends Phaser.Scene {
     this.visitedDrawn = count;
   }
 
+  /** The authored town's wide composition needs more readable people. Keep feet
+   * anchored to the same cells, and restore normal scale when leaving this map. */
+  private get characterScale(): number { return this.townVisual?.art ? 1.6 : 1; }
+
   private ensureActor(b: Bot): Actor {
     let a = this.actors.get(b.char);
     if (a) return a;
@@ -402,6 +407,8 @@ export class DungeonScene extends Phaser.Scene {
 
   private updateActor(a: Actor, b: Bot, cur: Frame, snap: boolean): void {
     const s = a.sprite;
+    s.setScale(this.characterScale);
+    a.label.setScale(this.characterScale);
     const target = this.worldOf(b.x, b.y);
     a.cell = [b.x, b.y]; a.alive = b.alive; a.won = b.won;
     s.setDepth(DEPTH.stand + b.y * 0.01);
@@ -456,7 +463,7 @@ export class DungeonScene extends Phaser.Scene {
       const dx = ft.x - pf!.x, dy = ft.y - pf!.y;
       dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'back' : 'front');
     }
-    s.setData('dir', dir).setDepth(DEPTH.stand + ft.y * 0.01 - 0.005);
+    s.setScale(this.characterScale).setData('dir', dir).setDepth(DEPTH.stand + ft.y * 0.01 - 0.005);
     this.tweens.killTweensOf(s);
     if (!snap && moved) {
       const duration = Math.min(400, this.app.playback.tickMs * 0.8);
@@ -533,7 +540,7 @@ export class DungeonScene extends Phaser.Scene {
   update(): void {
     for (const a of this.actors.values()) {
       if (!a.label.visible) continue;
-      a.label.setPosition(a.sprite.x, a.sprite.y - (a.alive ? FOOT_Y : 30) - 2);
+      a.label.setPosition(a.sprite.x, a.sprite.y - (a.alive ? FOOT_Y : 30) * a.sprite.scaleY - 2);
     }
     this.ring.clear();
     const fc = this.app.focus.char;
@@ -541,7 +548,7 @@ export class DungeonScene extends Phaser.Scene {
     if (a && a.sprite.visible && a.alive) {
       const col = Phaser.Display.Color.HexStringToColor(this.app.run?.colors[a.char] || '#ffd166').color;
       this.ring.lineStyle(2, col, 0.9);
-      this.ring.strokeEllipse(a.sprite.x, a.sprite.y - 2, TILE * 0.8, TILE * 0.36);
+      this.ring.strokeEllipse(a.sprite.x, a.sprite.y - 2, TILE * 0.8 * a.sprite.scaleX, TILE * 0.36 * a.sprite.scaleY);
     }
   }
 }
