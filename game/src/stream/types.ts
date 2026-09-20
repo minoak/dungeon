@@ -202,6 +202,15 @@ export interface DescendLine {
   pages?: Record<Char, string>;                                        // D59 수첩 — 층을 떠나는 순간 캐릭터가 쓴 한 장(실패한 캐릭터는 키 없음)
 }
 
+/** D94(09-20) 원정 결산 — 길드 보고로 한 원정이 닫힐 때 한 줄(고리 판에만). 판은 닫히지 않는다. */
+export interface ExpeditionLine {
+  kind: 'expedition';
+  turn: number; n: number; from_turn?: number;
+  depth?: number; treasure?: number;
+  done?: unknown[]; undone?: unknown[]; titles?: Record<string, string>;
+  fallen?: unknown[]; party?: unknown[];
+}
+
 export interface EndLine {
   reaction_summary?: ReactionSummary; reaction_floors?: ReactionFloor[];
   kind: 'end'; turn: number; outcome: 'escaped' | 'wiped' | 'timeout' | 'returned' | string; depth: number;
@@ -244,6 +253,7 @@ export interface Frame {
   npc_replies?: NpcReply[];                      // D93 NPC 가 되받은 말 — NPC 말풍선·로그 줄
   overheard?: Overheard[];                       // D90 들린 말 — 로그 줄
   descend?: DescendLine;                         // 이 틱 뒤에 층 전이(다음 프레임이 level)
+  expedition?: ExpeditionLine;                   // D94(09-20) 이 틱에 원정이 결산됐다(고리 판에만) — 전이와 같은 방식으로 직전 틱에 붙인다
   facing: Record<Char, Dir>;                     // 직전 프레임과의 좌표 차(안 움직이면 유지, 처음은 front)
   moved: Record<Char, boolean>;                  // 이 프레임에서 걸었나(트윈·걷기 애니의 방아쇠)
   vis: Record<Char, Set<string>>;                // 이 프레임에서 그 봇이 보는 칸 "x,y"(죽음·하강=빈 집합, 마을=전부)

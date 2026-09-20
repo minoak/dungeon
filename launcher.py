@@ -19,11 +19,13 @@ API(JSON):
   POST /api/party    {"slots":[{job,traits[],name,sex,background?,persona?,look?} | {"companion":"<동료 프리셋 id>"}, ...]} → sheetkit 조립 →
                      러너의 load_party 로 재검증 → party_custom.json 저장 (실패 400 + 이유 한 줄)
   POST /api/start    {"resume":true, "brain"?, "key"?} → 멈춘 판 이어가기(D79 — 스냅샷+그 판을 시작한 옵션, 같은 기록 파일에 append) 또는
-                     {"map":"normal|big|concept","town":bool,"brain":"gemini_api|claude_cli|anthropic_api|dummy",
+                     {"town":bool,"brain":"gemini_api|claude_cli|anthropic_api|dummy",
                       "seed":int|null|"random","party":"custom|default","mode":"standard|classic",
-                      "town_life"?:bool,"npc_reply"?:bool,"floor_life"?:bool,"bestiary_plus"?:bool} → 이전 판 보존(live.bat 규칙)
-                     → 러너 subprocess. 동시 1판(실행 중이면 409). 09-20 밤의 네 스위치(D89~D93)는 옵션이 없으면 끈다 —
-                     화면의 기본 체크는 NIGHT_DEFAULTS(/api/presets.night_defaults)가 정한다
+                      "town_life"?:bool,"npc_reply"?:bool,"floor_life"?:bool,"bestiary_plus"?:bool,"loop"?:bool,"offer"?:bool,
+                      "map"?:"normal|big|concept"} → 이전 판 보존(live.bat 규칙)
+                     → 러너 subprocess. 동시 1판(실행 중이면 409). 09-20 밤의 스위치들(D89~D95)은 옵션이 없으면 끈다 —
+                     화면의 기본 체크는 NIGHT_DEFAULTS(/api/presets.night_defaults)가 정한다.
+                     map 은 09-20 오후부터 화면에 없다(판은 늘 MAP_DEFAULT) — 옛 이름은 이어가기·게이트가 계속 보낸다
   GET  /api/status   {running,pid,started,seed,party,turn,outcome,viewer,game, stopping, resume:{run_id,seed,turn_last,depth,party,stopped,pages}|null}
   POST /api/stop     {graceful?:bool, pages?:bool} — graceful 이면 러너가 다음 틱 머리에서 (수첩 한 장씩 쓰고) 스스로 닫는다(D79), 아니면 즉시 종료
   POST /api/retry    {pause_id} → 판단 정지 중인 같은 러너에서 모델 재시도
@@ -61,24 +63,41 @@ from brain_config import BACKENDS, HTTP_BACKENDS, KEY_ENV, MODEL_ENV, clean_mode
 from character_presets import PresetStore         # noqa: E402
 
 MAPS = {                                          # 시작 옵션 → 러너 환경변수(wonderland.bat 메뉴 값 그대로)
+    # ⚠️normal·big 은 09-20 오후부터 **화면에 없는 옛 이름**이다(파트너 "다른건 쓰지 않으니") — 그래도 지우지 않는다:
+    #   (a) 멈춰 둔 옛 판의 run_opts.json 에 map:"normal" 이 적혀 있고 이어가기(D79)가 그 이름으로 세계를 다시 짓는다,
+    #   (b) 게이트 여럿이 /api/start 에 이 이름을 직접 보낸다(verify_launcher·verify_public·verify_account·verify_campaign·verify_resume).
     "normal": {},
     "big": {"DUNGEON_W": "80", "DUNGEON_H": "30", "DUNGEON_MONSTERS": "7", "DUNGEON_TRAPS": "4",
             "DUNGEON_LURKERS": "2", "DUNGEON_POTIONS": "1", "DUNGEON_DEPTHS": "1", "DUNGEON_TURNS": "500"},
     # D88(09-20) 새 던전 생성 프로필 — 넓은 통로·대홀·기둥의 석조 던전. 생성기가 42x34 에서만 검증됐다(1,000 시드)
     # → 크기를 여기서 같이 준다(부모 env 의 DUNGEON_W/H 를 덮는다). ⚠️키 이름은 바꾸지 않는다 —
     # 멈춰 둔 판의 run_opts.json 이 이 이름으로 이어간다(D79).
-    "concept": {"DUNGEON_W": "42", "DUNGEON_H": "34", "DUNGEON_ARCH": "concept"},
+    # DUNGEON_MONSTERS 4(파트너 09-20 "지금은 몹수는 4으로 늘리자"): 러너 기본은 2(깊이마다 +1 → 1~5층에 2·3·4·5·6 마리).
+    # 42x34 는 56x20 보다 바닥이 넓어 2 는 헐겁다. 4 면 4·5·6·7·8 마리 = 판 전체로 20 → 30.
+    # 0콜 실측(더미 두뇌·시드 10개·마을 끔·600틱·보스 실수치·던전 살림/새 몬스터 켬):
+    #   몹 2 → 전멸 7 · 평균 깊이 4.3 · 5층 도달 6/10
+    #   몹 3 → 전멸 10 · 평균 깊이 3.4 · 5층 2/10
+    #   몹 4 → 전멸 9 · 평균 깊이 3.6 · 5층 3/10
+    # ⚠️이 측정은 3 과 4 를 가르지 못한다 — 규칙 두뇌가 병목이다(도망도 물약도 제대로 못 쓴다). 몹 2 에서도 7/10 이 전멸했다.
+    #   난이도의 진짜 답은 실 LLM 판에서만 나온다. 이 수치는 하한으로만 읽을 것.
+    # ⚠️값 임시 — 험하면 이 한 줄만 고친다(2 로 되돌리면 옛 몹 수).
+    "concept": {"DUNGEON_W": "42", "DUNGEON_H": "34", "DUNGEON_ARCH": "concept", "DUNGEON_MONSTERS": "4"},
 }
-# ── 09-20 밤의 기본값(D88~D93) — 화면(launcher/index.html)의 맵 라디오와 고급 설정 체크박스 넷이 처음에 서 있는 자리.
+MAP_DEFAULT = "concept"                           # 09-20 오후(파트너 "이제 맵을 새로운 석조 던전의 보통으로 고정"): 화면에 맵 고르는 자리가 없다.
+                                                  #   옵션이 없거나 모르는 이름이면 이 맵으로 뜬다 — 바꾸려면 이 한 줄.
+# ── 09-20 밤의 기본값(D89~D95) — 화면(launcher/index.html)의 고급 설정 체크박스가 처음에 서 있는 자리.
 # 화면은 이 값을 /api/presets.night_defaults 로 받아 맞춘다(index.html 에는 값이 없다 — 공개 서버 server.py 도 같은 본문을 쓴다).
 # 뒤집는 법: 아래 한 줄만 고친다(전부 옛 판 = OLD_DEFAULTS 와 같은 값으로). 론처·서버는 재시작해야 새 값이 나간다.
-# ⚠️이것은 '화면의 기본'이다 — /api/start 에 옵션이 아예 없으면 Runner.start 는 옛 판(맵 normal · 스위치 끔)으로 띄운다:
+# ⚠️이것은 '화면의 기본'이다 — /api/start 에 옵션이 아예 없으면 Runner.start 는 스위치를 전부 끈 판으로 띄운다:
 #   멈춰 둔 옛 판의 run_opts.json 에는 이 키들이 없고, 그 판은 같은 세계 설정으로 이어가야 한다(D79 세계 지문 대조).
-NIGHT_DEFAULTS = {"map": "concept", "town_life": True, "npc_reply": True, "floor_life": True, "bestiary_plus": True}
-OLD_DEFAULTS = {"map": "normal", "town_life": False, "npc_reply": False, "floor_life": False, "bestiary_plus": False}   # 화면의 '이전 판 설정으로' 버튼이 돌아가는 자리
-OPTIONS_UI_VERSION = 1                            # 09-20 시작 옵션(MAPS·위 스위치)의 판 번호 — 화면이 보내는 옵션을 이 서버가 아는가.
+#   맵만은 예외다 — 화면에서 고르는 자리가 없어졌으므로 옵션이 없으면 MAP_DEFAULT 로 뜬다.
+NIGHT_DEFAULTS = {"town_life": True, "npc_reply": True, "floor_life": True, "bestiary_plus": True, "loop": True,
+                  "offer": False}   # ⚠️offer(D95 신에게 바치기)는 러너 쪽 구현이 아직 합쳐지지 않았다 — 켜도 아무 일이 없으므로 화면에서 끄고 감춘다(파트너 09-20 "천천히 구현해보자")
+OLD_DEFAULTS = {k: False for k in NIGHT_DEFAULTS}   # 화면의 '09-20 추가 전으로' 버튼이 돌아가는 자리(맵은 안 돌아간다 — 화면에 없다)
+OPTIONS_UI_VERSION = 2                            # 09-20 시작 옵션(MAPS·위 스위치)의 판 번호 — 화면이 보내는 옵션을 이 서버가 아는가.
                                                   #   8000번에 떠 있던 옛 론처를 다시 쓰는 조건(main)과 화면의 '이전 런처' 안내가 이 값을 본다.
                                                   #   MAPS 에 키를 더하거나 화면이 새 옵션을 보내게 되면 올린다(index.html 의 비교 값도 같이).
+                                                  #   2 = 09-20 오후(맵 고르기를 화면에서 걷음 · 스위치 둘 추가: loop·offer).
 BRAINS = BACKENDS
 TEXT_LIMITS = {"persona": sheetkit.PERSONA_MAX, "persona_total": sheetkit.PERSONA_TOTAL_MAX,
                "background": sheetkit.BACKGROUND_MAX}
@@ -239,9 +258,13 @@ class Runner:
                 if not os.path.exists(party_path) and not resume:   # 이어가기는 스냅샷의 시트를 쓴다(파티 파일이 없어도 된다)
                     raise BadRequest("저장된 커스텀 파티가 없다 — 먼저 파티를 저장하라(또는 기본 파티 선택)")
                 env["DUNGEON_PARTY_FILE"] = party_path
-            m = str(opts.get("map") or "normal")
+            # 09-20 오후: 화면에 맵 고르는 자리가 없다 — 옵션이 없으면(새 화면) MAP_DEFAULT 로 뜬다.
+            # 모르는 이름도 400 으로 막지 않고 같은 자리로 보낸다: 화면이 안 보내는 값을 옛 링크·옛 클라이언트가 보냈다고
+            # 출발을 막을 이유가 없다(옛 이름 normal·big 은 MAPS 에 그대로 있어 제 세계로 간다).
+            m = str(opts.get("map") or MAP_DEFAULT)
             if m not in MAPS:
-                raise BadRequest("맵은 %s 중 하나" % "/".join(MAPS))
+                m = MAP_DEFAULT
+            opts = {**opts, "map": m}   # 고른 결과를 run_opts.json 에 남긴다(D79) — 나중에 MAP_DEFAULT 를 바꿔도 멈춰 둔 판은 제 세계로 이어간다
             # normal = 러너 기본 + 부모 env 그대로: 콘솔·.env·게이트가 준 DUNGEON_W/H/TURNS 등은 이 판으로 물려받는다(게이트가
             # 이 길로 40x16·짧은 판을 만든다). 09-20 수선: 여기 있던 'BIG_KEYS 지우기'는 env 가 os.environ 의 사본이라 부모에 있는 키는
             # 하나도 못 지웠다(D31 부터 — 주석은 '안 물려준다'였고 동작은 반대). 지우는 척하던 줄을 걷고 사실을 적는다.
@@ -267,11 +290,15 @@ class Runner:
             env["DUNGEON_NPC_REPLY"] = "1" if opts.get("npc_reply") is True else "0"          # D93 NPC 되받기(NPC 가 말을 되받는다 — LLM 호출이 조금 는다)
             env["DUNGEON_FLOOR_LIFE"] = "1" if opts.get("floor_life") is True else "0"        # D92 던전의 물건들
             env["DUNGEON_BESTIARY_PLUS"] = "1" if opts.get("bestiary_plus") is True else "0"  # D92 새 몬스터
+            env["DUNGEON_LOOP"] = "1" if opts.get("loop") is True else "0"                    # D94 원정 고리(길드 보고가 판을 닫지 않는다 — 러너는 마을·의뢰·게시판이 있는 판에서만 켠다)
+            env["DUNGEON_OFFER"] = "1" if opts.get("offer") is True else "0"                  # D95 신에게 바치기
             env["DUNGEON_BOSS"] = "1" if opts.get("boss") else "0"   # D65 보스층·귀환 — 화면 기본 켬, 러너 기본 0(옵션 없으면 끔)
-            if opts.get("start") == "boss":                          # D67 프리셋: 보스방 앞에서 시작 — 마을 없음·보스 켬(관찰용)
+            # 09-20 오후(파트너 "설정도 보스방 앞에서 시작을 빼곤"): D67 관찰용 프리셋(start=boss)은 화면에서도 여기서도 걷었다.
+            # 러너의 DUNGEON_START 자체는 남아 있다 — 게이트 verify_boss 가 env 로 직접 쓴다. 부모 env 의 값은 물려주지 않는다.
+            # ⚠️이어가기는 예외 — 위에서 opts 를 run_opts(그 판을 시작한 옵션)로 갈아 끼웠다. 화면에 그 자리가 없어져도
+            #   '보스방 앞에서 시작'으로 멈춰 둔 판은 그 세계로 이어가야 한다(아니면 D79 지문이 어긋나 조용히 새 판이 된다).
+            if resume and opts.get("start") == "boss":
                 env["DUNGEON_START"] = "boss"
-                env.pop("DUNGEON_TOWN", None)
-                env["DUNGEON_BOSS"] = "1"
             else:
                 env.pop("DUNGEON_START", None)
             if brain == "dummy" or not opts.get("bestiary"):   # 규칙 두뇌는 도감 원장에 누적하지 않는다 · D64(09-13 파트너 "캐릭터 영속은
@@ -491,8 +518,9 @@ def presets_payload(ctx):
             "model_ui_version": 2,
             "party_ui_version": 1,                 # D81 한 장 화면(내 캐릭터 + 동료 칸)이 기대는 서버 — 화면은 이 값이 없으면 '이전 런처' 안내를 띄운다
             "options_ui_version": OPTIONS_UI_VERSION,   # 09-20 시작 옵션의 판 번호 — 새 맵·새 스위치를 모르는 옛 서버면 화면이 '이전 런처' 안내를 띄운다
-            "night_defaults": dict(NIGHT_DEFAULTS),     # 09-20 맵 라디오·고급 설정 체크박스 넷의 첫 자리(화면에는 값이 없다 — 여기 한 곳)
-            "old_defaults": dict(OLD_DEFAULTS),         #   '이전 판 설정으로' 버튼이 돌아가는 자리(옛 맵 · 스위치 끔)
+            "night_defaults": dict(NIGHT_DEFAULTS),     # 09-20 고급 설정 체크박스(09-20 추가분)의 첫 자리(화면에는 값이 없다 — 여기 한 곳)
+            "old_defaults": dict(OLD_DEFAULTS),         #   '09-20 추가 전으로' 버튼이 돌아가는 자리(그 스위치들만 끔 — 맵은 화면에 없다)
+            "map_default": MAP_DEFAULT,                 #   판이 늘 뜨는 맵(09-20 오후부터 화면에 고르는 자리가 없다 — 화면은 이 이름을 읽어 사실을 적는다)
             "text_limits": TEXT_LIMITS,
             "custom_saved": os.path.exists(ctx.party_path),
             "default_brain": ctx.default_brain or "gemini_api",
