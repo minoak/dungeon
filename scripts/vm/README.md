@@ -15,7 +15,8 @@
 - 2026-09-17: `3734b15` 배포. 로그인·다회사 모델 선택·예상 가격 표시를 공개 서버에 반영했다.
 - 운영 한도는 사용자 선택에 따라 `DUNGEON_API_CALL_LIMIT=500`으로 변경했다(기존 시험 한도 50).
   **09-20: 1,200 으로 올리기로 했다**(파트너 결정). 같은 날 저녁 기본 원정의 틱 상한이 1800 이 되면서
-  이 수와 나란해졌다 — 실측 틱당 0.66콜이면 1,800틱 판이 약 1,190콜이다.
+  이 수와 나란해졌다. ⚠️다만 틱당 콜은 하나의 수가 아니다(09-20 저녁 실판: 마을 0.33 · 1층 1.07 결정/틱) —
+  던전에 오래 있는 판이면 1,800틱이 약 1,780콜이라 한도 1200 이 대략 t1256 에서 먼저 닿는다.
   유닛 템플릿 `botpikdun.service` 에 적어 두었으나 **`deploy.sh` 는 유닛 파일을 갱신하지 않는다** —
   이미 도는 서버는 `sudo systemctl edit botpikdun` 으로 `[Service]` / `Environment=DUNGEON_API_CALL_LIMIT=1200`
   을 넣고 `sudo systemctl restart botpikdun`. 확인은 `systemctl show botpikdun -p Environment`.

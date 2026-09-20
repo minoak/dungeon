@@ -13,7 +13,8 @@ Environment=PYTHONUTF8=1
 Environment=BOTPIKDUN_DATA=@DATA_DIR@
 # 한 판(러너 프로세스 하나)이 보낼 수 있는 LLM 전송 수 — brains._http_post 가 센다(동시 캐릭터·재시도·실패 포함).
 #   0 = 제한 없음(로컬 기본). 09-20 저녁: 기본 원정의 틱 상한이 1800 이 되면서 이 수와 같은 자리에 놓였다 —
-#   실측 틱당 0.66 콜이면 1,800틱 판이 약 1,190 콜이다. 즉 틱이 먼저 끊지도, 호출이 먼저 끊지도 않는 지점이다.
+#   ⚠️틱당 콜은 하나의 수가 아니다(09-20 저녁 실판): 마을 0.33 · 1층 1.07 결정/틱.
+#   그래서 1,800틱 판은 혼합비에 따라 약 780~1,780 콜 사이다 — 던전에 오래 있으면 1200 이 먼저 닿는다(대략 t1256).
 #   ⚠️ deploy.sh 는 이 유닛 파일을 갱신하지 않는다(setup.sh 만 쓴다). 이미 도는 서버에서 바꾸려면:
 #     sudo systemctl edit botpikdun   →   [Service] / Environment=DUNGEON_API_CALL_LIMIT=1200   →   sudo systemctl restart botpikdun
 #   한도에 닿으면 판은 곱게 멈추고 같은 키로 이어갈 수 있다(D96). 자리 관리(D91)와는 별개다. ⚠️값 임시
