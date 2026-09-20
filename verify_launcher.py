@@ -417,9 +417,9 @@ else:
         return dict(got)
 
     e_con = env_of({"map": "concept"})
-    check("⑥ 맵 concept: DUNGEON_ARCH=concept · 크기 42x34 · 몹 3(러너 기본 2 — 09-20 오후 '약간 늘리자')을 같이 준다(부모 env 의 40x16 을 덮는다)",
+    check("⑥ 맵 concept: DUNGEON_ARCH=concept · 크기 42x34 · 몹 4(러너 기본 2 — 09-20 오후 파트너 '몹수는 4으로 늘리자')을 같이 준다(부모 env 의 40x16 을 덮는다)",
           e_con.get("DUNGEON_ARCH") == "concept" and (e_con.get("DUNGEON_W"), e_con.get("DUNGEON_H")) == ("42", "34")
-          and e_con.get("DUNGEON_MONSTERS") == "3")
+          and e_con.get("DUNGEON_MONSTERS") == "4")
     leak = {"DUNGEON_ARCH": "concept", **{k: "1" for k in NIGHT_ENV}}
     e_nor, e_big, e_none = env_of({"map": "normal"}, leak), env_of({"map": "big"}, leak), env_of({}, leak)
     check("⑥ 옛 이름(normal·big)을 보낸 판: 부모 env 에 DUNGEON_ARCH 가 있어도 자식 env 에서 지운다 — API 로는 여전히 받는다(멈춰 둔 판·게이트)",
@@ -466,20 +466,22 @@ else:
     check("⑥ 화면: 맵 고르는 자리가 없다(라디오·mapMode·본문 map 전부) · '보스방 앞에서 시작' 체크박스와 본문 start 도 없다",
           'name="map"' not in lh and "mapMode" not in lh and "map: $(" not in lh
           and "startBoss" not in lh and "start: $(" not in lh)
-    check("⑥ 화면: 체크박스 여섯(첫 자리는 HTML 에 없다 = checked 를 적지 않는다) · 출발 본문에 여섯 옵션",
+    check("⑥ 화면: 체크박스 다섯(첫 자리는 HTML 에 없다 = checked 를 적지 않는다) · 출발 본문에 다섯 옵션 — offer(D95)는 러너 쪽이 아직 없어 화면에서 걷었다(배선만 남는다)",
           all(('id="%s">' % i) in lh and ('id="%s" checked' % i) not in lh
-              for i in ("townLife", "npcReply", "floorLife", "bestiaryPlus", "loop", "offer"))
+              for i in ("townLife", "npcReply", "floorLife", "bestiaryPlus", "loop"))
+          and 'id="offer"' not in lh
           and all(s_ in lh for s_ in ("town_life: $('townLife').checked", "npc_reply: $('npcReply').checked",
                                       "floor_life: $('floorLife').checked", "bestiary_plus: $('bestiaryPlus').checked",
-                                      "loop: $('loop').checked", "offer: $('offer').checked")))
+                                      "loop: $('loop').checked")))
     check("⑥ 화면: 첫 자리는 서버 값으로(applyStartDefaults(presets.night_defaults)) · '09-20 추가 전으로' 버튼 = old_defaults · 옛 서버면 재시작 안내",
           "applyStartDefaults(presets.night_defaults)" in lh and 'id="bOldDefaults"' in lh and "setStartOptions(presets && presets.old_defaults)" in lh
           and "presets.options_ui_version !== 2" in lh and "LLM 호출이 조금 늘어난다" in lh)
     lp_src = io.open(os.path.join(HERE, "launcher.py"), encoding="utf-8").read()
-    check("⑥ launcher.py: 스위치 여섯의 env 줄(옵션 없으면 끈다) · 떠 있던 옛 론처를 다시 쓰는 조건에 시작 옵션 판 번호 · start==boss 분기 없음",
+    check("⑥ launcher.py: 스위치 여섯의 env 줄(옵션 없으면 끈다) · 떠 있던 옛 론처를 다시 쓰는 조건에 시작 옵션 판 번호 · start==boss 는 이어가기에서만(멈춰 둔 옛 판이 제 세계로 이어가게)",
           all(('env["%s"] = "1" if opts.get("%s") is True else "0"' % (v, o)) in lp_src for v, o in zip(NIGHT_ENV, NIGHT_OPTS))
           and 'existing.get("options_ui_version") == OPTIONS_UI_VERSION' in lp_src
-          and 'opts.get("start")' not in lp_src and 'env.pop("DUNGEON_START", None)' in lp_src)
+          and 'if resume and opts.get("start") == "boss"' in lp_src   # 새 판에서는 안 쓴다 — 이어가기만
+          and 'env.pop("DUNGEON_START", None)' in lp_src)
 
     # ───────────────────── ⑦ 기본 파티의 외형(09-20) ─────────────────────
     print("── ⑦ 기본 파티(party.json)의 외형 — 외형 사전의 바디·공용 헤어 · 직업·성별이 맞는다 · 화면 미리보기")

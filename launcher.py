@@ -72,13 +72,16 @@ MAPS = {                                          # 시작 옵션 → 러너 환
     # D88(09-20) 새 던전 생성 프로필 — 넓은 통로·대홀·기둥의 석조 던전. 생성기가 42x34 에서만 검증됐다(1,000 시드)
     # → 크기를 여기서 같이 준다(부모 env 의 DUNGEON_W/H 를 덮는다). ⚠️키 이름은 바꾸지 않는다 —
     # 멈춰 둔 판의 run_opts.json 이 이 이름으로 이어간다(D79).
-    # DUNGEON_MONSTERS 3: 러너 기본은 2(깊이마다 +1 → 1~5층에 2·3·4·5·6 마리)다. 42x34 는 56x20 보다 바닥이 넓어 2 는 헐겁다
-    # (파트너 09-20 "몹의 숫자를 약간 늘리자"). 3 이면 3·4·5·6·7 마리 = 판 전체로 20 → 25.
+    # DUNGEON_MONSTERS 4(파트너 09-20 "지금은 몹수는 4으로 늘리자"): 러너 기본은 2(깊이마다 +1 → 1~5층에 2·3·4·5·6 마리).
+    # 42x34 는 56x20 보다 바닥이 넓어 2 는 헐겁다. 4 면 4·5·6·7·8 마리 = 판 전체로 20 → 30.
     # 0콜 실측(더미 두뇌·시드 10개·마을 끔·600틱·보스 실수치·던전 살림/새 몬스터 켬):
-    #   몹 2 → 전멸 7 · 600틱 생존 3 · 5층 도달 6/10        몹 3 → 전멸 10 · 생존 0 · 5층 도달 2/10
-    # 즉 눈에 띄게 험해진다. 규칙 두뇌는 도망도 물약도 제대로 못 쓰므로 이 수치는 하한이다(LLM 판은 더 오래 버틴다).
+    #   몹 2 → 전멸 7 · 평균 깊이 4.3 · 5층 도달 6/10
+    #   몹 3 → 전멸 10 · 평균 깊이 3.4 · 5층 2/10
+    #   몹 4 → 전멸 9 · 평균 깊이 3.6 · 5층 3/10
+    # ⚠️이 측정은 3 과 4 를 가르지 못한다 — 규칙 두뇌가 병목이다(도망도 물약도 제대로 못 쓴다). 몹 2 에서도 7/10 이 전멸했다.
+    #   난이도의 진짜 답은 실 LLM 판에서만 나온다. 이 수치는 하한으로만 읽을 것.
     # ⚠️값 임시 — 험하면 이 한 줄만 고친다(2 로 되돌리면 옛 몹 수).
-    "concept": {"DUNGEON_W": "42", "DUNGEON_H": "34", "DUNGEON_ARCH": "concept", "DUNGEON_MONSTERS": "3"},
+    "concept": {"DUNGEON_W": "42", "DUNGEON_H": "34", "DUNGEON_ARCH": "concept", "DUNGEON_MONSTERS": "4"},
 }
 MAP_DEFAULT = "concept"                           # 09-20 오후(파트너 "이제 맵을 새로운 석조 던전의 보통으로 고정"): 화면에 맵 고르는 자리가 없다.
                                                   #   옵션이 없거나 모르는 이름이면 이 맵으로 뜬다 — 바꾸려면 이 한 줄.
@@ -88,7 +91,8 @@ MAP_DEFAULT = "concept"                           # 09-20 오후(파트너 "이�
 # ⚠️이것은 '화면의 기본'이다 — /api/start 에 옵션이 아예 없으면 Runner.start 는 스위치를 전부 끈 판으로 띄운다:
 #   멈춰 둔 옛 판의 run_opts.json 에는 이 키들이 없고, 그 판은 같은 세계 설정으로 이어가야 한다(D79 세계 지문 대조).
 #   맵만은 예외다 — 화면에서 고르는 자리가 없어졌으므로 옵션이 없으면 MAP_DEFAULT 로 뜬다.
-NIGHT_DEFAULTS = {"town_life": True, "npc_reply": True, "floor_life": True, "bestiary_plus": True, "loop": True, "offer": True}
+NIGHT_DEFAULTS = {"town_life": True, "npc_reply": True, "floor_life": True, "bestiary_plus": True, "loop": True,
+                  "offer": False}   # ⚠️offer(D95 신에게 바치기)는 러너 쪽 구현이 아직 합쳐지지 않았다 — 켜도 아무 일이 없으므로 화면에서 끄고 감춘다(파트너 09-20 "천천히 구현해보자")
 OLD_DEFAULTS = {k: False for k in NIGHT_DEFAULTS}   # 화면의 '09-20 추가 전으로' 버튼이 돌아가는 자리(맵은 안 돌아간다 — 화면에 없다)
 OPTIONS_UI_VERSION = 2                            # 09-20 시작 옵션(MAPS·위 스위치)의 판 번호 — 화면이 보내는 옵션을 이 서버가 아는가.
                                                   #   8000번에 떠 있던 옛 론처를 다시 쓰는 조건(main)과 화면의 '이전 런처' 안내가 이 값을 본다.
@@ -291,7 +295,12 @@ class Runner:
             env["DUNGEON_BOSS"] = "1" if opts.get("boss") else "0"   # D65 보스층·귀환 — 화면 기본 켬, 러너 기본 0(옵션 없으면 끔)
             # 09-20 오후(파트너 "설정도 보스방 앞에서 시작을 빼곤"): D67 관찰용 프리셋(start=boss)은 화면에서도 여기서도 걷었다.
             # 러너의 DUNGEON_START 자체는 남아 있다 — 게이트 verify_boss 가 env 로 직접 쓴다. 부모 env 의 값은 물려주지 않는다.
-            env.pop("DUNGEON_START", None)
+            # ⚠️이어가기는 예외 — 위에서 opts 를 run_opts(그 판을 시작한 옵션)로 갈아 끼웠다. 화면에 그 자리가 없어져도
+            #   '보스방 앞에서 시작'으로 멈춰 둔 판은 그 세계로 이어가야 한다(아니면 D79 지문이 어긋나 조용히 새 판이 된다).
+            if resume and opts.get("start") == "boss":
+                env["DUNGEON_START"] = "boss"
+            else:
+                env.pop("DUNGEON_START", None)
             if brain == "dummy" or not opts.get("bestiary"):   # 규칙 두뇌는 도감 원장에 누적하지 않는다 · D64(09-13 파트너 "캐릭터 영속은
                 env["DUNGEON_BESTIARY_FILE"] = ""              #   서빙까지 했을 때 시작 — 지금은 완전히 별개의 판"): 기본 이월 안 함(판 안 학습만).
             elif not env.get("DUNGEON_BESTIARY_FILE"):         #   옵션 '도감 이월'(bestiary=true)을 켠 판만 로컬 원장에 읽고 쓴다
