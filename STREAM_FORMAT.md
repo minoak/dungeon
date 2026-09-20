@@ -38,7 +38,8 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
   `stop_page`)을 쓰고 이 줄과 스냅샷을 남긴 뒤 스스로 끝난다 — `end` 없음(끊긴 판 = 이어갈 판). '바로 멈춤'·재시작·크래시는 이 줄 없이 끊긴다(마지막 틱까지가 기록).
   **2026-09-20 D91 additive**: `reason:"unwatched"` = 공개 서버(server.py)가 관전 요청(`/api/status`·`/state/…`)이 제한 시간(기본 600초) 동안 없던 판을 멈췄다 —
   같은 길(다음 틱 머리·스냅샷·`end` 없음)이고 수첩은 쓰지 않는다(`pages` 없음). 멈춤 요청 파일 `state/stop.json` 의 `reason`(있을 때만)을 러너가 받아 적는다.
-- `resume {turn, started, segment, backend, depth, stopped:"user"|"user_paused"|"pause_timeout"|"unwatched"|null, pages?:{char: 장}, party:[{char,hp,alive}]}`: 이어가기 시작. `turn` 은 마지막으로
+- `resume {turn, started, segment, backend, depth, stopped:"user"|"user_paused"|"pause_timeout"|"unwatched"|"budget"|null, pages?:{char: 장}, party:[{char,hp,alive}]}`: 이어가기 시작. `turn` 은 마지막으로
+  `"budget"` = D96(09-20) 그 판에 걸린 LLM 호출 한도를 다 썼다 — 재시도를 권하지 않고 곧바로 곱게 멈춘다(같은 키로 이어가면 계속된다).
   기록된 틱, 다음 `tick.turn` 은 그 +1(틱 번호 연속). `pages` 는 멈출 때 쓴 장 — 이어가는 몸이 '기억해두기로 한 것'(notes)에 들고 가고 첫 관측에 `floor_notice` 로
   "원정을 이어간다" 한 줄이 한 번 들어간다. `backend` 는 이 조각의 두뇌(앞 조각과 다를 수 있다 — 같은 시드라도 다른 판). `segment` 는 몇 번째 이어가기인가.
 - `run_meta.resume_failed {path, reason, run_id, pages, kept}`(additive): 이어가기를 청했지만 몸을 되살리지 못했다(엔진이 바뀜·설정이 다름·기록 파일이 다른 판) →

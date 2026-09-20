@@ -851,3 +851,29 @@ NPC 두뇌를 켠 판에서 NPC 가 답을 쓸 때만 쓰인다. `{name}` `{role
 | 566 | stat.maxhp | interactables._STAT_KR·_STAT_OBJ — 신이 올린 칸의 사람 말(힘·민첩은 기존 dungeon_gm.STAT_KR) | 최대 HP / 최대 HP 를 | |
 | 567 | npc.temple_attendant.line_blessed | entities/npc/temple_attendant.json — 공물 판에서 이미 축복을 받은 사람이 성직자에게 말을 걸었을 때(npc_talk 의 line) | 축복은 이미 받으셨어요. 그 다음은 신전에 바치는 것으로 정해져요 — 무엇이 오를지는 신께서 보고 정하십니다. | |
 | 568 | npc.temple_attendant.hail_blessed | entities/npc/temple_attendant.json — 공물 판에서 이미 축복을 받은 사람에게 성직자가 먼저 거는 인사(D71) | {name} 님, 축복은 이미 드렸어요. 신전은 늘 열려 있어요. | |
+
+## 2026-09-20 추가분 (D88~D94 — AFK 전권 위임분)
+
+> 이 절은 09-20 새벽~오전에 새로 들어간 임시 문장이다. 위와 같은 규칙: '교정' 칸을 채우면 그대로 옮기고,
+> 비우면 지금 문장을 유지하며 `삭제` 라 쓰면 그 칸을 없앤다. 정의 JSON 의 문장은 코드 무접촉으로 바뀐다.
+
+### budget
+
+| # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
+|---|---|---|---|---|
+| 569 | launcher.title.budget_note | launcher/index.html:104 (요소 #tBudgetNote) · 문장은 initProviders 가 씀 launcher/index.html:501 — 공개 서버 시작 화면의 예고 한 줄. 사람에게만 보이고 에이전트 관측에는 안 들어간다 | 이 서버는 한 판에 쓸 수 있는 모델 호출을 500회로 정해 두었다. 거기 닿으면 원정이 그 자리에서 멈추고, 같은 키로 이어가면 멈춘 자리에서 계속된다. (500 = 서버가 /api/presets 로 준 값) | |
+| 570 | launcher.resume.how.budget | launcher/index.html:572 — 론처 타이틀 '멈춘 원정 …' 줄의 사유 표기(검토표 #402 unwatched 와 같은 자리) | 모델 호출 한도에 닿아 멈춤 — 같은 키로 이어가면 계속된다 | |
+| 571 | viewer.brain_pause.budget.title | viewer/assets/brain-pause.js:46 — 관전 화면(게임 클라이언트·옛 뷰어)의 정지 패널 제목 | 호출 한도에 닿아 원정이 멈췄어요 | |
+| 572 | viewer.brain_pause.budget.summary | viewer/assets/brain-pause.js:47 — 같은 패널의 본문 | 이 서버가 한 판에 쓸 수 있는 모델 호출을 다 썼어요. 158틱까지의 몸과 기억은 그대로 남아 있어요. (158 = 멈춘 틱) | |
+| 573 | viewer.brain_pause.budget.next | viewer/assets/brain-pause.js:48 — 같은 패널의 둘째 줄 | 시작 화면에서 같은 키로 이어가면 멈춘 자리에서 계속돼요. | |
+| 574 | viewer.brain_pause.budget.button | viewer/assets/brain-pause.js:49 — '판단 재시도' 버튼이 뜨던 자리 | 시작 화면에서 이어가기 | |
+| 575 | runner.event.stopped.budget | show_runner.py:1893 — 판단 실패로 닫는 틱의 event 줄(events.log·관전 로그용. 에이전트 관측에는 안 들어간다. 검토표 #403 과 같은 급) | === 이 판에 걸린 LLM 호출 한도(500회)를 다 써서 원정을 멈춘다(t158 전) — 같은 키로 이어가면 멈춘 자리에서 계속된다 === | |
+| 576 | server.log.api_call_limit | server.py:663 — 서버 기동 stdout 운영 로그(검토표 #404 와 같은 급) | [server] 호출 한도(D96): 한 판에 LLM 호출 500회(0 = 끝없이) / 닿으면 곱게 멈추고 이어가기로 계속 | |
+
+### scale
+
+| # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
+|---|---|---|---|---|
+| 577 | launch.standard.floors_turns | launcher/index.html:226 (기본 원정 설명 문단 · ⚠️문구 임시 주석 그대로) | 던전 1~3층 · 최대 1200틱 · 기본은 마을(0층)에서 시작해 던전 입구로 간다 — 아래 '마을에서 시작'을 끄면 던전 1층에서 시작 | |
+| 578 | map.concept.label | launcher/index.html 맵 라디오(#mapMode) 라벨 · 검토표 #384 의 개정 — ⚠️09-20 오후 화면에서 맵 고르는 자리가 걷혔다(MAP_DEFAULT). 지금 화면에 안 보이지만 옛 화면·MAP_NAMES 쪽에 같은 문자열이 남아 있으니 검토표에는 둔다 | 석조 던전 (새 건축 · 54×42) | |
+| 579 | map.concept.title | launcher/index.html 맵 라디오 title · 검토표 #385 의 개정 (같은 이유로 지금 화면에는 안 보인다) | 새 던전 생성 방식(D88, 2026-09-20): 넓은 통로 · 큰 홀 · 기둥이 있는 석조 던전. 크기는 54×42 로 고정된다 | |
