@@ -241,7 +241,9 @@ def text(*p):
     with open(os.path.join(HERE, *p), encoding="utf-8") as f:
         return f.read()
 lp, lh, hd, fmt = text("launcher.py"), text("launcher", "index.html"), text("design", "HARNESS_DESIGN.md"), text("STREAM_FORMAT.md")
-check("⑧ 론처: 체크박스(기본 끔)·옵션·환경변수", 'id="townSight">' in lh and 'id="townSight" checked' not in lh and "town_sight: $('townSight').checked ? 'zone' : 'all'" in lh
+# 09-20 파트너 "마을 시야도 일단은 적용하자 어차피 당장 배포는 싱글 패키지로 할거니까" — 제출판의 첫 자리는 켬(D87 이 여기 딸려 온다).
+#   러너·엔진 기본은 그대로 'all'(옵션이 없으면 옛 판) — 아래 env 줄이 그것을 지킨다.
+check("⑧ 론처: 체크박스(09-20 제출판 기본 켬)·옵션·환경변수", 'id="townSight" checked' in lh and "town_sight: $('townSight').checked ? 'zone' : 'all'" in lh
       and 'env["DUNGEON_TOWN_SIGHT"] = "zone" if opts.get("town_sight") == "zone" else "all"' in lp)
 check("⑧ 문서: HARNESS D86 · STREAM_FORMAT(town_sight·zone_enter)", "## [결정] D86." in hd and "DUNGEON_TOWN_SIGHT" in hd and "town_sight" in fmt and "zone_enter" in fmt)
 
