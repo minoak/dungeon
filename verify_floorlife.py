@@ -15,6 +15,8 @@
   ⑧ 모닥불: 2층부터 · once 가 아니다(쓸 때마다) · 상한은 maxhp
   ⑨ 피클 왕복: 소품·다 쓴 상태·석판 본문이 남는다 · 그 칸이 없는 옛 스냅샷도 그대로 돈다(클래스 속성·getattr)
   ⑩ 배선: 러너 스위치·생성 세 자리·지문·run_meta 는 켠 판에만 · _run_gates.sh 등록
+  ⑪ 관측(09-20 수선): 눈에 든 소품이 sights.blocked(방위·거리·칸 수)·7×7 그림·판단 프롬프트에 사실로 실린다
+     — D19 전제 1 '그림에 그려진 구조가 문장에 없으면 계약 위반'. 소품이 없는 세계의 관측은 글자까지 그대로
 (기존 verify 는 별도 실행 — '스위치 끈 판 = 옛 판과 바이트 동일'의 본 검사는 verify_skill_off, 지형 계약은 verify_arch.)
 """
 import json
@@ -328,9 +330,48 @@ check("⑩ 정의(JSON) 한 장씩 — 뒤지는 것 셋·석판·모닥불이 �
       and not (set(LIFE_TYPES) & set(ENT.USE_RESERVED_TYPES))
       and {(f.type, f.name) for f in life_feats(build(2, 3))} <= {(o["type"], o["name"]) for o in ENT.by_kind("object")})
 check("⑩ 게이트 등록(_run_gates.sh)", re.search(r"\bverify_floorlife\b", src("_run_gates.sh")) is not None)
+# 09-20 수선: 새 피처 다섯에 관전 화면의 그림이 없으면 Kenney 폴백 타일(정체불명 회색 칸)이 선다 — 다섯 다 제 그림이 있어야 하고,
+#   승격한 소품은 소품 레이어가 이미 그렸으니 피처 루프가 그 칸을 건너뛰어야 한다(같은 물건이 둘로 보이지 않게).
+flat = src(os.path.join("game", "src", "scene", "dungeonPrototypeFlat.ts"))
+ds = src(os.path.join("game", "src", "scene", "DungeonScene.ts"))
+check("⑩ 관전 화면: 새 피처 다섯에 제 그림이 있다(dungeonLifeVisual) · 옛 그림 렌더러도 같이 본다 · 소품 칸은 두 번 안 그린다",
+      all(("key === 'feat:%s'" % t) in flat for t in LIFE_TYPES)
+      and "dungeonLifeVisual" in flat and "?? dungeonLifeVisual(key)" in ds
+      and "this.propCells.has(ft.x + ',' + ft.y)" in ds)
+
+print("── ⑪ 관측 — 그림에 선 소품이 문장에도 있다(09-20 수선)")
+# D19 전제 1: 그림에 그려진 구조가 문장에 없으면 계약 위반. 소품은 통행을 막는데 격자는 '.'(바닥)라
+#   문장·그림 둘 다에 사실이 실려야 한다. 대상 id 도 동사도 없다 — '지나갈 수 없다'는 사실뿐.
+d = build(3, 2)
+bots = [G.spawn(d, "1", [])]
+here = next(((px + dx, py + dy) for (px, py) in sorted(d.prop_cells) for dx, dy in ORTH
+             if d.walkable(px + dx, py + dy, bots) and not d.feature_at(px + dx, py + dy)), None)
+bots[0]["x"], bots[0]["y"] = here
+obs = d.view(bots[0], bots)
+blk = obs["sights"].get("blocked") or []
+seen_props = {c for c in d.visible_cells(*here, G.SIGHT) if c in d.prop_cells}
+check("⑪ 눈에 든 소품이 sights.blocked 에 방위·거리·칸 수로 실린다(대상 id 없음 · 합계 = 실제 보이는 소품 칸)",
+      bool(blk) and sum(e["n"] for e in blk) == len(seen_props)
+      and all(set(e) == {"bearing", "dist", "n"} for e in blk)
+      and all(e["dist"] == min(max(abs(x - here[0]), abs(y - here[1])) for (x, y) in seen_props
+                               if d._bearing(x - here[0], y - here[1]) == e["bearing"]) for e in blk), blk)
+check("⑪ 7×7 그림도 같은 사실 — 소품 칸은 바닥('.')이 아니다 · legend 에 낱말 하나",
+      any(G.PROP_BLOCK in row for row in obs["ascii_view"])
+      and obs["legend"].get(G.PROP_BLOCK) and G.PROP_BLOCK not in "@#.+$>M^=~![)T "
+      and sum(row.count(G.PROP_BLOCK) for row in obs["ascii_view"]) == len(seen_props))
+txt = brains._wire(obs)
+txt = txt if isinstance(txt, str) else "\n".join(str(x) for x in txt)
+check("⑪ 판단 프롬프트에 그 줄이 있다(방위별 한 줄 — 조언·지시 없이 사실만)",
+      all(("큰 물건이 바닥 %d칸을 채우고 있다 %dm (그 칸은 지나갈 수 없다)" % (e["n"], e["dist"])) in txt for e in blk))
+d_bare = G.Dungeon(seed=7, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1, scan=True, loops=True, floor_life=True)
+b_bare = [G.spawn(d_bare, "1", [])]
+o_bare = d_bare.view(b_bare[0], b_bare)
+check("⑪ 소품이 없는 세계(옛 생성기·마을)의 관측은 글자까지 그대로 — blocked 키도 legend 낱말도 안 생긴다",
+      "blocked" not in o_bare["sights"] and G.PROP_BLOCK not in o_bare["legend"]
+      and not any(G.PROP_BLOCK in row for row in o_bare["ascii_view"]))
 
 print("=" * 44)
 if C.failed:
     print("RESULT: %d FAILED / %d" % (C.failed, C.n))
     raise SystemExit(1)
-print("ALL PASS — verify_floorlife (D92 던전의 물건들: 끈 판 동일·연결성·통행 차단·뒤지기·석판·모닥불·스트림·피클·러너, %d checks, 실 LLM 0콜)" % C.n)
+print("ALL PASS — verify_floorlife (D92 던전의 물건들: 끈 판 동일·연결성·통행 차단·뒤지기·석판·모닥불·스트림·피클·러너·관측, %d checks, 실 LLM 0콜)" % C.n)

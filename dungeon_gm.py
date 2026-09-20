@@ -64,6 +64,8 @@ def gear_bonus(bot, slot):
     g = bot.get(slot)
     return g['bonus'] if g else 0
 LURKER, HIDDEN = 'm', '*'       # 관전자 전용(극적 아이러니): 숨은 적/숨은 보물. 봇 시야(view)엔 절대 안 나간다.
+PROP_BLOCK = 'o'                # D92(09-20) 엔진 소유 소품이 막은 칸(obs 7×7 그림 전용). 격자(#/./+)는 그대로다 —
+                                #   스트림의 level.grid 는 글리프 셋이 계약이고(verify_stream), 이건 관측 그림의 글자다.
 UNKNOWN_BEAST = '낯선 짐승'     # 도감(D9) 미등재 몬스터의 obs 표기 — 보이지만 정체를 모른다.
 
 
@@ -2210,6 +2212,8 @@ class Dungeon:
                     line += ' '                      # 미지(맵밖·벽뒤)
                 elif self.monster_at(x, y) and not self.monster_at(x, y).concealed:
                     line += MONSTER                  # 숨은(매복) 몹은 봇 눈에 안 보인다 — tile()도 바닥 처리
+                elif (x, y) in self.prop_cells:      # D92(09-20): 소품이 막은 칸 — '.'(바닥)로 그리면 그림이 거짓이 된다
+                    line += PROP_BLOCK               #   (소품 없는 세계에서는 이 가지를 한 번도 안 탄다 = 옛 그림과 글자까지 같다)
                 else:
                     other = next((b for b in bots if b['x'] == x and b['y'] == y
                                   and b['alive'] and not b['won']), None)
@@ -2418,6 +2422,23 @@ class Dungeon:
         # 다 본 공간에서만. 계단은 내용물(2026-07-12 정정 유지). 좌표는 안 나간다(방위+거리+딱지 — known 선례).
         zone_obs = None
         traps_vis = None
+        # D92(09-20) 눈에 든 소품 — 방의 가장자리를 채운 통·상자·항아리·잔해는 격자에선 바닥('.')인데 발은 못 딛는다.
+        #   그림(관전 화면)엔 서 있고 문장엔 없으면 캐릭터는 방의 모양을 실제와 다르게 이해한다(D19 전제 1 '그림에 그려진
+        #   구조가 문장에 없으면 계약 위반'). 그래서 사실 한 줄만 싣는다 — **방위·거리·칸 수**뿐이고 대상 id 도 동사도 없다
+        #   (지나갈 수 없다는 사실이지 상호작용거리가 아니다 — 뒤질 수 있는 통은 그 자리에서 따로 피처로 선다).
+        #   소품이 없는 세계(기본 생성기·마을·손그림 장면)에서는 키가 아예 안 실린다 = 옛 판의 obs 와 글자까지 같다.
+        blocked_vis = None
+        if self.prop_cells:
+            buckets = {}
+            for (x, y) in sorted(seen & self.prop_cells):
+                b = self._bearing(x - cx, y - cy)
+                if b == '-':                     # 발밑은 있을 수 없다(아무도 소품 칸에 서지 못한다) — 방어적으로 건너뛴다
+                    continue
+                dist = max(abs(x - cx), abs(y - cy))
+                cur = buckets.get(b)
+                buckets[b] = (dist if cur is None else min(cur[0], dist), (cur[1] if cur else 0) + 1)
+            blocked_vis = [{'bearing': b, 'dist': v[0], 'n': v[1]}
+                           for b, v in sorted(buckets.items(), key=lambda kv: (kv[1][0], kv[0]))]
         if self.scan:
             entset = bot.get('zones_entered') or set()
             ds = bot.get('doors_seen') or set()
@@ -2830,14 +2851,16 @@ class Dungeon:
                 'ascii_view': rows,
                 'sights': {'exit': exit_obj, 'features': feats, 'monsters': mons,
                            'ways': ways, 'bots': allies,
-                           **({'traps': traps_vis} if traps_vis is not None else {})},
+                           **({'traps': traps_vis} if traps_vis is not None else {}),
+                           **({'blocked': blocked_vis} if blocked_vis else {})},   # D92: 눈에 든 소품(지나갈 수 없는 칸) — 있을 때만
                 'party': party,
                 'options': options,   # 리모컨 — 엔진 열거 유효 행동(additive. BYO 계약: 번호+한마디)
                 'legend': {'@': 'you', '#': 'wall', '.': 'floor', '+': 'door',
                            '$': 'treasure', '>': 'stairs/exit', 'M': 'monster',
                            '^': 'trap', '=': 'chest', '~': 'fountain', '!': 'potion',
                            ')': 'weapon', '[': 'armor',
-                            'T': 'grave', ' ': 'unknown'}}
+                            'T': 'grave', ' ': 'unknown',
+                            **({PROP_BLOCK: 'blocking object'} if self.prop_cells else {})}}   # D92: 소품이 있는 세계에만
         return CA.observe(self, bot, bots, obs) if self.composed_actions else obs
 
     # ── 탐색 프런티어 (explore = 미지로 트인 출입구) ─────────────
