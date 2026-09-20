@@ -43,6 +43,7 @@ export function queueDungeonPrototype(load: Phaser.Loader.LoaderPlugin): void {
 export function dungeonPrototypeVisual(key: string): {texture:string;frame:number}|null {
   return flatVisual(key);
 }
+export { dungeonLifeVisual } from './dungeonPrototypeFlat';   // D92(09-20) 던전 살림 다섯의 그림 — 옛 그림 렌더러도 같이 쓴다(DungeonScene.visualOf)
 interface Part {
   image: Phaser.GameObjects.Image; x:number; y:number; wall:boolean; foot:number;
   width:number; height:number; brightness:number; hidden:boolean; baseAlpha:number;

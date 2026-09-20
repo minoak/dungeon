@@ -13,10 +13,22 @@ export function queueDungeonPrototype(load: Phaser.Loader.LoaderPlugin): void {
   load.image('dungeon-v2-walls', wallsUrl);
   load.image('dungeon-v2-floor', floorUrl);
 }
+/** D92(2026-09-20) 던전 살림의 피처 그림 — 뒤지는 통·상자·항아리(decor 시트 0·1·2 = dungeonDecor.PROP_KINDS 와 같은 프레임) ·
+ *  석판 · 모닥불. 이 다섯은 어느 렌더러에서도 제 그림을 쓴다(둘 다 쓰는 96px 시트 — 입체 렌더러가 늘 싣는다):
+ *  옛 생성기 판에서 살림만 켜면 렌더러는 옛 그림인데 통은 서야 하기 때문이다(그 판엔 level.props 가 없다).
+ *  ⚠️그림 임시: 석판은 전용 도트가 없어 쓰이지 않던 돌 기둥판(props 1), 모닥불은 횃불 불꽃(props 0)을 빌려 쓴다 — 전용 도트는 다음. */
+export function dungeonLifeVisual(key: string): { texture: string; frame: number } | null {
+  if (key === 'feat:barrel') return { texture: 'dungeon-v2-decor', frame: 0 };
+  if (key === 'feat:crate') return { texture: 'dungeon-v2-decor', frame: 1 };
+  if (key === 'feat:jar') return { texture: 'dungeon-v2-decor', frame: 2 };
+  if (key === 'feat:floor_tablet') return { texture: 'dungeon-v2-props', frame: 1 };
+  if (key === 'feat:campfire') return { texture: 'dungeon-v2-props', frame: 0 };
+  return null;
+}
 export function dungeonPrototypeVisual(key: string): { texture: string; frame: number } | null {
   if (key === 'feat:chest') return { texture: 'dungeon-v2-props', frame: 2 };
   if (key === 'exit' || key === 'feat:exit') return { texture: 'dungeon-v2-props', frame: 3 };
-  return null;
+  return dungeonLifeVisual(key);
 }
 
 export function paintDungeonPrototype(scene: Phaser.Scene, L: LevelLine, tile: number): Phaser.GameObjects.Image {
