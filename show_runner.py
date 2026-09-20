@@ -256,6 +256,13 @@ TOWN_LIFE_ON = os.environ.get("DUNGEON_TOWN_LIFE", "0") == "1"   # D90(09-20, �
 #   살아간다는 걸 보여 주고") 마을 생활 — 이 스위치 하나 뒤에 마을의 생활 부품이 선다(0콜): 구역의 '들린 말'(정의 entities/map 의 overheard 부품 —
 #   구역에 들어선 첫 관측에 한 줄, 메모 §4-4 "거리 분위기 '들린 말' 한 줄 고정 풀") · 마을 오브젝트·새 주민(같은 상수를 build_town 에서 읽는다).
 #   **러너 기본 0**(론처가 켠다) = 끈 판은 옛 판과 비트까지 같다. 세계 지문·run_meta 에는 켠 마을 판에만 적는다. layout 마을만.
+LOOP_ON = os.environ.get("DUNGEON_LOOP", "0") == "1" and TOWN_ON and QUESTS_ON and NOTICES_ON   # D94(09-20, 파트너 "귀환보고는 던전의 끝이지 판의 끝은 아니지 않아? 기본 게임은
+#   루프 구조를 가지고 있어. 마을에서 생활하면서 던전에 내려가고 다시 마을로 돌아와, 던전에서 돌아오면 결산이 되는거고 말야") 원정 고리 —
+#   길드 보고가 판을 닫지 않는다: 보고 = 그 원정의 결산 한 줄(기존 재료만: 완수/미완 의뢰·보물·닿은 깊이·쓰러진 사람)이고 마을은 그대로 흐른다.
+#   던전 입구를 다시 쓰면 새 시드의 지하 1층부터 다음 원정(같은 판 시드 + 같은 원정 번호 = 같은 던전 — 결정론). 몸·소지·장부(HP·보물·물약·
+#   축복·능력치·장비·관계·기억·수첩·도감)는 층 전이가 하는 그대로 이어진다 — 새 이월 목록을 만들지 않는다. 판을 닫는 것은 틱 상한(MAX_TURNS)과
+#   전멸뿐(원정 횟수 상한 없음). **러너 기본 0**(론처가 켠다) = 끈 판은 옛 판과 비트까지 같다. 고리는 길드 보고에서 닫히므로 의뢰 장부가
+#   있는 마을 판에만 선다(quests 와 같은 조건 — 없으면 보고할 데가 없어 옛 D65 그대로 워프 귀환이 판을 닫는다).
 REST_ON = os.environ.get("DUNGEON_REST", "1") != "0"         # 휴식(D35, 09-06) — 러너 기본 1, 엔진
                                                              #   기본 0. 회복이 붙은 wait: 틱마다 HP,
                                                              #   완료 시 상태 태그 소거. 사건이 깨운다
@@ -1154,9 +1161,10 @@ def town_for_run(apart, quests, walkers=False, guide=False):
     return d, starts
 
 
-def new_floor(nd, lore, quests=None):
-    """던전 층 하나(nd ≥ 1) — 시작 층·층 전이·소문 미리보기가 같은 인자로 짓는다(D69 에서 한곳으로). 시드 파생이라 같은 nd 는 같은 층."""
-    d = FLOOR_CLS(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
+def new_floor(nd, lore, quests=None, seed=None):
+    """던전 층 하나(nd ≥ 1) — 시작 층·층 전이·소문 미리보기가 같은 인자로 짓는다(D69 에서 한곳으로). 시드 파생이라 같은 nd 는 같은 층.
+    seed(D94, 09-20)를 주면 그 마스터 시드로 짓는다 — 원정 고리 판의 두 번째 원정부터 소문 미리보기가 그 원정의 1층을 세기 위해서다(기본 = 판의 시드)."""
+    d = FLOOR_CLS(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED if seed is None else seed, depth=nd,
                   n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
                   bestiary_plus=BESTIARY_PLUS_ON,   # D92 새 몬스터 풀 — 생성 세 자리(소문 미리보기·시작·전이)가 같은 값을 넘긴다
                   floor_life=FLOOR_LIFE_ON,   # D92 던전 살림 — 같은 규율(세 자리가 같은 값: 소문 미리보기와 실제 1층이 같은 층이어야 한다)
@@ -1177,6 +1185,12 @@ def new_floor(nd, lore, quests=None):
     return d
 
 
+def expedition_seed(n):
+    """D94(2026-09-20) n 번째 원정의 마스터 시드 — 1차는 판의 시드 그대로(끈 판·첫 원정 = 옛 판과 바이트 동일), 2차부터는 원정 번호를
+    섞은 파생 시드(엔진의 결정론 믹서 재사용 — hash() 비의존). 같은 판 시드 + 같은 원정 번호 = 같은 던전, 원정이 다르면 다른 던전."""
+    return DUNGEON_SEED if int(n) <= 1 else G.Dungeon._derive_seed(DUNGEON_SEED, 10000 + int(n))
+
+
 def floor_rumor(d):
     """D69 소문 재료 — 층 하나의 실제 배치를 세계가 센 숫자로(0콜): 몬스터 종별 수·함정·보물·상자·물약·장비. 주점 주인의 '아는 것'."""
     kinds = {}
@@ -1189,9 +1203,11 @@ def floor_rumor(d):
     return {"depth": d.depth, "monsters": kinds, "traps": len(d.traps), "features": feats}
 
 
-def npc_facts(d, npc_name, bots, fallen, quests):
+def npc_facts(d, npc_name, bots, fallen, quests, expedition=0):
     """D69 NPC 두뇌의 '아는 것' — 전부 세계의 사실(정의·장부·배치)이고 캐릭터 시트는 없다. NPC 역할별로 다른 사실을 준다:
-    접수원=게시판 의뢰·맡은 의뢰·진행·보고 결과 / 주점 주인=지하 1층 실측 소문 / 성직자=신의 요청·묘. 공통=파티 명단·귀환 여부."""
+    접수원=게시판 의뢰·맡은 의뢰·진행·보고 결과 / 주점 주인=지하 1층 실측 소문 / 성직자=신의 요청·묘. 공통=파티 명단·귀환 여부.
+    expedition(D94, 09-20) = 지금 몇 번째 원정인가(원정 고리 판에서만 1 이상 — 끈 판은 0 이라 옛 문장 그대로). 2 이상이면 '아직 안 내려갔다'가
+    거짓이라 앞선 원정을 말한다. fallen 은 부르는 쪽이 이 원정 몫만 넘긴다(고리 판)."""
     nd = (getattr(d, "npc_defs", None) or {}).get(npc_name) or {}
     alive = [b for b in bots if b["alive"]]
     facts = ["파티: " + ", ".join("%s(%s, HP %d/%d)" % (b.get("name") or ("모험가 %s" % b["char"]), b["job"], b["hp"], b["maxhp"]) for b in alive)]
@@ -1205,8 +1221,10 @@ def npc_facts(d, npc_name, bots, fallen, quests):
             facts.append("던전 입구의 규정: %d명이 맺은 파티만 지나갈 수 있다 · 파티는 모험가 길드나 주점에서, 같은 곳에 있는 사람끼리 맺는다 — 파티가 모자란 사람에게는 이 규정을 알려 준다" % G.PARTY_ENTRY_SIZE)
     if fallen:
         facts.append("이번 원정에서 쓰러진 사람: " + ", ".join(str(c) for c in fallen))
+    ex_ = int(expedition or 0)               # D94(09-20) 원정 고리 판의 원정 번호 — 끈 판은 0(아래 분기가 옛 문장 그대로)
     facts.append("지금은 원정에서 돌아온 뒤다(워프게이트로 귀환)" if getattr(d, "expedition_returned", False)
-                 else "이 사람들은 아직 던전에 내려가지 않았다")   # D83(09-18): 옛 '지금은 원정을 떠나기 전이다'는 내려감을 전제했다 — 사실만(⚠️문구 임시)
+                 else ("앞선 원정 %d번이 길드 보고로 끝났다 — 지금은 %d번째 원정을 떠나기 전이다" % (ex_ - 1, ex_) if ex_ >= 2   # D94(⚠️문구 임시): 두 번째 원정부터는 '아직 안 내려갔다'가 거짓이다
+                       else "이 사람들은 아직 던전에 내려가지 않았다"))   # D83(09-18): 옛 '지금은 원정을 떠나기 전이다'는 내려감을 전제했다 — 사실만(⚠️문구 임시)
     if nd.get("report") and quests is not None:
         board = []
         for tid, qid in sorted((getattr(d, "quest_ids", None) or {}).items()):
@@ -1315,6 +1333,7 @@ def _world_fingerprint():
             **({"bestiary_plus": True} if BESTIARY_PLUS_ON else {}),   # D92: 같은 규율(켠 판에만) — 안 가 본 층의 몹 배치가 달라지는 스위치
             **({"floor_life": True} if FLOOR_LIFE_ON else {}),   # D92: 같은 규율 — 안 가 본 층의 피처(통·석판·모닥불) 구성이 달라지는 스위치
             **({"partyform": True} if PARTYFORM_ON else {}),   # D84: 켠 판에만 적는다 — 옛 스냅샷의 지문과 글자까지 같게
+            **({"loop": True} if LOOP_ON else {}),   # D94(09-20): 같은 규율 — 보고 뒤에도 판이 흐르고 원정마다 시드가 갈리는 판(옛 몸을 이 세계에 놓지 않는다)
             **({"town_life": True} if (TOWN_LIFE_ON and TOWN_ON) else {}),   # D90(09-20): 같은 규율 — 마을의 부품 구성이 다른 판(이어가는 러너가 같아야 한다)
             **({"npc_reply": True} if (NPC_REPLY_ON and TOWN_ON) else {}),   # D93(09-20): 같은 규율 — 관측(npc_ears)·되받기 장부가 다른 판
             **({"strangers": True} if STRANGERS_ON else {}),   # D85: 같은 규율
@@ -1451,10 +1470,22 @@ def main():
     last_oracle_id = None                  # D61 개정: 마지막으로 스트림에 남긴 신의 요청 id(새 요청·거둠을 한 번만 적는다)
     quests = G.new_quests() if (QUESTS_ON and NOTICES_ON) else None   # D69 의뢰 장부(파티 단위·판 전체) — 층마다 같은 객체를 건다
     parties = G.new_parties() if PARTYFORM_ON else None               # D84 파티 장부(판 전체) — 의뢰 장부처럼 층마다 같은 객체를 건다(None = 옛 판)
+    expedition = {"n": 1, "t0": 1, "fallen": 0} if LOOP_ON else None   # D94 원정 장부(판 전체) — n 몇 번째 원정 · t0 그 원정이 시작한 틱 ·
+                                           #   fallen 그때까지 쓰러진 사람 수(결산이 이 원정 몫만 센다). None = 옛 판(보고가 판을 닫는다)
     if snap is not None:                   # D79: 장부·표식도 얼린 그대로
         returned, returned_party = bool(snap["returned"]), list(snap["returned_party"])
         last_oracle_id, quests = snap["last_oracle_id"], snap["quests"]
         parties = snap.get("parties") if PARTYFORM_ON else None
+        expedition = (snap.get("expedition") or expedition) if LOOP_ON else None   # D94: 원정 번호도 얼린 그대로(끈 판의 스냅샷엔 없다 — 지문이 먼저 갈라놓는다)
+
+    def _fallen_now():
+        """D94: NPC 가 아는 '이번 원정에서 쓰러진 사람' — 고리 판은 이 원정에서 쓰러진 사람만(끈 판은 판 전체 = 옛 그대로)."""
+        return fallen[int(expedition["fallen"]):] if expedition else fallen
+
+    def _exp_n():
+        """D94: NPC 가 아는 원정 번호 — 끈 판은 0(옛 문장 그대로)."""
+        return int(expedition["n"]) if expedition else 0
+
     npc_brain = NPC_BRAIN_ON and brains.backend_name() != "dummy"       # D69 마을 NPC 두뇌 — 더미 판은 콜 0 유지
     npc_reply_on = bool(NPC_REPLY_ON and npc_brain)                     # D93 NPC 되받기 — NPC 두뇌가 도는 판에만(build_town 의 d.npc_reply 와 같은 조건)
 
@@ -1561,6 +1592,7 @@ def main():
                 **({"arch": DUNGEON_ARCH, "arch_v": dungeon_concept.ARCH_VERSION} if DUNGEON_ARCH else {}),   # D88(09-20 additive, 켠 판에만) 던전 생성 프로필·생성 규칙 버전 — 격자 크기는 아래 w/h. level 줄에 rooms[].art_style · architecture 가 실린다
                 **({"town_sight": "zone"} if (TOWN_SIGHT == "zone" and TOWN_ON) else {}),   # D86(09-19 additive, 켠 판에만) 마을의 시야 = 지금 선 구역 — 시야·정지 물리 메타(town_hear 급)
                 **({"strangers": True} if STRANGERS_ON else {}),   # D85(09-19 additive, 켠 판에만) 인물 기록 판 — 프롬프트의 호칭이 캐릭터마다 다르다(내가 적은 이름|낯선 사람) · decisions.person_note
+                **({"loop": True} if LOOP_ON else {}),   # D94(09-20 additive, 켠 판에만) 원정 고리 판 — 길드 보고가 판을 닫지 않는다: 원정마다 expedition 줄(결산) 하나가 실리고 다음 원정은 새 시드의 1층부터. 판을 닫는 것은 틱 상한·전멸뿐
                 **({"town_life": True} if (TOWN_LIFE_ON and TOWN_ON) else {}),   # D90(09-20 additive, 켠 판에만) 마을 생활 판 — 구역의 들린 말(tick.overheard · 관측 notices kind 'overheard') 등 마을의 생활 부품. 0콜
                 **({"npc_reply": True} if (NPC_REPLY_ON and npc_brain) else {}),   # D93(09-20 additive, 켠 판에만) NPC 되받기 판 — decisions.to 가 'npc:<이름>'일 수 있고 tick.npc_replies 가 실린다(NPC 두뇌가 도는 판에만 — 더미 판은 꺼진 것과 같다)
                 **({"partyform": True} if PARTYFORM_ON else {}),   # D84(09-19 additive, 켠 판에만) 파티 결성 판 — 계단은 내 파티원만·세계마다 제 시계:
@@ -1713,6 +1745,7 @@ def main():
                 "open_props": open_props, "open_acts": open_acts, "quests": quests, "iss": iss, "rs": rs,
                 "reaction_book": reaction_book, "last_oracle_id": last_oracle_id, "returned": returned,
                 "returned_party": returned_party, "segment": segment,
+                **({"expedition": expedition} if LOOP_ON else {}),   # D94: 켠 판에만(같은 규율) — 이어가는 러너가 몇 번째 원정인지 알아야 다음 던전의 시드가 같다
                 **({"worlds": worlds, "parties": parties, "side_pos": side.tell()} if PARTYFORM_ON else {})}   # D84: 켠 판에만(옛 스냅샷과 같은 열쇠)
 
     def _snap_meta(next_turn, stop=None):    # 론처가 읽는 요약(json) — 피클을 열지 않고도 '지하 3층 t158 에서 멈춤'을 안다
@@ -1744,6 +1777,35 @@ def main():
         st.update(depth=iss.depth, _idkind=iss._idkind, _aware=iss._aware)
         return out
 
+    def _settle_expedition(d, bots, turn, rep):
+        """D94(2026-09-20 파트너 "던전에서 돌아오면 결산이 되는거고") 원정 결산 — 길드 보고를 받은 그 자리에서 이 원정의 사실을 한 번 낸다.
+        재료는 전부 이미 있는 것이다: 보고가 가른 완수/미완 의뢰 · 일행이 들고 온 보물 · 이 원정이 닿은 가장 깊은 층(보존 층 목록) ·
+        이 원정에서 쓰러진 사람. 새 수치나 보상은 만들지 않는다(D69 에서 제출 뒤로 미뤄 둔 것).
+        낸 뒤에 다음 원정을 연다 — 장부의 귀환·보고 표식을 지우고(마을이 '돌아온 뒤'라고 말하지 않게), 사람이 없는 던전 층의 보존을
+        버리고(다음 원정은 새 시드의 지하 1층부터 — 파트너 확정), 주점의 소문 재료를 그 1층으로 다시 센다(옛 숫자는 거짓이 된다).
+        몸·소지·관계·기억·도감은 손대지 않는다 — 층 전이가 이어 주는 길 그대로 다음 원정으로 간다."""
+        n_ = int(expedition["n"])
+        deep = max([k for k in saved if k >= 1] or [0])       # 이 원정이 닿은 가장 깊은 층(떠난 층은 보존 목록에 남는다)
+        gone = list(fallen[int(expedition["fallen"]):])       # 이 원정에서 쓰러진 사람(판 전체가 아니라)
+        loot = sum(int(b.get("bag") or 0) for b in bots)      # 보고하러 온 일행이 지금 지닌 보물(원정을 넘어 이월되므로 누적이다)
+        done_, undone_ = list(rep.get("done") or []), list(rep.get("undone") or [])
+        tt_ = rep.get("titles") or {}
+        sw.emit("expedition", turn=turn, n=n_, from_turn=int(expedition["t0"]), depth=deep, treasure=loot,
+                done=done_, undone=undone_, titles=tt_, fallen=gone,
+                party=[b["char"] for b in bots if b["alive"]])   # D94 additive — 원정 하나의 결산(켠 판에만 실린다)
+        event("=== %d차 원정 결산 (t%d~t%d) — 가장 깊이 지하 %d층 · 일행이 지닌 보물 %d · 완수 %s / 미완 %s · 쓰러짐 %s ==="   # ⚠️문구 임시(파트너 문장 대기)
+              % (n_, int(expedition["t0"]), turn, deep, loot,
+                 "·".join(tt_.get(x, x) for x in done_) or "없음",
+                 "·".join(tt_.get(x, x) for x in undone_) or "없음", gone or "없음"))
+        quests["returned"], quests["reported"] = None, None   # 다음 원정의 귀환·보고를 위해 표식만 지운다(맡은 의뢰·진행·완수는 장부에 그대로 남는다)
+        d.expedition_returned = False                         # 마을은 더 이상 '원정에서 돌아온 참'이 아니다(관측·접수원 문장의 단일 원천)
+        drop = [k for k in sorted(saved) if k >= 1 and not any(x["d"] is saved[k]["d"] for x in worlds)]
+        for k in drop:                                        # 다음 원정은 새 시드의 1층부터 — 사람이 아직 있는 층은 그대로 둔다(D84 판)
+            del saved[k]
+        expedition.update(n=n_ + 1, t0=turn, fallen=len(fallen))
+        if getattr(d, "rumor", None) is not None:             # D71 주점 소문은 '지하 1층 실측' — 새 원정의 1층으로 다시 센다(0콜)
+            d.rumor = floor_rumor(new_floor(1, lore, seed=expedition_seed(_exp_n() or 1)))
+
     def _everyone():                         # 판에 있는 사람 전부 — 옛 판은 이 층의 사람들 그대로
         return sorted((b for x in worlds for b in x["bots"]), key=lambda b: b["char"]) if PARTYFORM_ON else bots
 
@@ -1770,7 +1832,7 @@ def main():
                 if npc_brain and NPC_HAIL_BRAIN_ON:   # 옵션: 인사도 LLM 이(인사당 1콜) — 기본은 정의의 문장(0콜)
                     b_ = next((x for x in bots if x["char"] == ch_), None)
                     line2 = brains.npc_reply(b_, {"result": "npc_hail", "npc": nm_, "line": line_, "key": key_}, None,
-                                             npc_facts(d, nm_, bots, fallen, quests), npc=(getattr(d, "npc_defs", None) or {}).get(nm_)) if b_ else None
+                                             npc_facts(d, nm_, bots, _fallen_now(), quests, _exp_n()), npc=(getattr(d, "npc_defs", None) or {}).get(nm_)) if b_ else None
                     if line2:
                         line_, src_ = line2, "brain"
                 inbox.setdefault(ch_, []).append({"from": "npc:" + nm_, "text": line_, "turn": turn, "to": ch_})
@@ -1853,7 +1915,7 @@ def main():
                 if res.get("result") in ("npc_talk", "npc_gift", "npc_report") and res.get("npc"):   # D69 마을 NPC — 말을 걸었다
                     if npc_brain:                        # NPC 두뇌: 판정(선물·보고)은 끝났고 문장만 LLM 이(1콜, 실패=고정 대사)
                         npc_def = (getattr(d, "npc_defs", None) or {}).get(res["npc"]) or {}
-                        line_ = brains.npc_reply(b, res, dec.get("say"), npc_facts(d, res["npc"], bots, fallen, quests), npc=npc_def)
+                        line_ = brains.npc_reply(b, res, dec.get("say"), npc_facts(d, res["npc"], bots, _fallen_now(), quests, _exp_n()), npc=npc_def)
                         if line_:
                             res["line_fixed"], res["line"], res["line_src"] = res.get("line"), line_, "brain"
                     if res.get("line"):
@@ -1890,7 +1952,7 @@ def main():
 
         npc_replies = []                     # D93(09-20) 이 틱에 NPC 가 되받은 말 [{npc,char,line,via}] — 지목(to) 또는 그 NPC 의 말에 상대 없이 한 답.
         if npc_reply_on and getattr(d, "town", False):   #   배달은 D69 NPC 의 답과 한 길(npc_says → 다음 틱·같은 구역·잡담). 이 틱에 use 로 이미 말한 NPC 는 건너뛴다
-            npc_replies = npc_say_replies(d, bots, decisions, inbox_in, lambda nm_: npc_facts(d, nm_, bots, fallen, quests),
+            npc_replies = npc_say_replies(d, bots, decisions, inbox_in, lambda nm_: npc_facts(d, nm_, bots, _fallen_now(), quests, _exp_n()),
                                           spoke={n_ for n_, _l, _c in npc_says})
             npc_says += [(r_["npc"], r_["line"], r_["char"]) for r_ in npc_replies]
 
@@ -1985,11 +2047,16 @@ def main():
 
         if quests is not None and any(e.get("result") == "npc_report" for e in turn_events):   # D69 길드 보고 = 원정의 끝
             rep = next(e for e in turn_events if e.get("result") == "npc_report")
-            returned, returned_party = True, [b["char"] for b in bots if b["alive"]]
+            if not LOOP_ON:                    # D94: 고리 판에서 보고는 원정의 끝이지 판의 끝이 아니다 — outcome 'returned' 는 판을 닫는 판에서만
+                returned, returned_party = True, [b["char"] for b in bots if b["alive"]]
             tt = rep.get("titles") or {}
             event("=== 길드에 보고했다 — 완수 %s / 미완 %s — 원정 완료 ==="
                   % ("·".join(tt.get(x, x) for x in (rep.get("done") or [])) or "없음",
                      "·".join(tt.get(x, x) for x in (rep.get("undone") or [])) or "없음"))
+            if LOOP_ON:                        # D94(파트너 "귀환보고는 던전의 끝이지 판의 끝은 아니지 않아?"): 결산 한 줄을 내고 마을은 그대로 흐른다
+                _settle_expedition(d, bots, turn, rep)
+                w.update(d=d, bots=bots, inbox=inbox, pending=pending, open_props=open_props, open_acts=open_acts)
+                return None
             w.update(d=d, bots=bots, inbox=inbox, pending=pending, open_props=open_props, open_acts=open_acts)
             return "break"
         w.update(d=d, bots=bots, inbox=inbox, pending=pending, open_props=open_props, open_acts=open_acts)
@@ -2066,7 +2133,7 @@ def main():
                 d.lore = lore
                 fresh = False
             else:
-                d = FLOOR_CLS(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
+                d = FLOOR_CLS(w=DUNGEON_W, h=DUNGEON_H, seed=expedition_seed(_exp_n() or 1), depth=nd,   # D94: 원정마다 마스터 시드가 갈린다(끈 판·1차 원정은 판의 시드 그대로)
                               n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
                               bestiary_plus=BESTIARY_PLUS_ON,   # D92 새 몬스터 풀 — 2층부터 고블린의 절반이 새 종(1층은 그대로)
                               floor_life=FLOOR_LIFE_ON,   # D92 던전 살림(뒤지는 통·석판·모닥불) — 같은 규율
