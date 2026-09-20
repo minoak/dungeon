@@ -340,6 +340,10 @@ class Runner:
             else:
                 self.preserve_previous()
                 snapshot.remove(self.state_dir)          # D79: 새 원정 = 멈춘 판을 놓아 준다(그 기록은 방금 runs/ 로 복사됐다)
+                # D61 신탁도 지난 판의 것이다 — 안 지우면 다음 판이 시작하자마자 지난 판의 신의 목소리를 듣는다
+                #   (러너가 틱마다 state/oracle.json 을 읽는다). ⚠️이어가기(resume)에서는 지우지 않는다 —
+                #   그 판의 연속이므로 아직 전해지지 않은 요청은 그대로 살아 있어야 한다.
+                self.oracle_set("")
             self._write_run_opts(opts)                  # 이어가기에서 바꾼 회사·모델도 다음 이어가기에 유지
             run_control.reset(self.state_dir)
             with io.open(os.path.join(self.state_dir, "runner.out"), "w", encoding="utf-8") as out:

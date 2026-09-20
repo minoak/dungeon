@@ -384,6 +384,18 @@ else:
           st_o == 200 and (o1.get("oracle") or {}).get("text") and chr(10) not in o1["oracle"]["text"] and "<" not in o1["oracle"]["text"]
           and (o2.get("oracle") or {}).get("id") == o1["oracle"]["id"] and (st_o3.get("oracle") or {}).get("id") == o1["oracle"]["id"]
           and st_c == 200 and o3.get("oracle") is None)
+    # D61 버그(09-20 파트너 "신의 목소리가 다른 세션에서도 이어져서 전달되는 문제"): 새 원정이 지난 판의 신탁을 지우지 않아
+    #   다음 판이 시작하자마자 지난 판의 한 줄을 들었다(러너가 틱마다 state/oracle.json 을 읽는다).
+    #   새 원정 = 지운다 · 이어가기 = 그 판의 연속이므로 남긴다(start() 의 resume 가지엔 이 줄이 없다).
+    call("/api/oracle", {"text": "지난 판의 목소리"})
+    _, o_before = call("/api/oracle")
+    call("/api/start", {"mode": "classic", "map": "normal", "town": False, "brain": "dummy", "seed": 13})
+    _, o_after = call("/api/oracle")
+    call("/api/stop", {})
+    lp_oracle = io.open(os.path.join(HERE, "launcher.py"), encoding="utf-8").read()
+    check("③ 새 원정은 지난 판의 신탁을 데려가지 않는다(이어가기는 남긴다)",
+          (o_before.get("oracle") or {}).get("text") and o_after.get("oracle") is None
+          and lp_oracle.index('self.oracle_set("")') > lp_oracle.index("snapshot.remove(self.state_dir)"))
     srv.shutdown()
 
     # ───────────────────── ⑥ 시작 옵션 → 러너 환경변수(09-20) ─────────────────────
