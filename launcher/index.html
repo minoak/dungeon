@@ -240,11 +240,11 @@
     <div class="row center" id="tResumeRow" hidden><!-- 멈춘 판이 있을 때만 -->
       <span class="muted" id="tResumeText"></span>
       <!-- ⚠️ 문구 임시: 검토표 131~138 -->
-      <select id="resumeProvider" aria-label="이어갈 회사" style="width:auto"></select>
-      <select id="resumeModel" aria-label="이어갈 모델" style="width:auto;max-width:100%"></select>
-      <input type="text" id="resumeModelCustom" aria-label="이어갈 모델 ID 직접 입력" maxlength="200" placeholder="모델 ID 직접 입력" style="width:27ch;max-width:100%" hidden>
-      <input type="password" id="resumeKey" autocomplete="off" spellcheck="false" placeholder="이어가는 판에만 쓰는 API 키" style="width:28ch" hidden>
-      <button class="primary" id="bResume">이어가기</button>
+      <select id="resumeProvider" aria-label="계속할 때 쓸 회사" style="width:auto"></select>
+      <select id="resumeModel" aria-label="계속할 때 쓸 모델" style="width:auto;max-width:100%"></select>
+      <input type="text" id="resumeModelCustom" aria-label="계속할 때 쓸 모델 ID 직접 입력" maxlength="200" placeholder="모델 ID 직접 입력" style="width:27ch;max-width:100%" hidden>
+      <input type="password" id="resumeKey" autocomplete="off" spellcheck="false" placeholder="이 원정에만 쓰는 API 키" style="width:28ch" hidden>
+      <button class="primary" id="bResume">멈춘 원정 계속하기</button>
     </div>
 
     <div class="card" id="stopPanel" hidden><!-- 종료 전 알림 ⚠️문구 임시 -->
@@ -275,18 +275,18 @@
 
   <!-- 계정 — 접어 둔다. 처음 온 사람은 키 없이도 담아 둔 판을 볼 수 있다 -->
   <details class="acctFold" id="acctCard" hidden>
-    <summary>API 키로 들어오기</summary>
+    <summary>전에 하던 것 이어서 하기</summary>
     <div class="acctBody">
       <div id="acctOut">
         <div class="row">
-          <select id="loginProvider" aria-label="로그인할 회사" style="width:auto"></select>
+          <select id="loginProvider" aria-label="이어서 할 때 쓸 회사" style="width:auto"></select>
           <input type="password" id="loginKey" autocomplete="off" spellcheck="false" placeholder="API 키" style="flex:2;min-width:220px">
           <input type="text" id="loginNick" maxlength="20" placeholder="별명 (선택)" style="flex:1;min-width:120px">
-          <button class="primary" id="bLogin">들어오기</button>
+          <button class="primary" id="bLogin">이어서 하기</button>
         </div>
-        <div class="hint">가입도 비밀번호도 없다. 키는 저장되지 않고 지문만 남는다.
-          살아 있는 키만 문이 열리니, 키를 폐기하면 그 키를 쥔 누구도 들어올 수 없다.
-          들어오기 전에 만든 캐릭터는 들어올 때 계정으로 옮겨진다.</div>
+        <div class="hint">지난번에 쓰던 API 키를 다시 넣으면 그때 만든 캐릭터와 기록, 멈춰 둔 원정이 그대로 돌아온다.
+          가입도 비밀번호도 없다. 키 자체가 열쇠다. 키는 저장되지 않고 지문만 남으며, 살아 있는 키만 문이 열리니
+          키를 폐기하면 그 키를 쥔 누구도 들어올 수 없다. 지금 만들어 둔 캐릭터는 들어올 때 함께 옮겨진다.</div>
       </div>
       <div id="acctIn" hidden>
         <div class="row"><span id="acctWho"></span>
@@ -723,7 +723,7 @@ async function refreshStatus() {
       if (rs) {
         const how = rs.stopped === 'user' ? `수첩 쓰고 멈춤${rs.pages?.length ? ' · 수첩 ' + rs.pages.length + '장' : ''}` : rs.stopped === 'user_paused' ? '판단 정지 중 멈춤' : rs.stopped === 'pause_timeout' ? '판단 정지가 오래 이어져 멈춤' : rs.stopped === 'unwatched' ? '관전자가 없어 멈춤' : rs.stopped === 'budget' ? '모델 호출 한도에 닿아 멈췄다. 같은 키로 이어가면 계속된다' : '갑자기 끊겼다. 마지막 기록까지 남아 있다';   // unwatched = D91 공개 서버의 자동 멈춤 · budget = D96 호출 한도(⚠️문구 임시)
         $('tResumeText').textContent = `멈춰 둔 원정이 있다. 시드 ${rs.seed} · ${rs.depth === 0 ? '마을' : '지하 ' + rs.depth + '층'} · ${rs.turn_last}틱` +
-          (rs.party?.length ? ` · ${rs.party.filter(p => p.alive).map(p => p.name).join('·')}` : '') + ` · ${how}` + (rs.segment ? ` · 이어가기 ${rs.segment}번째` : '');
+          (rs.party?.length ? ` · ${rs.party.filter(p => p.alive).map(p => p.name).join('·')}` : '') + ` · ${how}` + (rs.segment ? ` · ${rs.segment}번째로 이어진 판` : '');
         if (providerReady && resumeRun !== st.resume.run_id) {
           resumeRun = st.resume.run_id;
           $('resumeProvider').value = st.resume.provider || st.resume.backend || 'gemini_api';
