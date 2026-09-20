@@ -222,7 +222,7 @@
     <div id="alphaInfo" hidden>
       <h3 style="margin-top:14px">스킬을 고르고, 주사위로 겨룬다</h3>
       <p>각 모험가는 스킬 2개로 시작해. 명중·피해를 주사위로 정하고, <b>3층에 도착하면 랜덤 스킬을 하나씩</b> 얻어.<br>
-        던전 1~5층 · 최대 600틱 · 기본은 마을(0층)에서 시작해 던전 입구로 간다 — 아래 '마을에서 시작'을 끄면 던전 1층에서 시작</p>
+        던전 1~3층 · 최대 1000틱 · 기본은 마을(0층)에서 시작해 던전 입구로 간다 — 아래 '마을에서 시작'을 끄면 던전 1층에서 시작</p><!-- 09-20 ⚠️ 문구 임시 — 층수·틱 상한은 launcher.py 의 standard 모드가 정한다 -->
       <p class="wl-skill-note">예: 1d6은 6면 주사위 하나, 피해 1~6을 뜻해. 스킬은 모험가가 직접 선택해 사용해.<br>
         사용 후 재사용 대기는 다른 행동을 완료할 때 줄어들어. 관전 화면에서 설명과 남은 대기를 볼 수 있어.</p>
       <div id="alphaPreview" class="wl-alpha-preview"></div>
@@ -236,7 +236,7 @@
       <div class="radios" id="mapMode">
         <label class="on"><input type="radio" name="map" value="normal" checked>보통 (56×20)</label>
         <label><input type="radio" name="map" value="big">큰 판 (80×30, 몹 7)</label>
-        <label title="새 던전 생성 방식(D88, 2026-09-20): 넓은 통로 · 큰 홀 · 기둥이 있는 석조 던전. 크기는 42×34 로 고정된다"><input type="radio" name="map" value="concept">석조 던전 (새 건축 · 42×34)</label><!-- D88 ⚠️ 문구 임시 -->
+        <label title="새 던전 생성 방식(D88, 2026-09-20): 넓은 통로 · 큰 홀 · 기둥이 있는 석조 던전. 크기는 54×42 로 고정된다"><input type="radio" name="map" value="concept">석조 던전 (새 건축 · 54×42)</label><!-- D88 ⚠️ 문구 임시 -->
       </div>
       <!-- 09-20: 맵 라디오와 아래 '09-20 추가' 체크박스 넷의 첫 자리는 이 파일에 없다 — 서버의 NIGHT_DEFAULTS(/api/presets.night_defaults)가 정한다(applyStartDefaults).
            이 HTML 의 자리(보통 맵 · 넷 다 끔)는 그 값을 받기 전의 모양일 뿐이다 -->
