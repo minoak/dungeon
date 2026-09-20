@@ -430,10 +430,12 @@ else:
     check("⑥ 옛 이름(normal·big)을 보낸 판: 부모 env 에 DUNGEON_ARCH 가 있어도 자식 env 에서 지운다 — API 로는 여전히 받는다(멈춰 둔 판·게이트)",
           all("DUNGEON_ARCH" not in e for e in (e_nor, e_big)) and e_big.get("DUNGEON_W") == "80")
     e_bad = env_of({"map": "cavern"})
+    M_CON = launcher.MAPS["concept"]
     check("⑥ 09-20 오후: 화면에 맵 고르는 자리가 없다 — 옵션이 없거나 모르는 이름이면 MAP_DEFAULT(석조 던전)로 뜬다(400 이 아니다)",
           launcher.MAP_DEFAULT == "concept" and launcher.MAP_DEFAULT in launcher.MAPS
-          and all(e.get("DUNGEON_ARCH") == "concept" and (e.get("DUNGEON_W"), e.get("DUNGEON_H")) == ("42", "34")
-                  for e in (e_none, e_bad)))
+          and all(e.get("DUNGEON_ARCH") == "concept"
+                  and (e.get("DUNGEON_W"), e.get("DUNGEON_H")) == (M_CON["DUNGEON_W"], M_CON["DUNGEON_H"])
+                  for e in (e_none, e_bad)))   # 크기는 MAPS 에서 읽는다 — 09-20 낮에 42x34 → 54x42 가 됐다
     check("⑥ normal = 러너 기본 + 부모 env 그대로(게이트의 40x16·짧은 판이 이 길로 간다 — 'BIG_KEYS 지우기'는 걷었다)",
           (e_nor.get("DUNGEON_W"), e_nor.get("DUNGEON_H"), e_nor.get("DUNGEON_TURNS")) == ("40", "16", "6")
           and not hasattr(launcher, "BIG_KEYS"))
