@@ -362,8 +362,8 @@ function redrawLooks() {
   const dp = (presets && presets.default_party) || [];
   for (const cv of $('defaultPreview').querySelectorAll('canvas[data-dp]')) drawLook(cv, dp[+cv.dataset.dp].look);
 }
-function markSheetsLoading() {                    // 그림이 아직 없을 때만 안내 한 줄 — 도착하면 지운다
-  const on = !(window.WLSprites && WLSprites.sheetsLoaded);
+function markSheetsLoading() {                    // 그림이 아직 없을 때만 안내 한 줄 — 대표 시트가 오면 지운다
+  const on = !(window.WLSprites && WLSprites.coreLoaded);
   const hint = $('sheetsHint');
   if (hint) hint.hidden = !on;
 }
@@ -693,8 +693,11 @@ async function loadPresets() {
   for (const cv of $('defaultPreview').querySelectorAll('canvas[data-dp]')) drawLook(cv, dp[+cv.dataset.dp].look);
   // 시트는 배경으로 오는 중이다(13MB) — 도착하면 그림만 채워 넣는다. 그때까지 폼은 이미 다 쓸 수 있다.
   markSheetsLoading();
-  if (window.WLSprites && WLSprites.sheetsReady)
+  // 두 번 다시 그린다: 대표 시트가 올 때(여기서 캐릭터가 제 그림이 된다)와 헤어 변형까지 다 올 때.
+  if (window.WLSprites && WLSprites.coreReady) {
+    WLSprites.coreReady.then(() => { redrawLooks(); markSheetsLoading(); });
     WLSprites.sheetsReady.then(() => { redrawLooks(); markSheetsLoading(); });
+  }
 }
 function renderCards() {
   const jobs = Object.keys(presets.jobs);
