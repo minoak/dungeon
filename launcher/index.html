@@ -1053,7 +1053,7 @@ $('bStart').onclick = async () => {
   const body = {
     // 09-20 오후: map 을 싣지 않는다 — 화면에 고르는 자리가 없고, 서버가 MAP_DEFAULT(석조 던전)로 연다
     town: $('town').checked,
-    town_apart: $('townApart').checked,   // D69 흩어진 출발(기본 켬) — 마을 판만 뜻이 있다
+    town_apart: $('townApart').checked,   // D69 흩어진 출발(09-20 제출판 기본 끔 — 셋이 광장에서 함께 출발) — 마을 판만 뜻이 있다
     npc_brain: $('npcBrain').checked,     // D69 마을 NPC 두뇌(기본 켬) — 더미 두뇌 판에선 저절로 꺼진다
     partyform: $('partyform').checked,    // D84 파티 결성(실험 · 기본 끔) — 마을 시작 판만 뜻이 있다(러너가 마을 판이 아니면 끈다)
     strangers: $('strangers').checked,    // D85 낯선 사람(실험 · 기본 끔) — 파티 결성을 켠 판에서만 뜻이 있다(러너가 아니면 끈다)
