@@ -388,7 +388,7 @@ else:
 
     # ───────────────────── ⑥ 시작 옵션 → 러너 환경변수(09-20) ─────────────────────
     # 러너를 띄우지 않는다 — Popen 을 가로채 '자식에게 넘어갈 env' 만 본다(0콜 · 판 없음). 부모 env 는 이 게이트의 40x16 그대로.
-    print("── ⑥ 시작 옵션 → 러너 환경변수 — 새 맵 · '09-20 추가' 스위치 넷 · 생성 프로필 지우기 · 화면의 첫 자리")
+    print("── ⑥ 시작 옵션 → 러너 환경변수 — 맵 고정(09-20 오후) · '09-20 추가' 스위치 여섯 · 생성 프로필 지우기 · 화면의 첫 자리")
     from unittest import mock
 
     class _FakeProc:
@@ -405,8 +405,9 @@ else:
         return _FakeProc()
 
     rn = launcher.Runner(HERE, os.path.join(TMP, "state_env"), os.path.join(TMP, "runs_env"))
-    NIGHT_ENV = ("DUNGEON_TOWN_LIFE", "DUNGEON_NPC_REPLY", "DUNGEON_FLOOR_LIFE", "DUNGEON_BESTIARY_PLUS")
-    NIGHT_OPTS = ("town_life", "npc_reply", "floor_life", "bestiary_plus")
+    NIGHT_ENV = ("DUNGEON_TOWN_LIFE", "DUNGEON_NPC_REPLY", "DUNGEON_FLOOR_LIFE", "DUNGEON_BESTIARY_PLUS",
+                 "DUNGEON_LOOP", "DUNGEON_OFFER")                          # 09-20 오후: D94 원정 고리·D95 신에게 바치기가 더해졌다
+    NIGHT_OPTS = ("town_life", "npc_reply", "floor_life", "bestiary_plus", "loop", "offer")
     base_opts = {"mode": "classic", "town": False, "brain": "dummy", "seed": 7, "party": "default"}
 
     def env_of(opts, parent=None):
@@ -416,57 +417,69 @@ else:
         return dict(got)
 
     e_con = env_of({"map": "concept"})
-    check("⑥ 맵 concept: DUNGEON_ARCH=concept · 크기 42x34 를 같이 준다(부모 env 의 40x16 을 덮는다)",
-          e_con.get("DUNGEON_ARCH") == "concept" and (e_con.get("DUNGEON_W"), e_con.get("DUNGEON_H")) == ("42", "34"))
+    check("⑥ 맵 concept: DUNGEON_ARCH=concept · 크기 42x34 · 몹 3(러너 기본 2 — 09-20 오후 '약간 늘리자')을 같이 준다(부모 env 의 40x16 을 덮는다)",
+          e_con.get("DUNGEON_ARCH") == "concept" and (e_con.get("DUNGEON_W"), e_con.get("DUNGEON_H")) == ("42", "34")
+          and e_con.get("DUNGEON_MONSTERS") == "3")
     leak = {"DUNGEON_ARCH": "concept", **{k: "1" for k in NIGHT_ENV}}
     e_nor, e_big, e_none = env_of({"map": "normal"}, leak), env_of({"map": "big"}, leak), env_of({}, leak)
-    check("⑥ 다른 맵(normal·big·옵션 없음)을 고른 판: 부모 env 에 DUNGEON_ARCH 가 있어도 자식 env 에서 지운다",
-          all("DUNGEON_ARCH" not in e for e in (e_nor, e_big, e_none)) and e_big.get("DUNGEON_W") == "80")
+    check("⑥ 옛 이름(normal·big)을 보낸 판: 부모 env 에 DUNGEON_ARCH 가 있어도 자식 env 에서 지운다 — API 로는 여전히 받는다(멈춰 둔 판·게이트)",
+          all("DUNGEON_ARCH" not in e for e in (e_nor, e_big)) and e_big.get("DUNGEON_W") == "80")
+    e_bad = env_of({"map": "cavern"})
+    check("⑥ 09-20 오후: 화면에 맵 고르는 자리가 없다 — 옵션이 없거나 모르는 이름이면 MAP_DEFAULT(석조 던전)로 뜬다(400 이 아니다)",
+          launcher.MAP_DEFAULT == "concept" and launcher.MAP_DEFAULT in launcher.MAPS
+          and all(e.get("DUNGEON_ARCH") == "concept" and (e.get("DUNGEON_W"), e.get("DUNGEON_H")) == ("42", "34")
+                  for e in (e_none, e_bad)))
     check("⑥ normal = 러너 기본 + 부모 env 그대로(게이트의 40x16·짧은 판이 이 길로 간다 — 'BIG_KEYS 지우기'는 걷었다)",
           (e_nor.get("DUNGEON_W"), e_nor.get("DUNGEON_H"), e_nor.get("DUNGEON_TURNS")) == ("40", "16", "6")
           and not hasattr(launcher, "BIG_KEYS"))
-    check("⑥ 스위치 넷: 옵션이 없으면 끈다 — 부모 env 의 1 도 덮는다(옛 판 · 멈춰 둔 옛 판과 같은 세계)",
+    check("⑥ 스위치 여섯: 옵션이 없으면 끈다 — 부모 env 의 1 도 덮는다(옛 판 · 멈춰 둔 옛 판과 같은 세계)",
           all(e.get(k) == "0" for e in (e_nor, e_big, e_none) for k in NIGHT_ENV))
     e_on = env_of({"map": "concept", **{k: True for k in NIGHT_OPTS}})
     e_str = env_of({**{k: "1" for k in NIGHT_OPTS}})
-    check("⑥ 스위치 넷: true 면 1 · 참이 아닌 값('1' 문자열)은 끔(파티 결성·낯선 사람과 같은 규칙)",
+    check("⑥ 스위치 여섯: true 면 1 · 참이 아닌 값('1' 문자열)은 끔(파티 결성·낯선 사람과 같은 규칙)",
           all(e_on.get(k) == "1" for k in NIGHT_ENV) and all(e_str.get(k) == "0" for k in NIGHT_ENV))
     for i, opt in enumerate(NIGHT_OPTS):
         e_one = env_of({opt: True})
-        check("⑥ %s 만 켜면 %s 만 1" % (opt, NIGHT_ENV[i]), [e_one.get(k) for k in NIGHT_ENV] == ["1" if j == i else "0" for j in range(4)])
+        check("⑥ %s 만 켜면 %s 만 1" % (opt, NIGHT_ENV[i]),
+              [e_one.get(k) for k in NIGHT_ENV] == ["1" if j == i else "0" for j in range(len(NIGHT_ENV))])
     env_of({"map": "concept", **{k: True for k in NIGHT_OPTS}})
     saved_on = (rn._read_run_opts() or {}).get("opts", {})
     env_of({"map": "normal"})
     saved_off = (rn._read_run_opts() or {}).get("opts", {})
-    check("⑥ 이어가기 재료: run_opts.json 에 맵·스위치 넷이 그대로 남는다(D79 — 이어가는 판이 같은 옵션으로 뜬다) · 안 보낸 키는 안 생긴다(옛 판 = 끔)",
+    check("⑥ 이어가기 재료: run_opts.json 에 맵·스위치 여섯이 그대로 남는다(D79 — 이어가는 판이 같은 옵션으로 뜬다) · 안 보낸 스위치는 안 생긴다(옛 판 = 끔)",
           saved_on.get("map") == "concept" and all(saved_on.get(k) is True for k in NIGHT_OPTS) and not any(k in saved_off for k in NIGHT_OPTS))
-    try:
-        with mock.patch.object(launcher.subprocess, "Popen", _fake_popen):
-            rn.start({**base_opts, "map": "cavern"}, os.path.join(TMP, "party_web.json"))
-        bad_map = ""
-    except launcher.BadRequest as e:
-        bad_map = str(e)
-    check("⑥ 모르는 맵은 400 — 이유에 아는 맵 키 전부", all(k in bad_map for k in launcher.MAPS) and "concept" in launcher.MAPS)
+    env_of({})
+    check("⑥ 맵을 안 보낸 판도 run_opts.json 에는 고른 결과가 적힌다 — 나중에 MAP_DEFAULT 를 바꿔도 멈춰 둔 판은 제 세계로 이어간다",
+          (rn._read_run_opts() or {}).get("opts", {}).get("map") == launcher.MAP_DEFAULT)
+    check("⑥ 보스방 앞에서 시작(D67 프리셋)은 걷었다 — 옵션 start=boss 는 아무 일도 안 한다(러너의 DUNGEON_START 자체는 남는다: verify_boss 가 env 로 쓴다)",
+          "DUNGEON_START" not in env_of({"town": True, "start": "boss"}, {"DUNGEON_START": "boss"})
+          and env_of({"town": True, "start": "boss"}).get("DUNGEON_TOWN") == "1")
     ND, OD = launcher.NIGHT_DEFAULTS, launcher.OLD_DEFAULTS
-    check("⑥ NIGHT_DEFAULTS·OLD_DEFAULTS: 키 = 맵 + 스위치 넷 · 맵은 MAPS 에 있는 키 · 옛 판 = normal + 넷 다 끔",
-          set(ND) == set(OD) == {"map", *NIGHT_OPTS} and ND["map"] in launcher.MAPS and all(isinstance(ND[k], bool) for k in NIGHT_OPTS)
-          and OD == {"map": "normal", **{k: False for k in NIGHT_OPTS}})
-    check("⑥ /api/presets: night_defaults·old_defaults = 론처 상수 그대로 · options_ui_version(옛 론처 구별)",
-          pre.get("night_defaults") == ND and pre.get("old_defaults") == OD and pre.get("options_ui_version") == launcher.OPTIONS_UI_VERSION == 1)
+    check("⑥ NIGHT_DEFAULTS·OLD_DEFAULTS: 키 = 스위치 여섯뿐(맵은 화면에 없다) · 값은 bool · '09-20 추가 전' = 여섯 다 끔",
+          set(ND) == set(OD) == set(NIGHT_OPTS) and all(isinstance(ND[k], bool) for k in NIGHT_OPTS)
+          and OD == {k: False for k in NIGHT_OPTS})
+    check("⑥ /api/presets: night_defaults·old_defaults·map_default = 론처 상수 그대로 · options_ui_version(옛 론처 구별)",
+          pre.get("night_defaults") == ND and pre.get("old_defaults") == OD and pre.get("map_default") == launcher.MAP_DEFAULT
+          and pre.get("options_ui_version") == launcher.OPTIONS_UI_VERSION == 2)
     with io.open(os.path.join(HERE, "launcher", "index.html"), encoding="utf-8") as f_html:
         lh = f_html.read()
-    check("⑥ 화면: 맵 라디오 concept · 체크박스 넷(첫 자리는 HTML 에 없다 = checked 를 적지 않는다) · 출발 본문에 네 옵션",
-          'name="map" value="concept"' in lh
-          and all(('id="%s">' % i) in lh and ('id="%s" checked' % i) not in lh for i in ("townLife", "npcReply", "floorLife", "bestiaryPlus"))
+    check("⑥ 화면: 맵 고르는 자리가 없다(라디오·mapMode·본문 map 전부) · '보스방 앞에서 시작' 체크박스와 본문 start 도 없다",
+          'name="map"' not in lh and "mapMode" not in lh and "map: $(" not in lh
+          and "startBoss" not in lh and "start: $(" not in lh)
+    check("⑥ 화면: 체크박스 여섯(첫 자리는 HTML 에 없다 = checked 를 적지 않는다) · 출발 본문에 여섯 옵션",
+          all(('id="%s">' % i) in lh and ('id="%s" checked' % i) not in lh
+              for i in ("townLife", "npcReply", "floorLife", "bestiaryPlus", "loop", "offer"))
           and all(s_ in lh for s_ in ("town_life: $('townLife').checked", "npc_reply: $('npcReply').checked",
-                                      "floor_life: $('floorLife').checked", "bestiary_plus: $('bestiaryPlus').checked")))
-    check("⑥ 화면: 첫 자리는 서버 값으로(applyStartDefaults(presets.night_defaults)) · '이전 판 설정으로' 버튼 = old_defaults · 옛 서버면 재시작 안내",
+                                      "floor_life: $('floorLife').checked", "bestiary_plus: $('bestiaryPlus').checked",
+                                      "loop: $('loop').checked", "offer: $('offer').checked")))
+    check("⑥ 화면: 첫 자리는 서버 값으로(applyStartDefaults(presets.night_defaults)) · '09-20 추가 전으로' 버튼 = old_defaults · 옛 서버면 재시작 안내",
           "applyStartDefaults(presets.night_defaults)" in lh and 'id="bOldDefaults"' in lh and "setStartOptions(presets && presets.old_defaults)" in lh
-          and "presets.options_ui_version !== 1" in lh and "LLM 호출이 조금 늘어난다" in lh)
+          and "presets.options_ui_version !== 2" in lh and "LLM 호출이 조금 늘어난다" in lh)
     lp_src = io.open(os.path.join(HERE, "launcher.py"), encoding="utf-8").read()
-    check("⑥ launcher.py: 스위치 넷의 env 줄(옵션 없으면 끈다) · 떠 있던 옛 론처를 다시 쓰는 조건에 시작 옵션 판 번호",
+    check("⑥ launcher.py: 스위치 여섯의 env 줄(옵션 없으면 끈다) · 떠 있던 옛 론처를 다시 쓰는 조건에 시작 옵션 판 번호 · start==boss 분기 없음",
           all(('env["%s"] = "1" if opts.get("%s") is True else "0"' % (v, o)) in lp_src for v, o in zip(NIGHT_ENV, NIGHT_OPTS))
-          and 'existing.get("options_ui_version") == OPTIONS_UI_VERSION' in lp_src)
+          and 'existing.get("options_ui_version") == OPTIONS_UI_VERSION' in lp_src
+          and 'opts.get("start")' not in lp_src and 'env.pop("DUNGEON_START", None)' in lp_src)
 
     # ───────────────────── ⑦ 기본 파티의 외형(09-20) ─────────────────────
     print("── ⑦ 기본 파티(party.json)의 외형 — 외형 사전의 바디·공용 헤어 · 직업·성별이 맞는다 · 화면 미리보기")

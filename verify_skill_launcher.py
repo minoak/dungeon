@@ -65,13 +65,16 @@ class AlphaLauncherTests(unittest.TestCase):
         self.assertEqual(env['DUNGEON_TOWN'], '1')
         self.assertEqual([env[k] for k in ('DUNGEON_SKILLS', 'DUNGEON_TRPG_COMBAT', 'DUNGEON_RANDOM_SKILL')], ['1'] * 3)
 
-    def test_boss_front_preset_overrides_town_and_turns_boss_on(self):
-        """D67(2026-09-13 파트너 "보스방 앞에 있는 프리셋이 하나 필요"): start=boss → DUNGEON_START=boss·마을 끔·보스 켬. 없으면 START 없음."""
+    def test_boss_front_preset_is_gone_and_start_env_never_leaks(self):
+        """09-20 오후(파트너 "설정도 보스방 앞에서 시작을 빼곤 이제 기본 설정값으로"): D67 프리셋을 화면과 론처에서 걷었다.
+        start=boss 를 보내도 아무 일도 없고(마을도 보스도 그대로), 부모 셸의 DUNGEON_START 는 러너에 물려주지 않는다.
+        러너의 DUNGEON_START 자체는 남아 있다 — verify_boss 가 env 로 직접 쓴다."""
         _, env = self.launch_env({'town': True, 'boss': False, 'start': 'boss'})
-        self.assertEqual(env['DUNGEON_START'], 'boss')
-        self.assertNotIn('DUNGEON_TOWN', env)
-        self.assertEqual(env['DUNGEON_BOSS'], '1')
-        _, env = self.launch_env({'town': True})
+        self.assertNotIn('DUNGEON_START', env)
+        self.assertEqual(env['DUNGEON_TOWN'], '1')
+        self.assertEqual(env['DUNGEON_BOSS'], '0')
+        with patch.dict(os.environ, {'DUNGEON_START': 'boss'}):
+            _, env = self.launch_env({'town': True})
         self.assertNotIn('DUNGEON_START', env)
         self.assertEqual(env['DUNGEON_TOWN'], '1')
 
