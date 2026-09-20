@@ -10,7 +10,7 @@
   ③ 론처 서버 API(launcher.py) — presets / party 저장·거부 / start(dummy 두뇌)→run_meta·status / 409 / stop
   ④ 시드: _pick_seed('7')=7 · 'random' 은 1~999999 · 두 번 뽑아 다름 · 기본 경로 7 유지
   ⑤ 기본 party.json 바이트 무변경(커스텀은 party_custom.json 별 파일)
-  ⑥ 시작 옵션 → 러너 환경변수(09-20, 러너를 안 띄우고 Popen 을 가로채 env 만 본다): 맵 concept = DUNGEON_ARCH·54x42 · 기본 원정 = 3층·1200틱 · 다른 맵은
+  ⑥ 시작 옵션 → 러너 환경변수(09-20, 러너를 안 띄우고 Popen 을 가로채 env 만 본다): 맵 concept = DUNGEON_ARCH·54x42 · 기본 원정 = launcher.STANDARD_RUN(3층·1800틱) · 다른 맵은
      부모 env 의 DUNGEON_ARCH 를 지운다 · normal 은 부모 env 그대로(지우는 척하던 BIG_KEYS 줄 철거) · 스위치 넷(마을 생활·NPC 되받기·
      던전의 물건들·새 몬스터)은 옵션 없으면 끔 · run_opts.json(이어가기 재료) · NIGHT_DEFAULTS → /api/presets → 화면의 첫 자리 · 옛 론처 구별
   ⑦ 기본 파티(party.json)의 외형(09-20): 외형 사전의 새 바디 + 공용 헤어 · 직업·성별 일치 · 겉모습 한 줄 · 론처 미리보기
@@ -432,11 +432,15 @@ else:
     e_con = env_of({"map": "concept"})
     check("⑥ 맵 concept: DUNGEON_ARCH=concept · 크기 54x42 · 몹 4(파트너 '몹수는 4으로 늘리자')를 같이 준다(부모 env 의 40x16 을 덮는다)",
           e_con.get("DUNGEON_ARCH") == "concept" and e_con.get("DUNGEON_MONSTERS") == "4" and (e_con.get("DUNGEON_W"), e_con.get("DUNGEON_H")) == ("54", "42"))
-    # 09-20 낮(민옥 "차라리 던전을 조금 더 크게 하고 층을 3층으로"): 기본 원정 = 3층·1200틱. 판 크기는 위 MAPS 가, 층수·틱 상한은
+    # 09-20 낮(민옥 "차라리 던전을 조금 더 크게 하고 층을 3층으로"): 기본 원정의 층수·틱 상한. 판 크기는 위 MAPS 가, 층수·틱 상한은
     #   standard 분기가 정한다 — 둘이 갈라지면 '3층 완주'라는 말이 거짓이 되므로 여기서 같이 고정한다.
+    # 09-20 저녁: 숫자를 여기 다시 박지 않는다 — launcher.STANDARD_RUN 이 정본이다(1200 → 1800 으로 고칠 때
+    #   이 게이트가 옛 수를 붙잡고 있어 빨간불이 났다. verify_skill_launcher 도 같은 이유로 상수를 읽는다).
     e_std = env_of({"map": "concept", "mode": "standard"})
-    check("⑥ 기본 원정(standard): 3층 · 1200틱 · 솔로 끔 — 맵이 준 54x42 는 그대로",
-          (e_std.get("DUNGEON_DEPTHS"), e_std.get("DUNGEON_TURNS"), e_std.get("DUNGEON_SOLO")) == ("3", "1200", "0")
+    std = launcher.STANDARD_RUN
+    check("⑥ 기본 원정(standard): %s층 · %s틱 · 솔로 끔(값은 launcher.STANDARD_RUN) — 맵이 준 54x42 는 그대로"
+          % (std["DUNGEON_DEPTHS"], std["DUNGEON_TURNS"]),
+          all(e_std.get(k) == v for k, v in std.items())
           and (e_std.get("DUNGEON_W"), e_std.get("DUNGEON_H")) == ("54", "42"))
     leak = {"DUNGEON_ARCH": "concept", **{k: "1" for k in NIGHT_ENV}}
     e_nor, e_big, e_none = env_of({"map": "normal"}, leak), env_of({"map": "big"}, leak), env_of({}, leak)
@@ -496,6 +500,11 @@ else:
     # 09-20 사고 기록: 화면에서 체크박스 하나를 걷으면서 출발 본문의 그 id 참조를 남겨 '출발' 이 TypeError 로 죽었다
     #   (민옥이 눌러 보고 찾아 d2f296a 로 고쳤다). 그때 내 검사는 <script> 만 찾는 정규식이라 type="module" 블록을
     #   통째로 놓쳐 빈 문자열을 검사하고 통과했다. 그래서 여기서는 속성 있는 태그까지 걷어 id 를 전수 대조한다.
+    # 화면 문구의 '던전 1~N층 · 최대 M틱' 은 손으로 적은 글자다 — 상수를 고치고 문구를 잊으면 화면이 거짓말을 한다(09-20 저녁 1200→1800).
+    m_ui = re.search("던전\\s*1~(\\d+)층\\s*·\\s*최대\\s*([\\d,]+)\\s*틱", lh)
+    check("⑥ 화면 문구의 층수·틱 상한이 launcher.STANDARD_RUN 과 같다(손으로 적은 글자라 조용히 낡는다)",
+          bool(m_ui) and m_ui.group(1) == launcher.STANDARD_RUN["DUNGEON_DEPTHS"]
+          and m_ui.group(2).replace(",", "") == launcher.STANDARD_RUN["DUNGEON_TURNS"])
     html_ids = set(re.findall(r'\bid="([A-Za-z0-9_-]+)"', lh))
     html_js = chr(10).join(re.findall(r'<script[^>]*>(.*?)</script>', lh, re.S))
     called_ids = set(re.findall(r"[$]\('([A-Za-z0-9_-]+)'\)", html_js))
