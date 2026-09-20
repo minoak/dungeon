@@ -18,6 +18,7 @@
 """
 import contextlib
 import io
+import re
 import json
 import os
 import tempfile
@@ -492,6 +493,14 @@ else:
           and all(s_ in lh for s_ in ("town_life: $('townLife').checked", "npc_reply: $('npcReply').checked",
                                       "floor_life: $('floorLife').checked", "bestiary_plus: $('bestiaryPlus').checked",
                                       "loop: $('loop').checked")))
+    # 09-20 사고 기록: 화면에서 체크박스 하나를 걷으면서 출발 본문의 그 id 참조를 남겨 '출발' 이 TypeError 로 죽었다
+    #   (민옥이 눌러 보고 찾아 d2f296a 로 고쳤다). 그때 내 검사는 <script> 만 찾는 정규식이라 type="module" 블록을
+    #   통째로 놓쳐 빈 문자열을 검사하고 통과했다. 그래서 여기서는 속성 있는 태그까지 걷어 id 를 전수 대조한다.
+    html_ids = set(re.findall(r'\bid="([A-Za-z0-9_-]+)"', lh))
+    html_js = chr(10).join(re.findall(r'<script[^>]*>(.*?)</script>', lh, re.S))
+    called_ids = set(re.findall(r"[$]\('([A-Za-z0-9_-]+)'\)", html_js))
+    check("⑥ 화면이 부르는 id 가 전부 실재한다(걷은 컨트롤의 참조가 남으면 '출발' 이 죽는다 — 09-20 사고)",
+          len(html_js) > 10000 and bool(called_ids) and not (called_ids - html_ids))
     check("⑥ 화면: 첫 자리는 서버 값으로(applyStartDefaults(presets.night_defaults)) · '09-20 추가 전으로' 버튼 = old_defaults · 옛 서버면 재시작 안내",
           "applyStartDefaults(presets.night_defaults)" in lh and 'id="bOldDefaults"' in lh and "setStartOptions(presets && presets.old_defaults)" in lh
           and "presets.options_ui_version !== 2" in lh and "LLM 호출이 조금 늘어난다" in lh)
