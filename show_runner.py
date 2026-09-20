@@ -767,6 +767,17 @@ def _story_of(eid, life=False):
         return None
 
 
+# D95(2026-09-20 · 리뷰 발견) 공물 판에서만 갈아 끼우는 소개·첫 대사. 왜: 켠 판의 신의 축복은 **한 사람에게 한 번**이라
+#   (엔진 _interact 의 blessed_done — 두 번째부터는 주지 않는다) 정의의 옛 문장 셋이 세계가 제 하지 않는 것을 말하는 자리가 된다:
+#   성직자의 특징 '(원정마다 한 병)' · 신전의 특징 '기도하면 축복의 물약을 한 병 받는다' · 성직자의 첫 선물 대사 '던전에서 돌아오면 또 들르세요'.
+#   정의 JSON 원문은 그대로 두고 켠 판에서만 바꾼다 = 끈 판의 스트림은 글자까지 옛 판 그대로(정의의 line_blessed·hail_blessed 와 같은 결).
+#   D81 마을 안내(town_guide)도 이 소개를 읽으므로 안내를 짓기 전에 바꾼다. ⚠️문구 임시 — 검토표 등재 대상.
+OFFER_STORY = {"temple_attendant": "기도를 받고 축복의 물약을 준다(한 사람에게 한 번)",
+               "temple": "문턱에서 모은 보물을 신에게 바친다 — 신이 힘·민첩·최대 HP 중 하나를 1 올린다. 성직자의 축복은 한 사람에게 한 번. 신의 요청이 들리는 곳"}
+OFFER_LINES = {"temple_attendant": "기도를 들었어요. 신의 축복이 담긴 물약이에요 — 마시면 몸이 한 단계 강해져요. "
+                                   "축복은 한 분께 한 번이에요. 그 다음은 신전에 바치는 것으로 정해져요."}
+
+
 def _overheard_of(eid):
     """D90(09-20) 구역 정의의 overheard 부품(들린 말 문장 목록) — 없으면 None."""
     try:
@@ -814,6 +825,7 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
     d.composed_actions = brains.COMPOSE
     d.place_story, d.zone_story, d.town_notice = {}, {}, None   # D75(09-15) 장소·사람 소개(피처 id → {trait, history}) · 구역 이름 → 같은 꼴 · 마을 진입 한마디
     d.skills, d.trpg_combat, d.random_skill = SKILLS_ON and brains.COMPOSE, TRPG_COMBAT_ON, RANDOM_SKILL_ON
+    offer_story = {}                           # D95(09-20 · 리뷰 발견) 켠 판에서 소개를 갈아 끼울 자리(정의 id → 피처 id) — 끈 판에선 늘 비어 있다
     if OFFER_ON:                               # D95(09-20) 공물 — 신전 문턱의 쓰임(interactables kind 'offer')과 '축복은 판당 한 번'을 같이 여는 표식.
         d.offer_on = True                      #   끈 판엔 인스턴스 속성 자체가 없다(클래스 속성 False) = 옛 판 그대로(town_life 선례)
     life = bool(TOWN_LIFE_ON and (getattr(d, "layout_result", None) or {}).get("spaces"))   # D90(09-20) 마을 생활 판 — 구역이 있는(layout) 마을만.
@@ -835,6 +847,8 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
         d.npc_lines[spec_n["name"]] = spec_n.get("line") or "…"
         if n.get("id") and _story_of(n["id"], blife):
             d.place_story[nfid] = dict(_story_of(n["id"], blife))   # D75 소개(정의가 있는 NPC 만)
+        if OFFER_ON and n.get("id") in OFFER_STORY:
+            offer_story[n["id"]] = nfid        # D95: 공물 판에서 갈아 끼울 자리만 적어 둔다(갈아 끼우기는 마을 안내를 짓기 전에 한 번)
         if spec_n.get("gift"):                 # D32 상점 v0 — 고정 선물(물약 1/방문·빈손이면 단검)
             d.npc_gifts[spec_n["name"]] = dict(spec_n["gift"])
         if spec_n.get("line_again"):           #   두 번째 대사(정해진 문장만)
@@ -861,9 +875,17 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
                 d.feature_roles[fid] = role
             if _story_of(ents.get(e.get("building")), blife):
                 d.place_story[fid] = dict(_story_of(ents.get(e.get("building")), blife))   # D75 건물 소개
+            if OFFER_ON and ents.get(e.get("building")) in OFFER_STORY:
+                offer_story[ents[e.get("building")]] = fid          # D95: 신전 — 갈아 끼울 자리
     d.features[d._exit_fid].name = "던전 입구"   # 같은 '>'라도 마을에선 탈출구가 아니라 입구다
     if _story_of("dungeon_gate"):
         d.place_story[d._exit_fid] = dict(_story_of("dungeon_gate"))   # D75 던전 입구 소개(입구 피처=건물 정의 dungeon_gate)
+    for eid_, fid_ in offer_story.items():         # D95(09-20 · 리뷰 발견) 공물 판의 사실로 — 위 OFFER_STORY·OFFER_LINES 주석이 '왜'.
+        if fid_ in d.place_story:                  #   끈 판은 offer_story 가 비어 있어 이 고리가 아예 돌지 않는다(옛 판 그대로)
+            d.place_story[fid_] = {**d.place_story[fid_], "trait": OFFER_STORY[eid_]}
+        nm_ = d.features[fid_].name
+        if OFFER_LINES.get(eid_) and nm_ in d.npc_lines:   # 첫 선물 대사(그 판에서 딱 한 번 반드시 나온다)도 같이
+            d.npc_lines[nm_] = OFFER_LINES[eid_]
     if life:                                       # D90(09-20) 마을 생활 — 그림 속 고정물 곁의 쓸 수 있는 오브젝트(layout 의 life_objects · 정의 = entities/object 의
         for o_ in res.get("life_objects") or []:   #   쓰임 부품 use — 마시기·앉기·읽기·구경·불 쬐기·몸 풀기·뒤지기). 행인보다 먼저 세운다(행인은 피처 칸을 피한다)
             G.IA.place(d, o_["entity"], int(o_["x"]), int(o_["y"]))

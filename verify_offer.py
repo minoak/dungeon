@@ -16,6 +16,9 @@
   ⑩ 표현: _last_prose·event_tags·act_summary 가 JSON 폴백·'기타' 가 아니다(메뉴형·조합형 둘 다)
   ⑪ 피클 왕복(D79): 표식(offer_on)·몸의 표식(blessed)이 건넌다 · 속성이 없는 옛 스냅샷도 그대로 돈다(getattr)
   ⑫ 배선: run_meta·세계 지문은 켠 판에만(additive) · decorate 의 offer_short · 러너 생성 세 자리 무접촉 · _run_gates.sh 등록
+  ⑬ 켠 판의 문장(09-20 리뷰 발견): 신전·성직자의 소개·첫 선물 대사·마을 안내(D81)가 '원정마다 한 병'을 말하지 않는다 ·
+     갈아 끼우는 자리는 그 둘뿐이고 정의 JSON 원문·끈 판은 옛 글자 · NPC 두뇌가 받는 '세계의 판정' 한 줄도 사실 ·
+     '한 번뿐' 표식은 축복을 실제로 준 그 한 번에만(접수원의 원정 물품엔 안 붙는다)
 """
 import contextlib
 import io
@@ -68,12 +71,12 @@ def src(*parts):
         return fh.read()
 
 
-def town(offer=True, spawn=True, quests=False):
-    """마을 한 판(0콜) — offer=러너 스위치. 몸은 party.json 의 셋."""
+def town(offer=True, spawn=True, quests=False, guide=False):
+    """마을 한 판(0콜) — offer=러너 스위치. 몸은 party.json 의 셋. guide=D81 마을 안내 줄(⑬ 이 읽는다)."""
     old = R.OFFER_ON
     R.OFFER_ON = offer
     try:
-        d, starts = R.build_town(quests=(G.new_quests() if quests else None))
+        d, starts = R.build_town(quests=(G.new_quests() if quests else None), guide=guide)
     finally:
         R.OFFER_ON = old
     bs = []
@@ -405,6 +408,59 @@ check("⑫ 엔진 훅 — 쓰임은 D89 의 한 자리 그대로(IA.handle 한 �
 check("⑫ 러너의 Dungeon( 생성 세 자리는 무접촉(다른 게이트의 글자 검사) · interactables 는 엔진을 import 하지 않는다(순환 없음)",
       sr.count("give_verb=GIVE_ON, bond_verb=BOND_ON") == 2 and "import dungeon_gm" not in src("interactables.py"))
 check("⑫ _run_gates.sh 등록", "verify_offer" in src("_run_gates.sh"))
+
+print("── ⑬ 켠 판의 문장 — 세계가 제 하지 않는 것을 말하지 않는다(09-20 리뷰 발견)")
+# 켠 판의 축복은 '한 사람에게 한 번'이라(⑦) 정의의 옛 약속 셋이 그 판에서 거짓이 된다: 성직자의 특징 '(원정마다 한 병)' ·
+#   신전의 특징 '기도하면 축복의 물약을 한 병 받는다' · 성직자의 첫 선물 대사 '던전에서 돌아오면 또 들르세요'(그 판에서 반드시 한 번 나온다).
+OLD_PROMISE = ("원정마다 한 병", "기도하면 축복의 물약을 한 병 받는다", "던전에서 돌아오면 또 들르세요")
+d13, _b13 = town(guide=True)
+d13off, _b13off = town(offer=False, guide=True)
+
+
+def town_text(dd):
+    return [s for st in dd.place_story.values() for s in st.values()] + list(dd.npc_lines.values()) \
+        + [g["about"] for g in (getattr(dd, "town_guide", None) or [])]
+
+
+att13, tem13 = by_name(d13, "성직자"), by_name(d13, "신전")
+att13o, tem13o = by_name(d13off, "성직자"), by_name(d13off, "신전")
+bad13 = [s for s in town_text(d13) if any(w in s for w in OLD_PROMISE)]
+check("⑬ 켠 판의 소개·첫 선물 대사·마을 안내(D81) 어디에도 옛 약속 셋이 없다", not bad13, bad13)
+check("⑬ 갈아 끼운 자리는 신전·성직자 둘뿐 — 마을 안내도 같은 문장을 읽는다(안내를 짓기 전에 바꾼다) · 정의 JSON 원문·끈 판은 옛 글자 그대로",
+      d13.place_story[att13.id]["trait"] == R.OFFER_STORY["temple_attendant"]
+      and d13.place_story[tem13.id]["trait"] == R.OFFER_STORY["temple"]
+      and d13.npc_lines["성직자"] == R.OFFER_LINES["temple_attendant"]
+      and next(g["about"] for g in d13.town_guide if g["name"] == "신전") == R.OFFER_STORY["temple"]
+      and all(any(w in s for w in OLD_PROMISE)
+              for s in (d13off.place_story[att13o.id]["trait"], d13off.place_story[tem13o.id]["trait"], d13off.npc_lines["성직자"]))
+      and ENT.get("temple")["comps"]["story"]["trait"].startswith("성직자에게 기도하면")
+      and ENT.npc("temple_attendant")["line"].endswith("던전에서 돌아오면 또 들르세요."))
+check("⑬ 바뀌는 것은 그 두 소개의 trait 와 성직자의 line 뿐 — 소개 수·history·역할 한 줄·다른 NPC 대사는 끈 판과 같다",
+      len(d13.place_story) == len(d13off.place_story) and d13.feature_roles == d13off.feature_roles
+      and d13.place_story[tem13.id]["history"] == d13off.place_story[tem13o.id]["history"]
+      and d13.npc_lines_again == d13off.npc_lines_again
+      and {k: v for k, v in d13.npc_lines.items() if k != "성직자"} == {k: v for k, v in d13off.npc_lines.items() if k != "성직자"})
+
+seen13 = []
+_old_call = brains._call_claude
+brains._call_claude = lambda prompt, model="haiku": seen13.append(prompt) or "네."   # 프롬프트만 보는 대역(0콜)
+try:
+    brains.npc_reply(bots7[0], g7a, "기도합니다", ["파티: 셋"], npc=d7.npc_defs["성직자"])       # 켠 판의 축복 선물
+    brains.npc_reply(bots0[0], g0a, "기도합니다", ["파티: 셋"], npc=d0.npc_defs["성직자"])       # 끈 판의 같은 자리
+finally:
+    brains._call_claude = _old_call
+check("⑬ NPC 두뇌가 받는 '세계의 판정' 한 줄도 사실 — 켠 판은 '이 한 번뿐이다', 끈 판은 옛 '이번 원정 몫' 그대로",
+      g7a.get("blessed") is True and g0a.get("blessed") is None and len(seen13) == 2
+      and "이 한 번뿐이다" in seen13[0] and "이번 원정 몫" not in seen13[0] and "이번 원정 몫" in seen13[1],
+      [l for p in seen13 for l in p.splitlines() if "건넸다" in l])
+d13b, bots13b = town()
+d13b.composed_actions = d13b.auto_approach = False
+rec13, bb13 = by_name(d13b, "길드 접수원"), bots13b[0]
+bb13["blessed"] = True                              # 이미 축복을 받은 몸이 접수원에게 원정 물품을 받는다
+bb13["x"], bb13["y"] = stand_by(d13b, rec13)
+r13b = d13b._interact(bb13, "f%d" % rec13.id, bots13b)
+check("⑬ '한 번뿐' 표식은 축복을 실제로 준 그 한 번에만 — 접수원의 원정 물품에는 붙지 않는다(엉뚱한 선물이 '한 번뿐'이 되지 않게)",
+      r13b["result"] == "npc_gift" and "blessed" not in r13b, r13b)
 
 if C.failed:
     print("FAILED %d" % C.failed)

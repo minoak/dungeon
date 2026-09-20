@@ -7,7 +7,7 @@
     "temple"
   ],
   "sprite": "wl-town-npcs#0",
-  "note": "대사·역할·성격·먼저 거는 인사(hail_*)는 SilenceBreaker 임시 초안(2026-09-14 D69·D71, 2026-09-15 D74 기도의 답) — 파트너 문장으로 교체할 것. gift.boon=축복의 물약(D74, 파트너 결정 '기도효과는 스테이터스 증가+1의 물약을 하나') — 판정은 엔진(방문당 한 병, 마시면 공격 능력치 +1), 문장은 두뇌가 켜지면 LLM 이 대신 쓴다(고정 대사=폴백). {name}=캐릭터 이름, {quests}=안 맡은 의뢰 수, {monsters}/{traps}/{treasure}=지하 1층 실측. story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). line_blessed·hail_blessed 는 D95(2026-09-20 공물) 판에서만 쓰인다 — 그 판에서 신의 축복은 판당 한 병이라 line_again('한 원정에 한 병')·hail('축복을 받아 갈 수 있어요')이 거짓이 되는 자리. 끈 판은 이 두 칸을 아무도 읽지 않는다. 둘 다 SilenceBreaker 임시 초안.",
+  "note": "대사·역할·성격·먼저 거는 인사(hail_*)는 SilenceBreaker 임시 초안(2026-09-14 D69·D71, 2026-09-15 D74 기도의 답) — 파트너 문장으로 교체할 것. gift.boon=축복의 물약(D74, 파트너 결정 '기도효과는 스테이터스 증가+1의 물약을 하나') — 판정은 엔진(방문당 한 병, 마시면 공격 능력치 +1), 문장은 두뇌가 켜지면 LLM 이 대신 쓴다(고정 대사=폴백). {name}=캐릭터 이름, {quests}=안 맡은 의뢰 수, {monsters}/{traps}/{treasure}=지하 1층 실측. story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). line_blessed·hail_blessed 는 D95(2026-09-20 공물) 판에서만 쓰인다 — 그 판에서 신의 축복은 판당 한 병이라 line_again('한 원정에 한 병')·hail('축복을 받아 갈 수 있어요')이 거짓이 되는 자리. 끈 판은 이 두 칸을 아무도 읽지 않는다. 둘 다 SilenceBreaker 임시 초안. 같은 이유로 아래 line 과 story.trait('원정마다 한 병')도 공물 판에서는 거짓이라, 러너가 그 판에서만 다른 문장으로 갈아 끼운다(show_runner.OFFER_LINES·OFFER_STORY) — 여기 원문은 끈 판(옛 판)의 글자다.",
   "comps": {
     "npc": {
       "line": "기도를 들었어요. 신의 축복이 담긴 물약이에요 — 마시면 몸이 한 단계 강해져요. 던전에서 돌아오면 또 들르세요.",

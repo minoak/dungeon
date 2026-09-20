@@ -5091,6 +5091,7 @@ class Dungeon:
             #   비워지는 탓에 축복이 원정마다 되풀이돼 공짜로 쌓였다(열 번 돌면 +10). 켠 판에서는 몸에 남는 표식(bot['blessed'])이
             #   층·원정을 넘어 따라가고, 그 뒤로 능력치는 바치는 만큼만 오른다. 끈 판은 이 줄이 늘 False = 옛 동작 그대로.
             blessed_done = bool(self.offer_on and bot.get('blessed'))
+            boon_once = False                                # D95(09-20 · 리뷰 발견): 이 선물이 '한 번뿐인 축복'인가 — 공물 판에서만 참(아래 결과에 additive)
             if not again and gift and f.name not in served:  #   실측: 이미 받고도 8틱마다 상인 둘을 번갈아 60틱(seed 726984)
                 got = []                                     # 마을 v1(09-11): 길드 접수원은 물약+단검을 함께 준다(기본 물품, 메모 §4-4)
                 if gift.get('potions'):
@@ -5099,7 +5100,7 @@ class Dungeon:
                 if gift.get('boon') and not blessed_done:         # D74(09-15 파트너 "기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자"): 성직자=축복의 물약
                     bot['boons'] = bot.get('boons', 0) + int(gift['boon'])
                     if self.offer_on:                            # D95(09-20): 공물 판에서만 '받은 적 있다'를 몸에 적는다(끈 판은 키 자체가 없다 = 옛 판 그대로)
-                        bot['blessed'] = True                    #   러너가 층 전이·원정 귀환의 새 몸에 이 표식을 실어 나른다(show_runner 이월)
+                        bot['blessed'] = boon_once = True        #   러너가 층 전이·원정 귀환의 새 몸에 이 표식을 실어 나른다(show_runner 이월)
                     got.append('축복의 물약')
                 if gift.get('weapon') and not bot.get('weapon'):     # 빈손일 때만 — 스왑·비교는 던전 몫(D28)
                     nm = str(gift['weapon'])
@@ -5113,7 +5114,8 @@ class Dungeon:
                               {'kind': 'ally_loot', 'char': bot['char'], 'what': given},
                               exclude=(bot['char'],))
                 return {**base, 'result': 'npc_gift', 'npc': f.name, 'item': given,
-                        'line': self.npc_lines.get(f.name, '…') + self._party_rule_sfx(f.name, bot)}
+                        'line': self.npc_lines.get(f.name, '…') + self._party_rule_sfx(f.name, bot),
+                        **({'blessed': True} if boon_once else {})}   # D95: 공물 판의 축복은 한 사람에게 한 번 — NPC 두뇌에게 '이번 원정 몫'이라 말하지 않게(additive)
             line_again = (getattr(self, 'npc_lines_again', None) or {}).get(f.name)
             if blessed_done:                                 # D95: 이미 축복을 받은 사람 — 두 옛 대사('한 병 드릴게요'·'살아 돌아오면 또')가
                 lb = ((getattr(self, 'npc_defs', None) or {}).get(f.name) or {}).get('line_blessed')   #   둘 다 거짓이 되는 자리.
