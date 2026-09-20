@@ -152,7 +152,7 @@ wonderland.bat              ← 더블클릭 → [1] LOCAL LAUNCHER (또는  pyt
 ## 검증과 데이터
 
 ```bash
-bash _run_gates.sh                                     # 결정론 게이트 75종 일괄 (Git Bash, LLM 0콜, 라이브 데이터와 격리)
+bash _run_gates.sh                                     # 결정론 게이트 82종 일괄 (Git Bash, LLM 0콜, 라이브 데이터와 격리)
 cd game && npm run smoke                               # 관전 클라이언트 헤드리스 스모크
 python tools/analyze_run.py runs/stream-XXXX.jsonl     # 지난 판 0콜 부검(이동·전투·대화 통계)
 python tools/run_notes.py   runs/stream-XXXX.jsonl     # 도감평·수첩 텍스트 덤프
@@ -160,7 +160,7 @@ python tools/unheard_audit.py runs/stream-XXXX.jsonl   # 동료를 지목한 말
 python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer.html   # 단일 HTML 리플레이
 ```
 
-- 게이트 `verify_*.py` **75종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
+- 게이트 `verify_*.py` **82종**은 엔진 물리(시야·전투·함정·경로)·스트림 계약·파티/솔로·스캐너·사건층·장비 개체·마을·엔티티 저장소·
   도감·수첩·결산·보스층·차단 접기·공개 서버·계정(키 지문)·캠페인(저장 캐릭터의 원정 기록)·이어가기(스냅샷=끊기지 않은 판)·API 호출 상한·길드 척추(의뢰·보고·NPC 두뇌)·파티 장부(계단이 세는 사람)를 LLM 0콜로 검사한다.
 - `runs/`의 판 기록은 실LLM으로 얻은 원본 데이터지만 **개인 플레이 기록이라 로컬에만 보존한다**(`.gitignore`, 2026-09-16). 저장소엔 정적 관전용 데모 판(`game/static-runs.json`)만 남는다. 전부 리플레이 가능하다.
 - 관측 표현 A/B 실험(사전등록): [docs/D19_experiment_summary.md](docs/D19_experiment_summary.md).
@@ -169,12 +169,13 @@ python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer
 
 엔진·러너·론처는 루트, 프롬프트는 `prompts/`, 정의는 `entities/`, 도구는 `tools/`, 관전 클라이언트는 `game/`, 판 기록은 `runs/`,
 그림 원본은 `art/`. 코드와 파일명에 남아 있는 `wonderland`(원더랜드)는 내부 코드명이다. 전체 지도와 정리 기준은 [docs/repo-map.md](docs/repo-map.md).
-설계 정본은 [`design/HARNESS_DESIGN.md`](design/HARNESS_DESIGN.md)(D1~D79), 변경 기록은 [docs/CHANGELOG.md](docs/CHANGELOG.md),
+설계 정본은 [`design/HARNESS_DESIGN.md`](design/HARNESS_DESIGN.md)(D1~D94), 변경 기록은 [docs/CHANGELOG.md](docs/CHANGELOG.md),
 판 하나를 이야기로 쓴 [연대기](docs/chronicles)와 [개발일지](docs/devlog)도 있다.
 
-## 상태 (2026-09-14)
+## 상태 (2026-09-20)
 
-한 판의 고리(시트 → 마을 → 의뢰 → 5층 → 보스 → 귀환 → 길드 보고)가 닫혔다. 마을은 던전의 대기실이 아니라 원정이 시작되고
+한 판의 고리(시트 → 마을 → 의뢰 → 5층 → 보스 → 귀환 → 길드 보고)가 닫혔다.
+09-20 에 그 고리 위에 네 가지가 더 얹혔다(전부 스위치 뒤, 끄면 옛 판과 바이트 동일): 새 던전 건축 프로필(D88 `DUNGEON_ARCH=concept` — 42×34 석조·넓은 통로·기둥, 관전 클라이언트가 스스로 입체로 그린다), 정의 한 장으로 붙는 오브젝트 쓰임(D89)과 그것으로 살린 마을 생활(D90 `DUNGEON_TOWN_LIFE` — 분수·우물·벤치·알림판·여관, 주민과 행인), 던전의 물건들과 새 몬스터(D92), 마을 사람이 들은 말을 되받는 것(D93 `DUNGEON_NPC_REPLY`). 판이 원정 하나로 끝나지 않는 루프(D94 `DUNGEON_LOOP`)는 같은 날의 실험층이다. 마을은 던전의 대기실이 아니라 원정이 시작되고
 끝나는 곳이다(D69: 게시판 의뢰·접수원 보고·NPC 두뇌·흩어진 출발). 돈·평판·판을 넘는 이월은 그 뒤의 기능이다. 실행자가 자기 키로 판을 여는
 공개 서버 `server.py`(D68: 세션·허용 목록·BYOK·상한)를 GCP 서울 VM + Caddy HTTPS로 배포했다.
 첫 설치와 비용 가드의 실제 VM 중지·재시작 복구를 확인했다. 진짜 Gemini 키를 사용하는 첫 판도 27턴 귀환·API 전송 50회로 성공했다.

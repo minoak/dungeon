@@ -478,3 +478,334 @@ NPC 두뇌를 켠 판에서 NPC 가 답을 쓸 때만 쓰인다. `{name}` `{role
 | 257 | looks.hair.layered-short | 헤어 한 줄 — 분류 이름 '마법사 레이어드 숏컷' | 짧은 은빛 머리 | |
 | 258 | looks.hair.wavy-twintails | 헤어 한 줄 — 분류 이름 '마법사 웨이브 양갈래' | 보라 리본으로 묶은 연보랏빛 웨이브 양갈래 | |
 | 259 | looks.hair.blunt-long | 헤어 한 줄 — 분류 이름 '마법사 일자 앞머리 장발' | 일자 앞머리의 긴 은빛 머리 | |
+
+## 2026-09-20 추가분 (D88~D94 — AFK 전권 위임분)
+
+> 이 절은 09-20 새벽~오전에 새로 들어간 임시 문장이다. 위와 같은 규칙: '교정' 칸을 채우면 그대로 옮기고,
+> 비우면 지금 문장을 유지하며 `삭제` 라 쓰면 그 칸을 없앤다. 정의 JSON 의 문장은 코드 무접촉으로 바뀐다.
+
+### 쓰임 부품 — 오브젝트 상호작용 결과 문장 (D89)
+
+| # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
+|---|---|---|---|---|
+| 260 | menu.use.read | interactables.KINDS['read'].label — 메뉴형 줄 머리 '읽기: <이름> <id> (발밑/인접)' | 읽기 | |
+| 261 | menu.use.sit | interactables.KINDS['sit'].label | 앉기 | |
+| 262 | menu.use.drink | interactables.KINDS['drink'].label | 마시기 | |
+| 263 | menu.use.browse | interactables.KINDS['browse'].label | 구경하기 | |
+| 264 | menu.use.practice | interactables.KINDS['practice'].label | 몸 풀기 | |
+| 265 | menu.use.rummage | interactables.KINDS['rummage'].label | 뒤지기 | |
+| 266 | menu.use.lodge | interactables.KINDS['lodge'].label — 건물이면 자리 표기가 '(문턱)' | 묵기 | |
+| 267 | menu.use.warm | interactables.KINDS['warm'].label | 불 쬐기 | |
+| 268 | menu.use.where | interactables.menu_label — 자리 표기(건물 / 그 밖) | (문턱) / (발밑/인접) | |
+| 269 | wire.use.fact.sit | interactables.fact_text — 메뉴 라벨 꼬리와 조합형 '## 대상의 현재 사실' 줄 '- <id> <이름>: …' | 앉으면 HP +{heal} (상처가 있을 때) | |
+| 270 | wire.use.fact.drink | interactables.fact_text | 마시면 HP +{heal} (상처가 있을 때) | |
+| 271 | wire.use.fact.warm | interactables.fact_text | 불을 쬐면 HP +{heal} (상처가 있을 때) | |
+| 272 | wire.use.fact.lodge | interactables.fact_text | 묵으면 HP 가 전부 돌아오고 몸 상태가 낫는다 | |
+| 273 | compose.tags.use | interactables.KINDS[*].tag + tags() — 조합형 대상 줄 '[f6] 벤치 (object, interactable, seat)' | interactable + readable / seat / drinkable / wares / practice / container / lodging / warmth | |
+| 274 | last.read | interactables.prose (brains._last_prose 와 show_runner.act_summary 가 부른다) | {what}의 글을 읽었다: "{text}"  ·  texts 가 여러 편이면 '{what}의 글을 읽었다 ({page}/{pages}): "{text}"' | |
+| 275 | last.sat | interactables.prose | {what}에 앉아 숨을 돌렸다(HP +{heal})  ·  heal 이 0이면 괄호 없음 | |
+| 276 | last.drank | interactables.prose | {what}의 물을 마셨다(HP +{heal}) | |
+| 277 | last.warmed | interactables.prose | {what}의 불을 쬐었다(HP +{heal}) | |
+| 278 | last.browsed | interactables.prose | {what}에 진열된 것을 구경했다: {wares, 쉼표로 이음} | |
+| 279 | last.practiced | interactables.prose | {what}을/를 상대로 몸을 풀었다 | |
+| 280 | last.rummaged.potion | interactables.prose | {what}을/를 뒤졌다 — 물약 하나가 나왔다(소지 물약 {n}병) | |
+| 281 | last.rummaged.treasure | interactables.prose | {what}을/를 뒤졌다 — 보물 하나가 나왔다(모은 보물 {n}개) | |
+| 282 | last.rummaged.nothing | interactables.prose | {what}을/를 뒤졌다 — 비어 있다 | |
+| 283 | last.lodged | interactables.prose | {what}에 묵었다 — 몸이 다 나았다(HP +{heal}, 나은 상태: {cleared}) | |
+| 284 | last.lodged.none | interactables.prose — 성한 몸으로 묵었을 때 | {what}에 묵었다 — 나을 상처가 없었다 | |
+| 285 | last.used_up.rummage | interactables.prose | {what}은/는 이미 비어 있다 | |
+| 286 | last.used_up | interactables.prose — rummage 가 아닌 once 오브젝트 | {what}은/는 이미 쓰였다 — 더 나오는 것이 없다 | |
+| 287 | witness.ally_use.result(use) | interactables.KINDS[*].seen 과 _GOT_SEEN — 기존 목격 문장 '…을(를) 사용하는 것을 (…)' 의 괄호 한 마디 | 글을 읽었다 / 앉아 쉬었다 / 물을 마셨다 / 구경했다 / 몸을 풀었다 / 묵었다 / 불을 쬐었다 / 물약을 꺼냈다 / 보물을 꺼냈다 / 빈손이었다 | |
+| 288 | objtag.use.verb | interactables.KINDS[*].tried — D39 오브젝트 태그 접미 ' — 앉아 봄 ×2' | 읽어 봄 / 앉아 봄 / 마셔 봄 / 구경해 봄 / 몸 풀어 봄 / 뒤져 봄 / 묵어 봄 / 불 쬐어 봄 | |
+| 289 | objtag.use.note | interactables.obj_note — D39 태그의 괄호 note(뒤지기만) | 물약 나옴 / 보물 나옴 / 비어 있음 | |
+| 290 | trail.use | interactables.event_tags — 궤적 꼬리표 [라벨] 사실 | [읽음] {what} "{text 앞 30자}" · [사용] {what} +{heal} (HP {hp}) · [구경] {what} · [사용] {what} — 몸 풀기 · [획득] {what} → 물약 (소지 {n}) · [획득] {what} → 보물 · [사용] {what} — 비어 있음 · [사용] {what} — 묵음 +{heal} (HP {hp}) · [헛손질] {what} — 이미 비어 있음 / 이미 쓰였음 | |
+| 291 | entities.object.stone_tablet | entities/object/stone_tablet.json (name · use.text · story.trait) | 석상 받침 · "절반은 닳아 읽을 수 없다. 남은 줄은 이렇다 — 돌아온 자만이 이야기를 남긴다." · 받침돌에 글이 새겨진 석상 | |
+| 292 | entities.object.bench | entities/object/bench.json (name · story.trait) | 벤치 · 앉아 쉬어 가는 긴 의자 | |
+| 293 | entities.object.well | entities/object/well.json (name · story.trait) | 우물 · 두레박이 걸린 마을 우물 | |
+| 294 | entities.object.barrel | entities/object/barrel.json (name · story.trait · 추첨 가중치 빈손 3 : 물약 1 : 보물 1 도 임시) | 통 · 뚜껑이 덜 닫힌 나무통 | |
+
+### 들린 말 · NPC 되받기 (D90·D93)
+
+| # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
+|---|---|---|---|---|
+| 295 | wire.notices.overheard | brains._wire — 캐릭터 프롬프트 '## 네 상태' 절 (D90, 구역에 들어선 첫 관측 한 번) | - {구역}에 들어서며 들린 말(마을 사람들끼리 나누는 말이다 — 네게 한 말이 아니다): 「{문장}」 | |
+| 296 | wire.npc_ears | brains._wire — 캐릭터 프롬프트 '## 네 상태' 절 (D93, 되받기 판의 마을에서 들리는 NPC 가 있을 때) | - 지금 네 말이 들리는 마을 사람: {이름(id) · …} — 응답 JSON 의 `to` 에 그 ID 를 적어 말하면 그 사람에게 건 말이 되고, 그 사람이 말로 답한다. 마을 사람이 네게 건넨 말을 들은 뒤 `to` 없이 한 잡담도 그 사람에게 한 답으로 들린다. 한 사람이 되받는 말은 네가 이번에 마을에 머무는 동안 3번까지다 | |
+| 297 | last.said.npc_far | brains._last_prose — 말의 결과(D72)에서 지목한 NPC 가 못 들었을 때 | 네가 한 말 「…」({NPC}에게) — {NPC}은(는) 멀어서 못 들었고, {들은 사람}이(가) 들었다 | |
+| 298 | npc.prompt.npc_say.prev | brains.npc_reply — NPC 두뇌 프롬프트 '방금 일어난 일' (캐릭터에게는 안 보인다) | - 조금 전 네가 이 사람에게 한 말: "{앞 줄}" | |
+| 299 | npc.prompt.npc_say.verdict | brains.npc_reply — NPC 두뇌 프롬프트 '방금 일어난 일' (캐릭터에게는 안 보인다) | - 세계의 판정: 말만 오갔다 — 물건을 건네거나 원정 보고를 받는 일은 상대가 네 앞에 와서 말을 걸 때 따로 처리된다(지금은 아니다) | |
+| 300 | runner.event.overheard | show_runner — events.log 와 관전 로그 (캐릭터에게는 안 보인다) | 봇{c} — {구역}에 들어서며 들린 말: 「{문장}」 | |
+| 301 | town_main_street.overheard[0] | entities/map/town_main_street.json | 비 온다더니 하늘만 흐리고 말았네. 좌판을 걷었다 폈다 한 게 몇 번이야. | |
+| 302 | town_main_street.overheard[1] | entities/map/town_main_street.json | 순무가 올해는 유난히 달아. 작년엔 죄다 바람이 들었었잖아. | |
+| 303 | town_main_street.overheard[2] | entities/map/town_main_street.json | 잡화점 집 막내가 또 분수에 빠졌다며? 그 집은 빨래가 마를 날이 없어. | |
+| 304 | town_main_street.overheard[3] | entities/map/town_main_street.json | 어젯밤 주점에서 누가 노래를 그렇게 불렀어? 우리 집까지 다 들리더라. | |
+| 305 | town_main_street.overheard[4] | entities/map/town_main_street.json | 수레 바퀴가 또 빠졌어. 큰길 돌이 들뜬 데가 한두 군데가 아니야. | |
+| 306 | town_main_street.overheard[5] | entities/map/town_main_street.json | 저 집 개가 요새 안 보이네. — 새끼를 낳았대, 네 마리. | |
+| 307 | town_main_street.overheard[6] | entities/map/town_main_street.json | 아침에 길드 앞이 시끌시끌하던데, 또 누가 돌아온 모양이지. | |
+| 308 | town_main_street.overheard[7] | entities/map/town_main_street.json | 겨울 오기 전에 장작은 미리 쟁여 둬. 작년처럼 늦으면 젖은 것밖에 안 남아. | |
+| 309 | town_main_street.overheard[8] | entities/map/town_main_street.json | 애들이 또 석상에 올라갔다가 혼났대. 하지 말라면 더 하는 나이지. | |
+| 310 | town_main_street.overheard[9] | entities/map/town_main_street.json | 생선 장수가 이번 주엔 안 온다네. 고갯길이 질어서 수레가 못 넘는대. | |
+| 311 | town_guild.overheard[0] | entities/map/town_guild.json | 접수원이 오늘은 기분이 좋아 보이던데. 장부가 맞아떨어졌나 봐. | |
+| 312 | town_guild.overheard[1] | entities/map/town_guild.json | 게시판 종이가 또 바람에 날아갔어. 누가 못 좀 제대로 박아 주지. | |
+| 313 | town_guild.overheard[2] | entities/map/town_guild.json | 저 친구는 앞마당에서 사흘째야. 같이 갈 사람을 못 구했다던가. | |
+| 314 | town_guild.overheard[3] | entities/map/town_guild.json | 지난달에 내려간 셋은 아직 소식이 없대. — 쉿, 가족이 저기 있잖아. | |
+| 315 | town_guild.overheard[4] | entities/map/town_guild.json | 앞마당 벤치 다리가 또 삐걱거려. 앉을 때마다 조마조마하다니까. | |
+| 316 | town_guild.overheard[5] | entities/map/town_guild.json | 돌아온 사람들은 하나같이 말수가 줄어. 우리 삼촌도 그랬어. | |
+| 317 | town_guild.overheard[6] | entities/map/town_guild.json | 길드 지붕에 제비가 집을 지었더라. 접수원이 못 본 척해 주는 거래. | |
+| 318 | town_guild.overheard[7] | entities/map/town_guild.json | 신참들은 장비 자랑부터 하고, 오래된 사람들은 밥 얘기부터 해. | |
+| 319 | town_guild.overheard[8] | entities/map/town_guild.json | 어제 앞마당에서 둘이 크게 다퉜다며? — 오늘 아침엔 같이 밥 먹던데. | |
+| 320 | town_guild.overheard[9] | entities/map/town_guild.json | 비 오는 날엔 앞마당 처마 밑이 제일 붐벼. 다들 갈 데가 없는 거지. | |
+| 321 | town_temple.overheard[0] | entities/map/town_temple.json | 오늘도 그 할머니가 제일 먼저 오셨어. 아들 이름 앞에 한참 서 계시더라. | |
+| 322 | town_temple.overheard[1] | entities/map/town_temple.json | 신전 계단은 아침마다 누가 쓸어 놓는 걸까. 늘 깨끗해. | |
+| 323 | town_temple.overheard[2] | entities/map/town_temple.json | 여긴 바람도 조용히 부는 것 같아. 애들도 여기선 안 뛰더라. | |
+| 324 | town_temple.overheard[3] | entities/map/town_temple.json | 성직자님이 어젯밤엔 밤새 불을 안 끄셨대. 무슨 일이 있었나. | |
+| 325 | town_temple.overheard[4] | entities/map/town_temple.json | 꽃을 누가 매일 갈아 놓는지 아무도 몰라. 아침이면 새 꽃이야. | |
+| 326 | town_temple.overheard[5] | entities/map/town_temple.json | 석상 발치에 이끼가 많이 올랐네. 요새 비가 잦았으니까. | |
+| 327 | town_temple.overheard[6] | entities/map/town_temple.json | 기도는 짧게 하고 가는 사람이 오래 살더라. 우리 아버지 말씀이야. | |
+| 328 | town_temple.overheard[7] | entities/map/town_temple.json | 이름 새기는 석공이 요즘 손이 떨린대. 그래도 글씨는 여전히 곱더라. | |
+| 329 | town_temple.overheard[8] | entities/map/town_temple.json | 새벽에 여기 앉아 있으면 큰길 소리가 하나도 안 들려. | |
+| 330 | town_shops.overheard[0] | entities/map/town_shops.json | 대장간 망치 소리가 오늘은 일찍 시작했네. 급한 일감이 들어왔나 봐. | |
+| 331 | town_shops.overheard[1] | entities/map/town_shops.json | 공방에 들어온 나무가 덜 말랐대. 한 달은 더 세워 둬야 한다던데. | |
+| 332 | town_shops.overheard[2] | entities/map/town_shops.json | 화덕 옆은 추운 날이면 고양이 차지야. 쫓아내도 도로 와. | |
+| 333 | town_shops.overheard[3] | entities/map/town_shops.json | 대장장이 손등에 덴 자국이 또 늘었더라. 장갑을 끼래도 말을 안 들어. | |
+| 334 | town_shops.overheard[4] | entities/map/town_shops.json | 장비점 주인은 진열대만 하루에 세 번을 닦아. | |
+| 335 | town_shops.overheard[5] | entities/map/town_shops.json | 쇠 냄새가 옷에 배서, 집에 가면 애가 코를 막아. | |
+| 336 | town_shops.overheard[6] | entities/map/town_shops.json | 공방 집 딸이 아버지보다 대패질이 낫대. 동네가 다 알아. | |
+| 337 | town_shops.overheard[7] | entities/map/town_shops.json | 작업 마당 물통이 또 새네. 테를 다시 조여야겠어. | |
+| 338 | town_shops.overheard[8] | entities/map/town_shops.json | 숯 실은 수레가 오늘도 늦어. 길이 질어서 그렇다나. | |
+| 339 | town_shops.overheard[9] | entities/map/town_shops.json | 모루 소리에 맞춰서 애들이 줄넘기를 하더라니까. | |
+| 340 | town_residential.overheard[0] | entities/map/town_residential.json | 빨래 걷어! 구름이 서쪽에서 몰려온다. | |
+| 341 | town_residential.overheard[1] | entities/map/town_residential.json | 옆집 아기가 밤새 울더니, 이가 나는 거였대. | |
+| 342 | town_residential.overheard[2] | entities/map/town_residential.json | 공동 숙소 굴뚝에서 또 연기가 거꾸로 나와. 새가 집을 지었나. | |
+| 343 | town_residential.overheard[3] | entities/map/town_residential.json | 여관 마당 나무에 새가 둥지를 틀었어. 주인이 가지를 못 치고 있대. | |
+| 344 | town_residential.overheard[4] | entities/map/town_residential.json | 골목 끝 집 할아버지가 또 의자를 밖에 내놨어. 해 좋은 날은 꼭 그러셔. | |
+| 345 | town_residential.overheard[5] | entities/map/town_residential.json | 애들이 담장에 또 뭘 그려 놨어. — 그래도 솜씨는 늘었더라. | |
+| 346 | town_residential.overheard[6] | entities/map/town_residential.json | 저녁마다 저 집에서 국 끓이는 냄새가 나서 배가 고파 죽겠어. | |
+| 347 | town_residential.overheard[7] | entities/map/town_residential.json | 밤에 골목 등불이 하나 나갔어. 누가 기름 좀 채워 주지. | |
+| 348 | town_residential.overheard[8] | entities/map/town_residential.json | 우리 집 닭이 또 옆집 마당에 알을 낳았지 뭐야. | |
+| 349 | town_residential.overheard[9] | entities/map/town_residential.json | 지붕 고친다던 사람이 사흘째 안 와. 비 오기 전엔 와야 할 텐데. | |
+| 350 | town_dungeon.overheard[0] | entities/map/town_dungeon.json | 계단 쪽에서 올라오는 바람은 한여름에도 차. 이 근처는 빨래가 안 말라. | |
+| 351 | town_dungeon.overheard[1] | entities/map/town_dungeon.json | 입구 돌바닥은 아무리 쓸어도 흙이 도로 쌓여. | |
+| 352 | town_dungeon.overheard[2] | entities/map/town_dungeon.json | 저 천막 사람들은 밤에도 불을 안 끄더라. 누굴 기다리는 건지. | |
+| 353 | town_dungeon.overheard[3] | entities/map/town_dungeon.json | 훈련대 허수아비 팔이 또 떨어졌네. 누가 그렇게 세게 쳤어? | |
+| 354 | town_dungeon.overheard[4] | entities/map/town_dungeon.json | 우리 애는 계단 근처엔 얼씬도 안 해. 어릴 때 겁을 단단히 줬거든. | |
+| 355 | town_dungeon.overheard[5] | entities/map/town_dungeon.json | 다들 저 자리에서 한 번씩 뒤를 돌아봐. 나는 매일 보니까 알지. | |
+| 356 | town_dungeon.overheard[6] | entities/map/town_dungeon.json | 어제는 계단 앞에서 누가 한참을 서 있다가 그냥 돌아갔어. 그럴 수도 있지. | |
+| 357 | town_dungeon.overheard[7] | entities/map/town_dungeon.json | 아래서 뭐가 올라오는지, 이 근처 풀은 색이 좀 달라. | |
+| 358 | town_dungeon.overheard[8] | entities/map/town_dungeon.json | 여기는 목은 좋은데, 밤에 잠이 잘 안 와. | |
+
+### 던전의 물건들 (D92)
+
+| # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
+|---|---|---|---|---|
+| 359 | tablet.lore.1 | dungeon_gm.py:1471 Dungeon.LIFE_TABLET_LORE[0] (던전 석판 본문 · 읽기) | 돌아온 자만이 이야기를 남긴다. | |
+| 360 | tablet.lore.2 | dungeon_gm.py:1472 Dungeon.LIFE_TABLET_LORE[1] | 이 돌을 깎은 손의 이름은 남아 있지 않다. | |
+| 361 | tablet.lore.3 | dungeon_gm.py:1473 Dungeon.LIFE_TABLET_LORE[2] | 글자 위로 물이 흘러 절반이 닳았다. | |
+| 362 | tablet.seal | dungeon_gm.py:1474 Dungeon.LIFE_TABLET_SEAL (보스층 석판 · BOSS_FLOOR_NOTICE 와 같은 사실) | 이 층의 문은 봉인되어 있다. 봉인은 이 층의 주인이 쓰러질 때 풀린다. | |
+| 363 | tablet.fact.traps | dungeon_gm.py:1488 Dungeon._tablet_facts (세계가 센 참인 사실) | 이 층에 놓인 함정은 %d개다. | |
+| 364 | tablet.fact.rooms | dungeon_gm.py:1489 Dungeon._tablet_facts | 이 층은 방 %d개로 이루어져 있다. | |
+| 365 | tablet.fact.monsters | dungeon_gm.py:1494 Dungeon._tablet_facts (쓰러지는 것이라 현재형으로 말하지 않는다) | 이 층에 처음 있던 것 — 고블린 3, 그림자거미 1. | |
+| 366 | crate.name | entities/object/crate.json name (관측·메뉴 라벨 '뒤지기: 나무 상자 f7') | 나무 상자 | |
+| 367 | crate.trait | entities/object/crate.json comps.story.trait | 못이 반쯤 빠진 나무 상자 | |
+| 368 | jar.name | entities/object/jar.json name | 항아리 | |
+| 369 | jar.trait | entities/object/jar.json comps.story.trait | 허리께까지 오는 오지 항아리 | |
+| 370 | floor_tablet.name | entities/object/floor_tablet.json name (메뉴 라벨 '읽기: 석판 f9') | 석판 | |
+| 371 | floor_tablet.text | entities/object/floor_tablet.json comps.use.text (use_over 가 없는 판 — 옛 피클·손그림 장면의 몫) | 글자 위로 물이 흘러 절반이 닳았다. | |
+| 372 | floor_tablet.trait | entities/object/floor_tablet.json comps.story.trait | 벽을 등지고 선 글 새긴 돌판 | |
+| 373 | campfire.name | entities/object/campfire.json name (메뉴 라벨 '불 쬐기: 모닥불 f5 — 불을 쬐면 HP +2 (상처가 있을 때)') | 모닥불 | |
+| 374 | campfire.trait | entities/object/campfire.json comps.story.trait | 아직 사위지 않은 불자리 | |
+
+### 새 몬스터 (D92)
+
+| # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
+|---|---|---|---|---|
+| 375 | monster.poison_goblin.name | entities/monster/poison_goblin.json name — 관측의 몬스터 이름·직전 결과·목격 문장·관전 로그 | 독칼 고블린 | |
+| 376 | monster.poison_goblin.brief | entities/monster/poison_goblin.json knowledge.brief — 등재 뒤 관측의 한 줄(심층 전) | 칼날에 독을 바른 고블린 | |
+| 377 | monster.poison_goblin.deep | entities/monster/poison_goblin.json knowledge.deep — 조우 5회 뒤 심층 본문 | 칼날에 독을 바른 고블린. 베인 상처는 얕지만 독이 돈다 — 독이 도는 동안은 명중과 회피가 무뎌지고, 쉬어야 빠진다. 겁이 많은 건 다른 고블린과 같아서 피를 많이 보면 달아난다. | |
+| 378 | monster.spiderling.name | entities/monster/spiderling.json name | 새끼거미 | |
+| 379 | monster.spiderling.brief | entities/monster/spiderling.json knowledge.brief | 셋씩 모여 사는 작은 거미 | |
+| 380 | monster.spiderling.deep | entities/monster/spiderling.json knowledge.deep | 셋씩 모여 사는 작은 거미. 하나하나는 고블린보다 약하다. 숨어 있지 않고 눈에 보이는 곳에 있다. 달아나지 않는다. | |
+| 381 | monster.goblin_heavy.name | entities/monster/goblin_heavy.json name | 고블린 중갑병 | |
+| 382 | monster.goblin_heavy.brief | entities/monster/goblin_heavy.json knowledge.brief | 쇠붙이를 두른 느린 고블린 | |
+| 383 | monster.goblin_heavy.deep | entities/monster/goblin_heavy.json knowledge.deep (엔진의 ai.pace 2와 짝 — 박자를 빼면 이 문장도 고쳐야 한다) | 쇠붙이를 온몸에 두른 고블린. 공격이 잘 들어가지 않고 오래 버틴다. 대신 걸음이 느려서, 쫓아올 때 한 칸 걷고 나면 다음 한 틱은 서 있다. 달아나지 않는다. | |
+
+### 론처 화면 문구
+
+| # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
+|---|---|---|---|---|
+| 384 | map.concept.label | launcher/index.html 맵 라디오(#mapMode) | 석조 던전 (새 건축 · 42×34) | |
+| 385 | map.concept.title | launcher/index.html 맵 라디오 title | 새 던전 생성 방식(D88, 2026-09-20): 넓은 통로 · 큰 홀 · 기둥이 있는 석조 던전. 크기는 42×34 로 고정된다 | |
+| 386 | night.note | launcher/index.html applyStartDefaults() → #nightNote (서버 값으로 조립) | 이 론처의 첫 자리: 맵 = {맵 이름} · '09-20 추가' 넷 중 켬 = {켠 것들 / 없음}. | |
+| 387 | night.button.old | launcher/index.html #bOldDefaults (+title) | 이전 판 설정으로 — (title) 09-20 전과 같은 판: 보통 맵 · 아래 '09-20 추가' 넷 다 끔 | |
+| 388 | night.button.first | launcher/index.html #bNightDefaults (+title) | 처음 자리로 — (title) 이 론처가 처음 열릴 때의 자리로 되돌린다 | |
+| 389 | opt.town_life | launcher/index.html #townLife 라벨·title | 마을 생활 (09-20 추가 — 마을의 물건 · 새 주민 · 들린 말, D90) / title: 켜면 러너에 DUNGEON_TOWN_LIFE=1 을 넘긴다: 마을에 물건과 새 주민이 놓이고, 말이 들린다. 끄면 그 전의 마을 그대로 | |
+| 390 | opt.npc_reply | launcher/index.html #npcReply 라벨·title | NPC 가 말을 되받는다 (09-20 추가 — LLM 호출이 조금 늘어난다, D93) / title: 켜면 러너에 DUNGEON_NPC_REPLY=1 을 넘긴다: NPC 가 캐릭터의 말을 되받는다. LLM 호출이 조금 늘어난다. 끄면 그 전 그대로 | |
+| 391 | opt.floor_life | launcher/index.html #floorLife 라벨·title | 던전의 물건들 (09-20 추가 — 던전 층에 놓이는 물건, D92) / title: 켜면 러너에 DUNGEON_FLOOR_LIFE=1 을 넘긴다: 던전 층에 물건들이 놓인다. 끄면 그 전의 던전 그대로 | |
+| 392 | opt.bestiary_plus | launcher/index.html #bestiaryPlus 라벨·title | 새 몬스터 (09-20 추가, D92) / title: 켜면 러너에 DUNGEON_BESTIARY_PLUS=1 을 넘긴다: 새 몬스터가 나온다. 끄면 그 전의 몬스터 구성 그대로 | |
+| 393 | default_party.look_note | launcher/index.html loadPresets() → #defaultPreview | 외형은 기본 파티 시트(party.json)에 적힌 그대로다. / 시트에 외형이 없는 사람은 판마다 랜덤으로 뽑힌다 — 뽑힌 얼굴은 판 기록에 남아 리플레이에서도 같다. | |
+| 394 | error.map | launcher.py Runner.start BadRequest | 맵은 normal/big/concept 중 하나 | |
+| 395 | party._look_note | party.json 메타 키(_look_note — 러너가 무시) | look(2026-09-20 추가 — ⚠️SilenceBreaker 가 고른 임시 선택, 파트너 확인 대기): 외형 사전의 바디(sprite)·공용 헤어(hairstyle). … look 을 지우면 예전처럼 러너가 판마다 시드로 뽑는다. … | |
+
+### 관전 로그 문장
+
+| # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
+|---|---|---|---|---|
+| 396 | evline.rummaged.got.potion | game/src/text/evline.ts GOT_NAMES (관전 로그) | 회복 물약 | |
+| 397 | evline.rummaged.got.treasure | game/src/text/evline.ts GOT_NAMES (관전 로그) | 보물 | |
+| 398 | evline.rummaged.have.potions | game/src/text/evline.ts rummaged 분기 (결과에 potions 가 있을 때만) | (소지 물약 {N}병) | |
+| 399 | evline.rummaged.have.bag | game/src/text/evline.ts rummaged 분기 (결과에 bag 이 있을 때만) | (모은 보물 {N}개) | |
+| 400 | evline.rummaged.found / evline.rummaged.empty (문장 틀은 그대로, 읽는 칸만 바뀜) | game/src/text/evline.ts rummaged 분기 | {대상}을(를) 뒤졌다 — {나온 것} 발견 / {대상}을(를) 뒤졌다 — 아무것도 없다 | |
+| 401 | viewer.rummaged.tail (문구는 그대로, 읽는 칸만 바뀜) | viewer/index.html interact 폴백 꼬리말 | 뒤져서 찾았다 / 뒤졌지만 아무것도 없다 | |
+
+### 서버 화면·상태 문구 (D91)
+
+| # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
+|---|---|---|---|---|
+| 402 | launcher.resume.how.unwatched | launcher/index.html:561 (론처 타이틀 '멈춘 원정 …' 줄의 사유 표기. 사람에게 보이는 문장이고 에이전트에게는 안 보인다) | 관전자가 없어 멈춤 | |
+| 403 | runner.event.stopped.unwatched | show_runner.py의 틱 머리 멈춤 event 줄 꼬리(events.log·관전 로그용. 에이전트 관측에는 안 들어간다) | · 관전자가 없어 서버가 멈췄다 | |
+| 404 | server.log.unwatched_stopped | server.py Sessions.stop_unwatched의 stderr 운영 로그 | [server] 관전 요청이 %d초 없던 판을 멈췄다(곱게/끊음) — 이어가기 가능 | |
+| 405 | server.log.seat_limits | server.py main() 기동 로그 | [server] 자리 관리(D91): 판단 정지 %d초 · 관전 요청 없는 판 %d초 뒤 멈춤(0 = 끔) — 둘 다 이어가기 가능 | |
+### 마을 생활 — 오브젝트·건물·새 주민 (D90)
+
+| # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
+|---|---|---|---|---|
+| 406 | building.blacksmith.life.building.role | entities/building/blacksmith.json | 진열된 것 구경(아직 사고팔 수는 없다) | |
+| 407 | building.blacksmith.life.story.trait | entities/building/blacksmith.json | 화덕과 모루 작업장을 둔 건물. 문턱에서 걸어 둔 것을 구경할 수 있다 | |
+| 408 | building.blacksmith.life.story.history | entities/building/blacksmith.json | 문턱과 마당이 길에 닿아 있다. 벽에 걸린 것은 주문받아 만든 것들이라 임자가 따로 있다. | |
+| 409 | building.blacksmith.life.use.wares.0 | entities/building/blacksmith.json | 벼린 낫 | |
+| 410 | building.blacksmith.life.use.wares.1 | entities/building/blacksmith.json | 말편자 | |
+| 411 | building.blacksmith.life.use.wares.2 | entities/building/blacksmith.json | 문고리 | |
+| 412 | building.blacksmith.life.use.wares.3 | entities/building/blacksmith.json | 날을 세우는 중인 도끼 | |
+| 413 | building.craft_workshop.life.building.role | entities/building/craft_workshop.json | 진열된 것 구경(아직 사고팔 수는 없다) | |
+| 414 | building.craft_workshop.life.story.trait | entities/building/craft_workshop.json | 목재와 도구를 놓는 작업 건물. 문턱에서 만든 것을 구경할 수 있다 | |
+| 415 | building.craft_workshop.life.story.history | entities/building/craft_workshop.json | 문턱과 마당이 길에 닿아 있다. 마을의 걸상과 좌판은 대개 여기서 나왔다. | |
+| 416 | building.craft_workshop.life.use.wares.0 | entities/building/craft_workshop.json | 다듬다 만 의자 다리 | |
+| 417 | building.craft_workshop.life.use.wares.1 | entities/building/craft_workshop.json | 나무 그릇 | |
+| 418 | building.craft_workshop.life.use.wares.2 | entities/building/craft_workshop.json | 수레바퀴 살 | |
+| 419 | building.craft_workshop.life.use.wares.3 | entities/building/craft_workshop.json | 새 두레박 | |
+| 420 | building.equipment_store.life.building.role | entities/building/equipment_store.json | 진열된 것 구경(아직 사고팔 수는 없다) | |
+| 421 | building.equipment_store.life.story.trait | entities/building/equipment_store.json | 무기와 방어구를 진열한 가게. 구경만 된다(사고팔기는 아직 없다) | |
+| 422 | building.equipment_store.life.story.history | entities/building/equipment_store.json | 문턱과 마당이 길에 닿아 있다. 진열대의 물건엔 아직 값이 붙어 있지 않다. | |
+| 423 | building.equipment_store.life.use.wares.0 | entities/building/equipment_store.json | 날 없는 연습용 검 | |
+| 424 | building.equipment_store.life.use.wares.1 | entities/building/equipment_store.json | 가죽 장갑 | |
+| 425 | building.equipment_store.life.use.wares.2 | entities/building/equipment_store.json | 징 박은 장화 | |
+| 426 | building.equipment_store.life.use.wares.3 | entities/building/equipment_store.json | 둥근 나무 방패 | |
+| 427 | building.garden_inn.life.building.role | entities/building/garden_inn.json | 묵어 가는 곳 | |
+| 428 | building.garden_inn.life.story.trait | entities/building/garden_inn.json | 넓은 객실과 작은 정원이 있는 숙소. 문턱에서 묵을 수 있다 | |
+| 429 | building.garden_inn.life.story.history | entities/building/garden_inn.json | 문턱과 마당이 길에 닿아 있다. 창마다 정원이 내다보인다. | |
+| 430 | building.general_store.life.building.role | entities/building/general_store.json | 진열된 것 구경(아직 사고팔 수는 없다) | |
+| 431 | building.general_store.life.story.trait | entities/building/general_store.json | 생활용품과 식료품을 진열한 가게. 구경만 된다(사고팔기는 아직 없다) | |
+| 432 | building.general_store.life.story.history | entities/building/general_store.json | 문턱과 마당이 길에 닿아 있다. 번화가 서쪽 좌판 자리에 지붕을 올려 가게가 됐다. | |
+| 433 | building.general_store.life.use.wares.0 | entities/building/general_store.json | 등잔 기름 | |
+| 434 | building.general_store.life.use.wares.1 | entities/building/general_store.json | 양초 | |
+| 435 | building.general_store.life.use.wares.2 | entities/building/general_store.json | 소금 자루 | |
+| 436 | building.general_store.life.use.wares.3 | entities/building/general_store.json | 말린 과일 | |
+| 437 | building.ordinary_inn.life.building.role | entities/building/ordinary_inn.json | 묵어 가는 곳 | |
+| 438 | building.ordinary_inn.life.story.trait | entities/building/ordinary_inn.json | 독립 객실이 있는 여관. 문턱에서 묵을 수 있다 | |
+| 439 | building.ordinary_inn.life.story.history | entities/building/ordinary_inn.json | 문턱과 마당이 길에 닿아 있다. 방은 작지만 문이 따로 달려 있어, 원정에서 돌아온 사람이 혼자 몸을 누이러 온다. | |
+| 440 | building.shared_lodging.life.building.role | entities/building/shared_lodging.json | 묵어 가는 곳 | |
+| 441 | building.shared_lodging.life.story.trait | entities/building/shared_lodging.json | 여럿이 잠자리를 나누는 작은 숙소. 문턱에서 묵을 수 있다 | |
+| 442 | building.shared_lodging.life.story.history | entities/building/shared_lodging.json | 문턱과 마당이 길에 닿아 있다. 침상이 한 방에 줄지어 있고, 늦게 온 사람은 문가 자리를 쓴다. | |
+| 443 | building.small_home.life.story.history | entities/building/small_home.json | 문턱과 마당이 길에 닿아 있다. 주민이 사는 집이다 — 손님을 받는 곳이 아니다. | |
+| 444 | building.tavern.life.story.history | entities/building/tavern.json | 던전에서 올라온 사람이 처음 들르는 곳이라 소문이 여기로 모인다. 술값 대신 이야기를 받는다는 말이 있을 만큼 주인이 듣는 걸 좋아한다. 바깥 탁자는 누구나 앉아도 된다. | |
+| 445 | monster.goblin_heavy.knowledge.brief | entities/monster/goblin_heavy.json | 쇠붙이를 두른 느린 고블린 | |
+| 446 | monster.goblin_heavy.knowledge.deep | entities/monster/goblin_heavy.json | 쇠붙이를 온몸에 두른 고블린. 공격이 잘 들어가지 않고 오래 버틴다. 대신 걸음이 느려서, 쫓아올 때 한 칸 걷고 나면 다음 한 틱은 서 있다. 달아나지 않는다. | |
+| 447 | monster.poison_goblin.knowledge.brief | entities/monster/poison_goblin.json | 칼날에 독을 바른 고블린 | |
+| 448 | monster.poison_goblin.knowledge.deep | entities/monster/poison_goblin.json | 칼날에 독을 바른 고블린. 베인 상처는 얕지만 독이 돈다 — 독이 도는 동안은 명중과 회피가 무뎌지고, 쉬어야 빠진다. 겁이 많은 건 다른 고블린과 같아서 피를 많이 보면 달아난다. | |
+| 449 | monster.spiderling.knowledge.brief | entities/monster/spiderling.json | 셋씩 모여 사는 작은 거미 | |
+| 450 | monster.spiderling.knowledge.deep | entities/monster/spiderling.json | 셋씩 모여 사는 작은 거미. 하나하나는 고블린보다 약하다. 숨어 있지 않고 눈에 보이는 곳에 있다. 달아나지 않는다. | |
+| 451 | npc.flower_elder.npc.line | entities/npc/flower_elder.json | 이 꽃은 작년에 받아 둔 씨로 심은 거라네. 물은 아침에 줘야 해 — 낮에 주면 잎이 탄다네. | |
+| 452 | npc.flower_elder.npc.line_again | entities/npc/flower_elder.json | 또 왔구먼. 꽃은 하루 사이엔 안 자라네. 그래도 보고 가게. | |
+| 453 | npc.flower_elder.npc.role | entities/npc/flower_elder.json | 주거구역의 화단을 돌보는 노인 | |
+| 454 | npc.flower_elder.npc.persona | entities/npc/flower_elder.json | 느리고 다정하다. 평생 이 마을에서 살았고 던전에는 한 번도 내려가지 않았다. 꽃과 날씨와 이웃 이야기를 좋아하고, 젊은 사람에게는 밥은 먹었느냐고 묻는다. 던전 얘기가 나오면 자기는 모른다며 웃는다. | |
+| 455 | npc.flower_elder.story.trait | entities/npc/flower_elder.json | 주거구역의 화단을 돌보는 노인 | |
+| 456 | npc.flower_elder.story.history | entities/npc/flower_elder.json | 평생 이 마을에서 살았고 던전에는 한 번도 내려가지 않았다. 볕 좋은 날엔 의자를 골목에 내놓고 앉아 있다. | |
+| 457 | npc.fountain_child.npc.line | entities/npc/fountain_child.json | 나 오늘은 안 빠졌어! …아직은. 분수 물은 마셔도 돼, 다들 마셔. | |
+| 458 | npc.fountain_child.npc.line_again | entities/npc/fountain_child.json | 또 왔네! 나 여기서 계속 놀 거야. | |
+| 459 | npc.fountain_child.npc.role | entities/npc/fountain_child.json | 분수가에서 노는 아이 | |
+| 460 | npc.fountain_child.npc.persona | entities/npc/fountain_child.json | 겁이 없고 질문이 많다. 잡화점 집 막내로, 분수에 빠져서 혼난 적이 여러 번이다. 모험가를 보면 뭘 들고 있는지, 어디 다녀왔는지 묻는다. 던전에는 가 본 적이 없고 가면 안 된다는 말만 들었다. | |
+| 461 | npc.fountain_child.story.trait | entities/npc/fountain_child.json | 분수가에서 노는 아이. 잡화점 집 막내 | |
+| 462 | npc.fountain_child.story.history | entities/npc/fountain_child.json | 분수에 빠져서 혼난 게 한두 번이 아니다. 빨래가 마를 날이 없다고 집에서는 한숨을 쉰다. | |
+| 463 | npc.gear_merchant.life.npc.role | entities/npc/gear_merchant.json | 장비점의 상인 · 빈손인 사람에게 단검 하나 | |
+| 464 | npc.gear_merchant.life.npc.persona | entities/npc/gear_merchant.json | 물건 자랑을 좋아한다. 아직 값을 못 매겨 팔지는 못하고, 빈손으로 던전에 가는 사람만은 그냥 못 보낸다. | |
+| 465 | npc.gear_merchant.life.story.trait | entities/npc/gear_merchant.json | 장비점의 상인. 빈손인 사람에게 단검을 하나 준다 | |
+| 466 | npc.gear_merchant.life.story.history | entities/npc/gear_merchant.json | 가게로 가는 길목에 나와 지나가는 사람의 허리춤부터 본다. 진열대의 물건엔 아직 값을 못 붙였다. | |
+| 467 | npc.innkeeper.life.npc.line | entities/npc/innkeeper.json | 빈 방은 많아. 문턱에서 묵어 가면 돼 — 자고 나면 다친 데도, 몸에 붙은 탈도 다 낫는다. | |
+| 468 | npc.innkeeper.life.npc.line_again | entities/npc/innkeeper.json | 아까도 말했지, 방은 비어 있어. 묵을 거면 문턱으로 와. | |
+| 469 | npc.innkeeper.life.npc.role | entities/npc/innkeeper.json | 일반 여관의 주인 · 묵어 가는 곳 | |
+| 470 | npc.innkeeper.life.npc.persona | entities/npc/innkeeper.json | 무뚝뚝하지만 손님의 안색은 놓치지 않는다. 누가 며칠째 안 돌아왔는지 속으로 센다. | |
+| 471 | npc.innkeeper.life.story.trait | entities/npc/innkeeper.json | 일반 여관의 주인. 여관 문턱 곁에 나와 있다 | |
+| 472 | npc.innkeeper.life.story.history | entities/npc/innkeeper.json | 원정 나간 손님의 방은 돌아올 때까지 비워 둔다. 끝내 안 돌아온 방이 몇 개인지는 말하지 않는다. | |
+| 473 | npc.item_merchant.life.npc.role | entities/npc/item_merchant.json | 잡화점의 상인 · 한 사람에 물약 하나 | |
+| 474 | npc.item_merchant.life.npc.persona | entities/npc/item_merchant.json | 셈이 빠르고 말이 짧다. 물약만은 값을 안 따지고 한 사람에 하나씩 쥐여 준다. | |
+| 475 | npc.item_merchant.life.story.trait | entities/npc/item_merchant.json | 잡화점의 상인. 한 사람에 물약을 하나 준다 | |
+| 476 | npc.item_merchant.life.story.history | entities/npc/item_merchant.json | 잡화점 문 앞에 나와 있는 날이 많다. 물약을 왜 그냥 주느냐고 물으면, 돌아와야 단골이 된다고 답한다. | |
+| 477 | npc.retired_adventurer.npc.line | entities/npc/retired_adventurer.json | 나도 예전엔 내려갔지. 지금은 무릎이 말을 안 들어서 이 탁자가 내 자리야. 앉았다 가. | |
+| 478 | npc.retired_adventurer.npc.line_again | entities/npc/retired_adventurer.json | 또 왔군. 옛날 얘기는 밑천이 금방 떨어져 — 그래도 앉아. | |
+| 479 | npc.retired_adventurer.npc.role | entities/npc/retired_adventurer.json | 주점 바깥 탁자의 단골 · 옛이야기 | |
+| 480 | npc.retired_adventurer.npc.persona | entities/npc/retired_adventurer.json | 느긋하고 말끝이 길다. 젊어서 던전에 다녔지만 무릎을 다친 뒤로 그만뒀다. 자기 옛이야기(같이 다니던 동료, 처음 마을에 온 날, 무릎을 다친 날)는 기꺼이 하지만, 지금 던전 안이 어떤지는 모른다고 분명히 말한다 — 내려간 지 너무 오래됐다. 남에게 이래라저래라 하지 않는다. | |
+| 481 | npc.retired_adventurer.story.trait | entities/npc/retired_adventurer.json | 주점 바깥 탁자의 단골. 예전에 던전에 다녔다 | |
+| 482 | npc.retired_adventurer.story.history | entities/npc/retired_adventurer.json | 무릎을 다친 뒤로 내려가지 않는다. 지금 던전이 어떤지는 모른다고 말한다 — 아는 건 제 옛이야기뿐이다. 낮에는 거의 늘 이 탁자에 있다. | |
+| 483 | npc.shop_porter.npc.line | entities/npc/shop_porter.json | 비켜요, 비켜 — 아, 미안. 공방에 나무 나르는 중이라. | |
+| 484 | npc.shop_porter.npc.line_again | entities/npc/shop_porter.json | 또 마주쳤네. 오늘만 몇 번째 왕복인지 모르겠어. | |
+| 485 | npc.shop_porter.npc.role | entities/npc/shop_porter.json | 상점가에서 짐을 나르는 일꾼 | |
+| 486 | npc.shop_porter.npc.persona | entities/npc/shop_porter.json | 숨이 차 있고 말이 빠르다. 대장간과 공방 사이로 짐을 나른다. 힘든 티를 내면서도 일 얘기를 좋아한다. | |
+| 487 | npc.shop_porter.story.trait | entities/npc/shop_porter.json | 상점가에서 짐을 나르는 일꾼 | |
+| 488 | npc.shop_porter.story.history | entities/npc/shop_porter.json | 대장간의 쇠와 공방의 나무가 그의 등을 거쳐 간다. 저녁은 늘 일한 집에서 얻어먹는다. | |
+| 489 | npc.smith.npc.line | entities/npc/smith.json | 쇠는 달궈졌을 때 쳐야 해. 불 쬐고 싶으면 화덕 곁에 서 — 그건 막지 않아. | |
+| 490 | npc.smith.npc.line_again | entities/npc/smith.json | 아까도 왔지. 주문은 아직 못 받아 — 밀린 일이 많아. | |
+| 491 | npc.smith.npc.role | entities/npc/smith.json | 대장간의 주인 · 화덕을 지킨다 | |
+| 492 | npc.smith.npc.persona | entities/npc/smith.json | 말이 짧고 손이 크다. 망치질 박자를 놓치는 걸 싫어해서 일하는 중엔 대답이 늦다. 마을의 문고리와 편자는 거의 다 그가 만들었다. 주문은 아직 받지 못한다고 답한다. | |
+| 493 | npc.smith.story.trait | entities/npc/smith.json | 대장간의 주인. 화덕 곁에서 일한다(주문은 아직 받지 않는다) | |
+| 494 | npc.smith.story.history | entities/npc/smith.json | 마을이 울타리 하나였을 때 그 울타리의 못을 친 사람의 손자라고 한다. 화덕 불은 밤에도 꺼뜨리지 않는다. | |
+| 495 | npc.tavern_keeper.life.npc.line | entities/npc/tavern_keeper.json | 안은 아직 준비 중이야. 바깥 탁자는 비어 있으니 앉았다 가도 돼. | |
+| 496 | npc.tavern_keeper.life.npc.line_again | entities/npc/tavern_keeper.json | 아까 왔잖아. 안은 아직이라니까 — 바깥 탁자는 그대로 있어. | |
+| 497 | npc.town_resident.npc.line | entities/npc/town_resident.json | 장 보러 가는 길이에요. 오늘은 순무가 좋다던데. | |
+| 498 | npc.town_resident.npc.line_again | entities/npc/town_resident.json | 아까 뵀죠? 저는 아직도 장바구니가 비었네요. | |
+| 499 | npc.town_resident.npc.role | entities/npc/town_resident.json | 주거구역에 사는 주민 | |
+| 500 | npc.town_resident.npc.persona | entities/npc/town_resident.json | 수더분하고 바쁘다. 빨래와 장보기와 이웃 소식이 하루의 전부다. 모험가에게는 공손하지만 던전 얘기는 무서워서 듣기 싫어한다. | |
+| 501 | npc.town_resident.story.trait | entities/npc/town_resident.json | 주거구역에 사는 주민. 골목을 오간다 | |
+| 502 | npc.town_resident.story.history | entities/npc/town_resident.json | 이 마을에서 태어났다. 던전 입구 쪽으로는 볼일이 없어 거의 가지 않는다. | |
+| 503 | object.barrel.story.trait | entities/object/barrel.json | 뚜껑이 덜 닫힌 나무통 | |
+| 504 | object.bench.story.trait | entities/object/bench.json | 앉아 쉬어 가는 긴 의자 | |
+| 505 | object.camp_tent.story.trait | entities/object/camp_tent.json | 던전 입구 지구 동쪽에 쳐 둔 천막. 안에 앉아 쉴 자리가 있다 | |
+| 506 | object.camp_tent.story.history | entities/object/camp_tent.json | 원정을 기다리는 사람들이 번갈아 쓴다. 누구 것인지는 아무도 모른다. | |
+| 507 | object.flowerbed.use.texts.0 | entities/object/flowerbed.json | 키 낮은 꽃이 줄을 맞춰 심겨 있다. 흙이 젖어 있다 — 누가 아침에 물을 준 모양이다. | |
+| 508 | object.flowerbed.use.texts.1 | entities/object/flowerbed.json | 가장자리 돌 하나에 서툰 글씨로 이름 몇 개가 새겨져 있다. 오래된 것은 닳아 읽을 수 없다. | |
+| 509 | object.flowerbed.use.texts.2 | entities/object/flowerbed.json | 꽃 사이로 벌 몇 마리가 오간다. 한쪽 구석엔 뽑다 만 잡초 더미가 있다. | |
+| 510 | object.flowerbed.story.trait | entities/object/flowerbed.json | 주거구역 한가운데의 화단. 가꾸는 사람이 있다 | |
+| 511 | object.flowerbed.story.history | entities/object/flowerbed.json | 우물 곁, 숙소들 사이의 작은 꽃밭이다. 철마다 심는 것이 바뀐다. | |
+| 512 | object.forge_hearth.story.trait | entities/object/forge_hearth.json | 불이 살아 있는 화덕과 모루. 곁에서 불을 쬘 수 있다 | |
+| 513 | object.forge_hearth.story.history | entities/object/forge_hearth.json | 대장간과 공방 사이 작업 마당에 있다. 불은 밤에도 꺼뜨리지 않는다. | |
+| 514 | object.guild_noticeboard.use.texts.0 | entities/object/guild_noticeboard.json | 길드 알림 — 의뢰는 길드 문 앞 게시판에 붙인다. 이 알림판은 마을 사람들의 쪽지 자리다. | |
+| 515 | object.guild_noticeboard.use.texts.1 | entities/object/guild_noticeboard.json | 분실물 — 장갑 한 짝, 왼쪽. 접수대에 맡겨 둠. (아래에 다른 글씨로) 찾아감. | |
+| 516 | object.guild_noticeboard.use.texts.2 | entities/object/guild_noticeboard.json | 일손 구함 — 대장간 풀무꾼. (위에 덧쓴 글씨) 구했음. | |
+| 517 | object.guild_noticeboard.use.texts.3 | entities/object/guild_noticeboard.json | 누군가의 쪽지 — 먼저 올라간다. 주점 바깥 탁자에서 기다릴게. | |
+| 518 | object.guild_noticeboard.use.texts.4 | entities/object/guild_noticeboard.json | 길드 알림 — 앞마당의 벤치와 입구 지구의 훈련대는 누구나 써도 된다. | |
+| 519 | object.guild_noticeboard.story.trait | entities/object/guild_noticeboard.json | 마을 사람들의 쪽지가 붙는 알림판. 의뢰 게시판과는 다른 것이다 | |
+| 520 | object.guild_noticeboard.story.history | entities/object/guild_noticeboard.json | 길드 서쪽 마당 벽에 걸려 있다. 길드가 맡지 않는 자잘한 소식이 여기 붙는다 — 찾는 물건, 구하는 일손, 누군가에게 남기는 말. | |
+| 521 | object.produce_stall.use.wares.0 | entities/object/produce_stall.json | 순무 | |
+| 522 | object.produce_stall.use.wares.1 | entities/object/produce_stall.json | 말린 콩 | |
+| 523 | object.produce_stall.use.wares.2 | entities/object/produce_stall.json | 절인 양배추 | |
+| 524 | object.produce_stall.use.wares.3 | entities/object/produce_stall.json | 햇사과 | |
+| 525 | object.produce_stall.story.trait | entities/object/produce_stall.json | 채소와 과일을 늘어놓은 좌판. 구경만 된다(사고팔기는 아직 없다) | |
+| 526 | object.produce_stall.story.history | entities/object/produce_stall.json | 번화가 동쪽, 분수가 보이는 자리. 아침에 제일 먼저 펴고 비가 오면 제일 먼저 걷는다. | |
+| 527 | object.stone_tablet.use.text | entities/object/stone_tablet.json | 절반은 닳아 읽을 수 없다. 남은 줄은 이렇다 — 돌아온 자만이 이야기를 남긴다. | |
+| 528 | object.stone_tablet.story.trait | entities/object/stone_tablet.json | 받침돌에 글이 새겨진 석상 | |
+| 529 | object.sundries_stall.use.wares.0 | entities/object/sundries_stall.json | 금 간 등잔 | |
+| 530 | object.sundries_stall.use.wares.1 | entities/object/sundries_stall.json | 짝 잃은 장갑 | |
+| 531 | object.sundries_stall.use.wares.2 | entities/object/sundries_stall.json | 이 빠진 빗 | |
+| 532 | object.sundries_stall.use.wares.3 | entities/object/sundries_stall.json | 색 바랜 깃발 조각 | |
+| 533 | object.sundries_stall.story.trait | entities/object/sundries_stall.json | 온갖 헌 물건을 늘어놓은 좌판. 구경만 된다(사고팔기는 아직 없다) | |
+| 534 | object.sundries_stall.story.history | entities/object/sundries_stall.json | 던전에서 나왔다는 물건이라지만 대부분은 마을에서 나온 헌것이다. | |
+| 535 | object.tavern_table.story.trait | entities/object/tavern_table.json | 주점 밖에 내놓은 탁자와 걸상. 앉아 쉴 수 있다 | |
+| 536 | object.tavern_table.story.history | entities/object/tavern_table.json | 볕이 좋은 날엔 주점 주인이 걸상을 하나 더 내놓는다. 해 질 녘엔 이 자리가 먼저 찬다. | |
+| 537 | object.town_fountain.story.trait | entities/object/town_fountain.json | 번화가 한가운데의 분수. 물을 마실 수 있다 | |
+| 538 | object.town_fountain.story.history | entities/object/town_fountain.json | 돌 테두리가 닳아 반들거린다. 장이 서는 날엔 좌판이 분수를 빙 둘러 서고, 아이들은 물가에서 논다. | |
+| 539 | object.town_statue.use.text | entities/object/town_statue.json | 받침돌에 새겨진 글 — 처음엔 울타리 하나였다. 내려갔다 올라온 이들이 잠자리와 술을 찾으면서 길이 나고 지붕이 올라갔다. 이 마을의 이름을 누가 붙였는지는 여기에도 적혀 있지 않다. | |
+| 540 | object.town_statue.story.trait | entities/object/town_statue.json | 신전 지구 서쪽 뜰의 석상. 받침돌에 글이 새겨져 있다 | |
+| 541 | object.town_statue.story.history | entities/object/town_statue.json | 누구의 상인지는 닳아서 알아볼 수 없다. 아이들이 올라타다 혼나는 자리다. | |
+| 542 | object.training_crate.story.trait | entities/object/training_crate.json | 훈련 도구를 넣어 두는 나무 궤짝 | |
+| 543 | object.training_crate.story.history | entities/object/training_crate.json | 뚜껑에 자물쇠가 없다. 누가 뭘 넣고 빼는지 아무도 세지 않는다. | |
+| 544 | object.training_rack.story.trait | entities/object/training_rack.json | 목검과 창이 걸린 훈련대. 몸을 풀 수 있다 | |
+| 545 | object.training_rack.story.history | entities/object/training_rack.json | 던전 입구로 가는 길목에 있다. 길드가 세워 둔 것이라 누구나 쓴다. | |
+| 546 | object.well.story.trait | entities/object/well.json | 두레박이 걸린 마을 우물 | |
