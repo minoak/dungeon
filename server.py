@@ -9,7 +9,10 @@ launcher.py 는 로컬 도구다: 리포 루트 전체를 정적으로 내주고
      디렉터리 목록은 자기 세션의 /runs/ 만. 점으로 시작하는 파일과 .py 는 어디서도 안 내준다.
   3. BYOK — 판 시작 요청의 provider 에 맞는 회사 키 환경변수 하나에만 key 가 들어간다(보관 없는 세션형, D10 서랍, D80).
      디스크·로그·응답에 남기지 않는다. 서버 자체의 키·대체 두뇌는 러너에 물려주지 않는다.
-  4. 상한 — 서버 전체 동시 max_runs(기본 3)판 · 세션당 1판(Runner 그대로) · IP 당 시간당 시작 starts_per_hour(기본 12).
+  4. 상한 — 서버 전체 동시 max_runs(기본 3)판 · 세션당 1판(Runner 그대로) · IP 당 시간당 시작 starts_per_hour(기본 12) ·
+     한 판이 쓰는 LLM 호출 API_CALL_LIMIT(기본 500 — 러너에 DUNGEON_API_CALL_LIMIT 로 넘긴다). 값은 /api/presets 로 화면에도 내려가고,
+     D96(2026-09-20 파트너 "500콜 한도로 맞추고 안내를 하자 … 서버의 처음 화면에서 api 키로 이어서 플레이 할 수 있게"): 한도에 닿은 판은
+     재시도를 권하지 않고 곧바로 곱게 멈춘다(사유 'budget') — 이어가기(D79)로 계속되고, 이어간 판은 새 러너라 한도를 다시 0부터 센다.
      자리 관리(D91, 2026-09-20 파트너 확정 — 둘 다 10분, "실사용을 보며 수정이 필요할 수도 있다"): 판단 정지가 PAUSE_LIMIT_SEC 이어지면
      러너가 스스로 닫고, 관전 요청(/api/status·/state/…)이 UNWATCHED_LIMIT_SEC 동안 없는 판은 서버가 곱게 멈춘다(수첩 없음 · 사유
      'unwatched'). 둘 다 이어가기(D79) 가능한 길 — 돌아온 방문자의 론처 화면에 '멈춘 원정 … 이어가기'가 뜬다. 로컬 론처(launcher.py)에는 없다.
@@ -25,6 +28,7 @@ launcher.py 는 로컬 도구다: 리포 루트 전체를 정적으로 내주고
        BOTPIKDUN_LOGIN_PER_HOUR(기본 30) · BOTPIKDUN_SECRET(지문 비밀 — 없으면 <data>/secret 을 첫 기동 때 만든다, 백업 대상) ·
        BOTPIKDUN_PAUSE_LIMIT_SEC(판단 정지를 기다려 주는 초, 기본 600 · 0 = 끝없이) ·
        BOTPIKDUN_UNWATCHED_LIMIT_SEC(관전 요청이 없는 판을 멈추기까지의 초, 기본 600 · 0 = 끔) ·
+       BOTPIKDUN_API_CALL_LIMIT(한 판이 쓰는 LLM 호출 수, 기본 500 · 0 = 끝없이 — 없으면 DUNGEON_API_CALL_LIMIT 를 따른다) ·
        BOTPIKDUN_BRAIN(기본 gemini_api — 게이트 verify_public·verify_account 만 dummy)
 """
 import argparse
@@ -55,6 +59,8 @@ KEY_MIN, KEY_MAX = 20, 4096
 KEY_LIMITS = {"gemini_api": (20, 512), "anthropic_api": (20, 4096), "openai_api": (1, 4096)}
 LOGIN_PER_HOUR = 30                                          # D77 로그인(=구글 생존 확인) IP 시간당 상한
 PAUSE_LIMIT_SEC = 600                                        # F1(09-18) 판단 정지를 기다려 주는 초 — 넘으면 러너가 스스로 닫는다(이어가기 가능). 값 확정(D91, 09-20 파트너: 10분)
+API_CALL_LIMIT = 500                                         # D96(09-20 파트너 "그럼 어쩔 수 없지 500콜 한도로 맞추고 안내를 하자") 한 판(러너 프로세스)이 쓰는 LLM 호출 수 · 0 = 끝없이.
+                                                             #   실측 ~0.5콜/틱이라 600틱 판은 여유가 있고, 긴 판은 여기 닿아 곱게 멈춘다(사유 'budget' → 이어가기는 새 러너 = 다시 0부터).
 UNWATCHED_LIMIT_SEC = 600                                    # D91(09-20 파트너: 10분) 관전 요청(/api/status·/state/…)이 이만큼 없는 판은 곱게 멈춘다(이어가기 가능) · 0 = 끔.
                                                              #   근거(실측): 숨긴 탭도 폴링은 이어지고 탭을 닫으면 바로 끊긴다 — '요청 없음 = 아무도 안 봄'. "실사용을 보며 수정이 필요할 수도 있다"(파트너) — 값은 여기 한 곳
 MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1"
@@ -107,12 +113,13 @@ class Sessions:
 
     def __init__(self, root, data_dir, brain="gemini_api", max_runs=3, starts_per_hour=12, ttl=SESSION_TTL,
                  login_per_hour=LOGIN_PER_HOUR, key_check=None, pause_limit=PAUSE_LIMIT_SEC,
-                 unwatched_limit=UNWATCHED_LIMIT_SEC):
+                 unwatched_limit=UNWATCHED_LIMIT_SEC, api_call_limit=API_CALL_LIMIT):
         self.root, self.brain = root, brain
         self.max_runs, self.starts_per_hour, self.ttl = int(max_runs), int(starts_per_hour), ttl
         self.login_per_hour, self.key_check = int(login_per_hour), key_check
         self.pause_limit = max(0, int(pause_limit))   # F1 러너에 DUNGEON_PAUSE_LIMIT_SEC 로 넘긴다(0 = 끝없이)
         self.unwatched_limit = max(0, int(unwatched_limit))   # D91 관전 요청이 이만큼 없는 판은 곱게 멈춘다(0 = 끔)
+        self.api_call_limit = max(0, int(api_call_limit))     # D96 러너에 DUNGEON_API_CALL_LIMIT 로 넘긴다(0 = 끝없이) — 화면이 말하는 수와 러너가 세는 수가 같아야 해서 서버가 명시한다
         self.watcher = None                     # D91 자동 멈춤을 살피는 데몬 스레드(start_watcher — 끔이면 None 그대로)
         self.closed = threading.Event()         # 서버가 닫힌다(stop_all) — 살피기 스레드를 내린다
         self.dir = os.path.join(data_dir, "sessions")
@@ -523,7 +530,8 @@ class PublicHandler(Handler):
             obj.update(byok=True, public=True, max_runs=self.sessions.max_runs, running=self.sessions.running_count(),
                        account=self._me()["account"],                      # D77 화면이 계정 상태를 같이 읽는다
                        pause_limit=self.sessions.pause_limit,              # D91 additive — 화면이 '얼마 뒤 멈추는지'를 말할 수 있게(초 · 0 = 없음)
-                       unwatched_limit=self.sessions.unwatched_limit)
+                       unwatched_limit=self.sessions.unwatched_limit,
+                       api_call_limit=self.sessions.api_call_limit)        # D96 additive — 시작 화면이 '한 판에 몇 콜까지'를 말할 수 있게(0 = 없음). 화면은 이 값을 그대로 쓴다
             return self._json(200, obj)
         if p == "/api/me":                                            # D77 계정 상태 — 론처 화면의 계정 카드
             return self._json(200, self._me())
@@ -594,6 +602,7 @@ class PublicHandler(Handler):
                 # 러너 __main__의 .env 로더도 목적지를 바꾸지 못하게 서버 설정을 명시한다.
                 extra["OPENAI_BASE_URL"] = openai_base_url()
                 extra["DUNGEON_PAUSE_LIMIT_SEC"] = self.sessions.pause_limit   # F1 재시도를 아무도 안 누르는 판이 자리를 쥐고 있지 못하게
+                extra["DUNGEON_API_CALL_LIMIT"] = self.sessions.api_call_limit   # D96 한 판이 쓰는 LLM 호출 수 — /api/presets 로 화면이 예고한 그 값이 러너로 간다(이어가는 판도 새 프로세스라 여기서 다시 0부터)
                 if getattr(self.ctx, "aid", None):        # D78(09-16) 계정 판: 도감 원장은 계정 폴더에, 저장한 캐릭터(id)만 남는다
                     body["bestiary"] = True
                     extra["DUNGEON_BESTIARY_FILE"] = os.path.join(self.ctx.dir, "bestiary.json")
@@ -614,7 +623,8 @@ class PublicHandler(Handler):
 
 
 def make_public_server(host, port, root=HERE, data_dir=None, brain=None, max_runs=None, starts_per_hour=None,
-                       login_per_hour=None, key_check=None, pause_limit=None, unwatched_limit=None):
+                       login_per_hour=None, key_check=None, pause_limit=None, unwatched_limit=None,
+                       api_call_limit=None):
     sessions = Sessions(root,
                         data_dir or os.environ.get("BOTPIKDUN_DATA") or os.path.join(root, "state", "public"),
                         brain or os.environ.get("BOTPIKDUN_BRAIN") or "gemini_api",
@@ -624,7 +634,10 @@ def make_public_server(host, port, root=HERE, data_dir=None, brain=None, max_run
                         key_check=key_check,
                         pause_limit=pause_limit if pause_limit is not None else _env_int("BOTPIKDUN_PAUSE_LIMIT_SEC", PAUSE_LIMIT_SEC),
                         unwatched_limit=(unwatched_limit if unwatched_limit is not None
-                                         else _env_int("BOTPIKDUN_UNWATCHED_LIMIT_SEC", UNWATCHED_LIMIT_SEC)))
+                                         else _env_int("BOTPIKDUN_UNWATCHED_LIMIT_SEC", UNWATCHED_LIMIT_SEC)),
+                        # D96: 서비스 환경값에 이미 DUNGEON_API_CALL_LIMIT 가 있으면 그 값을 따른다 — 운영에 걸린 수와 화면이 말하는 수를 하나로
+                        api_call_limit=(api_call_limit if api_call_limit is not None
+                                        else _env_int("BOTPIKDUN_API_CALL_LIMIT", _env_int("DUNGEON_API_CALL_LIMIT", API_CALL_LIMIT))))
     srv = LauncherServer((host, port), partial(PublicHandler, sessions=sessions))
     srv.daemon_threads = True
     srv.sessions = sessions
@@ -647,6 +660,8 @@ def main():
           % (a.host, a.port, s.dir, s.accounts.dir, s.max_runs, s.starts_per_hour, s.login_per_hour, s.brain))
     print("[server] 자리 관리(D91): 판단 정지 %d초 · 관전 요청 없는 판 %d초 뒤 멈춤(0 = 끔) / 둘 다 이어가기 가능"   # stdout 은 cp949 콘솔일 수 있다 - em dash 금지(기동 직후 UnicodeEncodeError)
           % (s.pause_limit, s.unwatched_limit))
+    print("[server] 호출 한도(D96): 한 판에 LLM 호출 %d회(0 = 끝없이) / 닿으면 곱게 멈추고 이어가기로 계속"
+          % s.api_call_limit)
 
     def sweeper():
         while True:

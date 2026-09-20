@@ -1474,6 +1474,16 @@ def main():
         resume_fail["kept"] = os.path.basename(kept) if kept else None
     sw = run_summary.Tap(stream.StreamWriter(os.path.join(STATE, "stream.jsonl"), append=snap is not None), rs)   # 실행당 truncate(이어가기는 스냅샷 자리 뒤에 append) · 모든 emit 이 결산에도
     brain_pause = run_control.BrainPause(STATE, sw, names, event, limit=PAUSE_LIMIT_SEC)
+
+    def _on_brain_error(turn, errors):     # 판단 실패의 갈래 — think_all 이 재시도 전에 부른다
+        """D96(09-20) 이 틱의 실패가 전부 호출 한도 때문이면 판단 정지를 열지 않는다.
+        재시도 버튼은 같은 한도에 다시 막혀 아무 일도 못 하고, 그동안 화면은 없는 길을 가리킨다 —
+        그러니 곧바로 곱게 멈춘다(사람이 누른 멈춤·D91 과 같은 길: 루프 머리 스냅샷이 진실이라 이어가면 그대로 계속된다).
+        한도가 없는 판(로컬 기본 = 0)에서는 그 라벨이 아예 안 나오므로 옛 동작 그대로다."""
+        if brains.api_limit_only(errors):
+            raise run_control.BudgetExhausted()
+        brain_pause.wait(turn, errors)
+
     returned, returned_party = False, []   # D65 워프게이트 귀환으로 끝난 판의 표식(outcome 'returned')·귀환한 사람들
     last_oracle_id = None                  # D61 개정: 마지막으로 스트림에 남긴 신의 요청 id(새 요청·거둠을 한 번만 적는다)
     quests = G.new_quests() if (QUESTS_ON and NOTICES_ON) else None   # D69 의뢰 장부(파티 단위·판 전체) — 층마다 같은 객체를 건다
@@ -1716,7 +1726,7 @@ def main():
                                                 RESUME_NOTICE_PAGE if pg else "")
         sw.emit("resume", turn=int(snap["next_turn"]) - 1, started=time.strftime("%Y-%m-%dT%H:%M:%S"), segment=segment,
                 backend=brains.backend_name(), depth=d.depth,
-                stopped=(stop_info.get("reason") or None),          # 앞 조각이 어떻게 끝났나: user(수첩 쓰고 멈춤)·user_paused(판단 정지 중 멈춤)·pause_timeout(F1 판단 정지 제한 시간)·unwatched(D91 관전자 없는 판 — 공개 서버)·None(끊김·크래시)
+                stopped=(stop_info.get("reason") or None),          # 앞 조각이 어떻게 끝났나: user(수첩 쓰고 멈춤)·user_paused(판단 정지 중 멈춤)·pause_timeout(F1 판단 정지 제한 시간)·unwatched(D91 관전자 없는 판 — 공개 서버)·budget(D96 호출 한도)·None(끊김·크래시)
                 **({"pages": pages_prev} if pages_prev else {}),   # 멈출 때 쓴 수첩 장(캐릭터별) — 이어가는 몸이 들고 간다
                 party=[{"char": b["char"], "hp": b["hp"], "alive": b["alive"]} for b in bots])
     run_id = "%s@%s" % (DUNGEON_SEED, run_started)   # 캠페인(D78)의 판 식별자 — 이어가도 같은 판
@@ -1871,14 +1881,19 @@ def main():
                 event("🔮 신의 요청이 거두어졌다")
             last_oracle_id = oracle_now
         try:
-            decisions = brains.think_all(d, bots, inbox, on_error=lambda errors: brain_pause.wait(turn, errors))
+            decisions = brains.think_all(d, bots, inbox, on_error=lambda errors: _on_brain_error(turn, errors))
         except run_control.StopRequested as stop_exc:   # D79: 판단 정지 대기 중 사용자가 멈춤 — 루프 머리 스냅샷(이 틱 전)이 진실. 조용히 닫는다
             # F1(09-18): 제한 시간(PAUSE_LIMIT_SEC) 동안 아무도 재시도를 안 누른 판도 같은 길로 스스로 닫는다 — 사유만 다르다
             # D91(09-20): 판단 정지 중에 온 멈춤 요청이 사유를 들고 있으면(unwatched = 관전자 없는 판) 그 사유를 그대로 적는다
-            stopped_now = ("pause_timeout" if isinstance(stop_exc, run_control.PauseTimeout)
+            # D96(09-20): 호출 한도에 닿은 판은 판단 정지를 아예 안 열고 여기로 온다(budget) — 재시도가 아니라 이어가기가 길이다
+            stopped_now = ("budget" if isinstance(stop_exc, run_control.BudgetExhausted)
+                           else "pause_timeout" if isinstance(stop_exc, run_control.PauseTimeout)
                            else run_control.stop_reason(run_control.stop_requested(STATE), "user_paused"))
             snapshot.write_meta(STATE, _snap_meta(turn, {"reason": stopped_now, "pages": {}}))
-            if stopped_now == "pause_timeout":
+            if stopped_now == "budget":
+                event("=== 이 판에 걸린 LLM 호출 한도(%d회)를 다 써서 원정을 멈춘다(t%d 전) — 같은 키로 이어가면 멈춘 자리에서 계속된다 ==="
+                      % (brains.API_CALL_LIMIT, turn))
+            elif stopped_now == "pause_timeout":
                 event("=== 판단 정지가 제한 시간(%d초)을 넘겨 원정을 멈춘다(t%d 전) — 마지막 기록에서 이어갈 수 있다 ===" % (PAUSE_LIMIT_SEC, turn))
             else:
                 event("=== 판단 정지 중에 원정을 멈춘다(t%d 전) — 마지막 기록에서 이어갈 수 있다 ===" % turn)

@@ -116,6 +116,8 @@
   <div class="title">
     <div class="logo">봇픽던</div>
     <div class="tag">캐릭터를 꾸미고, 던전을 열고, 그들이 어떻게 헤쳐 나가는지 지켜본다</div>
+    <!-- D96 호출 한도 예고 — 공개 서버가 /api/presets 로 준 값이 있을 때만. 문장은 initProviders 가 쓴다 ⚠️ 문구 임시 -->
+    <div class="hint" id="tBudgetNote" hidden style="margin:8px auto 0;max-width:640px"></div>
     <div class="row center">
       <button class="primary" id="bNew">새 원정</button>
       <button id="bReplays">지난 판 보기</button>
@@ -306,7 +308,7 @@
 <script type="module">
 import { skillsHtml } from '/viewer/assets/skills.js';
 import { createBrainPause } from '/viewer/assets/brain-pause.js';
-const pausePanel = createBrainPause();
+const pausePanel = createBrainPause({ budgetNotice: false });   // D96: 시작 화면엔 제 이어가기 줄이 있다 — 같은 말을 두 번 하지 않는다
 /* ═══ 상태 ═══ */
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -494,6 +496,10 @@ async function initProviders() {
   }
   $('brain').value = config.default_brain in providerLabels && (!isPublic || http.includes(config.default_brain)) ? config.default_brain : 'gemini_api';
   changeBrain();
+  // D96 한 판에 쓸 수 있는 모델 호출 수 — 서버가 아는 값(0 이거나 없으면 한도 없는 판이라 아무 말도 안 한다)
+  const budget = Number(config.api_call_limit || 0);
+  $('tBudgetNote').hidden = !budget;
+  if (budget) $('tBudgetNote').textContent = `이 서버는 한 판에 쓸 수 있는 모델 호출을 ${budget}회로 정해 두었다. 거기 닿으면 원정이 그 자리에서 멈추고, 같은 키로 이어가면 멈춘 자리에서 계속된다.`;
   providerReady = true;
 }
 $('loginProvider').onchange = () => { $('loginKey').value = ''; };
@@ -569,7 +575,7 @@ async function refreshStatus() {
       const rs = st.resume;                                                 // D79 이어갈 몸이 있다(멈춘 판의 요약)
       $('tResumeRow').hidden = !rs;
       if (rs) {
-        const how = rs.stopped === 'user' ? `수첩 쓰고 멈춤${rs.pages?.length ? ' · 수첩 ' + rs.pages.length + '장' : ''}` : rs.stopped === 'user_paused' ? '판단 정지 중 멈춤' : rs.stopped === 'pause_timeout' ? '판단 정지가 오래 이어져 멈춤' : rs.stopped === 'unwatched' ? '관전자가 없어 멈춤' : '끊김(마지막 기록까지)';   // unwatched = D91 공개 서버의 자동 멈춤(⚠️문구 임시)
+        const how = rs.stopped === 'user' ? `수첩 쓰고 멈춤${rs.pages?.length ? ' · 수첩 ' + rs.pages.length + '장' : ''}` : rs.stopped === 'user_paused' ? '판단 정지 중 멈춤' : rs.stopped === 'pause_timeout' ? '판단 정지가 오래 이어져 멈춤' : rs.stopped === 'unwatched' ? '관전자가 없어 멈춤' : rs.stopped === 'budget' ? '모델 호출 한도에 닿아 멈춤 — 같은 키로 이어가면 계속된다' : '끊김(마지막 기록까지)';   // unwatched = D91 공개 서버의 자동 멈춤 · budget = D96 호출 한도(⚠️문구 임시)
         $('tResumeText').textContent = `멈춘 원정: seed ${rs.seed} · ${rs.depth === 0 ? '마을' : '지하 ' + rs.depth + '층'} t=${rs.turn_last}` +
           (rs.party?.length ? ` · ${rs.party.filter(p => p.alive).map(p => p.name).join('·')}` : '') + ` · ${how}` + (rs.segment ? ` · 이어가기 ${rs.segment}번째` : '');
         if (providerReady && resumeRun !== st.resume.run_id) {

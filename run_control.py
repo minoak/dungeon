@@ -21,6 +21,13 @@ class PauseTimeout(StopRequested):
     사용자가 멈춘 것과 같은 길(루프 머리 스냅샷이 진실 → 이어가기 가능)이라 StopRequested 의 한 갈래다."""
 
 
+class BudgetExhausted(StopRequested):
+    """D96(09-20) 이 판에 걸린 LLM 호출 한도에 닿았다 — 판단이 전부 '한도라서 전송 못 함'으로 실패했다.
+    재시도를 눌러도 한도는 그대로라 같은 실패가 되풀이되므로 판단 정지를 열지 않고 곧바로 곱게 멈춘다.
+    사람이 누른 멈춤·D91 과 같은 길(루프 머리 스냅샷이 진실 → 이어가기 가능)이라 StopRequested 의 한 갈래다.
+    이어간 판은 새 러너 프로세스라 한도를 처음부터 다시 센다(파트너 09-20 설계)."""
+
+
 def read_json(path):
     try:
         value = json.loads(Path(path).read_text(encoding="utf-8"))
