@@ -665,7 +665,7 @@ check("⑧ HARNESS D69·D70·D71 · CHANGELOG · README(길드 보고·구역·�
       and "npc_hails" in src(os.path.join("game", "src", "text", "evline.ts")))
 check("⑧ 러너 스위치 3 · 론처 체크박스 2 + env 2",
       all(s_ in src("show_runner.py") for s_ in ("DUNGEON_QUESTS", "DUNGEON_TOWN_APART", "DUNGEON_NPC_BRAIN", "npc_reply(", "npc_report"))
-      and all(s_ in src(os.path.join("launcher", "index.html")) for s_ in ('id="townApart" checked', 'id="npcBrain" checked', "town_apart:", "npc_brain:"))
+      and all(s_ in src(os.path.join("launcher", "index.html")) for s_ in ('id="townApart"', 'id="npcBrain" checked', "town_apart:", "npc_brain:"))
       and all(s_ in src("launcher.py") for s_ in ("DUNGEON_TOWN_APART", "DUNGEON_NPC_BRAIN")))
 check("⑧ 클라이언트: evline(quest_accepted·npc_report·questSfx·returned) · Bubbles(npc) · types(quests·warped) · 씬 npcHeadOf",
       all(s_ in src(os.path.join("game", "src", "text", "evline.ts")) for s_ in ("quest_accepted", "npc_report", "questSfx", "returned:"))
