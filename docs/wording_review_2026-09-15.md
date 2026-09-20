@@ -822,3 +822,32 @@ NPC 두뇌를 켠 판에서 NPC 가 답을 쓸 때만 쓰인다. `{name}` `{role
 | 547 | npc_facts.expedition_next | show_runner.py — npc_facts() 의 귀환 여부 줄(D94 분기, 코드에 '⚠️문구 임시' 주석). NPC 두뇌가 도는 판에서 접수원·주점 주인·성직자가 '아는 사실'로 받는다. 끈 판은 옛 문장 그대로. (수선에서 손대지 않음) | 앞선 원정 {n-1}번이 길드 보고로 끝났다 — 지금은 {n}번째 원정을 떠나기 전이다 | |
 | 548 | event.expedition_settled | show_runner.py — _settle_expedition() 의 events.log 한 줄(코드에 '⚠️문구 임시' 주석). 캐릭터에게는 안 보이고 민옥·관전 로그가 읽는다. 수선으로 {done} 의 뜻이 '장부 누계'에서 '이번 원정에 새로 완수한 의뢰'로 좁혀졌다(문장 형태는 그대로). | === {n}차 원정 결산 (t{t0}~t{turn}) — 가장 깊이 지하 {depth}층 · 일행이 지닌 보물 {treasure} · 완수 {done} / 미완 {undone} · 쓰러짐 {fallen} === | |
 | 549 | event.loop_timeout | show_runner.py — 판 끝 틱 상한 분기의 LOOP_ON 쪽 events.log 한 줄(코드에 '⚠️문구 임시' 주석). 수선에서 새로 생긴 문장. 캐릭터에게는 안 보이고 민옥·관전 로그가 읽는다. 끈 판은 옛 문장('… 지하 N층) — [..] 던전에 남음 …') 그대로. | === 시간 종료 (틱 한도 {MAX_TURNS} 도달) — 마을에 {home} / 던전에 {away} / 쓰러짐 {dead} === | |
+
+## 2026-09-20 추가분 (D88~D94 — AFK 전권 위임분)
+
+> 이 절은 09-20 새벽~오전에 새로 들어간 임시 문장이다. 위와 같은 규칙: '교정' 칸을 채우면 그대로 옮기고,
+> 비우면 지금 문장을 유지하며 `삭제` 라 쓰면 그 칸을 없앤다. 정의 JSON 의 문장은 코드 무접촉으로 바뀐다.
+
+### offer
+
+| # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
+|---|---|---|---|---|
+| 550 | story.temple.trait.offer | show_runner.OFFER_STORY['temple'] — 공물 판에서만 갈아 끼우는 신전 소개(관측의 about 줄 · D81 마을 안내의 장소 줄). 끈 판은 entities/building/temple.json 의 원문 그대로 | 문턱에서 모은 보물을 신에게 바친다 — 신이 힘·민첩·최대 HP 중 하나를 1 올린다. 성직자의 축복은 한 사람에게 한 번. 신의 요청이 들리는 곳 | |
+| 551 | story.temple_attendant.trait.offer | show_runner.OFFER_STORY['temple_attendant'] — 공물 판에서만 갈아 끼우는 성직자 소개(관측의 about 줄). 끈 판은 정의 원문('…원정마다 한 병') | 기도를 받고 축복의 물약을 준다(한 사람에게 한 번) | |
+| 552 | npc.temple_attendant.line.offer | show_runner.OFFER_LINES['temple_attendant'] — 공물 판에서만 갈아 끼우는 성직자의 첫 선물 대사(npc_gift 의 line · 그 판에서 반드시 한 번 나온다). 끈 판은 정의 원문('…던전에서 돌아오면 또 들르세요.') | 기도를 들었어요. 신의 축복이 담긴 물약이에요 — 마시면 몸이 한 단계 강해져요. 축복은 한 분께 한 번이에요. 그 다음은 신전에 바치는 것으로 정해져요. | |
+| 553 | npcbrain.verdict.gift.blessed | brains.npc_reply — NPC 두뇌 프롬프트의 '세계의 판정' 한 줄 꼬리(공물 판의 축복 선물에만). 끈 판은 옛 '이번 원정 몫' 그대로 | 이 사람에게 주는 축복은 이 한 번뿐이다 | |
+| 554 | last.offered | interactables.prose — 바친 캐릭터의 직전 결과 1인칭 문장(관전 요약 act_summary 도 같은 소스) | 신전에 보물 3개를 바쳤다 — 신이 힘을 1 올렸다(지금 힘 4 · 모은 보물 2개) | |
+| 555 | last.offer_short | interactables.prose — 보물이 모자랐을 때의 직전 결과 문장 | 신전에 바치려 했다 — 모은 보물이 2개다(한 번 바치는 데 보물 3개가 든다) | |
+| 556 | wire.use.offer | interactables.fact_text — 메뉴 라벨 꼬리 · 조합형 '## 대상의 현재 사실' 줄('- f4 신전: …') | 모은 보물 3개를 바치면 힘·민첩·최대 HP 중 하나가 1 오른다(무엇이 오를지는 신이 정한다) | |
+| 557 | menu.offer.label | interactables.KINDS['offer'].label — 메뉴형 줄 머리 '바치기: 신전 f4 (문턱) — …' | 바치기 | |
+| 558 | tags.offer | interactables.KINDS['offer'].tag — 조합형 대상 목록의 사실 태그 '[object, interactable, offering]' | offering | |
+| 559 | objtags.offer.tried | interactables.KINDS['offer'].tried — D39 오브젝트 태그의 동사 '바쳐 봄 ×N' | 바쳐 봄 | |
+| 560 | objtags.offer.note.offered | interactables.obj_note — 오브젝트 태그의 마지막 사실 한 마디(바친 뒤) | 힘 +1 | |
+| 561 | objtags.offer.note.offer_short | interactables.obj_note — 오브젝트 태그의 마지막 사실 한 마디(모자랐을 때) | 보물 모자람 | |
+| 562 | witness.ally_use.offered | interactables._OFFER_SEEN — 곁의 사람이 보는 목격 괄호('…가 신전을 사용하는 것을 (신전에 보물을 바쳤다)') | 신전에 보물을 바쳤다 | |
+| 563 | witness.ally_use.offer_short | interactables._OFFER_SEEN — 같은 자리, 못 바쳤을 때 | 바치려다 그만두었다 | |
+| 564 | trail.use.offered | interactables.event_tags — 궤적 꼬리표(키는 기존 use 재사용) 라벨 + 짧은 사실 | 바침 / 신전 — 보물 3개 → 힘 +1 (지금 4 · 남은 보물 2) | |
+| 565 | trail.misc.offer_short | interactables.event_tags — 궤적 꼬리표(키는 기존 misc 재사용) | 헛손질 / 신전 — 모은 보물 2개(바치는 데 3개) | |
+| 566 | stat.maxhp | interactables._STAT_KR·_STAT_OBJ — 신이 올린 칸의 사람 말(힘·민첩은 기존 dungeon_gm.STAT_KR) | 최대 HP / 최대 HP 를 | |
+| 567 | npc.temple_attendant.line_blessed | entities/npc/temple_attendant.json — 공물 판에서 이미 축복을 받은 사람이 성직자에게 말을 걸었을 때(npc_talk 의 line) | 축복은 이미 받으셨어요. 그 다음은 신전에 바치는 것으로 정해져요 — 무엇이 오를지는 신께서 보고 정하십니다. | |
+| 568 | npc.temple_attendant.hail_blessed | entities/npc/temple_attendant.json — 공물 판에서 이미 축복을 받은 사람에게 성직자가 먼저 거는 인사(D71) | {name} 님, 축복은 이미 드렸어요. 신전은 늘 열려 있어요. | |
