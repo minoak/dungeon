@@ -205,6 +205,14 @@
     </div>
     <!-- 호출 한도 예고 — 공개 서버가 /api/presets 로 준 값이 있을 때만. 문장은 initProviders 가 쓴다 ⚠️ 문구 임시 -->
     <div class="hint" id="tBudgetNote" hidden></div>
+    <!-- 키를 맡기라고 하기 전에 먼저 말한다. 여기 적은 것은 verify_public 이 매번 확인한다
+         (세션 폴더 전체와 서버 로그에 키 문자열이 0회인지). ⚠️ 문구 임시 -->
+    <div class="hint" id="tKeyNote" style="max-width:660px;margin:12px auto 0;padding:11px 15px;border:1px solid #2c303c;background:#1d2029;border-radius:8px;font-size:12.5px;line-height:1.7;color:#9aa0ad;text-align:left">
+      원정은 <b>직접 가져온 API 키</b>로 돕니다. 키는 서버에 저장하지 않습니다 —
+      판이 도는 동안 그 판의 프로세스 안에만 있고, 판 기록에도 서버 로그에도 남지 않습니다.
+      계정을 만들 때도 키가 아니라 <b>키의 지문</b>만 보관합니다. 비용은 키 주인에게 청구됩니다.
+      <a href="https://github.com/minoak/dungeon" target="_blank" rel="noopener">코드 보기 ↗</a>
+    </div>
 
     <!-- 액자 — 포스터가 먼저 뜨고, 잠시 뒤 담아 둔 판이 소리 없이 돈다(game 의 ?embed=1).
          판 파일이 없거나 늦으면 포스터가 그대로 남는다. 첫 화면이 무거워지지 않게 늦게 붙인다. -->
@@ -432,6 +440,10 @@
 </section>
 
 </main>
+<!-- 어느 화면에서 내려와도 코드로 갈 수 있게 ⚠️ 문구 임시 -->
+<footer class="hint" style="text-align:center;padding:18px 16px 28px;opacity:.75">
+  <a href="https://github.com/minoak/dungeon" target="_blank" rel="noopener">github.com/minoak/dungeon ↗</a>
+</footer>
 <script src="/viewer/assets/sprites/sprites.js"></script>   <!-- D37 파츠 스프라이트 합성기(뷰어와 공용) — 없어도 폼은 산다 -->
 <script type="module">
 import { skillsHtml } from '/viewer/assets/skills.js';
