@@ -10,7 +10,7 @@
   ③ 론처 서버 API(launcher.py) — presets / party 저장·거부 / start(dummy 두뇌)→run_meta·status / 409 / stop
   ④ 시드: _pick_seed('7')=7 · 'random' 은 1~999999 · 두 번 뽑아 다름 · 기본 경로 7 유지
   ⑤ 기본 party.json 바이트 무변경(커스텀은 party_custom.json 별 파일)
-  ⑥ 시작 옵션 → 러너 환경변수(09-20, 러너를 안 띄우고 Popen 을 가로채 env 만 본다): 맵 concept = DUNGEON_ARCH·42x34 · 다른 맵은
+  ⑥ 시작 옵션 → 러너 환경변수(09-20, 러너를 안 띄우고 Popen 을 가로채 env 만 본다): 맵 concept = DUNGEON_ARCH·54x42 · 기본 원정 = 3층·1000틱 · 다른 맵은
      부모 env 의 DUNGEON_ARCH 를 지운다 · normal 은 부모 env 그대로(지우는 척하던 BIG_KEYS 줄 철거) · 스위치 넷(마을 생활·NPC 되받기·
      던전의 물건들·새 몬스터)은 옵션 없으면 끔 · run_opts.json(이어가기 재료) · NIGHT_DEFAULTS → /api/presets → 화면의 첫 자리 · 옛 론처 구별
   ⑦ 기본 파티(party.json)의 외형(09-20): 외형 사전의 새 바디 + 공용 헤어 · 직업·성별 일치 · 겉모습 한 줄 · 론처 미리보기
@@ -417,9 +417,14 @@ else:
         return dict(got)
 
     e_con = env_of({"map": "concept"})
-    check("⑥ 맵 concept: DUNGEON_ARCH=concept · 크기 42x34 · 몹 4(러너 기본 2 — 09-20 오후 파트너 '몹수는 4으로 늘리자')을 같이 준다(부모 env 의 40x16 을 덮는다)",
-          e_con.get("DUNGEON_ARCH") == "concept" and (e_con.get("DUNGEON_W"), e_con.get("DUNGEON_H")) == ("42", "34")
-          and e_con.get("DUNGEON_MONSTERS") == "4")
+    check("⑥ 맵 concept: DUNGEON_ARCH=concept · 크기 54x42 · 몹 4(파트너 '몹수는 4으로 늘리자')를 같이 준다(부모 env 의 40x16 을 덮는다)",
+          e_con.get("DUNGEON_ARCH") == "concept" and e_con.get("DUNGEON_MONSTERS") == "4" and (e_con.get("DUNGEON_W"), e_con.get("DUNGEON_H")) == ("54", "42"))
+    # 09-20 낮(민옥 "차라리 던전을 조금 더 크게 하고 층을 3층으로"): 기본 원정 = 3층·1000틱. 판 크기는 위 MAPS 가, 층수·틱 상한은
+    #   standard 분기가 정한다 — 둘이 갈라지면 '3층 완주'라는 말이 거짓이 되므로 여기서 같이 고정한다.
+    e_std = env_of({"map": "concept", "mode": "standard"})
+    check("⑥ 기본 원정(standard): 3층 · 1000틱 · 솔로 끔 — 맵이 준 54x42 는 그대로",
+          (e_std.get("DUNGEON_DEPTHS"), e_std.get("DUNGEON_TURNS"), e_std.get("DUNGEON_SOLO")) == ("3", "1000", "0")
+          and (e_std.get("DUNGEON_W"), e_std.get("DUNGEON_H")) == ("54", "42"))
     leak = {"DUNGEON_ARCH": "concept", **{k: "1" for k in NIGHT_ENV}}
     e_nor, e_big, e_none = env_of({"map": "normal"}, leak), env_of({"map": "big"}, leak), env_of({}, leak)
     check("⑥ 옛 이름(normal·big)을 보낸 판: 부모 env 에 DUNGEON_ARCH 가 있어도 자식 env 에서 지운다 — API 로는 여전히 받는다(멈춰 둔 판·게이트)",

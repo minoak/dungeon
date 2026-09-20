@@ -19,6 +19,14 @@ ARCH_VERSION = 2          # 생성 규칙 버전 — run_meta.arch_v · level.ar
 DEFAULT_W, DEFAULT_H = 42, 34   # 이 프로필이 검증된 격자(러너는 DUNGEON_W/H 를 안 줬을 때 이 값을 쓴다)
 MIN_W, MIN_H = 26, 17     # 최소 격자: 가장 큰 방(15×11 · 돌린 회랑 5×13)+여백 2 의 randint 범위가 비지 않고(19×17),
                           #   마지막 폴백(6×5 방 격자 채우기 — 가로 3 × 세로 2 = 6칸)이 방 5개를 반드시 채우는 크기(26×16)
+# ── 방 수 목표(D88 개정, 09-20) ─────────────────────────────
+# 왜: 격자만 키우면 방 수가 그대로라(개정 전 0콜 실측 50시드 — 42×34 도 54×42 도 방 6.4개) 늘어난 넓이가 전부
+#   빈 암반과 긴 통로가 된다. 방 수를 넓이에 비례로 같이 늘리면 한 구역이 바닥을 먹는 비율(구역 뭉갬)이 오히려
+#   내려간다(0콜 실측 120시드 · 42×34 → 54×42: 방 6.37 → 10.45 · 바닥 460 → 717칸 · 뭉갬 평균 0.282 → 0.176).
+#   기준 격자에서는 옛 고정값 5~8 을 그대로 뽑는다 — 42×34 의 결정론(게이트 기준값·verify_arch 실측 고정값)이
+#   한 글자도 안 바뀌어야 하기 때문. 핀 = verify_arch ③-2.
+ROOM_TARGET_LO, ROOM_TARGET_HI = 5, 8        # ⚠️값 임시 — 기준 격자(아래 넓이)에서 뽑던 방 수
+ROOM_TARGET_AREA = DEFAULT_W * DEFAULT_H     # 그 방 수가 정해진 기준 넓이(42×34 = 1428칸)
 
 
 class ConceptDungeon(G.Dungeon):
@@ -79,8 +87,17 @@ class ConceptDungeon(G.Dungeon):
                     styles[rid] = 'chamber'
         return rooms, styles
 
+    def _room_target_range(self):
+        """이 격자에서 노릴 방 수의 범위 — 기준 격자(ROOM_TARGET_AREA) 대비 넓이비로 늘린다. 굴림 없음.
+        기준 격자에서는 넓이비가 정확히 1.0 이라 옛 값 (5, 8) 이 그대로 나온다.
+        기준보다 작은 격자는 줄이지 않는다(max) — 마지막 폴백이 방 5개를 요구하고, 작은 격자의 옛 동작도 그대로."""
+        f = (self.w * self.h) / float(ROOM_TARGET_AREA)
+        return (max(ROOM_TARGET_LO, int(round(ROOM_TARGET_LO * f))),
+                max(ROOM_TARGET_HI, int(round(ROOM_TARGET_HI * f))))
+
     def _carve_rooms(self, n=6):
-        target = self.rng.randint(5, 8)
+        lo, hi = self._room_target_range()
+        target = self.rng.randint(lo, hi)
         self.room_styles = {}
         # Rejection sampling has no fixed sectors, central room, symmetry or required hall.
         for _ in range(12):

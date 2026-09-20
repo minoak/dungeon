@@ -10,6 +10,8 @@
      보스층엔 보스·봉인·boss_front · 같은 시드 = 같은 층(전역 random 오염 무관) · level_snapshot 은 rng 를 안 굴린다
   ③ [120시드] 구역 건전성(K=4): zone_at = 모든 바닥 · 통로 구역 존재 · 구역 그래프 단일 연결 · 모든 '+' 칸이 문 명사(cell)로 등재되고 양쪽이 다른 구역 ·
      모든 문 타일의 양 어깨가 벽(09-20 수선) · 가장 큰 구역 점유율 상한(실측 고정) · 갈림길/막다른 곳은 비어 있다
+  ③-2 방 수가 격자 넓이를 따라간다(09-20 개정 — 민옥 "던전을 조금 더 크게 하고 층을 3층으로"): 기준 42×34 는 옛 고정값 (5,8) 그대로 =
+     결정론의 닻 · 더 작은 격자도 그 아래로 안 내려간다 · 론처가 주는 54×42 는 방·바닥이 실제로 늘고 구역 뭉갬은 오히려 내려간다
   ④ 문장층(K>2 에서 거짓이 되던 말): 통로 길이 = bbox 긴 변(칸 수 아님) · obs zone.ends 빈 목록 · 프롬프트에 '갈림길'·'막다른 곳' 줄 없음 ·
      이름 임계가 프로필 값(넓은 방·작은 방·긴 통로가 셋 다 실제로 갈린다)
   ⑤ 견고화: scan 강제 · 최소 격자 가드(명시 문장 ValueError) · 작은 격자의 완화 폴백(26×17 에서도 방 5+·연결) · from_ascii 경유 인스턴스의 level_snapshot
@@ -284,6 +286,40 @@ check("③ 가장 큰 구역 점유율: 최대 < 0.80 · 절반 이상인 시드
 check("③ 갈림길·막다른 곳은 비어 있다(폭 1 길의 명사 — 넓은 통로 프로필은 말하지 않는다)", ends == 0, ends)
 check("③ 방 유형이 다 나온다(hall·pillared_hall·gallery·chamber·two_columns)",
       styles == {'hall', 'pillared_hall', 'gallery', 'chamber', 'two_columns'}, styles)
+
+# ── ③-2 방 수가 격자 넓이를 따라간다(09-20 개정) ──────────────
+# 왜 이 자리에 핀을 박나: 격자만 키우면 방 수가 그대로라 늘어난 넓이가 전부 빈 암반과 긴 통로가 된다.
+#   그리고 기준 격자(42×34)에서 뽑는 방 수가 한 칸이라도 달라지면 이 파일의 ①~⑧ 기준값과 옛 판의 결정론이 통째로 어긋난다.
+print("── ③-2 방 수 비례(기준 42×34 = 옛 값 · 론처 54×42)")
+BIG = {**KW, 'w': 54, 'h': 42}          # 론처 MAPS['concept'] 가 주는 크기
+r42, r54, r26 = (ConceptDungeon(seed=0, **KW)._room_target_range(),
+                 ConceptDungeon(seed=0, **BIG)._room_target_range(),
+                 ConceptDungeon(seed=0, **{**KW, 'w': DC.MIN_W, 'h': DC.MIN_H})._room_target_range())
+check("③-2 기준 격자(42×34)의 방 수 목표 = 옛 고정값 (5, 8) — 여기가 결정론의 닻이다", r42 == (5, 8), r42)
+check("③-2 기준보다 작은 격자(%d×%d)도 (5, 8) 아래로 안 내려간다 — 마지막 폴백이 방 5개를 요구한다" % (DC.MIN_W, DC.MIN_H),
+      r26 == (5, 8), r26)
+check("③-2 54×42 는 목표가 는다(넓이비 %.2f 배)" % ((54 * 42) / float(42 * 34)), r54 == (8, 13), r54)
+bshares, brooms, bfloors, bnocorr, bgbad = [], 0, 0, 0, 0
+srooms = sfloors = 0
+for s in range(NZ):
+    ds = build(s)
+    srooms += len(ds.rooms)
+    sfloors += sum(1 for c in walk_cells(ds) if ds.grid[c[1]][c[0]] == FLOOR)
+    db = ConceptDungeon(seed=s, **BIG)
+    bfl = {c for c in walk_cells(db) if db.grid[c[1]][c[0]] == FLOOR}
+    bshares.append(max(len(z.cells) for z in db.zones.values()) / float(len(bfl)))
+    brooms += len(db.rooms)
+    bfloors += len(bfl)
+    bnocorr += not any(z.kind == '통로' for z in db.zones.values())
+    bgbad += not zone_graph_connected(db)
+print("  [실측 %d시드] 42×34 방 %.2f·바닥 %.0f·뭉갬 평균 %.3f  →  54×42 방 %.2f·바닥 %.0f·뭉갬 평균 %.3f(최대 %.3f)"
+      % (NZ, srooms / float(NZ), sfloors / float(NZ), sum(shares) / NZ,
+         brooms / float(NZ), bfloors / float(NZ), sum(bshares) / NZ, max(bshares)))
+check("③-2 54×42: 방·바닥이 실제로 는다(방 ≥ 9 · 바닥 ≥ 650칸)", brooms / float(NZ) >= 9 and bfloors / float(NZ) >= 650,
+      (brooms / float(NZ), bfloors / float(NZ)))
+check("③-2 54×42 구역 건전성: 뭉갬 최대 < 0.50 · 절반 이상 0시드 · 통로 구역 있음 · 구역 그래프 단일 연결(실측 고정 — 42×34 보다 낫다)",
+      max(bshares) < .50 and sum(1 for v in bshares if v >= .5) == 0 and bnocorr == 0 and bgbad == 0,
+      (max(bshares), bnocorr, bgbad))
 
 # ── ④ 문장층 ───────────────────────────────────────────────
 print("── ④ 문장층")
