@@ -13,7 +13,12 @@
 - 시험용 예산 통지로 실제 VM `TERMINATED` 확인 후 재시작. 앱/Caddy 자동 시작과 로컬 상태·화면 200 확인.
 - 첫 실판: 진짜 Gemini 키로 27턴에 `outcome=returned`, API 전송 시도 정확히 50회. 인증 오류·서버 예외 없음(2026-09-13 14:36 UTC 확인).
 - 2026-09-17: `3734b15` 배포. 로그인·다회사 모델 선택·예상 가격 표시를 공개 서버에 반영했다.
-- 운영 한도는 사용자 선택에 따라 `DUNGEON_API_CALL_LIMIT=500`으로 변경했다(기존 시험 한도 50). 재시도·실패를 포함한 러너 프로세스별 API 전송 시도 수이며 금액 한도가 아니다. 중지 후 이어가기는 새 러너이므로 다시 집계한다.
+- 운영 한도는 사용자 선택에 따라 `DUNGEON_API_CALL_LIMIT=500`으로 변경했다(기존 시험 한도 50).
+  **09-20: 1,200 으로 올리기로 했다**(파트너 결정 — 1,000틱 판이 실측 틱당 0.54콜로 약 540콜이다).
+  유닛 템플릿 `botpikdun.service` 에 적어 두었으나 **`deploy.sh` 는 유닛 파일을 갱신하지 않는다** —
+  이미 도는 서버는 `sudo systemctl edit botpikdun` 으로 `[Service]` / `Environment=DUNGEON_API_CALL_LIMIT=1200`
+  을 넣고 `sudo systemctl restart botpikdun`. 확인은 `systemctl show botpikdun -p Environment`.
+  비용은 방문자의 키가 낸다(BYOK). 자리를 오래 쥐는 문제는 이 한도가 아니라 자동 멈춤(D91)이 막는다. 재시도·실패를 포함한 러너 프로세스별 API 전송 시도 수이며 금액 한도가 아니다. 중지 후 이어가기는 새 러너이므로 다시 집계한다.
   설정 파일: `/etc/systemd/system/botpikdun.service.d/smoke-test.conf`.
 - Cloud Shell 로그: `~/botpikdun-first-install.log`, `~/botpikdun-smoke-setup.log`, `~/botpikdun-recovery.log`.
 - 갱신 전후 데이터 백업: VM의 `/var/backups/botpikdun/pre-login-20260917.tgz`, `login-ready-20260917.tgz`(root 전용). 이후 생성된 계정·캐릭터는 해당 시점 백업에 포함되지 않는다. 지속 운영 시 별도 정기 백업이 필요하다.
