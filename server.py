@@ -50,7 +50,10 @@ from brain_config import HTTP_BACKENDS, KEY_ENV, MODEL_ENV, LEGACY_MODEL_ENV, MO
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 COOKIE = "botpikdun_sid"
-STATIC_OK = ("/game/", "/viewer/", "/launcher/", "/art/")   # 리포에서 그대로 내주는 접두(공개 리포의 정적 자산)
+STATIC_OK = ("/game/", "/viewer/", "/launcher/", "/art/", "/demo/")   # 리포에서 그대로 내주는 접두(공개 리포의 정적 자산)
+# /demo/ = 미리 담아 둔 판 기록(D97). 세션의 /runs/ 와 달리 누구에게나 같은 파일이고 읽기만 한다 —
+# 처음 온 사람이 자기 판을 돌리기 전에도 "이 세계가 어떻게 돌아가는지" 볼 수 있어야 하기 때문이다.
+# 목록은 demo/index.json 이 정한다(없으면 론처가 그 자리를 아예 안 띄운다).
 SESSION_OK = ("/state/", "/runs/")                           # 세션 폴더에서 내주는 접두
 ENTRY = ("/", "/launcher/", "/launcher/index.html", "/game/", "/game/index.html")   # 여기서만 새 번호표를 준다
 SESSION_TTL = 24 * 3600
