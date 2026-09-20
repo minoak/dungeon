@@ -414,6 +414,17 @@ export function groupHtml(f: Frame, run: Run, focus: Char | null): string {
     if (f.descend.reaction_summary) parts.push(lineHtml('ev notable',
       '이 층의 반응 결산<br>' + reactionSummaryHtml(f.descend.reaction_summary, run), chars, focus));
   }
+  if (f.expedition) {                            // D94(09-20) 원정 결산 — 판은 닫히지 않는다(다음 원정이 이어진다)
+    const x = f.expedition, t = obj(x.titles) || {};
+    const label = (v: unknown) => esc(str(t[str(v)] ?? v));
+    const done = arr(x.done).map(label).join('·'), undone = arr(x.undone).map(label).join('·');
+    const bits = [`가장 깊이 지하 ${num(x.depth, 0)}층`, `보물 ${num(x.treasure, 0)}`];
+    if (done) bits.push(`완수 ${done}`);
+    if (undone) bits.push(`미완 ${undone}`);
+    if (arr(x.fallen).length) bits.push(`쓰러짐 ${arr(x.fallen).map(c => esc(nameOf(run, str(c)))).join('·')}`);
+    const chars = arr(x.party).map(c => str(c)).filter(c => isBotChar(run, c));
+    parts.push(lineHtml('ev gold', `■ ${num(x.n, 1)}차 원정 결산 — ${bits.join(' · ')}`, chars, focus));
+  }
   const body = parts.join('');
   if (!body) return '';
   return `<div class="grp" data-turn="${f.turn}"><div class="gt">t${f.turn}</div>${body}</div>`;

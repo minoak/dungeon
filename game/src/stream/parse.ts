@@ -6,7 +6,7 @@
 //  + 시야(관전 근사 LOS)·캐릭터별 본 칸 누적을 프레임에 파생한다.
 // 라이브용 증분: feed(전체 텍스트)를 다시 불러도 앞부분이 그대로면 붙은 라인만 파싱한다(level 객체 안정).
 import type {
-  Bot, Char, DescendLine, Dir, EndLine, Feature, Frame, LevelLine, LevelState, Monster, PartyMember,
+  Bot, Char, DescendLine, Dir, EndLine, ExpeditionLine, Feature, Frame, LevelLine, LevelState, Monster, PartyMember,
   RunMeta, Run, StreamLine, TickLine, Trap,
 } from './types';
 import { allCells, cellKey, lineOfSight, EMPTY_SET } from '../world/Sight';
@@ -62,6 +62,11 @@ export class StreamParser {
       case 'descend': case 'ascend': {            // 전이 자체는 프레임이 아니다 — 직전 틱에 붙인다
         const last = this.run.frames[this.run.frames.length - 1];
         if (last) last.descend = o as DescendLine;
+        break;
+      }
+      case 'expedition': {                       // D94(09-20) 원정 결산 — 전이와 같은 자리(직전 틱)에 붙인다
+        const last = this.run.frames[this.run.frames.length - 1];
+        if (last) last.expedition = o as unknown as ExpeditionLine;
         break;
       }
       case 'end': this.run.end = o as EndLine; break;
