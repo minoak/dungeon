@@ -379,8 +379,12 @@ export class DungeonScene extends Phaser.Scene {
 
     // 피처(출구는 층 고정물) — 시야 안이거나 본 적 있는 자리, concealed 는 숨김
     const seenFeats = new Set<string>();
+    // D92(09-20): 엔진 소유 소품(level.props)으로 이미 그려진 칸 — 그 위에 승격한 피처(뒤지는 통·상자·항아리)를
+    //   또 그리면 통 그림 위에 폴백 타일이 겹친다. 소품 레이어가 곧 그 물체의 그림이므로 피처 스프라이트는 건너뛴다.
+    const propCells = new Set((cur.level.props ?? []).map(p => p.x + ',' + p.y));
     for (const ft of cur.features) {
       if (ft.type === 'exit' || ft.type === 'building' || ft.concealed) continue;   // building(D60): 시각 레이어가 건물을 그린다 — 문턱 피처는 안 그림
+      if (propCells.has(ft.x + ',' + ft.y) && !worldVisual('feat:' + ft.type)) continue;
       if (!known(ft.x, ft.y)) continue;
       const k = ft.type + '#' + ft.id;
       seenFeats.add(k);
