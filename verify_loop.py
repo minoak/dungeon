@@ -17,7 +17,9 @@
   ⑥ 피클 이어가기(D79): 결산 뒤 스냅샷에 원정 번호가 얼어 있다 · 고리를 끈 러너는 그 스냅샷을 거절한다(지문 loop) ·
      이어간 판의 꼬리가 대조군과 같다(다시 짓지 않는다)
   ⑦ 세계가 거짓말하지 않는다: 결산으로 장부의 귀환·보고 표식이 비고 끝난 판이 '워프로 돌아온 판'이라 말하지 않는다 ·
-     NPC 가 아는 사실이 2차 원정을 말한다(끈 판은 옛 문장 그대로)
+     NPC 가 아는 사실이 2차 원정을 말한다(끈 판은 옛 문장 그대로) ·
+     (수선 09-20 리뷰) 틱 상한으로 끝난 고리 판이 마을에 선 일행을 '던전에 남음'이라 부르지 않는다(생환 줄이 비지 않는다) ·
+     2차 결산이 1차에서 완수한 의뢰를 '이번 원정의 완수'라고 되풀이하지 않는다(장부·접수원은 그대로 되풀이한다)
   ⑧ 배선·자기 등록(_run_gates.sh)
 """
 import contextlib
@@ -311,6 +313,37 @@ check("⑦ NPC 가 아는 사실: 끈 판은 옛 문장 · 2차 원정 판은 �
       and not any("아직 던전에 내려가지 않았다" in s for s in f_new)
       and any("앞선 원정 1번" in s and "2번째 원정" in s for s in f_new), f_new)
 
+# 수선(09-20 리뷰): 고리 판의 정상 종료는 틱 상한이다 — 그 끝 줄이 '마을 광장에 선 일행'을 던전에 남았다고 부르면 거짓이다
+party_chars = sorted(p["char"] for p in kinds(on, "level")[0]["party"])
+check("⑦ 틱 상한으로 끝난 고리 판: 마을에 선 일행 = 생환(살아 돌아온 사람) · 던전에 남은 자 없음 · 끈 판의 귀환 판은 그대로",
+      on[-1]["depth"] == 0 and sorted(on[-1]["survivors"]) == party_chars and on[-1]["remaining"] == []
+      and sorted(off1[-1]["survivors"]) == party_chars and off1[-1]["remaining"] == [],
+      (on[-1].get("depth"), on[-1].get("survivors"), on[-1].get("remaining")))
+
+
+class _Rec:                                          # 접수원 피처 — _report_quests 가 읽는 것만
+    id, name, x, y = 3, "길드 접수원", 1, 1
+
+
+class _Guild:                                        # 의뢰 장부가 있는 마을 — 보고를 두 번 받아 본다(엔진을 그대로 부른다)
+    npc_defs = {"길드 접수원": {"report": True}}
+
+    def __init__(self):
+        self.quests, self.turn = G.new_quests(), 10
+
+
+_g = _Guild()
+_g.quests["accepted"]["goblin_cull"] = {"turn": 3, "by": "1"}
+_g.quests["done"]["goblin_cull"] = {"turn": 8, "by": "1"}
+r1 = G.Dungeon._report_quests(_g, {"char": "1", "x": 1, "y": 1, "bag": 0}, _Rec)
+_g.turn = 250
+r2 = G.Dungeon._report_quests(_g, {"char": "1", "x": 1, "y": 1, "bag": 0}, _Rec)   # 2차 원정 — 이번 원정엔 아무것도 안 했다
+check("⑦ 보고는 장부 전체를 되풀이하지만(엔진 그대로) 결산의 완수는 이번 원정 몫만 — 아무것도 안 한 원정에 '완수'가 적히지 않는다",
+      r1["done"] == r2["done"] == ["goblin_cull"]
+      and show_runner.expedition_done(r2["done"], r1["done"]) == []
+      and show_runner.expedition_done(["goblin_cull", "rat_hunt"], r1["done"]) == ["rat_hunt"]
+      and show_runner.expedition_done(r1["done"], []) == ["goblin_cull"], (r1["done"], r2["done"]))
+
 # ── ⑧ 배선·자기 등록 ──────────────────────────────────────
 print("── ⑧ 배선·자기 등록")
 rsrc = io.open(os.path.join(HERE, "show_runner.py"), encoding="utf-8").read()
@@ -319,7 +352,11 @@ check("⑧ 러너 배선: DUNGEON_LOOP 상수 · 결산 · 원정 시드 · 켠 
       all(s in rsrc for s in ('LOOP_ON = os.environ.get("DUNGEON_LOOP", "0") == "1" and TOWN_ON and QUESTS_ON and NOTICES_ON',
                               "_settle_expedition(d, bots, turn, rep)", "def expedition_seed(n):",
                               'sw.emit("expedition"', '**({"loop": True} if LOOP_ON else {})',
-                              "seed=expedition_seed(_exp_n() or 1)")))
+                              "seed=expedition_seed(_exp_n() or 1)",
+                              # 수선(09-20 리뷰): 끝 줄·생환 명단·결산의 완수 — 고리 판에서만 갈라지는 세 자리
+                              "def expedition_done(done, said):",
+                              'expedition_done(rep.get("done"), expedition.get("said"))',
+                              '=== 시간 종료 (틱 한도 %d 도달) — 마을에 %s / 던전에 %s / 쓰러짐 %s ===')))
 check("⑧ _run_gates.sh 에 등록(부분 문자열이 아니라 낱말 경계로 — verify_isolated 와 같은 규칙)",
       re.search(r"\bverify_loop\b", gates_src) is not None)
 

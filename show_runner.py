@@ -1191,6 +1191,14 @@ def expedition_seed(n):
     return DUNGEON_SEED if int(n) <= 1 else G.Dungeon._derive_seed(DUNGEON_SEED, 10000 + int(n))
 
 
+def expedition_done(done, said):
+    """D94 수선(2026-09-20 리뷰) 이번 원정이 완수한 의뢰 — 보고는 장부의 맡은 의뢰 전부를 다시 가르므로(dungeon_gm._report_quests 가
+    q['accepted'] 전체를 읽는다) 앞선 원정에서 완수한 의뢰가 다음 보고에도 그대로 따라온다. 결산은 '몇 차 원정'을 이름에 단 줄이라
+    그대로 쓰면 아무것도 안 한 원정이 '완수 고블린 소탕'이라 적힌다 — 지난 결산이 이미 말한 것을 뺀다. 장부는 손대지 않는다
+    (게시판·접수원은 '이미 완수했다'를 계속 말해야 한다 — 거기서는 되풀이가 거짓이 아니다)."""
+    return [x for x in (done or []) if x not in set(said or ())]
+
+
 def floor_rumor(d):
     """D69 소문 재료 — 층 하나의 실제 배치를 세계가 센 숫자로(0콜): 몬스터 종별 수·함정·보물·상자·물약·장비. 주점 주인의 '아는 것'."""
     kinds = {}
@@ -1470,8 +1478,9 @@ def main():
     last_oracle_id = None                  # D61 개정: 마지막으로 스트림에 남긴 신의 요청 id(새 요청·거둠을 한 번만 적는다)
     quests = G.new_quests() if (QUESTS_ON and NOTICES_ON) else None   # D69 의뢰 장부(파티 단위·판 전체) — 층마다 같은 객체를 건다
     parties = G.new_parties() if PARTYFORM_ON else None               # D84 파티 장부(판 전체) — 의뢰 장부처럼 층마다 같은 객체를 건다(None = 옛 판)
-    expedition = {"n": 1, "t0": 1, "fallen": 0} if LOOP_ON else None   # D94 원정 장부(판 전체) — n 몇 번째 원정 · t0 그 원정이 시작한 틱 ·
-                                           #   fallen 그때까지 쓰러진 사람 수(결산이 이 원정 몫만 센다). None = 옛 판(보고가 판을 닫는다)
+    expedition = {"n": 1, "t0": 1, "fallen": 0, "said": []} if LOOP_ON else None   # D94 원정 장부(판 전체) — n 몇 번째 원정 · t0 그 원정이
+                                           #   시작한 틱 · fallen 그때까지 쓰러진 사람 수(결산이 이 원정 몫만 센다) · said 앞선 결산이 이미
+                                           #   완수로 적은 의뢰 id(수선 09-20: 되풀이가 '이번 원정의 완수'로 읽히지 않게). None = 옛 판(보고가 판을 닫는다)
     if snap is not None:                   # D79: 장부·표식도 얼린 그대로
         returned, returned_party = bool(snap["returned"]), list(snap["returned_party"])
         last_oracle_id, quests = snap["last_oracle_id"], snap["quests"]
@@ -1784,11 +1793,13 @@ def main():
         낸 뒤에 다음 원정을 연다 — 장부의 귀환·보고 표식을 지우고(마을이 '돌아온 뒤'라고 말하지 않게), 사람이 없는 던전 층의 보존을
         버리고(다음 원정은 새 시드의 지하 1층부터 — 파트너 확정), 주점의 소문 재료를 그 1층으로 다시 센다(옛 숫자는 거짓이 된다).
         몸·소지·관계·기억·도감은 손대지 않는다 — 층 전이가 이어 주는 길 그대로 다음 원정으로 간다."""
+        nonlocal returned_party
         n_ = int(expedition["n"])
         deep = max([k for k in saved if k >= 1] or [0])       # 이 원정이 닿은 가장 깊은 층(떠난 층은 보존 목록에 남는다)
         gone = list(fallen[int(expedition["fallen"]):])       # 이 원정에서 쓰러진 사람(판 전체가 아니라)
         loot = sum(int(b.get("bag") or 0) for b in bots)      # 보고하러 온 일행이 지금 지닌 보물(원정을 넘어 이월되므로 누적이다)
-        done_, undone_ = list(rep.get("done") or []), list(rep.get("undone") or [])
+        done_ = expedition_done(rep.get("done"), expedition.get("said"))   # 수선(09-20): 지난 결산이 이미 완수로 적은 의뢰는 이번 원정의 완수가 아니다
+        undone_ = list(rep.get("undone") or [])               #   미완은 거르지 않는다 — 아직 못 채운 의뢰는 이번 원정에도 참으로 미완이다
         tt_ = rep.get("titles") or {}
         sw.emit("expedition", turn=turn, n=n_, from_turn=int(expedition["t0"]), depth=deep, treasure=loot,
                 done=done_, undone=undone_, titles=tt_, fallen=gone,
@@ -1798,11 +1809,14 @@ def main():
                  "·".join(tt_.get(x, x) for x in done_) or "없음",
                  "·".join(tt_.get(x, x) for x in undone_) or "없음", gone or "없음"))
         quests["returned"], quests["reported"] = None, None   # 다음 원정의 귀환·보고를 위해 표식만 지운다(맡은 의뢰·진행·완수는 장부에 그대로 남는다)
+        returned_party = [b["char"] for b in bots if b["alive"]]   # 수선(09-20 리뷰): 이 원정을 마치고 마을에 선 사람들 = '던전에서 살아 돌아온
+        #   사람'의 단일 원천. 판은 틱 상한까지 더 흐르므로 returned(판을 닫는 표식)는 세우지 않는다 — 판 끝의 생환 줄만 이 명단을 읽는다
         d.expedition_returned = False                         # 마을은 더 이상 '원정에서 돌아온 참'이 아니다(관측·접수원 문장의 단일 원천)
         drop = [k for k in sorted(saved) if k >= 1 and not any(x["d"] is saved[k]["d"] for x in worlds)]
         for k in drop:                                        # 다음 원정은 새 시드의 1층부터 — 사람이 아직 있는 층은 그대로 둔다(D84 판)
             del saved[k]
-        expedition.update(n=n_ + 1, t0=turn, fallen=len(fallen))
+        expedition.update(n=n_ + 1, t0=turn, fallen=len(fallen),
+                          said=sorted(set(expedition.get("said") or []) | set(rep.get("done") or [])))   # 이 결산이 말한 완수 의뢰(다음 결산이 되풀이하지 않게)
         if getattr(d, "rumor", None) is not None:             # D71 주점 소문은 '지하 1층 실측' — 새 원정의 1층으로 다시 센다(0콜)
             d.rumor = floor_rumor(new_floor(1, lore, seed=expedition_seed(_exp_n() or 1)))
 
@@ -2359,8 +2373,18 @@ def main():
               % (turn, d.depth, dead or "없음"))
     else:                                            # 틱 한도 도달 — 크래시 아님을 분명히
         outcome = "timeout"
-        event("=== 시간 종료 (틱 한도 %d 도달, 지하 %d층) — %s 던전에 남음 / 쓰러짐 %s ==="
-              % (MAX_TURNS, d.depth, left, dead or "없음"))
+        if LOOP_ON:                                  # D94 수선(09-20 리뷰): 고리 판이 정상으로 끝나는 자리가 여기다 — 원정을 마치고 마을 광장에
+            #   선 사람을 '던전에 남음'이라 부르면 거짓이고, 생환 줄이 비어 '아무도 못 돌아왔다'로 읽힌다. 선 자리로 가른다(끈 판은 옛 문구 그대로)
+            at_ = {b["char"]: x["d"].depth for x in worlds for b in x["bots"]}   # 누가 어느 층에 선 채 끝났나(세계가 여럿인 D84 판 포함)
+            home = [c for c in left if at_.get(c, d.depth) == 0]                 # 마을에 선 사람
+            away = [c for c in left if c not in home]                            # 던전에 있는 사람
+            won = [c for c in home if c in returned_party]                       # 그중 원정을 마치고 길드에 보고한 사람 = 살아 돌아온 사람
+            left = [c for c in left if c not in won]                             # 남은 자 = 아직 안 돌아온 사람(던전에 있거나 한 번도 안 내려갔거나)
+            event("=== 시간 종료 (틱 한도 %d 도달) — 마을에 %s / 던전에 %s / 쓰러짐 %s ==="   # ⚠️문구 임시
+                  % (MAX_TURNS, home or "없음", away or "없음", dead or "없음"))
+        else:
+            event("=== 시간 종료 (틱 한도 %d 도달, 지하 %d층) — %s 던전에 남음 / 쓰러짐 %s ==="
+                  % (MAX_TURNS, d.depth, left, dead or "없음"))
         event("    (더 길게: 론처 옵션의 틱 상한 또는 DUNGEON_TURNS=400 scripts/start.sh)")
     if reaction_book is not None:
         reaction_book.close_floor(turn)
