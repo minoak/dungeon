@@ -19,6 +19,8 @@
   ⑬ 켠 판의 문장(09-20 리뷰 발견): 신전·성직자의 소개·첫 선물 대사·마을 안내(D81)가 '원정마다 한 병'을 말하지 않는다 ·
      갈아 끼우는 자리는 그 둘뿐이고 정의 JSON 원문·끈 판은 옛 글자 · NPC 두뇌가 받는 '세계의 판정' 한 줄도 사실 ·
      '한 번뿐' 표식은 축복을 실제로 준 그 한 번에만(접수원의 원정 물품엔 안 붙는다)
+  ⑭ 고리 판(D94, 09-20 리뷰 발견): 보물을 들고 돌아와 접수원보다 신전을 먼저 고르는 각본 한 판(0콜) —
+     'offered' 가 러너를 통과해 실제로 일어나고 그중 하나는 첫 결산 뒤(2차 원정의 마을) · 오른 것이 원정을 넘는다
 """
 import contextlib
 import io
@@ -143,11 +145,15 @@ check("② 끈 판의 축복은 옛대로 — 방문마다 한 병(원정 고리
       g0a["result"] == "npc_gift" and g0b["result"] == "npc_gift" and b0.get("boons") == 2 and b0.get("blessed") is None)
 
 
-def run(offer, brain=None):
-    """러너 한 판(더미 두뇌 · 임시 state) → 스트림 행들. 0콜."""
+def run(offer, brain=None, **over):
+    """러너 한 판(더미 두뇌 · 임시 state) → 스트림 행들. 0콜.
+    over = 러너 모듈 상수 덮어쓰기(⑭ 의 LOOP_ON·MAX_TURNS — env 는 import 때 이미 읽혔다)."""
     st = tempfile.mkdtemp(prefix="run_", dir=ROOT)
     old = (R.STATE, R.OFFER_ON, G.dummy_brain)
+    was = {k: getattr(R, k) for k in over}
     R.STATE, R.OFFER_ON = st, offer
+    for k, v in over.items():
+        setattr(R, k, v)
     if brain:
         G.dummy_brain = brain
     try:
@@ -158,6 +164,8 @@ def run(offer, brain=None):
                 pass
     finally:
         R.STATE, R.OFFER_ON, G.dummy_brain = old
+        for k, v in was.items():
+            setattr(R, k, v)
     with open(os.path.join(st, "stream.jsonl"), encoding="utf-8") as fh:
         return [json.loads(ln) for ln in fh if ln.strip()]
 
@@ -461,6 +469,72 @@ bb13["x"], bb13["y"] = stand_by(d13b, rec13)
 r13b = d13b._interact(bb13, "f%d" % rec13.id, bots13b)
 check("⑬ '한 번뿐' 표식은 축복을 실제로 준 그 한 번에만 — 접수원의 원정 물품에는 붙지 않는다(엉뚱한 선물이 '한 번뿐'이 되지 않게)",
       r13b["result"] == "npc_gift" and "blessed" not in r13b, r13b)
+
+print("── ⑭ 고리 판(D94)에서 실제로 바쳐지는가 — 귀환 → 신전 → 접수원 보고(09-20 리뷰 발견)")
+# 왜: ⑧ 은 원정 한 번짜리 왕복이라 '돌아온 마을에서 바친다'는 장면이 러너를 통과해 실제로 일어나는지는 안 봤다
+#   (리뷰의 0콜 풀게임에서 offer_short 3 · offered 0 — 시험대 두뇌가 피처마다 한 번씩만 써 보기 때문). 공물은 원정 고리
+#   국면의 일이므로, 고리 판에서 '보물을 들고 돌아와 접수원보다 신전을 먼저 고르는' 각본을 한 판 돌려 눈으로 센다.
+spawned14 = []
+
+
+def loot_spawn(d, char, others=(), **kw):
+    """원정에서 모아 온 몫의 대역 — 판을 시작하는 몸에만(층 전이 재스폰은 바로 뒤 이월이 bag 을 덮어쓴다)."""
+    b = real_spawn(d, char, others, **kw)
+    b["bag"] = b.get("bag", 0) + 4 * IA.OFFER_COST
+    spawned14.append(b)
+    return b
+
+
+def loop_scripted(obs, char="?"):
+    """0콜 각본(조합형) — 마을에선 던전 입구 → 던전에선 보스를 치고 워프게이트 →
+    돌아온 마을: 보물이 있으면 **접수원보다 신전이 먼저**, 그 다음 보고(= 그 원정의 결산)."""
+    s = obs.get("sights") or {}
+
+    def go(f):
+        return {"type": "use" if f.get("adj") else "goto", "target": f["id"]}
+    if not obs.get("town"):                   # 던전: 보이는 몹(보스)을 치고 나가는 길로 — 원정은 워프 귀환으로만 끝난다
+        for m in s.get("monsters") or []:
+            if m.get("adj"):
+                return {"type": "attack", "target": m["id"]}
+        if s.get("monsters"):
+            return {"type": "goto", "target": min(s["monsters"], key=lambda m: m["dist"])["id"]}
+        ex = s.get("exit")
+        return go(ex) if ex else real_dummy(obs, char)
+    if obs.get("expedition_returned"):
+        feats = sorted(s.get("features") or [], key=lambda x: (x.get("dist", 99), x["id"]))
+        tem = next((f for f in feats if f.get("name") == "신전"), None)
+        rec = next((f for f in feats if f.get("name") == "길드 접수원"), None)
+        if tem is not None and int(obs.get("inventory") or 0) >= IA.OFFER_COST:
+            return go(tem)                    # 접수원보다 신전이 먼저다(이 각본의 요점)
+        if rec is not None:
+            return go(rec)
+    ex = s.get("exit")
+    return go(ex) if ex else real_dummy(obs, char)
+
+
+real_stats = G.ENT.monster_stats
+G.ENT.monster_stats = lambda kind: {**real_stats(kind), "hp": 1, "atk": 0, "dmg": 0, "ac": 5}   # 보스도 한 대에(verify_loop 선례) — 싸움을 보는 판이 아니다
+G.spawn = loot_spawn
+try:                                          # 워프 귀환이 서는 판(보스·작은 층) — 계단으로 오르기만 해서는 원정이 끝나지 않는다
+    rows14 = run(True, brain=loop_scripted, LOOP_ON=True, BOSS_ON=True, MAX_TURNS=600, DUNGEON_W=40, DUNGEON_H=16)
+finally:
+    G.spawn, G.ENT.monster_stats = real_spawn, real_stats
+ev14 = [(int(r.get("turn") or 0), e) for r in rows14 for e in (r.get("events") if isinstance(r.get("events"), list) else [])]
+settle14 = [r for r in rows14 if r.get("kind") == "expedition"]
+off14 = [(t, e) for t, e in ev14 if e.get("result") == "offered"]
+rep14 = [e for t, e in ev14 if e.get("result") == "npc_report"]
+gift14 = [e for t, e in ev14 if e.get("result") == "npc_gift" and e.get("npc") == "성직자"]
+body14 = spawned14[-1] if spawned14 else {}
+check("⑭ 고리 판이 예외 없이 돈다 — 원정 결산 2회 이상 · 접수원 보고 2회 이상 · run_meta 에 loop 와 offer 둘 다",
+      rows14[-1]["kind"] in ("end", "timeout") and rows14[0].get("loop") is True and rows14[0].get("offer") is True
+      and len(settle14) >= 2 and len(rep14) >= 2, (rows14[-1].get("kind"), len(settle14), len(rep14)))
+check("⑭ 돌아온 마을에서 실제로 바친다 — 'offered' 가 러너를 통과해 2회 이상 일어나고, 그중 하나는 첫 결산 뒤다(2차 원정의 마을)",
+      len(off14) >= 2 and settle14 and any(t > int(settle14[0].get("turn") or 0) for t, _ in off14),
+      ([t for t, _ in off14], [int(r.get("turn") or 0) for r in settle14]))
+check("⑭ 바쳐서 오른 것이 원정을 넘는다 — 마지막 몸의 힘+민첩+최대 HP = 시트 + 바친 횟수 · 성직자의 선물은 판을 통틀어 한 번뿐(고리가 방문 장부를 비워도)",
+      len(gift14) <= 1 and body14 and sum(int(body14.get(s) or 0) for s in IA.OFFER_STATS)
+      == int(base8["str"]) + int(base8["dex"]) + int(base8["hp"]) + len(off14),
+      (len(gift14), len(off14), {s: body14.get(s) for s in IA.OFFER_STATS}))
 
 if C.failed:
     print("FAILED %d" % C.failed)
