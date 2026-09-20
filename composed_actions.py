@@ -444,7 +444,8 @@ def decorate(bot, action, result):
     pending = bool(bot.get('order')) and (r in ('approaching', 'pathed', 'walking', 'following', 'beside', 'resting', 'waiting') or result.get('approach_status') == 'ready')
     if pending:
         status = None
-    elif r in ('lost', 'no_target', 'too_far', 'no_path', 'blocked', 'nothing', 'no_potion', 'no_boon', 'no_room', 'wait_allies', 'disabled', 'skill_failed', 'skill_missed'):
+    elif r in ('lost', 'no_target', 'too_far', 'no_path', 'blocked', 'nothing', 'no_potion', 'no_boon', 'no_room', 'wait_allies', 'disabled', 'skill_failed', 'skill_missed',
+               'offer_short'):                             # offer_short = D95 바칠 보물이 모자람(청했으나 못 한 일 — no_potion 과 같은 급)
         status = 'failed'
     elif r in ('no_effect', 'already_beside', 'used_up') or (action['type'] == 'search' and not result.get('found')):
         status = 'no_effect'                                   # used_up = D89 once 로 다 쓴 오브젝트를 다시 씀(실패가 아니라 변화 없음)

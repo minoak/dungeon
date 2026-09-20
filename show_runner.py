@@ -256,6 +256,13 @@ TOWN_LIFE_ON = os.environ.get("DUNGEON_TOWN_LIFE", "0") == "1"   # D90(09-20, �
 #   살아간다는 걸 보여 주고") 마을 생활 — 이 스위치 하나 뒤에 마을의 생활 부품이 선다(0콜): 구역의 '들린 말'(정의 entities/map 의 overheard 부품 —
 #   구역에 들어선 첫 관측에 한 줄, 메모 §4-4 "거리 분위기 '들린 말' 한 줄 고정 풀") · 마을 오브젝트·새 주민(같은 상수를 build_town 에서 읽는다).
 #   **러너 기본 0**(론처가 켠다) = 끈 판은 옛 판과 비트까지 같다. 세계 지문·run_meta 에는 켠 마을 판에만 적는다. layout 마을만.
+OFFER_ON = os.environ.get("DUNGEON_OFFER", "0") == "1"   # D95(09-20, 파트너 "원정을 돌고 나서 보물이나 특정 재물을 신에게 바치면 신이
+#   모험가의 능력치를 올려줄수 있어야 한다고 생각해. 캐릭터를 관리하는건 신의 몫으로 두는거지") 공물 — 신전 문턱에서 use(쓰임 부품 kind
+#   'offer', D89 밑)로 모은 보물을 바치면 몸의 한 칸(힘·민첩·최대 HP)이 1 오른다(무엇이 오를지는 신이 고른다 — 결정론, 판정 rng 무접촉).
+#   같이 오는 것 하나: 신의 축복(D74 성직자의 선물)이 **판당 한 번**으로 좁는다 — 원정 고리 판에서 방문 장부가 원정마다 비워지는 탓에
+#   축복이 원정마다 되풀이돼 공짜로 쌓이던 자리(열 번 돌면 +10). 그 뒤로 능력치는 바치는 만큼만 오른다. 돈·가격·매매는 만들지 않는다
+#   (D69 에서 제출 뒤로 보류) — 보물(bot['bag'])은 이미 세계에 있는데 쓸 곳이 없던 물건이고, 그 빈자리를 쓴다.
+#   **러너 기본 0**(론처가 켠다) = 끈 판은 옛 판과 비트까지 같다. 세계 지문·run_meta 에는 켠 판에만 적는다. 마을 판만(신전이 마을에 있다).
 REST_ON = os.environ.get("DUNGEON_REST", "1") != "0"         # 휴식(D35, 09-06) — 러너 기본 1, 엔진
                                                              #   기본 0. 회복이 붙은 wait: 틱마다 HP,
                                                              #   완료 시 상태 태그 소거. 사건이 깨운다
@@ -807,6 +814,8 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
     d.composed_actions = brains.COMPOSE
     d.place_story, d.zone_story, d.town_notice = {}, {}, None   # D75(09-15) 장소·사람 소개(피처 id → {trait, history}) · 구역 이름 → 같은 꼴 · 마을 진입 한마디
     d.skills, d.trpg_combat, d.random_skill = SKILLS_ON and brains.COMPOSE, TRPG_COMBAT_ON, RANDOM_SKILL_ON
+    if OFFER_ON:                               # D95(09-20) 공물 — 신전 문턱의 쓰임(interactables kind 'offer')과 '축복은 판당 한 번'을 같이 여는 표식.
+        d.offer_on = True                      #   끈 판엔 인스턴스 속성 자체가 없다(클래스 속성 False) = 옛 판 그대로(town_life 선례)
     life = bool(TOWN_LIFE_ON and (getattr(d, "layout_result", None) or {}).get("spaces"))   # D90(09-20) 마을 생활 판 — 구역이 있는(layout) 마을만.
     blife = life and NOTICES_ON and TOWN_BUILDINGS_ON   # 켠 판용 문장(정의의 life 부품)을 읽는가 — 그 문장들은 건물의 쓰임('문턱에서 묵어 가면 돼')을 말하는데, 건물의 쓰임은
     #   피처 → 정의 id 사전(building_defs — 건물 역할 부품 스위치가 건다)으로 찾는다. 그 스위치를 끈 판은 쓰임을 못 찾으니 문장도 옛 것 그대로 둔다(거짓 방지)
@@ -1316,6 +1325,7 @@ def _world_fingerprint():
             **({"floor_life": True} if FLOOR_LIFE_ON else {}),   # D92: 같은 규율 — 안 가 본 층의 피처(통·석판·모닥불) 구성이 달라지는 스위치
             **({"partyform": True} if PARTYFORM_ON else {}),   # D84: 켠 판에만 적는다 — 옛 스냅샷의 지문과 글자까지 같게
             **({"town_life": True} if (TOWN_LIFE_ON and TOWN_ON) else {}),   # D90(09-20): 같은 규율 — 마을의 부품 구성이 다른 판(이어가는 러너가 같아야 한다)
+            **({"offer": True} if (OFFER_ON and TOWN_ON) else {}),   # D95(09-20): 같은 규율 — 신전의 쓰임·축복 횟수가 다른 판(몸에 적히는 표식도 다르다)
             **({"npc_reply": True} if (NPC_REPLY_ON and TOWN_ON) else {}),   # D93(09-20): 같은 규율 — 관측(npc_ears)·되받기 장부가 다른 판
             **({"strangers": True} if STRANGERS_ON else {}),   # D85: 같은 규율
             **({"town_sight": "zone"} if (TOWN_SIGHT == "zone" and TOWN_ON) else {}),   # D86: 같은 규율
@@ -1562,6 +1572,7 @@ def main():
                 **({"town_sight": "zone"} if (TOWN_SIGHT == "zone" and TOWN_ON) else {}),   # D86(09-19 additive, 켠 판에만) 마을의 시야 = 지금 선 구역 — 시야·정지 물리 메타(town_hear 급)
                 **({"strangers": True} if STRANGERS_ON else {}),   # D85(09-19 additive, 켠 판에만) 인물 기록 판 — 프롬프트의 호칭이 캐릭터마다 다르다(내가 적은 이름|낯선 사람) · decisions.person_note
                 **({"town_life": True} if (TOWN_LIFE_ON and TOWN_ON) else {}),   # D90(09-20 additive, 켠 판에만) 마을 생활 판 — 구역의 들린 말(tick.overheard · 관측 notices kind 'overheard') 등 마을의 생활 부품. 0콜
+                **({"offer": True} if (OFFER_ON and TOWN_ON) else {}),   # D95(09-20 additive, 켠 판에만) 공물 판 — 신전 문턱의 use(interact result 'offered'·'offer_short')가 열리고 신의 축복은 판당 한 번. 0콜
                 **({"npc_reply": True} if (NPC_REPLY_ON and npc_brain) else {}),   # D93(09-20 additive, 켠 판에만) NPC 되받기 판 — decisions.to 가 'npc:<이름>'일 수 있고 tick.npc_replies 가 실린다(NPC 두뇌가 도는 판에만 — 더미 판은 꺼진 것과 같다)
                 **({"partyform": True} if PARTYFORM_ON else {}),   # D84(09-19 additive, 켠 판에만) 파티 결성 판 — 계단은 내 파티원만·세계마다 제 시계:
                                            #   tick.bots 가 '이 세계에 있는 사람'만이고 depart/arrive 줄이 실린다(다른 세계 = stream_side.jsonl). 판 모양 메타(town 급)
@@ -2112,6 +2123,9 @@ def main():
                 n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
                 n["boons"] = b.get("boons", 0)            # 축복의 물약도 이월(D74, 09-15)
                 n["str"], n["dex"] = b["str"], b["dex"]   # 축복으로 오른 능력치는 이 판 안에서 영구(D74) — 시트 초기값을 덮는다
+                n["maxhp"] = b["maxhp"]                   # D95(09-20): 공물로 오른 최대 HP 도 같은 급(힘·민첩과 함께). 아무도 안 올린 판에선 시트 값 그대로 = 무변화
+                if b.get("blessed"):                      # D95: 신의 축복을 받은 적 — 공물 판에서 축복은 판당 한 번이라 층·원정을 넘어 몸을 따라간다
+                    n["blessed"] = True                   #   (켠 판에만 적히는 표식 — 끈 판은 키 자체가 없다)
                 n["weapon"] = b.get("weapon")             # 장비도 이월(07-30) — 걸치고 내려간다
                 n["armor"] = b.get("armor")
                 d.adopt_gear(n)                           # D57: 개체 번호는 층-로컬 — 새 층의 번호를 받는다

@@ -65,7 +65,11 @@ USE_KINDS = {'read': ('text', 'texts', 'verb'),   # 적힌 글을 읽는다 — 
              'practice': (),                 # 몸을 푼다 — 몸에 남는 효과 없음(한 턴)
              'rummage': ('loot',),           # 뒤진다 — loot[{item, w}] 가중 추첨(세계 시드·자리에서 정해진다 — 판정 rng 무접촉). 늘 한 번
              'lodge': (),                    # 묵는다 — HP 전부 + 상태 태그 소거(D34 '지우기는 휴식뿐': 묵기는 휴식이다)
-             'warm': ('heal',)}              # 불을 쬔다 — heal(기본 1)
+             'warm': ('heal',),              # 불을 쬔다 — heal(기본 1)
+             'offer': ()}                    # D95(09-20) 바친다 — 모은 보물을 신에게 내고 몸의 한 칸(힘·민첩·최대 HP)이 +1.
+#   무엇이 오를지는 신이 고른다(바치는 이가 지정하지 않는다). 값·후보는 상수 한 곳(interactables.OFFER_COST·OFFER_STATS)이라
+#   정의가 읽는 칸이 없다. 세계의 스위치(Dungeon.offer_on — 러너 DUNGEON_OFFER)를 켠 판에서만 쓰임이 선다(interactables.use_of).
+USE_GATED_KINDS = ('offer',)                   # 세계의 스위치 뒤에 있는 kind — 끈 판에서는 정의에 부품이 있어도 '없는 것'이다(관측·메뉴·태그·실행 한 눈)
 USE_LOOT = ('potion', 'treasure', 'nothing')   # rummage 에서 나오는 것 — 물약 수·보물 수(bag)·빈손
 USE_READ_VERBS = ('look',)                     # D90(09-20) read 의 동사 변형 — look = '살펴보기'(글이 아닌 것: 화단). 표현은 interactables.VERBS
 USE_RESERVED_TYPES = ('exit', 'stairs_up', 'npc', 'treasure', 'potion', 'weapon', 'armor', 'chest', 'fountain', 'grave', 'building')
@@ -104,6 +108,8 @@ def _use_problems(rel, use):
             out.append('%s: use(rummage).loot 는 [{item: %s, w: 정수≥1}] 목록' % (rel, '|'.join(USE_LOOT)))
         if use.get('once') is False:                 # 뒤질 때마다 나오면 소지가 끝없이 는다 — 통은 한 번 비면 빈 통이다
             out.append('%s: use(rummage) 는 늘 한 번이다(once 를 false 로 둘 수 없다)' % rel)
+    if kind == 'offer' and use.get('once'):          # D95(09-20 파트너 "상한도 두지 마라 — 보물이 곧 상한이다"): 바치는 횟수를 정의가 막지 않는다
+        out.append('%s: use(offer) 에는 once 를 둘 수 없다 — 바칠 보물이 있는 만큼 바친다(상한은 모은 보물이다)' % rel)
     return out
 
 
@@ -456,9 +462,13 @@ def npc(eid, life=False):
             'role': c.get('role'), 'persona': c.get('persona'), 'report': bool(c.get('report')),
             'line_report': c.get('line_report'), 'line_report_failed': c.get('line_report_failed'),
             'line_report_empty': c.get('line_report_empty'), 'knows': list(c.get('knows') or []),
+            # D95(09-20): 이미 축복을 받은 사람에게 하는 말 — 공물 판(Dungeon.offer_on)에서 신의 축복은 판당 한 번이라 그 사실을 말할 자리가 필요하다.
+            #   끈 판은 이 칸을 아무도 읽지 않는다(엔진이 offer_on 일 때만 본다). 판정 무접촉 — 말뿐.
+            'line_blessed': c.get('line_blessed'),
             # D71(09-14): NPC 가 먼저 거는 인사 — hail(기본)·hail_no_potion·hail_board·hail_return·hail_rumor·hail_oracle(전부 선택, 상황별)
             **{k: c.get(k) for k in ('hail', 'hail_no_potion', 'hail_board', 'hail_return', 'hail_rumor', 'hail_oracle',
-                                     'hail_party', 'line_party')},   # D84 조각 5: 파티 결성 판에서 입구의 규칙을 말해 주는 인사·대사 꼬리({party_need})
+                                     'hail_party', 'line_party',   # D84 조각 5: 파티 결성 판에서 입구의 규칙을 말해 주는 인사·대사 꼬리({party_need})
+                                     'hail_blessed')},   # D95(09-20): 공물 판에서 이미 축복을 받은 사람에게 거는 인사 — 축복이 판당 한 번이라 옛 인사가 거짓이 되는 자리
             'walk': (dict(c['walk']) if isinstance(c.get('walk'), dict) else None)}   # D73(09-14) 행인: {region: layout 구역 id, rate}
 
 

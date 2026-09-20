@@ -18,11 +18,13 @@
   · 다 쓴 것은 다 쓴 것으로 보인다(09-20 리뷰 수선) — once 로 다 쓴 피처는 관측의 use 칸에 spent 가 실리고, 메뉴 라벨·조합형
     '대상의 현재 사실' 줄이 효과 꼬리('마시면 HP +3') 대신 '이미 쓰였다'는 사실만 말한다(남이 다 쓴 뒤의 다른 캐릭터에게도 — 세계의 상태).
   · 마을 생활 판(D90, d.town_life)의 건물은 정의의 life.use 를 쓴다(entities.comps_of) — 끈 판의 건물은 옛 판 그대로 쓰임이 없다.
+  · 세계의 스위치 뒤에 있는 kind 가 있다(D95 공물, _GATE_ATTR) — 끈 판에서는 정의에 부품이 있어도 use_of 가 None 이라
+    관측·메뉴·태그·실행·오브젝트 태그가 한 눈으로 '없는 것'이 된다(끈 판 = 옛 판과 바이트 동일).
 
 결과 dict 는 기존 interact 결과와 같은 꼴: {char, type:'interact', target, result, what, use_kind, …사실}.
   kind → result:  read→read{text[,page,pages]} · sit→sat{heal,hp} · drink→drank{heal,hp} · browse→browsed{wares} ·
                   practice→practiced · rummage→rummaged{got[,potions|bag,quest]} · lodge→lodged{heal,hp,cleared} ·
-                  warm→warmed{heal,hp} · once 로 다 쓴 뒤→used_up
+                  warm→warmed{heal,hp} · offer→offered{cost,bag,stat,value[,hp]} | offer_short{cost,bag} · once 로 다 쓴 뒤→used_up
   (뒤져서 나온 것의 칸 이름이 `found` 가 아니라 `got` 인 까닭: `found` 는 수색 결과의 [{kind,name…}] 목록 계약이라
    tags.py·bestiary.py 가 모든 이벤트의 found 를 목록으로 돈다 — 문자열을 실으면 그 집계기들이 죽는다.)
 """
@@ -41,6 +43,7 @@ KINDS = {
     'rummage':  {'label': '뒤지기',   'tag': 'container', 'tried': '뒤져 봄',     'seen': None},      # 목격 한 마디는 나온 것에 따라(아래 _GOT_SEEN)
     'lodge':    {'label': '묵기',     'tag': 'lodging',   'tried': '묵어 봄',     'seen': '묵었다'},
     'warm':     {'label': '불 쬐기',  'tag': 'warmth',    'tried': '불 쬐어 봄',  'seen': '불을 쬐었다'},
+    'offer':    {'label': '바치기',   'tag': 'offering',  'tried': '바쳐 봄',     'seen': None},      # 목격 한 마디는 바쳤나·못 바쳤나에 따라(아래 _OFFER_SEEN)
 }
 assert set(KINDS) == set(ENT.USE_KINDS), '쓰임 kind 어휘는 entities.USE_KINDS 와 같아야 한다(검증기 ↔ 처리기)'
 # D90(09-20) read 의 동사 변형(use.verb) — 처리·결과 이름은 read 그대로이고 말만 바뀐다(글이 아니라 눈에 보이는 것을 돌려주는 화단 같은 것).
@@ -54,10 +57,20 @@ def _info(use):
     use = use or {}
     return VERBS.get(use.get('verb')) if (use.get('kind') == 'read' and use.get('verb')) else KINDS.get(use.get('kind'))
 
-RESULTS = ('read', 'sat', 'drank', 'browsed', 'practiced', 'rummaged', 'lodged', 'warmed', 'used_up')
+RESULTS = ('read', 'sat', 'drank', 'browsed', 'practiced', 'rummaged', 'lodged', 'warmed', 'used_up',
+           'offered', 'offer_short')       # D95(09-20) 공물 — 바쳤다 / 바칠 보물이 모자랐다
 _HEAL_KINDS = {'sit': 'sat', 'drink': 'drank', 'warm': 'warmed'}
 _GOT_KR = {'potion': '물약', 'treasure': '보물'}
 _GOT_SEEN = {'potion': '물약을 꺼냈다', 'treasure': '보물을 꺼냈다', 'nothing': '빈손이었다'}
+
+# ── D95(2026-09-20) 공물 — 파트너 "원정을 돌고 나서 보물이나 특정 재물을 신에게 바치면 신이 모험가의 능력치를 올려줄수 있어야 한다고
+#    생각해. 캐릭터를 관리하는건 신의 몫으로 두는거지" / "결산을 통해서 얻은 자원들로 캐릭터 성장에 이용해야 한다".
+#    돈은 만들지 않는다(D69 에서 제출 뒤로 보류) — 보물(bot['bag'])은 이미 세계에 있는 물건이고 지금 쓸 곳이 없었다. 그 빈자리를 쓴다.
+OFFER_COST = 3                             # ⚠️값 임시 — 한 번 바치는 데 드는 보물 수(파트너 값 대기). 상한은 두지 않는다: 모은 보물이 곧 상한이다
+OFFER_STATS = ('str', 'dex', 'maxhp')      # 신이 고르는 칸(차례 = 해시 자리) — 몸에 직접 적히는 수치뿐(새 몸 변수를 만들지 않는다)
+_STAT_KR = {'str': '힘', 'dex': '민첩', 'maxhp': '최대 HP'}         # dungeon_gm.STAT_KR + 최대 HP(공물에서만 쓰는 말이라 여기 사본)
+_STAT_OBJ = {'str': '힘을', 'dex': '민첩을', 'maxhp': '최대 HP 를'}   # 목적격 — 라틴 글자 뒤는 띄어 쓴다('HP 가 전부 돌아오고' 관례)
+_OFFER_SEEN = {'offered': '신전에 보물을 바쳤다', 'offer_short': '바치려다 그만두었다'}   # ⚠️문구 임시 — 곁의 사람이 보는 한 마디(ally_use 괄호)
 
 _IDX = {'src': None, 'n': -1, 'by_type': {}}
 
@@ -75,9 +88,24 @@ def _by_type():
     return _IDX['by_type']
 
 
+# D95(09-20) 세계의 스위치 뒤에 있는 kind → 그 스위치를 담은 Dungeon 속성. 끈 판에서는 정의에 부품이 있어도 use_of 가 None 을 돌려준다
+#   = 관측의 use 칸·메뉴 줄·조합형 태그·실행·오브젝트 태그가 한 눈으로 '없는 것'이 된다(끈 판 = 옛 판과 바이트 동일).
+_GATE_ATTR = {'offer': 'offer_on'}
+
+
 def use_of(d, f):
     """피처 → use 부품(dict) 또는 None. 건물 = 그 문턱 피처의 정의 id(building_defs — build_town 이 둔다),
-    오브젝트 = type 이 같은 정의(같은 type 을 여러 정의가 쓰면 이름이 같은 것 먼저 — 무기 단검·장검과 같은 문법)."""
+    오브젝트 = type 이 같은 정의(같은 type 을 여러 정의가 쓰면 이름이 같은 것 먼저 — 무기 단검·장검과 같은 문법).
+    스위치 뒤의 kind(_GATE_ATTR)는 그 스위치를 켠 세계에서만 돌려준다."""
+    use = _use_raw(d, f)
+    attr = _GATE_ATTR.get((use or {}).get('kind'))
+    if attr and not getattr(d, attr, False):   # 옛 피클 스냅샷·from_ascii(__new__)엔 없는 속성 — getattr 기본 False
+        return None
+    return use
+
+
+def _use_raw(d, f):
+    """정의·세계가 적어 둔 그대로의 use 부품(스위치 무시) — use_of 만 부른다."""
     if f is None:
         return None
     over = (getattr(d, 'use_over', None) or {}).get(f.id)   # D92(09-20) 피처마다 다른 쓰임 — 던전 석판의 본문은 그 층의 사실이라
@@ -133,6 +161,9 @@ def fact_text(fact):
         return '불을 쬐면 HP +%d (상처가 있을 때)' % heal
     if k == 'lodge':
         return '묵으면 HP 가 전부 돌아오고 몸 상태가 낫는다'
+    if k == 'offer':                             # D95 — 값·오르는 칸은 사실, 무엇이 오를지는 말하지 않는다(신이 고른다)
+        return '모은 보물 %d개를 바치면 %s 중 하나가 1 오른다(무엇이 오를지는 신이 정한다)' % (
+            OFFER_COST, '·'.join(_STAT_KR[s] for s in OFFER_STATS))
     return None
 
 
@@ -172,6 +203,16 @@ def _draw(d, f, loot):
         if pick < 0:
             return e['item']
     return loot[-1]['item']
+
+
+def _offer_stat(d, bot):
+    """신이 고르는 한 칸 — 세계 시드·바치는 이의 이름·그 몸의 지금 수치(힘·민첩·최대 HP)의 해시. 판정 rng 무접촉이라
+    같은 상태면 늘 같은 결과다(D95: "캐릭터를 관리하는건 신의 몫" — 바치는 이가 무엇을 올릴지 지정하지 않는다).
+    바칠 때마다 한 칸이 오르므로 다음 번의 해시 재료도 저절로 달라진다(따로 세는 장부를 두지 않는 까닭)."""
+    key = '%s|%s|%s' % (getattr(d, 'master_seed', 0), bot.get('char'),
+                        '|'.join('%s=%d' % (s, int(bot.get(s) or 0)) for s in OFFER_STATS))
+    n = int.from_bytes(hashlib.sha256(key.encode('utf-8')).digest()[:8], 'big')
+    return OFFER_STATS[n % len(OFFER_STATS)]
 
 
 def handle(d, bot, f, bots=None, target_id=None):
@@ -217,6 +258,19 @@ def handle(d, bot, f, bots=None, target_id=None):
             if qv:
                 out['quest'] = qv
         seen = _GOT_SEEN[got]
+    elif kind == 'offer':                                      # D95(09-20) 공물 — 모은 보물을 내면 신이 몸의 한 칸을 올린다. 굴림 없음(결정론)
+        bag = int(bot.get('bag') or 0)
+        if bag < OFFER_COST:                                   # 모자라면 사실만 돌려준다 — 권유·조언 없음(무엇을 하라고 말하지 않는다)
+            out, seen = {**base, 'result': 'offer_short', 'cost': OFFER_COST, 'bag': bag}, _OFFER_SEEN['offer_short']
+        else:
+            bot['bag'] = bag - OFFER_COST
+            stat = _offer_stat(d, bot)
+            bot[stat] = int(bot.get(stat) or 0) + 1
+            if stat == 'maxhp':                                # 몸 자체가 커진다 — 없던 상처가 생기지 않게 지금 HP 도 같이 오른다
+                bot['hp'] = int(bot.get('hp') or 0) + 1
+            out = {**base, 'result': 'offered', 'cost': OFFER_COST, 'bag': bot['bag'],
+                   'stat': stat, 'value': bot[stat], **({'hp': bot['hp']} if stat == 'maxhp' else {})}
+            seen = _OFFER_SEEN['offered']
     elif kind == 'lodge':                                      # D34 '지우기는 휴식뿐' — 묵기는 휴식이다(휴식 완료와 같은 소거)
         heal = max(0, bot['maxhp'] - bot['hp'])
         bot['hp'] = bot['maxhp']
@@ -275,6 +329,14 @@ def prose(last):
         if not last.get('heal') and not cl:
             return '%s에 묵었다 — 나을 상처가 없었다' % what
         return '%s에 묵었다 — 몸이 다 나았다(HP +%d%s)' % (what, last.get('heal', 0), (', 나은 상태: ' + '·'.join(cl)) if cl else '')
+    if r == 'offered':                              # D95 — 무엇을 냈고 무엇이 올랐나(사실만). 고른 것은 신이다
+        st = last.get('stat')
+        return '%s에 보물 %d개를 바쳤다 — 신이 %s 1 올렸다(지금 %s %d · 모은 보물 %d개)' % (
+            what, last.get('cost', OFFER_COST), _STAT_OBJ.get(st, '한 칸을'),
+            _STAT_KR.get(st, '?'), last.get('value', 0), last.get('bag', 0))
+    if r == 'offer_short':
+        return '%s에 바치려 했다 — 모은 보물이 %d개다(한 번 바치는 데 보물 %d개가 든다)' % (
+            what, last.get('bag', 0), last.get('cost', OFFER_COST))
     if r == 'used_up':
         if last.get('use_kind') == 'rummage':
             return '%s%s 이미 비어 있다' % (what, _j(what, '은', '는'))
@@ -307,6 +369,12 @@ def event_tags(rec):
         return [('use', '사용', '%s — 비어 있음' % what)]
     if r == 'lodged':
         return [('use', '사용', '%s — 묵음 +%d (HP %d)' % (what, rec.get('heal', 0), rec.get('hp', 0)))]
+    if r == 'offered':                    # D95 — 새 키를 만들지 않는다(use 재사용, EVENT_KINDS 무수정)
+        return [('use', '바침', '%s — 보물 %d개 → %s +1 (지금 %d · 남은 보물 %d)'
+                 % (what, rec.get('cost', OFFER_COST), _STAT_KR.get(rec.get('stat'), '?'),
+                    rec.get('value', 0), rec.get('bag', 0)))]
+    if r == 'offer_short':
+        return [('misc', '헛손질', '%s — 모은 보물 %d개(바치는 데 %d개)' % (what, rec.get('bag', 0), rec.get('cost', OFFER_COST)))]
     if r == 'used_up':
         return [('misc', '헛손질', '%s — 이미 %s' % (what, '비어 있음' if rec.get('use_kind') == 'rummage' else '쓰였음'))]
     return [('misc', '기타', str(r))]
@@ -324,6 +392,10 @@ def obj_note(res):
         return ('%s 나옴' % _GOT_KR[res['got']]) if res.get('got') in _GOT_KR else '비어 있음'
     if res.get('result') == 'used_up' and res.get('use_kind') == 'rummage':
         return '비어 있음'
+    if res.get('result') == 'offered':      # D95 — 지난번에 신이 올려 준 칸(나↔그 신전 사이의 사실)
+        return '%s +1' % _STAT_KR.get(res.get('stat'), '?')
+    if res.get('result') == 'offer_short':
+        return '보물 모자람'
     return None
 
 

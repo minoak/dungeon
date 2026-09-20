@@ -4,7 +4,8 @@
  부품만 보고, 새 건물은 JSON 한 장". 새 동사 없음 — 전부 기존 use(메뉴형 interact) 밑. 돈·가격·매매 없음.)
 게이트:
   ① 정의·검증기: COMPS(object: use·story / building: use) · 최소 정의 4장(read·sit·drink·rummage) · kind 어휘 = 처리기 어휘 ·
-     8 kind 전부 통과 · 거절(모르는 kind·모르는 칸·빈 글·음수 회복·빈 진열·모르는 추첨 항목·rummage once:false·엔진 타입에 use·NPC 에 use)
+     여기서 보는 8 kind 전부 통과(D95 공물은 세계의 스위치 뒤 — verify_offer 가 본다) ·
+     거절(모르는 kind·모르는 칸·빈 글·음수 회복·빈 진열·모르는 추첨 항목·rummage once:false·엔진 타입에 use·NPC 에 use)
   ② 부품 없는 세계 = 옛 판 그대로: 생성 층 3시드의 obs 에 use 칸 없음 · 부품 없는 건물은 메뉴 줄 없음·써도 nothing ·
      모르는 타입(묘)은 옛 줄 '상호작용: …' 그대로·nothing · 조합형 태그 옛 그대로
   ③ 메뉴 경로(8 kind): 줄 머리(읽기·앉기·…·묵기 문턱) · 결과 이름·사실 칸 · HP 변화(상한) · 피처 존속 · 멀면 too_far · 판정 rng 무접촉
@@ -95,9 +96,11 @@ print("── ① 정의·검증기")
 check("① COMPS: object 에 use·story · building 에 use (npc·monster 에는 없음)",
       {"use", "story"} <= ENT.COMPS["object"] and "use" in ENT.COMPS["building"]
       and "use" not in ENT.COMPS["npc"] and "use" not in ENT.COMPS["monster"])
-check("① 쓰임 kind 어휘 8종 — 검증기(entities.USE_KINDS) = 처리기(interactables.KINDS) · 결과 이름 9종",
-      set(ENT.USE_KINDS) == set(IA.KINDS) == {"read", "sit", "drink", "browse", "practice", "rummage", "lodge", "warm"}
-      and IA.RESULTS == ("read", "sat", "drank", "browsed", "practiced", "rummaged", "lodged", "warmed", "used_up"))
+check("① 쓰임 kind 어휘 9종(D95 공물은 세계의 스위치 뒤 — verify_offer 가 본다) — 검증기(entities.USE_KINDS) = 처리기(interactables.KINDS) · 결과 이름 11종",
+      set(ENT.USE_KINDS) == set(IA.KINDS) == {"read", "sit", "drink", "browse", "practice", "rummage", "lodge", "warm", "offer"}
+      and set(ENT.USE_GATED_KINDS) == set(IA._GATE_ATTR) == {"offer"}
+      and IA.RESULTS == ("read", "sat", "drank", "browsed", "practiced", "rummaged", "lodged", "warmed", "used_up",
+                         "offered", "offer_short"))
 base4 = {e: ENT.get(e) for e in ("stone_tablet", "bench", "well", "barrel")}
 check("① 최소 정의 4장 — 석상 받침 read · 벤치 sit(heal 1) · 우물 drink(heal 1) · 통 rummage(once, 추첨표) · 전부 story.trait · 도감 본문 없음",
       [base4[e]["comps"]["use"]["kind"] for e in ("stone_tablet", "bench", "well", "barrel")] == ["read", "sit", "drink", "rummage"]
