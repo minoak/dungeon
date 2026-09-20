@@ -348,8 +348,10 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None):
             scene.insert(0, '- 조금 전 네가 이 사람에게 한 말: "%s"' % str(res["prev"])[:NPC_LINE_LEN])
         scene.append("- 세계의 판정: 말만 오갔다 — 물건을 건네거나 원정 보고를 받는 일은 상대가 네 앞에 와서 말을 걸 때 따로 처리된다(지금은 아니다)")
     elif r == "npc_gift":
-        scene.append("- 세계의 판정: 너는 %s에게 %s을(를) 건넸다(%s — 이번 원정 몫)"
-                     % (who, res.get("item", "?"), "기도의 답, 마시면 공격 능력치가 1 오른다" if res.get("item") == "축복의 물약" else "정해진 원정 물품"))   # D74
+        scene.append("- 세계의 판정: 너는 %s에게 %s을(를) 건넸다(%s — %s)"
+                     % (who, res.get("item", "?"), "기도의 답, 마시면 공격 능력치가 1 오른다" if res.get("item") == "축복의 물약" else "정해진 원정 물품",
+                        # D95(09-20 · 리뷰 발견): 공물 판의 축복은 한 사람에게 한 번이라 '이번 원정 몫'은 거짓이다(엔진이 두 번 다시 주지 않는다) ⚠️문구 임시
+                        "이 사람에게 주는 축복은 이 한 번뿐이다" if res.get("blessed") else "이번 원정 몫"))   # D74
     elif r == "npc_report":
         t_ = res.get("titles") or {}
         done = "·".join(t_.get(x, x) for x in (res.get("done") or [])) or "없음"

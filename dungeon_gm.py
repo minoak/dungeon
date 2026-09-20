@@ -887,6 +887,12 @@ class Dungeon:
     LIFE_RUMMAGE = (2, 4)     # 소품이 있는 층: 그중 뒤질 수 있는 것으로 승격할 수(나머지는 조용한 장애물 — 피처는 시야에 들 때마다 정지를 낳는다)
     LIFE_RUMMAGE_BARE = (1, 3)   # 소품이 없는 층(옛 생성기): 방 구석에 놓는 통의 수
     LIFE_TABLETS = (1, 2)     # 층당 석판 수
+    # D95(2026-09-20) 공물 — 파트너 "원정을 돌고 나서 보물이나 특정 재물을 신에게 바치면 신이 모험가의 능력치를 올려줄수 있어야
+    #   한다고 생각해. 캐릭터를 관리하는건 신의 몫으로 두는거지". 켜면 ①신전 문턱에서 use(kind offer)가 열리고(interactables)
+    #   ②신의 축복(D74 성직자의 선물)이 판당 한 번으로 좁는다 — 원정 고리(D94) 판에서 원정마다 되풀이돼 공짜로 쌓이던 자리.
+    #   **클래스 속성**인 이유 = ZONE_BLOCK·floor_life 와 같다: from_ascii 는 __new__ 경유(마을은 이 길로 온다)고 옛 피클
+    #   스냅샷(D79)에는 이 값이 없다. 러너 build_town 이 DUNGEON_OFFER 를 켠 판에만 인스턴스 속성으로 건다.
+    offer_on = False
 
     def __init__(self, seed=7, depth=1, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                  scan=False, n_potions=0, loops=False, selfstop=False,
@@ -3628,6 +3634,8 @@ class Dungeon:
             key = 'hail_rumor'
         elif nd.get('hail_oracle') and (getattr(self, 'oracle', None) or {}).get('text'):
             key = 'hail_oracle'
+        elif nd.get('hail_blessed') and self.offer_on and bot.get('blessed'):
+            key = 'hail_blessed'                           # D95(09-20): 공물 판에서 축복은 판당 한 번 — 이미 받은 사람에게 "축복을 받아 갈 수 있어요"는 거짓이다
         line = nd.get(key) or nd.get('hail') or ''
         r = getattr(self, 'rumor', None) or {}
         mons = ', '.join('%s %d마리' % (k, v) for k, v in (r.get('monsters') or {}).items()) or '몬스터'
@@ -5079,13 +5087,20 @@ class Dungeon:
             again = f.name in met                            #   ("살아 돌아오면 또 하나" — 후퇴→재정비 고리)
             met.add(f.name)                                  # D32 개정(09-06 파트너 확정): 두 번째부터는 '아까 왔잖아'
             given = None                                     #   고정 대사(line_again) — 방문 여부 기준, 선물 여부와 무관.
+            # D95(2026-09-20) 공물 판에서만: 신의 축복(gift.boon)은 **판당 한 번**이다. 원정 고리(D94)에서 방문 장부가 원정마다
+            #   비워지는 탓에 축복이 원정마다 되풀이돼 공짜로 쌓였다(열 번 돌면 +10). 켠 판에서는 몸에 남는 표식(bot['blessed'])이
+            #   층·원정을 넘어 따라가고, 그 뒤로 능력치는 바치는 만큼만 오른다. 끈 판은 이 줄이 늘 False = 옛 동작 그대로.
+            blessed_done = bool(self.offer_on and bot.get('blessed'))
+            boon_once = False                                # D95(09-20 · 리뷰 발견): 이 선물이 '한 번뿐인 축복'인가 — 공물 판에서만 참(아래 결과에 additive)
             if not again and gift and f.name not in served:  #   실측: 이미 받고도 8틱마다 상인 둘을 번갈아 60틱(seed 726984)
                 got = []                                     # 마을 v1(09-11): 길드 접수원은 물약+단검을 함께 준다(기본 물품, 메모 §4-4)
                 if gift.get('potions'):
                     bot['potions'] = bot.get('potions', 0) + int(gift['potions'])
                     got.append('물약')
-                if gift.get('boon'):                             # D74(09-15 파트너 "기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자"): 성직자=축복의 물약
+                if gift.get('boon') and not blessed_done:         # D74(09-15 파트너 "기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자"): 성직자=축복의 물약
                     bot['boons'] = bot.get('boons', 0) + int(gift['boon'])
+                    if self.offer_on:                            # D95(09-20): 공물 판에서만 '받은 적 있다'를 몸에 적는다(끈 판은 키 자체가 없다 = 옛 판 그대로)
+                        bot['blessed'] = boon_once = True        #   러너가 층 전이·원정 귀환의 새 몸에 이 표식을 실어 나른다(show_runner 이월)
                     got.append('축복의 물약')
                 if gift.get('weapon') and not bot.get('weapon'):     # 빈손일 때만 — 스왑·비교는 던전 몫(D28)
                     nm = str(gift['weapon'])
@@ -5099,8 +5114,15 @@ class Dungeon:
                               {'kind': 'ally_loot', 'char': bot['char'], 'what': given},
                               exclude=(bot['char'],))
                 return {**base, 'result': 'npc_gift', 'npc': f.name, 'item': given,
-                        'line': self.npc_lines.get(f.name, '…') + self._party_rule_sfx(f.name, bot)}
+                        'line': self.npc_lines.get(f.name, '…') + self._party_rule_sfx(f.name, bot),
+                        **({'blessed': True} if boon_once else {})}   # D95: 공물 판의 축복은 한 사람에게 한 번 — NPC 두뇌에게 '이번 원정 몫'이라 말하지 않게(additive)
             line_again = (getattr(self, 'npc_lines_again', None) or {}).get(f.name)
+            if blessed_done:                                 # D95: 이미 축복을 받은 사람 — 두 옛 대사('한 병 드릴게요'·'살아 돌아오면 또')가
+                lb = ((getattr(self, 'npc_defs', None) or {}).get(f.name) or {}).get('line_blessed')   #   둘 다 거짓이 되는 자리.
+                if lb:                                       #   정의의 line_blessed 가 있으면 그것을 말한다(없으면 옛 길 — 세계가 거짓말하지 않게 정의가 채운다)
+                    return {**base, 'result': 'npc_talk', 'npc': f.name, 'blessed': True,
+                            'line': lb + self._party_rule_sfx(f.name, bot),
+                            **({'again': True} if again else {})}
             return {**base, 'result': 'npc_talk', 'npc': f.name,
                     'line': (line_again if (again and line_again) else self.npc_lines.get(f.name, '…')) + self._party_rule_sfx(f.name, bot),
                     **({'again': True} if again else {})}    # 스트림 additive — 재방문 계측(부검용)
