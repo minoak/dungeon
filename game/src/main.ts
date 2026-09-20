@@ -62,11 +62,21 @@ async function boot(): Promise<void> {
 
   const q = new URLSearchParams(location.search);
   const t = q.get('t');
+  // 액자 모드(?embed=1). 론처 첫 화면의 액자가 이 주소로 무대만 띄운다.
+  // 조작 막대와 옆 패널을 감추고(style.css 의 body[data-embed]) 재생이 저절로 돈다.
+  const embed = q.get('embed') === '1';
+  if (embed) document.body.dataset.embed = '1';
   // 정적 배포: 라이브 판이 없다 — 기본 판은 runs/index.json 의 첫 항목(static-bundle.mjs 가 첨부한 판)
   const fallback = STATIC ? ((await fetchRunIndex())?.runs[0]?.path ?? '') : 'state/stream.jsonl';
   const run = q.get('run') || fallback;
   if (!run) { app.bus.emit('error', '첨부된 판이 없다 (runs/index.json)'); return; }
   await app.loadRun(run, { focus: q.get('focus'), turn: t ? +t : null });
+  if (embed) {
+    app.playback.setSpeed(1);                                   // 4 배속. 액자에서는 걸음이 빨라야 눈에 띈다
+    // 끝에 닿으면 Playback 이 스스로 멈춘다. 잠깐 두었다가 다시 켜면 play() 가 처음으로 되감는다.
+    app.playback.on('play', on => { if (!on) window.setTimeout(() => app.playback.play(), 1500); });
+    app.playback.play();
+  }
 }
 
 boot().catch(e => {

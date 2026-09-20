@@ -301,3 +301,29 @@ kbd { display: inline-block; font-family: inherit; font-size: 10px; line-height:
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; }
 }
+
+/* 액자 모드(?embed=1) — 론처 첫 화면의 액자. 무대만 남기고 조작·패널·기록을 감춘다. */
+body[data-embed="1"] #topbar,
+body[data-embed="1"] #side,
+body[data-embed="1"] #bottom,
+body[data-embed="1"] #codex,
+body[data-embed="1"] #sceneCaption,
+body[data-embed="1"] #stageInfo,
+body[data-embed="1"] #hudError,
+body[data-embed="1"] .stage-help { display: none; }
+/* 액자는 화면이 작다. 말풍선을 줄여 그림을 덜 덮게 한다. */
+body[data-embed="1"] #app #overlay .bubble { max-width: min(215px, calc(100% - 20px)); padding: 8px 10px 7px;
+                                             font-size: 11px; line-height: 1.55; border-radius: 9px 9px 9px 3px; }
+body[data-embed="1"] #app #overlay .bubble .meta { font-size: 9px; margin-top: 5px; padding-top: 4px; }
+/* 액자에서는 말풍선을 한 번에 하나만. 여럿이 동시에 뜨면 좁은 액자에서 서로 겹쳐 글이 안 읽혔다. */
+body[data-embed="1"] #app #overlay .bubble:not(:last-of-type) { display: none; }
+body[data-embed="1"] #app #overlay .stage-dir { font-size: 11px; }
+body[data-embed="1"] #app {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0; padding: 0; height: 100vh;
+}
+body[data-embed="1"] #stage {
+  grid-column: 1; grid-row: 1;
+  border-radius: 0; box-shadow: none; border: 0;
+}

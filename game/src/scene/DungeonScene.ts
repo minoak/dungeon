@@ -36,6 +36,10 @@ export interface Actor {
 
 export interface SceneData { app: App; atlas: SdAtlas; tiles: TilesCfg }
 
+// 액자 모드(?embed=1)에서는 마을 이름표를 걷는다. 액자는 화면이 작아 이름표가 서로 겹쳐 글자가 뭉갰다.
+// 함수인 까닭: 액자 표시는 부팅 중에 붙는데 이 파일은 그보다 먼저 읽힌다(상수로 두면 늘 false 였다).
+const townLabelsOff = () => typeof document !== 'undefined' && document.body?.dataset.embed === '1';
+
 export class DungeonScene extends Phaser.Scene {
   app!: App;
   atlas!: SdAtlas;
@@ -322,14 +326,14 @@ export class DungeonScene extends Phaser.Scene {
       const building = this.add.image(x, y, 'wl-town-' + b.texture).setOrigin(0.5, 1);
       building.setScale(b.width * s / building.width).setDepth(depthAt(y));
       this.levelObjs.push(building);
-      if (b.name) this.levelObjs.push(this.add.text(x, y + 6, b.name, {fontFamily:'sans-serif',fontSize:'12px',color:'#f4e4bd',backgroundColor:'#17232bcc',padding:{x:6,y:3}})
+      if (b.name && !townLabelsOff()) this.levelObjs.push(this.add.text(x, y + 6, b.name, {fontFamily:'sans-serif',fontSize:'12px',color:'#f4e4bd',backgroundColor:'#17232bcc',padding:{x:6,y:3}})
         .setOrigin(0.5,0).setDepth(DEPTH.stand + 5));
     }
     for (const p of V.props) {
       const x = (p.x + ox) * s, y = (p.y + oy) * s;
       this.levelObjs.push(this.add.sprite(x, y, 'wl-town-props', p.frame).setOrigin(0.5, TOWN_PROP_FOOT / TOWN_PROP_CELL)
         .setScale(s * (p.width ?? TOWN_PROP_CELL) / TOWN_PROP_CELL).setDepth(depthAt(y)));
-      if (p.name) this.levelObjs.push(this.add.text(x, y + 3, p.name, {fontFamily:'sans-serif',fontSize:'11px',color:'#f4e4bd',backgroundColor:'#17232bcc',padding:{x:4,y:2}})
+      if (p.name && !townLabelsOff()) this.levelObjs.push(this.add.text(x, y + 3, p.name, {fontFamily:'sans-serif',fontSize:'11px',color:'#f4e4bd',backgroundColor:'#17232bcc',padding:{x:4,y:2}})
         .setOrigin(0.5,0).setDepth(DEPTH.stand + 5));
     }
   }
@@ -414,7 +418,7 @@ export class DungeonScene extends Phaser.Scene {
         this.feats.set(k, s);
       } else s.setPosition(c.x, c.y);
       if (marker) {                                // 표식의 밝기는 반짝임 트윈 몫 — 이름표만 곁(2칸 안)에 산 캐릭터가 있을 때 켠다
-        this.featLabels.get(k)?.setText(ft.name).setVisible(cur.bots.some(b => b.alive && !b.won
+        this.featLabels.get(k)?.setText(ft.name).setVisible(!townLabelsOff() && cur.bots.some(b => b.alive && !b.won
           && Math.max(Math.abs(b.x - ft.x), Math.abs(b.y - ft.y)) <= 2));
         continue;
       }
