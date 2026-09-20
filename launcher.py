@@ -100,6 +100,9 @@ MAP_DEFAULT = "concept"                           # 09-20 오후(파트너 "이�
 # ⚠️이것은 '화면의 기본'이다 — /api/start 에 옵션이 아예 없으면 Runner.start 는 스위치를 전부 끈 판으로 띄운다:
 #   멈춰 둔 옛 판의 run_opts.json 에는 이 키들이 없고, 그 판은 같은 세계 설정으로 이어가야 한다(D79 세계 지문 대조).
 #   맵만은 예외다 — 화면에서 고르는 자리가 없어졌으므로 옵션이 없으면 MAP_DEFAULT 로 뜬다.
+# 09-20 기본 원정의 크기(파트너 "차라리 던전을 조금 더 크게 하고 층을 3층으로" · "1천턴 정도로 제한").
+#   근거·실측은 MAPS["concept"] 곁 주석에. 되돌리는 자리는 이 한 줄이다. ⚠️값 임시
+STANDARD_RUN = {"DUNGEON_DEPTHS": "3", "DUNGEON_TURNS": "1200", "DUNGEON_SOLO": "0"}
 NIGHT_DEFAULTS = {"town_life": True, "npc_reply": True, "floor_life": True, "bestiary_plus": True, "loop": True,
                   "offer": False}   # ⚠️offer(D95 신에게 바치기)는 러너 쪽 구현이 아직 합쳐지지 않았다 — 켜도 아무 일이 없으므로 화면에서 끄고 감춘다(파트너 09-20 "천천히 구현해보자")
 OLD_DEFAULTS = {k: False for k in NIGHT_DEFAULTS}   # 화면의 '09-20 추가 전으로' 버튼이 돌아가는 자리(맵은 안 돌아간다 — 화면에 없다)
@@ -302,7 +305,7 @@ class Runner:
             #   이어가는 판은 스냅샷의 틱 상한을 그대로 물려받는다(show_runner.py 의 D79 되묶기) — 이어가기는 '멈춘 자리부터'이지
             #   '틱 예산을 새로'가 아니다. 그래서 틱 상한은 한도와 무관하게 '한 원정 완주에 필요한 값'으로 잡는다.
             if mode == "standard":
-                env.update(DUNGEON_DEPTHS="3", DUNGEON_TURNS="1200", DUNGEON_SOLO="0")
+                env.update(**STANDARD_RUN)
             if opts.get("town"):
                 env["DUNGEON_TOWN"] = "1"
             else:

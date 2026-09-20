@@ -30,7 +30,9 @@ class AlphaLauncherTests(unittest.TestCase):
             result, env = self.launch_env({'mode': 'alpha', 'map': 'big'})
         self.assertEqual(result['mode'], 'standard')
         self.assertEqual([env[k] for k in ('DUNGEON_SKILLS', 'DUNGEON_TRPG_COMBAT', 'DUNGEON_RANDOM_SKILL')], ['1'] * 3)
-        self.assertEqual([env[k] for k in ('DUNGEON_DEPTHS', 'DUNGEON_TURNS', 'DUNGEON_SOLO')], ['5', '600', '0'])
+        # 기본 원정의 층수·틱수는 launcher.STANDARD_RUN 이 정한다 — 숫자를 여기 다시 박지 않는다(09-20 3층·1200틱).
+        self.assertEqual([env[k] for k in ('DUNGEON_DEPTHS', 'DUNGEON_TURNS', 'DUNGEON_SOLO')],
+                         [launcher.STANDARD_RUN[k] for k in ('DUNGEON_DEPTHS', 'DUNGEON_TURNS', 'DUNGEON_SOLO')])
         self.assertEqual(env['DUNGEON_BESTIARY_FILE'], '')
         self.assertEqual(env['DUNGEON_ACTION_MODE'], 'compose')
         self.assertEqual(env['DUNGEON_STATE_DIR'], self.temp.name)
