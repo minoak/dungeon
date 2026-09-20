@@ -60,3 +60,6 @@ docs/TASK_*.md
 docs/devlog/2026-09-12-yuna/
 # 7월 관전 덤프 폴더(로컬)
 runs/watch-*/
+
+# 에이전트 작업 폴더(git worktree) — 리포에 남기지 않는다
+.claude/
