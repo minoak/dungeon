@@ -105,6 +105,9 @@ API_URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/%s:gen
 API_CALL_LIMIT = int(os.environ.get("DUNGEON_API_CALL_LIMIT", "0"))
 if API_CALL_LIMIT < 0:
     raise ValueError("DUNGEON_API_CALL_LIMIT는 0 이상의 정수여야 한다")
+API_LIMIT_LABEL = "호출 실패 ApiCallLimit"   # D96(09-20) 한도에 닿아 **전송 자체를 안 한** 실패의 라벨. 문자열은 옛 값 그대로다.
+                                             #   다른 실패(타임아웃·안전 차단·JSON 불량)와 달리 다시 물어도 같은 자리에서 막히므로,
+                                             #   러너가 '재시도가 뜻 있는 실패'와 가르는 표식으로 쓴다(api_limit_only).
 _api_call_lock = threading.Lock()
 _api_call_count = 0
 
@@ -537,7 +540,7 @@ def _http_post(url, headers, body):
     if API_CALL_LIMIT:
         with _api_call_lock:
             if _api_call_count >= API_CALL_LIMIT:
-                return None, None, "호출 실패 ApiCallLimit"
+                return None, None, API_LIMIT_LABEL
             _api_call_count += 1
             import sys
             print("[api-budget] request %d/%d" % (_api_call_count, API_CALL_LIMIT), file=sys.stderr, flush=True)
@@ -555,6 +558,15 @@ def _http_post(url, headers, body):
         return r.status_code, r.json(), None
     except Exception:
         return r.status_code, None, None               # 비 JSON 본문(게이트웨이 HTML 등)
+
+
+def api_limit_only(errors):
+    """D96(09-20) 이 틱의 판단 실패가 **전부** 호출 한도 때문인가 — 러너가 판단 정지와 한도 도달을 가르는 자리.
+
+    errors = think_all 이 on_error 에 넘기는 {캐릭터: 실패 결정} 그대로. 결정의 reason 은 마지막 시도의 라벨이고,
+    그게 전부 API_LIMIT_LABEL 이면 다시 물어도 같은 자리에서 막힌다(한도는 러너 프로세스 전체를 센다).
+    하나라도 다른 종류의 실패가 섞이면 False — 그 판단은 재시도에 뜻이 있다(옛 판단 정지 그대로). 빈 dict 도 False."""
+    return bool(errors) and all((dec or {}).get("reason") == API_LIMIT_LABEL for dec in errors.values())
 
 
 _ENUMISH = re.compile(r"[A-Za-z_]{1,40}\Z")
