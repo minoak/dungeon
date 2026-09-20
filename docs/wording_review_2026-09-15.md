@@ -809,3 +809,16 @@ NPC 두뇌를 켠 판에서 NPC 가 답을 쓸 때만 쓰인다. `{name}` `{role
 | 544 | object.training_rack.story.trait | entities/object/training_rack.json | 목검과 창이 걸린 훈련대. 몸을 풀 수 있다 | |
 | 545 | object.training_rack.story.history | entities/object/training_rack.json | 던전 입구로 가는 길목에 있다. 길드가 세워 둔 것이라 누구나 쓴다. | |
 | 546 | object.well.story.trait | entities/object/well.json | 두레박이 걸린 마을 우물 | |
+
+## 2026-09-20 추가분 (D88~D94 — AFK 전권 위임분)
+
+> 이 절은 09-20 새벽~오전에 새로 들어간 임시 문장이다. 위와 같은 규칙: '교정' 칸을 채우면 그대로 옮기고,
+> 비우면 지금 문장을 유지하며 `삭제` 라 쓰면 그 칸을 없앤다. 정의 JSON 의 문장은 코드 무접촉으로 바뀐다.
+
+### loop
+
+| # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
+|---|---|---|---|---|
+| 547 | npc_facts.expedition_next | show_runner.py — npc_facts() 의 귀환 여부 줄(D94 분기, 코드에 '⚠️문구 임시' 주석). NPC 두뇌가 도는 판에서 접수원·주점 주인·성직자가 '아는 사실'로 받는다. 끈 판은 옛 문장 그대로. (수선에서 손대지 않음) | 앞선 원정 {n-1}번이 길드 보고로 끝났다 — 지금은 {n}번째 원정을 떠나기 전이다 | |
+| 548 | event.expedition_settled | show_runner.py — _settle_expedition() 의 events.log 한 줄(코드에 '⚠️문구 임시' 주석). 캐릭터에게는 안 보이고 민옥·관전 로그가 읽는다. 수선으로 {done} 의 뜻이 '장부 누계'에서 '이번 원정에 새로 완수한 의뢰'로 좁혀졌다(문장 형태는 그대로). | === {n}차 원정 결산 (t{t0}~t{turn}) — 가장 깊이 지하 {depth}층 · 일행이 지닌 보물 {treasure} · 완수 {done} / 미완 {undone} · 쓰러짐 {fallen} === | |
+| 549 | event.loop_timeout | show_runner.py — 판 끝 틱 상한 분기의 LOOP_ON 쪽 events.log 한 줄(코드에 '⚠️문구 임시' 주석). 수선에서 새로 생긴 문장. 캐릭터에게는 안 보이고 민옥·관전 로그가 읽는다. 끈 판은 옛 문장('… 지하 N층) — [..] 던전에 남음 …') 그대로. | === 시간 종료 (틱 한도 {MAX_TURNS} 도달) — 마을에 {home} / 던전에 {away} / 쓰러짐 {dead} === | |
