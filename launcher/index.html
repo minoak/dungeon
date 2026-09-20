@@ -180,6 +180,7 @@
   <h2>내 캐릭터와 동료</h2><!-- D81 ⚠️ 문구 임시: 검토표 149~ -->
   <div class="muted" style="margin-bottom:12px">1번 칸은 네 캐릭터다. 2·3번 칸에는 함께 갈 동료를 고른다 — 준비된 동료이거나, 네가 저장해 둔 다른 캐릭터다. 출발하면 마을에서 시작한다.<br>
     성격은 키워드(최대 3개)로 고르거나 직접 쓴다 — 키워드는 문장으로 바뀌지 않고 그대로 시트에 들어간다. 배경은 자유롭게.</div>
+  <div class="muted" id="sheetsHint" hidden>캐릭터 그림을 불러오는 중이다 — 먼저 이름과 성격을 정하면 된다. 그림은 준비되는 대로 자리에 들어온다.</div>
   <div class="partyGrid" id="partyGrid">
     <div class="cards" id="cards"></div>
     <div id="mates"></div>
@@ -345,6 +346,24 @@ function drawLook(cv, look) {
   const g = cv.getContext('2d');
   g.imageSmoothingEnabled = false; g.clearRect(0, 0, cv.width, cv.height);
   if (img) g.drawImage(img, 0, 0);
+}
+/* 시트(124장 13MB)는 폼보다 늦게 온다 — 도착하면 그림만 다시 그린다(입력 중인 칸은 건드리지 않는다). */
+function redrawLooks() {
+  for (const card of $('cards').querySelectorAll('.card')) {
+    const cv = card.querySelector('canvas.lookPrev');
+    if (cv && slots[+card.dataset.i]) drawLook(cv, slots[+card.dataset.i].look);
+  }
+  for (const card of $('mates').querySelectorAll('[data-mate]')) {
+    const m = mateOf(mates[+card.dataset.mate]), cv = card.querySelector('canvas');
+    if (m && cv) drawLook(cv, m.look);
+  }
+  const dp = (presets && presets.default_party) || [];
+  for (const cv of $('defaultPreview').querySelectorAll('canvas[data-dp]')) drawLook(cv, dp[+cv.dataset.dp].look);
+}
+function markSheetsLoading() {                    // 그림이 아직 없을 때만 안내 한 줄 — 도착하면 지운다
+  const on = !(window.WLSprites && WLSprites.sheetsLoaded);
+  const hint = $('sheetsHint');
+  if (hint) hint.hidden = !on;
 }
 function lookBlock(s, lk) {
   const chips = (obj, k) => Object.entries(obj).map(([id, v]) =>
@@ -634,7 +653,9 @@ $('bOracleClear').onclick = async () => { await api('/api/oracle', { text: '' })
 
 /* ═══ 파티 ═══ */
 async function loadPresets() {
-  if (presets) { await refreshCharacters(); return; }
+  // 앞선 호출이 아직 돌고 있거나 중간에 끊겼어도 카드가 비어 있으면 다시 세운다
+  // (그러지 않으면 두 번째 클릭이 여기서 빠져나가 빈 파티 화면이 그대로 굳는다).
+  if (presets) { await refreshCharacters(); if (!$('cards').childElementCount) renderCards(); return; }
   presets = await api('/api/presets');
   if (!presets.text_limits || presets.ruleset !== 'skills-v1' || presets.brain_failure_policy !== 'retry-pause-v1' || presets.model_ui_version !== 2
       || presets.party_ui_version !== 1                                 // D81: 동료 목록(companions)을 모르는 옛 서버면 빈 동료 칸 대신 재시작 안내
@@ -664,6 +685,10 @@ async function loadPresets() {
       ? '외형은 기본 파티 시트(party.json)에 적힌 그대로다.'
       : '시트에 외형이 없는 사람은 판마다 랜덤으로 뽑힌다 — 뽑힌 얼굴은 판 기록에 남아 리플레이에서도 같다.') + '</div>';
   for (const cv of $('defaultPreview').querySelectorAll('canvas[data-dp]')) drawLook(cv, dp[+cv.dataset.dp].look);
+  // 시트는 배경으로 오는 중이다(13MB) — 도착하면 그림만 채워 넣는다. 그때까지 폼은 이미 다 쓸 수 있다.
+  markSheetsLoading();
+  if (window.WLSprites && WLSprites.sheetsReady)
+    WLSprites.sheetsReady.then(() => { redrawLooks(); markSheetsLoading(); });
 }
 function renderCards() {
   const jobs = Object.keys(presets.jobs);

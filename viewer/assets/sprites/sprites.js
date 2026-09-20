@@ -13,6 +13,8 @@
   const DIRS = ['front', 'left', 'back', 'right'];
   let DATA = null;
   let SD = null;
+  let sheetsDone = true;              // 시트 124장(13MB) 을 다 받았나 - 받는 중에는 고를 목록을 시트 유무로 거르지 않는다
+  let sheetsReady = Promise.resolve();  // 그 로딩이 끝나는 때(부르는 쪽은 이걸 기다렸다 그림만 다시 그린다)
   const sheets = new Map();
   const hairSheets = new Map();
   const cache = new Map();
@@ -92,12 +94,17 @@
     cache.clear();
     SD = null; sheets.clear(); hairSheets.clear();
     // SD 묶음이 없거나 한 장이 실패해도 기존 파츠와 다른 외형은 표시한다.
+    sheetsDone = false;
     try {
       const base = new URL('sd/atlas.json', new URL(url, location.href));
       const response = await fetch(base, {cache:'no-store'});
       if (!response.ok) throw new Error('SD atlas ' + response.status);
       const config = await response.json();
-      await Promise.allSettled(Object.entries(config.presets).flatMap(([id, preset]) =>
+      SD = config;                       // 목록(외형·헤어)은 시트보다 먼저 선다 - atlas 하나면 무엇을 고를 수 있는지 다 안다
+      // 시트는 124장 13MB 다 - 이걸 기다리면 부르는 쪽 화면이 그동안 멈춘다(원격에서 45초+).
+      // 그래서 기다리지 않고 배경으로 받는다. 도착 전에는 cell() 이 파츠 합성으로 폴백하고,
+      // 다 받으면 sheetsReady 가 풀려 부르는 쪽이 그림만 다시 그린다.
+      sheetsReady = Promise.allSettled(Object.entries(config.presets).flatMap(([id, preset]) =>
         Object.entries(preset.hairstyles || {default:{name:'기본 머리',sheet:preset.sheet}}).map(async ([style, art]) => {
         const img = new Image(); img.src = new URL(art.sheet, base).href;
         await img.decode();
@@ -106,9 +113,8 @@
           throw new Error('SD 시트 크기 불일치: ' + id);
         hairSheets.set(id + '|' + style, img);
         if(style === 'default') sheets.set(id, img);
-      })));
-      SD = config;
-    } catch (e) { /* SD 미로드 = look 안의 기존 파츠로 폴백 */ }
+      }))).then(() => { sheetsDone = true; });
+    } catch (e) { sheetsDone = true; /* SD 미로드 = look 안의 기존 파츠로 폴백 */ }
     return DATA;
   }
 
@@ -122,18 +128,21 @@
     smooth(look) { return !!(isSD(look) && SD.presets[look.sprite].filter === 'linear'); },
     get data() { return DATA; },
     get ready() { return !!DATA; },
+    get sheetsReady() { return sheetsReady; },   // 시트(13MB) 가 다 온 때 - 부르는 쪽은 이때 미리보기를 다시 그린다
+    get sheetsLoaded() { return sheetsDone; },
     frameMs(look) { return isSD(look) ? SD.frame_ms :
       (DATA && DATA.animations && DATA.animations.walk && DATA.animations.walk.frame_ms) || 140; },
     displayScale(look) { return isSD(look) ? SD.display_scale : 1; },
+    // 시트를 아직 받는 중이면 atlas 가 적은 대로 다 보여 준다(그림만 늦게 온다). 다 받은 뒤엔 실제로 있는 것만.
     illustrations(look) { return SD ? Object.entries(SD.presets)
-      .filter(([id,p]) => sheets.has(id) && (p.selectable !== false || id === look?.sprite))
+      .filter(([id,p]) => (!sheetsDone || sheets.has(id)) && (p.selectable !== false || id === look?.sprite))
       .map(([id, p]) => ({id, name:p.name, job:p.job, sex:p.sex})) : []; },
     defaultHair(look) { return SD?.presets[look?.sprite]?.defaultHair || 'default'; },
     // 새 바디는 동일한 공용 헤어 id를 쓴다. default는 저장 호환용 별칭이다.
     hairstyles(look) {
       const p = SD && look && SD.presets[look.sprite];
       return p ? Object.entries(p.hairstyles || {default:{name:'기본 머리'}})
-        .filter(([id]) => (!p.sharedHair || id !== 'default') && hairSheets.has(look.sprite + '|' + id)).map(([id,h]) => ({id,name:h.name})) : [];
+        .filter(([id]) => (!p.sharedHair || id !== 'default') && (!sheetsDone || hairSheets.has(look.sprite + '|' + id))).map(([id,h]) => ({id,name:h.name})) : [];
     },
     // 파츠 목록(론처 칩용) — {heads:[{id,name,group}], bodies:[{id,name}]}
     parts() {
