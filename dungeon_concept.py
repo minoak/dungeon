@@ -279,6 +279,93 @@ class ConceptDungeon(G.Dungeon):
         self.doors_restored = len(getattr(self, '_thresholds', None) or {}) - len(gen) if self.RESTORE_ARCH else 0
         self._thresholds = None
 
+    # ── 소품(D92, 2026-09-20) ──────────────────────────────────
+    # 클라이언트 그림 어휘와 같은 낱말(game/src/scene/dungeonDecor.ts PROP_KINDS: barrel·crate·jar·rubble).
+    # 앞 셋은 '뒤질 수 있는 것'의 후보이기도 하다(던전 살림 스위치 — dungeon_gm.Dungeon.LIFE_RUMMAGE_IDS).
+    PROP_CYCLES = (('barrel', 'crate', 'barrel', 'jar'),
+                   ('jar', 'barrel', 'jar', 'crate'),
+                   ('rubble', 'rubble', 'jar', 'rubble'))
+
+    def _place_props(self):
+        """방 가장자리에 큰 소품을 놓는다 — 지시서 art/dungeon-v2/IMPLEMENTATION_GUIDE.md '소품 배치' 절 그대로
+        (작은 방은 한 모서리 최대 4 · 큰 방은 대각 두 모서리, 면적 10%·12개 상한 · 큰 방은 모서리 곁 둘째 줄까지).
+        비우는 칸: 문과 그 주변 8칸 · 열린 통로 입구 · 피처(출구·상자·보물…)와 그 직교 이웃 · 몹 주변 8칸 · 함정 칸.
+        **굴림은 엔진 판정 rng 가 아니라 좌표·시드 해시**(지시서 6항) — 같은 시드는 같은 지형과 같은 소품이다.
+        하나 채택할 때마다 '나머지 바닥이 전부 이어지나'를 엔진의 이동 규칙으로 확인한다: 8방향·대각 코너컷 금지는
+        직교 연결과 같다(대각이 허용되려면 양 직교 칸이 열려 있어야 하므로 그 직교 경로가 이미 있다).
+        격자(#/./+)는 한 글자도 안 바뀐다 — 스캐너·문·구역 분류·시야는 소품을 바닥으로 본다(막는 것은 발뿐)."""
+        orth = ((0, -1), (0, 1), (1, 0), (-1, 0))
+        floors = {(x, y) for y in range(self.h) for x in range(self.w) if self.grid[y][x] in (G.FLOOR, G.DOOR)}
+        blocked = set()
+
+        def connected():
+            start = next((c for c in sorted(floors) if c not in blocked), None)
+            if start is None:
+                return False
+            seen, todo = {start}, [start]
+            for x, y in todo:                  # todo 는 돌면서 늘어난다(BFS)
+                for p in ((x-1, y), (x+1, y), (x, y-1), (x, y+1)):
+                    if p in floors and p not in blocked and p not in seen:
+                        seen.add(p)
+                        todo.append(p)
+            return len(seen) == len(floors) - len(blocked)
+
+        reserved = set()
+        for f in self.features.values():       # 피처와 그 직교 이웃 — 상자·보물·계단 앞을 막지 않는다
+            reserved.add((f.x, f.y))
+            reserved.update((f.x+dx, f.y+dy) for dx, dy in orth)
+        for m in self.monsters:                # 몹 주변 8칸(보스 포함) — 처음부터 갇혀 있는 몹을 만들지 않는다
+            reserved.update((m.x+dx, m.y+dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+        reserved.update((t.x, t.y) for t in self.traps)
+
+        def near_door(x, y):
+            return any(self.grid[y+dy][x+dx] == G.DOOR for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                       if 0 <= x+dx < self.w and 0 <= y+dy < self.h)
+
+        props = []
+        for r in self.rooms:
+            seed = self._life_roll('prop_room', r.id, r.x, r.y)
+            spacious = r.w * r.h >= 60
+            if not spacious and seed % 7 == 0:
+                continue                       # 숨 쉴 자리가 필요한 작은 방도 있다
+            corners = [(r.x, r.y), (r.x+r.w-1, r.y), (r.x, r.y+r.h-1), (r.x+r.w-1, r.y+r.h-1)]
+            (ax, ay), (bx, by) = corners[seed % 4], corners[(seed % 4) ^ 3]
+
+            def score(c, ax=ax, ay=ay, bx=bx, by=by, spacious=spacious):
+                x, y = c
+                near = abs(x-ax) + abs(y-ay)
+                if spacious:                   # 큰 방은 대각 두 모서리에 모은다(둘째 모서리는 살짝 뒤)
+                    near = min(near, abs(x-bx) + abs(y-by) + 0.8)
+                return (near + self._life_roll('prop_jitter', x, y) % 7 / 10.0, y, x)
+
+            cands = []
+            for y in range(r.y, r.y+r.h):
+                for x in range(r.x, r.x+r.w):
+                    edge = min(x-r.x, r.x+r.w-1-x, y-r.y, r.y+r.h-1-y)
+                    if edge == 0 or (spacious and edge == 1
+                                     and min(abs(x-ax)+abs(y-ay), abs(x-bx)+abs(y-by)) <= 4):
+                        cands.append((x, y))
+            cands.sort(key=score)
+            cycle = self.PROP_CYCLES[seed % len(self.PROP_CYCLES)]
+            limit = min(12, r.w*r.h//10) if spacious else min(4, max(1, r.w*r.h*16//100))
+            n = 0
+            for x, y in cands:
+                if n >= limit:
+                    break
+                if self.grid[y][x] != G.FLOOR or (x, y) in blocked or (x, y) in reserved or near_door(x, y):
+                    continue
+                if any(not r.contains(x+dx, y+dy) and 0 <= x+dx < self.w and 0 <= y+dy < self.h
+                       and self.grid[y+dy][x+dx] == G.FLOOR for dx, dy in orth):
+                    continue                   # 열린 통로 입구(문 타일 없는 트임) — 방의 목을 막지 않는다
+                blocked.add((x, y))
+                if not connected():
+                    blocked.discard((x, y))
+                    continue
+                props.append({'id': len(props), 'kind': cycle[n % len(cycle)], 'x': x, 'y': y, 'blocks': True})
+                n += 1
+        self.props = props
+        self.prop_cells = frozenset((p['x'], p['y']) for p in props if p['blocks'])
+
     def boss_front(self):
         """보스룸 앞 칸(D67) — 부모 규칙(테두리 관통 칸의 바로 바깥 바닥)이 답을 못 내는 지형의 폴백.
         이 프로필은 방 사이가 2칸일 수 있어, 관통 칸의 바깥이 곧 옆 방 문턱의 문·어깨 벽인 경우가 있다(0콜 스윕: 보스층
@@ -295,12 +382,13 @@ class ConceptDungeon(G.Dungeon):
         ring = sorted(((x, y) for y in range(room.y - 1, room.y + room.h + 1)
                        for x in range(room.x - 1, room.x + room.w + 1)
                        if not room.contains(x, y) and 0 <= x < self.w and 0 <= y < self.h
-                       and self.grid[y][x] in (G.FLOOR, G.DOOR)), key=lambda c: (c[1], c[0]))
+                       and self.grid[y][x] in (G.FLOOR, G.DOOR) and not self.prop_at(x, y)),   # D92: 소품 칸에는 아무도 설 수 없다
+                      key=lambda c: (c[1], c[0]))
         seen, todo = set(ring), list(ring)
         for x, y in todo:                      # todo 는 돌면서 늘어난다(BFS)
             for nx, ny in ((x, y-1), (x-1, y), (x+1, y), (x, y+1)):
                 if ((nx, ny) in seen or not (0 <= nx < self.w and 0 <= ny < self.h) or room.contains(nx, ny)
-                        or self.grid[ny][nx] not in (G.FLOOR, G.DOOR)):
+                        or self.grid[ny][nx] not in (G.FLOOR, G.DOOR) or self.prop_at(nx, ny)):
                     continue
                 if self.grid[ny][nx] == G.FLOOR:
                     return (nx, ny)
@@ -318,4 +406,7 @@ class ConceptDungeon(G.Dungeon):
         level['architecture'] = dict(version=ARCH_VERSION, columns=getattr(self, 'columns', []),
                                      corridors=getattr(self, 'corridors', []),
                                      extra_connections=getattr(self, 'extra_connections', 0))
+        props = list(getattr(self, 'props', ()) or ())       # D92(09-20 additive) 엔진 소유 소품 — 있을 때만.
+        if props:                                            #   클라이언트는 props 가 있으면 제 바닥 소품 추첨을 건너뛰고 이 목록을 그린다
+            level['props'] = [dict(p) for p in props]        #   (game/src/scene/dungeonDecor.ts) = 충돌을 아는 쪽이 자리를 정한다
         return level

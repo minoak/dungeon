@@ -39,7 +39,13 @@ for _k in [k for k in os.environ if k.startswith("DUNGEON_")]:       # 게이트
     os.environ.pop(_k)
 RUN_ENV = dict(DUNGEON_BRAIN_BACKEND="dummy", DUNGEON_GM="0", DUNGEON_STEP_DELAY="0", DUNGEON_BESTIARY_FILE="",
                DUNGEON_PARTY_FILE=os.path.join(HERE, "party.json"), DUNGEON_STATE_DIR=STATE,
-               DUNGEON_RUNS_DIR=os.path.join(TMP, "runs"), DUNGEON_SEED="7", DUNGEON_DEPTHS="2", DUNGEON_TURNS="36",
+               # ⚠️D92(09-20) 로 시드가 7 → 9 로 바뀌었다: 엔진 소유 소품(concept 프로필에 딸린 통·상자·항아리)이 놓이면서
+               #   spawn 의 후보 칸이 줄어 파티 출발 자리가 달라졌고, 시드 7 의 더미 2인은 36틱 안에 계단에 닿지 못한다
+               #   (같은 조건 14시드 스윕: 120틱 안 하강 소품 켠 판 8/14 중앙값 57 · 끈 판 7/14 중앙값 45 — 느려진 게 아니라
+               #   출발 자리가 달라진 것. 시드 9 는 7틱에 하강). ⑧ 은 '층 전이가 난다'를 보는 자리라 빠른 시드를 쓴다.
+               #   ⚠️'시드 7 을 두고 틱 상한만 올리자'는 안 된다 — 같은 조건 자식 프로세스로 재봤더니 시드 7 은 200틱 안에도
+               #   하강하지 않는다(09-20 수선 측정). 대신 '이동이 느려지는 회귀'의 핀은 여기가 아니라 ⑦ 이다(12시드 × 600틱 종결).
+               DUNGEON_RUNS_DIR=os.path.join(TMP, "runs"), DUNGEON_SEED="9", DUNGEON_DEPTHS="2", DUNGEON_TURNS="36",
                DUNGEON_ARCH="concept")                                # 행동 모드는 실판 기본(compose) — menu 는 ⑧ 끝의 자식 프로세스
 os.environ.update(RUN_ENV)
 

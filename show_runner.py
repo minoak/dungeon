@@ -121,6 +121,10 @@ N_LURK = int(os.environ.get("DUNGEON_LURKERS", "1"))
 BESTIARY_PLUS_ON = os.environ.get("DUNGEON_BESTIARY_PLUS", "0") == "1"   # D92(09-20 파트너 "던전에 추가 오브젝트나 몬스터 혹은 이벤트를
 #   넣는 것만 하면 될 것 같아" · 메모 §4-3 '요구하는 대응이 다른 종류'): 새 몬스터 풀(상태형 독칼 고블린·무리형 새끼거미·단단한 고블린 중갑병) —
 #   2층부터 고블린의 절반이 새 종으로 바뀐다(1층은 그대로 — 의뢰·주점 소문의 실측). 러너 기본도 0(론처가 켠다) = 옛 판과 비트까지 같다
+FLOOR_LIFE_ON = os.environ.get("DUNGEON_FLOOR_LIFE", "0") == "1"   # D92(09-20 파트너 "던전에 추가 오브젝트나 몬스터 혹은 이벤트를 넣는 것만
+#   하면 될 것 같아"): 던전 살림 — 뒤지는 통·나무 상자·항아리(rummage, 한 번)·읽는 석판(그 층을 세계가 센 사실)·모닥불(2층부터, 곁에서 쓰면 HP).
+#   새 동사는 없다(전부 기존 use/interact 밑 · 부품은 entities/object 의 JSON). 러너 기본도 0(론처가 켠다) = 옛 판과 비트까지 같다.
+#   ⚠️소품(통행을 막는 큰 물건)은 이 스위치가 아니라 생성 프로필(DUNGEON_ARCH=concept)에 딸린다 — 그 판의 지형의 일부다.
 N_POTION = int(os.environ.get("DUNGEON_POTIONS", "1"))   # 층당 회복 물약(07-17) — 러너 기본 1,
                                                           # 엔진 직생성 기본 0(기존 verify 비트 동일)
 N_GEAR = int(os.environ.get("DUNGEON_GEAR", "3"))        # 층당 장비(07-30) — 러너 기본 3(순환:
@@ -1108,7 +1112,7 @@ def arrive_cells(d, ax, ay, k, taken=()):
                 if (nx, ny) in seen or not (0 <= nx < d.w and 0 <= ny < d.h):
                     continue
                 seen.add((nx, ny))
-                if d.grid[ny][nx] == G.WALL:
+                if d.grid[ny][nx] == G.WALL or d.prop_at(nx, ny):   # D92(09-20): 소품이 막은 칸은 지나가지도 서지도 못한다(walkable 과 같은 눈)
                     continue
                 nxt.append((nx, ny))
                 if d.feature_at(nx, ny) is None and not d.monster_at(nx, ny) and (nx, ny) not in taken:
@@ -1155,6 +1159,7 @@ def new_floor(nd, lore, quests=None):
     d = FLOOR_CLS(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
                   n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
                   bestiary_plus=BESTIARY_PLUS_ON,   # D92 새 몬스터 풀 — 생성 세 자리(소문 미리보기·시작·전이)가 같은 값을 넘긴다
+                  floor_life=FLOOR_LIFE_ON,   # D92 던전 살림 — 같은 규율(세 자리가 같은 값: 소문 미리보기와 실제 1층이 같은 층이어야 한다)
                   scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
                   graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
                   wait_verb=WAIT_ON, motion=MOTION_ON, ally_doing=ALLY_DOING_ON,
@@ -1308,6 +1313,7 @@ def _world_fingerprint():
             "compose": bool(brains.COMPOSE), "scan": SCAN_ON, "loops": LOOPS_ON, "town_apart": TOWN_APART_ON,
             "town_hear": TOWN_HEAR, "quests": bool(QUESTS_ON and NOTICES_ON), "plan": PLAN_ON,
             **({"bestiary_plus": True} if BESTIARY_PLUS_ON else {}),   # D92: 같은 규율(켠 판에만) — 안 가 본 층의 몹 배치가 달라지는 스위치
+            **({"floor_life": True} if FLOOR_LIFE_ON else {}),   # D92: 같은 규율 — 안 가 본 층의 피처(통·석판·모닥불) 구성이 달라지는 스위치
             **({"partyform": True} if PARTYFORM_ON else {}),   # D84: 켠 판에만 적는다 — 옛 스냅샷의 지문과 글자까지 같게
             **({"town_life": True} if (TOWN_LIFE_ON and TOWN_ON) else {}),   # D90(09-20): 같은 규율 — 마을의 부품 구성이 다른 판(이어가는 러너가 같아야 한다)
             **({"npc_reply": True} if (NPC_REPLY_ON and TOWN_ON) else {}),   # D93(09-20): 같은 규율 — 관측(npc_ears)·되받기 장부가 다른 판
@@ -1462,6 +1468,7 @@ def main():
             d = FLOOR_CLS(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION, depth=START_DEPTH,   # D67: 프리셋이면 최심층
                           n_monsters=N_MON + START_DEPTH - 1, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,   #   (층 전이와 같은 몹 수 규칙)
                           bestiary_plus=BESTIARY_PLUS_ON,   # D92 새 몬스터 풀(보스 프리셋처럼 깊은 층에서 시작하는 판도 같은 규칙)
+                          floor_life=FLOOR_LIFE_ON,   # D92 던전 살림(뒤지는 통·석판·모닥불) — 같은 규율
                           loops=LOOPS_ON, selfstop=SELF_ON, graves=GRAVES_ON, events=EVENTS_ON,
                           dry_signal=DRY_ON, hail=HAIL_ON, wait_verb=WAIT_ON, motion=MOTION_ON, ally_doing=ALLY_DOING_ON,
                           ally_sight=ALLY_SIGHT_ON, social=SOCIAL_ON, solo=SOLO_ON, n_gear=N_GEAR,
@@ -1635,6 +1642,7 @@ def main():
                 bestiary_defs=lore,        # D63(09-13 additive): 지식 본문 정의 {종키:{name, lore, brief?, unlock?, review?}} — 도감·수첩 창이
                                            #   캐릭터 상태(모름·등재·심층)만큼 본문을 보여 주는 데 쓴다. 판정 무접촉·정의가 뒤에 바뀌어도 그 판이 알던 본문
                 **({"bestiary_plus": True} if BESTIARY_PLUS_ON else {}),   # D92(09-20 additive, 켠 판에만) 새 몬스터 풀 — 2층부터 몹 배치가 달라지는 판 파라미터(monsters 급)
+                **({"floor_life": True} if FLOOR_LIFE_ON else {}),   # D92(09-20 additive, 켠 판에만) 던전 살림 — 층마다 뒤지는 통·석판·모닥불이 선다(피처 구성이 달라지는 판 파라미터)
                 brain_failure_policy=run_control.POLICY,
                 bestiary_file=bool(BESTIARY_FILE),   # 영속 여부(실행모드 메타 — gm/menu 와 같은 급)
                 party=[{**G.SK.snapshot(b), **{k: b[k] for k in ("char", "job", "sex", "maxhp", "str", "dex",
@@ -2061,6 +2069,7 @@ def main():
                 d = FLOOR_CLS(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, depth=nd,
                               n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
                               bestiary_plus=BESTIARY_PLUS_ON,   # D92 새 몬스터 풀 — 2층부터 고블린의 절반이 새 종(1층은 그대로)
+                              floor_life=FLOOR_LIFE_ON,   # D92 던전 살림(뒤지는 통·석판·모닥불) — 같은 규율
                               scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
                               graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
                               wait_verb=WAIT_ON, motion=MOTION_ON, ally_doing=ALLY_DOING_ON,

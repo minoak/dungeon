@@ -5,7 +5,7 @@
 import Phaser from 'phaser';
 import { paintTownPaving } from './townPaving';
 import { paintAuthoredTown } from './townAuthored';
-import { dungeonArtFor, queueDungeonPrototype, paintDungeonPrototype, dungeonPrototypeVisual, syncDungeonPrototype, tickDungeonPrototype, type DungeonArt } from './dungeonPrototype';
+import { dungeonArtFor, queueDungeonPrototype, paintDungeonPrototype, dungeonPrototypeVisual, dungeonLifeVisual, syncDungeonPrototype, tickDungeonPrototype, type DungeonArt } from './dungeonPrototype';
 import type { App } from '../app';
 import type { Bot, Char, Dir, Feature, Frame, LevelState, Monster, TownVisual } from '../stream/types';
 import { NPC_CELL, NPC_FOOT, npcTexture, npcFrame, npcWalk, queueNpcs, registerNpcAnims } from '../assets/npcs';
@@ -61,6 +61,10 @@ export class DungeonScene extends Phaser.Scene {
   private featLabels = new Map<string, Phaser.GameObjects.Text>();   // D90 저작 마을의 피처 표식에 딸린 이름표(키 = feats 와 같다)
   // D88(09-20) 이 층의 던전 렌더러 — 층마다 고른다(dungeonArtFor: level.architecture 가 있으면 입체 · URL ?dungeonArt= 는 강제 · 마을은 늘 null)
   private dungeonArt: DungeonArt | null = null;
+  // D92(09-20) 이 층에서 엔진 소유 소품(level.props)이 이미 그려진 칸 — 승격된 통·상자·항아리는 피처이기도 해서
+  //   그대로 두면 소품 그림 위에 피처 그림이 한 장 더 선다(같은 물건이 둘로 보인다). 소품 레이어가 없는 판(옛 그림
+  //   렌더러 · ?dungeonArt=off)에서는 비어 있다 — 그때는 피처가 스스로 그려야 그 통이 화면에 선다.
+  private propCells = new Set<string>();
   private get prototypeDungeon(): boolean { return this.dungeonArt !== null; }
   get projectedDungeon(): boolean { return this.dungeonArt === 'projected'; }
 
@@ -160,7 +164,8 @@ export class DungeonScene extends Phaser.Scene {
   tileFrame(key: string): number { return tileIndex(this.ts, this.cols, key); }
   /** 새 에셋을 우선 사용하고, 아직 없는 종류는 기존 타일로 표시한다. */
   visualOf(key: string): { texture: string; frame: number; scale: number; originY: number } {
-    const art = (this.prototypeDungeon ? dungeonPrototypeVisual(key) : null) ?? worldVisual(key);
+    const art = (this.prototypeDungeon ? dungeonPrototypeVisual(key) : null) ?? worldVisual(key)
+      ?? dungeonLifeVisual(key);   // D92(09-20) 던전 살림 다섯(통·상자·항아리·석판·모닥불) — 옛 그림 렌더러에도 제 그림이 있다(없으면 정체불명 폴백 타일)
     return art ? { ...art, scale: 1, originY: WORLD_FOOT / WORLD_CELL }
       : { texture: 'tiny', frame: this.tileFrame(key), scale: TILE / this.ts.tile, originY: 0.9 };
   }
@@ -265,9 +270,12 @@ export class DungeonScene extends Phaser.Scene {
     const tex = V ? 'wl-town-terrain' : 'wl-terrain';
     const tileset = this.map.addTilesetImage(tex, tex, TERRAIN_CELL, TERRAIN_CELL, 0, 0);
     this.ground = this.map.createLayer(0, tileset!, 0, 0)!.setScale(TILE / TERRAIN_CELL).setDepth(DEPTH.ground);
+    this.propCells.clear();
     if (this.prototypeDungeon) {
       this.ground.setVisible(false);
       this.levelObjs.push(paintDungeonPrototype(this, L, TILE, this.dungeonArt!));
+      // D92(09-20): 소품 레이어가 그린 칸을 적어 둔다 — 그 칸의 피처(뒤지는 통으로 승격된 소품)는 아래 피처 루프가 건너뛴다.
+      for (const p of L.props ?? []) this.propCells.add(p.x + ',' + p.y);
     }
     if (V) {
       const paving = paintTownPaving(this, V, TILE, DEPTH.ground + 1);
@@ -379,12 +387,9 @@ export class DungeonScene extends Phaser.Scene {
 
     // 피처(출구는 층 고정물) — 시야 안이거나 본 적 있는 자리, concealed 는 숨김
     const seenFeats = new Set<string>();
-    // D92(09-20): 엔진 소유 소품(level.props)으로 이미 그려진 칸 — 그 위에 승격한 피처(뒤지는 통·상자·항아리)를
-    //   또 그리면 통 그림 위에 폴백 타일이 겹친다. 소품 레이어가 곧 그 물체의 그림이므로 피처 스프라이트는 건너뛴다.
-    const propCells = new Set((cur.level.props ?? []).map(p => p.x + ',' + p.y));
     for (const ft of cur.features) {
       if (ft.type === 'exit' || ft.type === 'building' || ft.concealed) continue;   // building(D60): 시각 레이어가 건물을 그린다 — 문턱 피처는 안 그림
-      if (propCells.has(ft.x + ',' + ft.y) && !worldVisual('feat:' + ft.type)) continue;
+      if (this.propCells.has(ft.x + ',' + ft.y)) continue;   // D92(09-20): 소품 레이어가 이미 그 통을 그렸다 — 같은 칸에 한 장 더 얹지 않는다
       if (!known(ft.x, ft.y)) continue;
       const k = ft.type + '#' + ft.id;
       seenFeats.add(k);

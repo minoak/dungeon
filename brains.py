@@ -1602,7 +1602,9 @@ def _wire(obs, names=None, compose=False):
         L += list(obs["ascii_view"])
         L += ["```",
               "기호: # 벽 · . 바닥 · + 문(너머 안 보임) · , 발자국 · $ 보물 · > 계단 · M 몬스터"
-              " · ^ 드러난 함정 · = 상자 · ~ 샘 · ! 회복 물약 · 숫자=동료"]
+              " · ^ 드러난 함정 · = 상자 · ~ 샘 · ! 회복 물약 · 숫자=동료"
+              # D92(09-20): 소품이 있는 세계에서만 한 낱말이 는다(그 판의 obs 가 legend 에 싣고 올 때만) — ⚠️문구 임시
+              + (" · o 지나갈 수 없는 큰 물건" if (obs.get("legend") or {}).get("o") else "")]
 
     s = obs.get("sights") or {}
     if scan:
@@ -1677,6 +1679,9 @@ def _wire(obs, names=None, compose=False):
         for t in s.get("traps", []):
             put(t.get("bearing"), t.get("dist", 0),
                 "%s %dm (발각됨 — 위치를 안다)" % (t.get("name", "함정"), t.get("dist", 0)))
+        for q in s.get("blocked", []):          # D92(09-20) 눈에 든 소품 — 사실만(방위·거리·칸 수). ⚠️문구 임시
+            put(q.get("bearing"), q.get("dist", 0),
+                "큰 물건이 바닥 %d칸을 채우고 있다 %dm (그 칸은 지나갈 수 없다)" % (q.get("n", 1), q.get("dist", 0)))
         for b in s.get("bots", []):
             put(b.get("bearing"), b.get("dist", 0),
                 "%s(HP %s/%s%s) %dm%s%s" % (who(b.get("char", "?")),
@@ -1744,6 +1749,8 @@ def _wire(obs, names=None, compose=False):
                         (" · " + " · ".join(b["status"])) if b.get("status") else "",   # D34 상태
                         at(b), _person_sfx(b, people),                                 # D85: 낯선 사람의 겉모습 · 아는 사람이면 내 기록(조건 a — 보일 때 뜬다)
                         _ally_sfx(b, who)))                                            # D27 개정(09-12) 고른 행동 · 몸짓 깃발
+        for q in s.get("blocked", []):          # D92(09-20) 눈에 든 소품 — 사실만(방위·거리·칸 수). ⚠️문구 임시
+            L.append("- 큰 물건이 바닥 %d칸을 채우고 있다 — %s (그 칸은 지나갈 수 없다)" % (q.get("n", 1), at(q)))
         for w in s.get("ways", []):
             L.append("- %s쪽으로 트인 길 — 거리 %d, %s%s"
                      % (w.get("bearing", "?"), w.get("dist", 0),

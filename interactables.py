@@ -80,6 +80,9 @@ def use_of(d, f):
     오브젝트 = type 이 같은 정의(같은 type 을 여러 정의가 쓰면 이름이 같은 것 먼저 — 무기 단검·장검과 같은 문법)."""
     if f is None:
         return None
+    over = (getattr(d, 'use_over', None) or {}).get(f.id)   # D92(09-20) 피처마다 다른 쓰임 — 던전 석판의 본문은 그 층의 사실이라
+    if over:                                                #   정의 한 장으로는 말할 수 없다. 세계의 상태가 정의보다 먼저다(옛 피클엔 없는 칸 — getattr)
+        return over
     if f.type == 'building':
         eid = (getattr(d, 'building_defs', None) or {}).get(f.id)
         try:                                     # D90: 마을 생활 판(d.town_life — build_town 이 켠 판에만 건다)이면 정의의 life.use 를 얹어 읽는다
