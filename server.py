@@ -350,17 +350,22 @@ class Sessions:
                     "자기 API 키로는 지금도 시작할 수 있다" % self.house_per_ip_day)
         return None
 
-    def house_left(self, ip):
-        """오늘 이 주소가 더 열 수 있는 운영자 키 판 수 — 서버 전체 남은 수와 주소 남은 수 중 작은 쪽(꺼져 있으면 0)."""
+    def house_left_parts(self, ip):
+        """(서버 전체 남은 판, 이 주소 남은 판 | 주소 상한 없음이면 None) — 꺼져 있으면 (0, 0).
+        화면이 '다 찼다'의 주어를 가른다(09-21 파트너가 주소 한도를 서버 전체가 찬 것으로 읽었다)."""
         if not self.house_on():
-            return 0
+            return 0, 0
         tag = self._house_ip(ip)
         with self.house_lock:
             doc = self._house_doc_locked()
-        left = self.house_per_day - int(doc.get("total", 0))
-        if self.house_per_ip_day:
-            left = min(left, self.house_per_ip_day - int(doc["ip"].get(tag, 0)))
-        return max(0, left)
+        total = max(0, self.house_per_day - int(doc.get("total", 0)))
+        mine = max(0, self.house_per_ip_day - int(doc["ip"].get(tag, 0))) if self.house_per_ip_day else None
+        return total, mine
+
+    def house_left(self, ip):
+        """오늘 이 주소가 더 열 수 있는 운영자 키 판 수 — 서버 전체 남은 수와 주소 남은 수 중 작은 쪽(꺼져 있으면 0)."""
+        total, mine = self.house_left_parts(ip)
+        return total if mine is None else min(total, mine)
 
     def house_check(self, ip):
         """자리만 본다(쓰지 않는다) — 없으면 HouseSpent."""
@@ -658,7 +663,10 @@ class PublicHandler(Handler):
                        unwatched_limit=self.sessions.unwatched_limit,
                        api_call_limit=self.sessions.api_call_limit)        # D96 additive — 시작 화면이 '한 판에 몇 콜까지'를 말할 수 있게(0 = 없음). 화면은 이 값을 그대로 쓴다
             s = self.sessions                                             # D98 additive — 운영자 키 판(키 없이 시작)의 조건과 이 주소의 오늘 남은 판
-            obj["house"] = {"on": s.house_on(), "left": s.house_left(self._ip()), "per_day": s.house_per_day,
+            left_total, left_ip = s.house_left_parts(self._ip())
+            obj["house"] = {"on": s.house_on(), "left": left_total if left_ip is None else min(left_total, left_ip),
+                            "left_total": left_total, "left_ip": left_ip,   # '다 찼다'의 주어(서버 전체 / 이 주소)를 화면이 가른다
+                            "per_day": s.house_per_day,
                             "per_ip_day": s.house_per_ip_day, "model": s.house_model, "turns": s.house_turns,
                             "call_limit": s.house_call_limit, "resume": False,
                             "unwatched": s.house_unwatched or s.unwatched_limit}   # 보는 창이 없으면 몇 초 뒤 멈추나(화면이 말한다)

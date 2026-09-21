@@ -191,8 +191,8 @@ try:
     pa = A.call("/api/presets")
     ha = (pa[2] or {}).get("house") or {}
     check("② presets.house = 켜짐 · 이 주소 남은 2 · 하루 3 · 모델·600틱·400콜 · 이어가기 없음 · 안 보면 30초",
-          ha == {"on": True, "left": 2, "per_day": 3, "per_ip_day": 2, "model": "gemini-3.8-flash", "turns": 600,
-                 "call_limit": 400, "resume": False, "unwatched": 30} and server.HOUSE_UNWATCHED_SEC == 30, str(ha))
+          ha == {"on": True, "left": 2, "left_total": 3, "left_ip": 2, "per_day": 3, "per_ip_day": 2, "model": "gemini-3.8-flash",
+                 "turns": 600, "call_limit": 400, "resume": False, "unwatched": 30} and server.HOUSE_UNWATCHED_SEC == 30, str(ha))
     check("② presets 응답에 운영자 키 없음", HKEY.encode() not in pa[1])
     st, raw, obj = start_spied(A, dict(STD, provider="anthropic_api", brain="anthropic_api", model="claude-x", house=False))
     env = captured[-1] if captured else {}
@@ -236,6 +236,9 @@ try:
     check("④ 같은 주소 두 번째 200 · 세 번째 429(이 주소)", st2 == 200 and st3 == 429 and "이 주소" in (o3 or {}).get("error", ""),
           "%s %s %s" % (st2, st3, o3))
     check("④ 거절은 수를 안 쓴다(서버 2)", usage(d_on).get("total") == 2, str(usage(d_on)))
+    hA = (A.call("/api/presets")[2] or {}).get("house", {})
+    check("④ 이 주소만 찼을 때: left 0 · left_ip 0 · left_total 1(서버 전체는 남았다 — 화면이 '이 주소에서 … 다 썼습니다'를 고른다)",
+          hA.get("left") == 0 and hA.get("left_ip") == 0 and hA.get("left_total") == 1, str(hA))
     C = judge(port, "10.0.0.3")
     stc = start_spied(C, dict(STD, seed=11))[0]
     D = judge(port, "10.0.0.4")
@@ -245,6 +248,9 @@ try:
           "%s %s %s" % (stc, std_, od))
     left = {j.ip: (j.call("/api/presets")[2] or {}).get("house", {}).get("left") for j in (A, B, C, D)}
     check("④ presets.left: 서버 몫이 다 찼으니 모두 0", set(left.values()) == {0}, str(left))
+    hD = (D.call("/api/presets")[2] or {}).get("house", {})
+    check("④ 서버 전체가 찼을 때: left_total 0 · 한 판도 안 쓴 주소는 left_ip 2 그대로(화면이 '서버 전체 … 다 찼습니다'를 고른다)",
+          hD.get("left_total") == 0 and hD.get("left_ip") == 2 and hD.get("left") == 0, str(hD))
     st, _, obj = start_spied(D, dict(STD, key=OWN, seed=13))
     check("④ 운영자 키 판이 다 찬 날에도 자기 키 판은 열린다", st == 200, str(obj))
 
@@ -372,6 +378,9 @@ try:
           'id="brainCard"' in html and 'id="houseCard" hidden' in html and "$('brainCard').hidden = houseOpen();" in html
           and "$('keyCard').hidden = houseOpen() ||" in html and "$('houseCard').hidden = !houseOpen();" in html
           and 'id="tByokNote"' in html and "$('tByokNote').hidden = houseOpen();" in html)
+    check("⑨ '다 찼다'의 주어를 가른다: 서버 전체(left_total 0) / 이 주소 — 첫 화면·키 칸·출발 오류 세 자리",
+          "const houseAllSpent = () => !!house && !(house.left_total > 0);" in html
+          and html.count("houseAllSpent() ?") >= 3 and "이 주소에서 오늘 운영자 키 판" in html and "오늘 서버 전체의 운영자 키 판" in html)
     check("⑨ 첫 화면 안내 자리는 인라인 display 없이(hidden 을 이기지 않게)",
           '<div id="tHouseNote" hidden style="margin-top:8px' in html and 'id="tHouseNote" hidden style="display' not in html)
     check("⑨ 첫 화면 안내 자리(tHouseNote) · 조건 문장은 서버 값(house.turns·house.model·house.left)에서",

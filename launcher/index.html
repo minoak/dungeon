@@ -645,12 +645,13 @@ function changeBrain() {
   $('keyHint').textContent = '입력한 키는 이 원정에만 사용하며 파일이나 브라우저 저장소에 저장하지 않는다. ' +
     (!isPublic ? '비워 두면 로컬 .env에 설정된 해당 회사 키를 사용한다.'
       : houseOpen() ? houseLine() + ' 비워 두면 이 조건으로 출발한다.'        // D98 ⚠️ 문구 임시
-      : '공개 서버에서는 키 입력이 필요하다.' + (house && house.on ? ' (오늘 운영자 키 판은 다 찼다)' : ''));
+      : '공개 서버에서는 키 입력이 필요하다.' + (house && house.on ? (houseAllSpent() ? ' (오늘 서버 전체의 운영자 키 판이 다 찼다)' : ' (이 주소의 오늘 운영자 키 판을 다 썼다)') : ''));
   updateMode();
 }
 // D98(09-21) 운영자 키 판 — 키를 비우고 출발하면 서버의 키로 돈다(모델 고정·틱 상한·이어가기 없음·하루 판 수). 조건은 서버가 준다.
 let house = null;
 const houseOpen = () => !!(isPublic && house && house.on && house.left > 0);
+const houseAllSpent = () => !!house && !(house.left_total > 0);   // 자리가 없는 까닭이 서버 전체인가(아니면 이 주소의 하루 몫) — 09-21 파트너가 주소 한도를 전체로 읽음
 const houseModelName = () => String(house.model || '').split('-').map(w => w ? w[0].toUpperCase() + w.slice(1) : w).join(' ');   // gemini-3.8-flash → Gemini 3.8 Flash
 const houseLine = () => `키가 없으면 운영자 키(${house.model})로 돌려 볼 수 있다: 한 판 최대 ${house.turns}틱 · 모델 호출 ${house.call_limit}회까지 · 이어가기 없음 · 이 주소에서 오늘 남은 판 ${house.left}.`;
 async function initProviders() {
@@ -683,7 +684,8 @@ async function initProviders() {
     ? `이 데모의 원정은 운영자가 비용을 내는 ${houseModelName()}로 돕니다. 키를 가져오지 않아도 됩니다. `
       + `여럿이 나눠 쓰는 데모라 한도를 빡빡하게 잡았습니다. 한 판은 최대 ${house.turns}틱이고 이어가기가 없으며, `
       + `창을 닫거나 오래 다른 탭에 두면 판이 멈춥니다. 이 주소에서 오늘 ${house.left}판 남았습니다.`
-    : `오늘 운영자 키로 돌 수 있는 판은 다 찼습니다. 한국 시간 자정에 다시 열립니다. 자기 키로는 지금도 시작할 수 있습니다.`;
+    : (houseAllSpent() ? `오늘 서버 전체의 운영자 키 판(${house.per_day}판)이 다 찼습니다.` : `이 주소에서 오늘 운영자 키 판 ${house.per_ip_day}판을 다 썼습니다.`)
+      + ` 한국 시간 자정에 다시 열립니다. 자기 키로는 지금도 시작할 수 있습니다.`;
   if (houseOpen()) {
     $('houseCardTitle').textContent = `두뇌: ${houseModelName()} (데모 제공)`;
     $('houseCardText').textContent = `이 데모는 운영자가 비용을 내는 ${houseModelName()}로 돈다. 모델과 API 키는 고르지 않는다. `
@@ -1302,7 +1304,7 @@ $('bStart').onclick = async () => {
       } else {
         $('err2').style.color = '#ff8b7a';
         $('err2').textContent = house && house.on
-          ? '오늘 운영자 키 판은 다 찼다. 선택한 회사의 API 키를 넣어 줘. 이 판에만 쓰이고 서버에 남지 않는다.'
+          ? (houseAllSpent() ? '오늘 서버 전체의 운영자 키 판이 다 찼다.' : '이 주소의 오늘 운영자 키 판을 다 썼다.') + ' 선택한 회사의 API 키를 넣어 줘. 이 판에만 쓰이고 서버에 남지 않는다.'
           : '선택한 회사의 API 키를 넣어 줘. 이 판에만 쓰이고 서버에 남지 않는다.';
         return;
       }

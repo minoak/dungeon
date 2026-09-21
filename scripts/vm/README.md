@@ -79,7 +79,11 @@ sudo journalctl -u botpikdun -n 20 --no-pager | grep D98
 마지막 줄에 `운영자 키 판(D98): 켜짐 / 모델 gemini-3.8-flash / 최대 600틱 / …` 이 보이면 켜진 것이다(키 문자열은 어디에도 찍지 않는다).
 `systemctl show -p Environment` 에는 **안 보이는 게 정상**이다 — EnvironmentFile 은 파일 경로만 남긴다(그래서 이 방식을 쓴다).
 값을 바꾸려면 같은 파일에 줄을 더한다: `BOTPIKDUN_HOUSE_PER_DAY=10` · `BOTPIKDUN_HOUSE_PER_IP_DAY=2` · `BOTPIKDUN_HOUSE_CALL_LIMIT=400` ·
-`BOTPIKDUN_HOUSE_TURNS=600` · `BOTPIKDUN_HOUSE_UNWATCHED_SEC=30` (`sudo nano /etc/botpikdun/house.env` → 재시작). 끄기: `BOTPIKDUN_HOUSE_PER_DAY=0` 을 넣고 재시작하거나
+`BOTPIKDUN_HOUSE_TURNS=600` · `BOTPIKDUN_HOUSE_UNWATCHED_SEC=30` (`sudo nano /etc/botpikdun/house.env` → 재시작).
+**관전 페이싱**: 같은 파일에 `DUNGEON_STEP_DELAY=0.25` 도 둔다(2026-09-21 파트너가 로컬에서 보고 "틱은 괜찮은것 같네").
+러너는 캐릭터가 한 걸음 옮길 때마다 이만큼 쉰다(기본 0.5초 — 관전 화면이 따라오라고 넣은 대기, 모델과 무관). 셋이면 틱마다 0.75초로
+관전 클라이언트의 1배속 간격(0.7초)과 맞는다. 서버 환경값이 판마다 그대로 전해지므로 운영자 키 판·자기 키 판 모두에 걸린다.
+어림: 첫 완주 판(09-20)은 평균 2.1초/틱이었고 그 절반쯤이 이 대기였다 → 600틱 약 21분이 15분 안팎으로(실측 아님). 판당 호출 수는 그대로다. 끄기: `BOTPIKDUN_HOUSE_PER_DAY=0` 을 넣고 재시작하거나
 `house.conf` 를 `house.conf.disabled` 로 바꾸고 `daemon-reload` + 재시작. 밖에서 확인:
 ```bash
 curl -s -c /tmp/c -o /dev/null https://botpicdun.duckdns.org/launcher/
