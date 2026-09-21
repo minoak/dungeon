@@ -906,3 +906,4 @@ NPC 두뇌를 켠 판에서 NPC 가 답을 쓸 때만 쓰인다. `{name}` `{role
 | 595 | launcher.house_card.title | launcher/index.html:688 (#houseCardTitle — 모험 준비 화면에서 두뇌·키 카드 대신 뜨는 카드의 제목) — 운영자 키 판이 열려 있을 때 | 두뇌: Gemini 3.8 Flash (데모 제공) | |
 | 596 | launcher.house_card.text | launcher/index.html:689 (#houseCardText — 같은 카드 본문) · 숫자는 서버 값 | 이 데모는 운영자가 비용을 내는 Gemini 3.8 Flash로 돈다. 모델과 API 키는 고르지 않는다. 여럿이 나눠 쓰는 데모라 한도를 빡빡하게 잡았다: 한 판 최대 600틱 · 모델 호출 400회까지 · 이어가기 없음 · 이 주소에서 하루 2판(오늘 남은 판 2). 창을 닫거나 오래 다른 탭에 두면 판이 멈춘다. | |
 | 597 | server.log.unwatched_stop | server.py:291 — 서버 stderr 운영 로그(검토표 #576 과 같은 급) · 관전 요청이 끊긴 판을 멈출 때 | [server] 관전 요청이 30초 없던 판을 멈췄다(곱게) / 운영자 키 판(이어가기 없음) — 자기 키 판이면 끝이 '/ 이어가기 가능' | |
+| 598 | launcher.title.scroll_cue | launcher/index.html:278 (.heroCap — 첫 화면 단추 아래, 스크롤 아래의 세 줄 소개·키 안내·이어서 하기로 내려가는 링크 · 09-21 화면 개편 A2) | ▼ 키와 비용 안내 | |

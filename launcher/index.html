@@ -4,186 +4,205 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>에이전트 던전 — 시작</title>
+<link rel="stylesheet" href="/viewer/assets/pixel-ui.css"><!-- 09-21 도트 화면 공용 부품(색·판·글꼴) -->
 <style>
-  /* ── 론처 한 장(D31) — 뷰어(viewer/index.html)와 같은 톤. launcher.py 의 /api/* 소비자 ── */
+  /* ── 론처 한 장(D31) · launcher.py/server.py 의 /api/* 소비자 ──
+     09-21 도트 화면 개편: 색·판·글꼴은 /viewer/assets/pixel-ui.css 의 --wl-* 를 쓴다(시안 여러 장 가운데 고른 A2 · docs/CHANGELOG.md 09-21 밤 절).
+     도트는 보는 곳에, 고딕은 읽는 곳에 — 도트 글꼴은 11·22·33px(정수배)만. */
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { min-height: 100%; }
-  body {
-    background: #0b0c10; color: #d8dbe2;
-    font: 14px/1.55 "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
-    background-image:
-      radial-gradient(1100px 620px at 50% -12%, #1d2436 0%, rgba(13,15,20,0) 62%),
-      radial-gradient(760px 460px at 12% 8%, #1a1f2e 0%, rgba(13,15,20,0) 58%);
-    background-attachment: fixed;
-  }
+  body { background: var(--wl-bg); color: var(--wl-fg); font: 14px/1.55 var(--wl-sans); }
+  a { color: var(--wl-gold); }
   header { display: flex; align-items: center; gap: 14px; padding: 12px 22px;
-           background: #12141ac9; border-bottom: 1px solid #23262f; backdrop-filter: blur(8px);
-           position: sticky; top: 0; z-index: 20; }
-  header .brand { display: flex; align-items: center; gap: 9px; color: #e8c268; text-decoration: none; }
-  header .brandMark { width: 21px; height: 21px; flex: none; }
-  header h1 { font-size: 17px; color: #e8c268; letter-spacing: 3px; }
-  header .sub { color: #8a8f9c; font-size: 12px; letter-spacing: .5px; }
+           background: var(--wl-panel); border-bottom: 3px solid var(--wl-ink); position: sticky; top: 0; z-index: 20; }
+  header .brand { display: flex; align-items: center; gap: 9px; color: var(--wl-gold); text-decoration: none; }
+  header .brandMark { display: none; }
+  header h1 { font: 700 22px/1.2 var(--wl-px); color: var(--wl-gold); }
+  header .sub { color: var(--wl-dim); font-size: 12px; }
   main { max-width: 1080px; margin: 0 auto; padding: 22px; }
   section[hidden] { display: none; }
-  h2 { font-size: 15px; color: #e8c268; margin: 6px 0 12px; letter-spacing: 1px; }
-  /* ── 첫 화면: 로고 · 액자 · 시작 단추 · 소개 세 칸 ── */
-  .hero { text-align: center; padding: 30px 0 8px; }
-  .heroHead { margin-bottom: 18px; }
-  .heroLogo {
-    font-size: 46px; font-weight: 700; letter-spacing: 3px; margin-left: 3px;
-    background: linear-gradient(180deg, #f7dd9a 0%, #e8c268 46%, #b9862f 100%);
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    text-shadow: 0 2px 26px rgba(232,194,104,.14);
-  }
-  .heroTag { color: #9aa0ad; margin-top: 10px; font-size: 14.5px; }
-  .frame {
-    position: relative; max-width: 880px; margin: 0 auto; border-radius: 12px; overflow: hidden;
-    border: 1px solid #2d3242; background: #07080b;
-    box-shadow: 0 22px 60px -22px #000, 0 0 0 1px #ffffff08 inset;
-  }
-  .frame img, .frame iframe { display: block; width: 100%; aspect-ratio: 16 / 9; height: auto; border: 0; }
-  .frame img { object-fit: cover; }
-  .frame iframe { position: absolute; inset: 0; height: 100%; opacity: 0; transition: opacity .7s ease; }
+  h2 { font: 700 22px/1.3 var(--wl-px); color: var(--wl-gold); margin: 6px 0 12px; }
+
+  /* ── 첫 화면(시안 A2): 담아 둔 판이 화면 가득 · 제목은 위 · 단추는 아래 · 가운데는 비워 세계가 보이게 ──
+     헤더는 첫 화면에서만 숨긴다(이름이 두 번 나왔다). 어느 화면인지는 show() 가 body[data-screen] 에 적는다. */
+  body[data-screen="sTitle"] header { display: none; }
+  body[data-screen="sTitle"] main { max-width: none; padding: 0; }
+  .stage { position: relative; height: 100vh; height: 100svh; min-height: 560px; overflow: hidden; background: #000; }
+  .frame { position: absolute; inset: 0; margin: 0; }
+  .frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  /* 판 창을 작게 띄워 확대한다(--introZ = max(1, 화면 폭/900), introFrame 이 적는다) — 크게 띄우면 마을 전체가 보여 캐릭터가 풍경에 묻혔다 */
+  .frame iframe { position: absolute; left: 0; top: 0; border: 0;
+    width: calc(100% / var(--introZ, 1)); height: calc(100% / var(--introZ, 1));
+    transform: scale(var(--introZ, 1)); transform-origin: 0 0; opacity: 0; transition: opacity .7s ease; }
   .frame iframe.on { opacity: 1; }
-  .frame::after {   /* 안쪽 그늘 — 액자처럼 보이게 */
-    content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
-    box-shadow: inset 0 0 90px 14px #04060a88;
-  }
-  .frame figcaption {
-    position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 20px 14px 10px; font-size: 12px; color: #c3c8d4; text-align: left;
-    background: linear-gradient(180deg, rgba(7,8,11,0) 0%, rgba(7,8,11,.82) 68%);
-  }
-  .frameNow { display: flex; align-items: center; gap: 7px; }
-  .frameNow .dot { width: 6px; height: 6px; border-radius: 50%; background: #6fe3b0; flex: none;
-                   box-shadow: 0 0 0 3px #6fe3b025; }
-  button.ghost { background: #ffffff12; border-color: #ffffff22; color: #e6e9f0; backdrop-filter: blur(6px); }
-  .heroStart { margin-top: 22px; }
-  button.big { padding: 12px 26px; font-size: 15px; border-radius: 7px; }
-  button.primary.big { box-shadow: 0 10px 26px -12px #e8c26899; }
-  .hero .status { margin-top: 14px; }
-  #demoBox { margin-top: 16px; }
+  .heroTop, .heroBot { position: absolute; left: 0; right: 0; z-index: 5; text-align: center; padding: 0 16px; }
+  .heroTop { top: 0; padding-top: 7vh; padding-bottom: 60px;
+    background: linear-gradient(180deg, #0b0705e6 0%, #0b070599 55%, #0b070500 100%); }   /* 지도 위 글이 읽히게 거는 그늘 */
+  .heroBot { bottom: 0; padding-top: 70px; padding-bottom: 14px;
+    background: linear-gradient(0deg, #0b0705f0 0%, #0b0705b0 55%, #0b070500 100%); }
+  .heroLogo { font: 700 55px/1.1 var(--wl-px); color: var(--wl-gold);
+    text-shadow: 0 5px 0 var(--wl-gold-lo), 0 10px 0 var(--wl-ink); }
+  .heroTag { font: 400 22px/1.5 var(--wl-px); color: var(--wl-fg); margin-top: 18px; text-shadow: var(--wl-outline2); }
+  .heroStart { margin-top: 0; }
+  .hero .status { margin-top: 2px; color: var(--wl-dim); text-shadow: var(--wl-outline1); }
+  #demoBox { margin-top: 10px; }
+  #demoBox .hint { color: var(--wl-dim); text-shadow: var(--wl-outline1); }
   #tRunRow, #tResumeRow { margin-top: 12px; }
-  #stopPanel { max-width: 860px; margin: 12px auto 0; text-align: left; }
-  .tri { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px;
-         max-width: 880px; margin: 34px auto 0; text-align: left; }
-  .triCard { background: linear-gradient(180deg, #14171f 0%, #111319 100%);
-             border: 1px solid #23262f; border-radius: 9px; padding: 14px 15px; }
-  .triCard h3 { font-size: 13px; color: #e8c268; letter-spacing: 2px; margin-bottom: 7px; }
-  .triCard p { font-size: 12.5px; color: #8f95a3; line-height: 1.65; }
-  /* 계정 — 접어 둔다 */
-  .acctFold { max-width: 880px; margin: 26px auto 0; border: 1px solid #23262f; border-radius: 9px;
-              background: #12141a; }
+  #stopPanel { max-width: 720px; margin: 12px auto 0; text-align: left; }
+  .heroCap { display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 12px;
+    font: 400 11px/1.4 var(--wl-px); color: var(--wl-dim); text-shadow: var(--wl-outline1); }
+  .heroCap .frameNow::before { content: '▶ '; color: var(--wl-gold); }
+  .heroCap a { color: var(--wl-dim); text-decoration: none; }
+  .heroCap a:hover { color: var(--wl-gold); }
+  /* 스크롤 아래: 세 줄 소개 · 키 안내 · 이어서 하기 */
+  .below { max-width: 720px; margin: 0 auto; padding: 40px 16px 10px; display: flex; flex-direction: column; gap: 22px; }
+  .tri { background: var(--wl-panel); box-shadow: var(--wl-board); padding: 6px 16px; }
+  .triCard { display: flex; gap: 16px; align-items: baseline; padding: 10px 0; border-bottom: 2px solid var(--wl-lo); }
+  .triCard:last-child { border-bottom: 0; }
+  .triCard h3 { flex: none; width: 56px; font: 700 22px/1.3 var(--wl-px); color: var(--wl-gold); }
+  .triCard p { font-size: 13px; color: var(--wl-dim); line-height: 1.65; }
+  .keyNote { padding: 12px 16px; background: var(--wl-panel); box-shadow: var(--wl-board);
+    font-size: 13px; line-height: 1.75; color: var(--wl-dim); text-align: left; }
+  .keyNote b { color: var(--wl-fg); }
+  .keyNote .hint { font-size: 12.5px; color: var(--wl-dim); margin-top: 8px; }
+  .acctFold { background: var(--wl-panel); box-shadow: var(--wl-board); }
   .acctFold[hidden] { display: none; }
-  .acctFold > summary { cursor: pointer; padding: 11px 15px; color: #b9bec9; font-size: 13px; list-style: none; }
+  .acctFold > summary { cursor: pointer; padding: 14px 16px; font: 400 11px/1.4 var(--wl-px); color: var(--wl-fg); list-style: none; }
   .acctFold > summary::-webkit-details-marker { display: none; }
-  .acctFold > summary::before { content: '▸ '; color: #6a6f7a; }
-  .acctFold[open] > summary::before { content: '▾ '; }
-  .acctFold > summary:hover { color: #e8c268; }
-  .acctBody { padding: 4px 15px 15px; border-top: 1px solid #1c1f28; }
-  #acctErr { color: #ff8b7a; font-size: 13px; min-height: 16px; }
+  .acctFold > summary::before { content: '▶ '; color: var(--wl-gold); }
+  .acctFold[open] > summary::before { content: '▼ '; }
+  .acctFold > summary:hover { color: var(--wl-gold); }
+  .acctBody { padding: 4px 16px 16px; border-top: 2px solid var(--wl-lo); }
+  #acctErr { color: var(--wl-red); font-size: 13px; min-height: 16px; }
   @media (max-width: 720px) {
-    .heroLogo { font-size: 34px; letter-spacing: 8px; margin-left: 8px; }
-    .hero { padding-top: 18px; }
+    .heroLogo { font-size: 33px; text-shadow: 0 3px 0 var(--wl-gold-lo), 0 6px 0 var(--wl-ink); }
+    .heroTop { padding-top: 5vh; }
+    .heroStart button.big { padding: 10px 20px 12px; margin: 6px 7px 12px; }   /* 폰에서 단추 둘이 한 줄에 들게(아래 공용 button.big 보다 좁게 겨눠야 이긴다) */
   }
+
+  /* ── 공용 부품 ── */
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .row[hidden] { display: none; }   /* D79(09-16): flex 가 hidden 속성을 이겨 타이틀의 실행 줄·이어가기 줄이 상태와 무관하게 보이던 결함 */
   .center { justify-content: center; }
-  button {
-    background: #1d2029; color: #d8dbe2; border: 1px solid #2c303c; border-radius: 6px;
-    padding: 9px 16px; font-size: 14px; cursor: pointer; font-family: inherit;
-  }
-  button:hover { border-color: #e8c268; }
-  button.primary { background: #e8c268; color: #14161c; font-weight: bold; border-color: #e8c268; }
-  button.primary:disabled { opacity: .45; cursor: default; }
-  button.danger { border-color: #7a2f28; color: #ff8b7a; }
-  button.small { padding: 4px 10px; font-size: 12px; }
-  .status { margin-top: 18px; color: #8a8f9c; font-size: 13px; }
-  .status b { color: #6fe3b0; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
-  .card { background: linear-gradient(180deg, #14171f 0%, #111319 100%); border: 1px solid #23262f;
-          border-radius: 9px; padding: 15px; }
-  .card h3 { font-size: 13px; color: #8a8f9c; margin-bottom: 10px; letter-spacing: 1px; }
-  .card h3 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
-  label.f { display: block; font-size: 12px; color: #8a8f9c; margin: 8px 0 3px; }
+  /* 단추 — 모서리가 한 칸 깎인 도트 판. 금 단추가 주 행동, 나무 단추가 나머지 */
+  button { font: 400 11px/1.4 var(--wl-px); color: var(--wl-fg); background: var(--wl-panel2); border: 0; border-radius: 0;
+    padding: 9px 13px 8px; margin: 2px; cursor: pointer; box-shadow: var(--wl-btn); }
+  button:hover { filter: brightness(1.12); }
+  button:active { transform: translateY(1px); }
+  button.primary { background: var(--wl-gold); color: var(--wl-ink); font-weight: 700; box-shadow: var(--wl-btn-gold); }
+  button:disabled { opacity: .45; cursor: default; filter: none; transform: none; }
+  button.danger { color: var(--wl-red); }
+  button.small { padding: 6px 10px 5px; }
+  button.big { font-size: 22px; font-weight: 700; padding: 12px 28px 14px; margin: 6px 10px 14px; box-shadow: var(--wl-btn-big); }
+  button.primary.big { box-shadow: var(--wl-btn-big-gold); }
+  button.ghost { background: #0b0705cc; box-shadow: 0 0 0 2px var(--wl-hi); }
+  .status { margin-top: 18px; color: var(--wl-dim); font-size: 13px; }
+  .status b { color: #9fd98a; }
+  /* 나무판 */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; }
+  .card { background: var(--wl-panel); box-shadow: var(--wl-board); padding: 18px; }
+  .card h3 { font: 700 22px/1.3 var(--wl-px); color: var(--wl-gold); margin-bottom: 12px; display: flex; align-items: center; }
+  .opts .card h3, #houseCard h3 { font: 700 11px/1.4 var(--wl-px); }          /* 설정 판 제목은 작게 — 22px 면 'Google Gemini API 키 (이 판에만)' 이 폰에서 꺾였다 */
+  .card h3 .dot { display: inline-block; width: 12px; height: 12px; margin-right: 10px; box-shadow: 0 0 0 2px var(--wl-ink); }
+  label.f { display: block; font: 400 11px/1.4 var(--wl-px); color: var(--wl-fg); margin: 16px 0 7px; }
+  label.f .hint { font-family: var(--wl-sans); }
+  /* 입력칸 — 판에 파인 홈 */
   input[type=text], input[type=password], input[type=number], textarea, select {
-    width: 100%; background: #1d2029; color: #d8dbe2; border: 1px solid #2c303c; border-radius: 5px;
-    padding: 7px 9px; font-size: 13.5px; font-family: inherit;
+    width: 100%; background-color: var(--wl-well); color: var(--wl-fg); border: 0; border-radius: 0; box-shadow: var(--wl-well-in);
+    padding: 9px 11px; font-size: 13.5px; font-family: inherit;
   }
+  input:focus, textarea:focus, select:focus { outline: 2px solid var(--wl-gold); outline-offset: 3px; }
+  ::placeholder { color: var(--wl-faint); }
+  select { appearance: none; -webkit-appearance: none; padding-right: 30px;
+    background-image: var(--wl-arrow); background-repeat: no-repeat; background-position: right 11px center; }
   textarea { min-height: 78px; resize: vertical; }
-  .priceGrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:8px; margin:8px 0; }
+  /* 체크박스 — 도트 칸 */
+  input[type=checkbox] { appearance: none; -webkit-appearance: none; width: 14px; height: 14px; margin: 0 9px -2px 2px; cursor: pointer;
+    background: var(--wl-well); box-shadow: 0 0 0 2px var(--wl-ink), inset 2px 2px 0 #000; vertical-align: baseline; }
+  input[type=checkbox]:checked { background: var(--wl-gold); box-shadow: var(--wl-chip-gold); }
+  .priceGrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; margin:8px 0; }
+  .priceGrid label { font-size: 12px; color: var(--wl-dim); }
   .priceTable { width:100%; border-collapse:collapse; font-size:12px; }
-  .priceTable th,.priceTable td { padding:6px; text-align:left; border-bottom:1px solid #2c303c; }
-  .priceTable tr.selected { color:#e8c268; }
-  #priceCard a { color:#e8c268; }
+  .priceTable th,.priceTable td { padding:6px; text-align:left; border-bottom:2px solid var(--wl-lo); }
+  .priceTable tr.selected { color:var(--wl-gold); }
   textarea[data-k=persona] { min-height: 150px; line-height: 1.65; }
   textarea[data-k=background] { min-height: 200px; line-height: 1.65; }
   [data-persona] { max-height: 100px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .radios { display: flex; gap: 6px; flex-wrap: wrap; }
+  /* 칩 — 둥근 알약 대신 도트 패. 고르면 금색으로 눌린다 */
+  .radios, .traits { display: flex; gap: 9px; flex-wrap: wrap; }
   .radios label, .traits label {
-    border: 1px solid #2c303c; border-radius: 14px; padding: 3px 11px; font-size: 12.5px; cursor: pointer;
-    user-select: none; background: #171922;
+    font: 400 11px/1.4 var(--wl-px); padding: 6px 10px 5px; cursor: pointer; user-select: none;
+    background: var(--wl-panel2); color: var(--wl-fg); box-shadow: var(--wl-chip);
   }
   .radios input, .traits input { display: none; }
-  .radios label.on, .traits label.on { border-color: #e8c268; color: #e8c268; }
+  .radios label.on, .traits label.on { background: var(--wl-gold); color: var(--wl-ink); box-shadow: var(--wl-chip-gold); }
   .traits label.off { opacity: .4; cursor: default; }
-  .traits { display: flex; gap: 6px; flex-wrap: wrap; }
-  /* D37 외형 블록 — 미리보기(16px→64px 픽셀 확대)·머리/몸통 칩·재질별 스와치+자유 색·랜덤 */
-  .look { display: flex; gap: 12px; align-items: flex-start; margin-top: 2px; }
-  .lookPrev { width: 148px; height: 148px; image-rendering: pixelated; flex: none; border-radius: 8px;
-              border: 1px solid #2c303c;
-              background: #1a1d25 radial-gradient(90px 60px at 50% 78%, #262b38 0%, #1a1d25 72%); }
-  .lookBody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-  .lookParts { display:flex; flex-direction:column; gap:5px; }
+  /* D37 외형 블록 — 미리보기(16px→64px 픽셀 확대)·머리/몸통 칩·재질별 스와치+자유 색·랜덤. 미리보기 칸은 돌바닥 격자 */
+  .look { display: flex; gap: 14px; align-items: flex-start; margin-top: 2px; }
+  .lookPrev { width: 148px; height: 148px; image-rendering: pixelated; flex: none;
+              background-color: #3a2f25;
+              background-image: linear-gradient(#0000 94%, #2a211a 94%), linear-gradient(90deg, #0000 94%, #2a211a 94%);
+              background-size: 37px 37px; box-shadow: 0 0 0 3px var(--wl-ink), inset 3px 3px 0 0 var(--wl-lo); }
+  .lookBody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .lookParts { display:flex; flex-direction:column; gap:6px; }
   .lookParts[hidden] { display:none; }
-  .lookGallery { color:#e8c268; font-size:12px; }
-  .swrow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-  .swlab { width: 30px; font-size: 11.5px; color: #8a8f9c; flex: none; }
-  .sw { width: 18px; height: 18px; border-radius: 4px; border: 2px solid transparent; cursor: pointer; padding: 0; }
-  .sw.on { border-color: #e8c268; }
-  .swrow input[type=color] { width: 24px; height: 20px; padding: 0; border: 1px solid #2c303c; background: none; cursor: pointer; margin-left: 2px; }
-  button.small { align-self: flex-start; font-size: 12px; padding: 4px 10px; }
-  .hint { font-size: 11.5px; color: #6a6f7a; margin-top: 4px; }
-  .cnt { float: right; }
-  .cnt.over { color: #ff8b7a; }
-  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
-  details summary { cursor: pointer; color: #8a8f9c; font-size: 12.5px; margin-top: 6px; }
-  #err { color: #ff8b7a; font-size: 13px; min-height: 18px; margin-top: 10px; white-space: pre-wrap; }
-  .foot { margin-top: 22px; display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
-  .preview { font-size: 12.5px; color: #b9bec9; }
-  .preview b { color: #d8dbe2; }
-  .muted { color: #6a6f7a; font-size: 12px; }
+  .lookGallery { color:var(--wl-gold); font-size:12px; }
+  .swrow { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .swlab { width: 30px; font: 400 11px/1.4 var(--wl-px); color: var(--wl-dim); flex: none; }
+  button.sw { width: 18px; height: 18px; padding: 0; margin: 0; cursor: pointer; box-shadow: 0 0 0 2px var(--wl-ink); filter: none; }
+  button.sw.on { box-shadow: 0 0 0 2px var(--wl-ink), 0 0 0 4px var(--wl-gold); }
+  .swrow input[type=color] { width: 24px; height: 20px; padding: 0; border: 0; background: none; cursor: pointer; margin-left: 2px; box-shadow: 0 0 0 2px var(--wl-ink); }
+  .look button.small { align-self: flex-start; }
+  .hint { font-size: 11.5px; color: var(--wl-dim); margin-top: 4px; }
+  .cnt { float: right; font: 400 11px/1.4 var(--wl-px); color: var(--wl-dim); }
+  .cnt.over { color: var(--wl-red); }
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 22px; }
+  details > summary { cursor: pointer; color: var(--wl-fg); font: 400 11px/1.4 var(--wl-px); margin-top: 6px; list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: '▶ '; color: var(--wl-gold); }
+  details[open] > summary::before { content: '▼ '; }
+  details > summary:hover { color: var(--wl-gold); }
+  #err { color: var(--wl-red); font-size: 13px; min-height: 18px; margin-top: 10px; white-space: pre-wrap; }
+  .foot { margin-top: 34px; display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+  .foot button { font-size: 22px; font-weight: 700; padding: 12px 24px 14px; box-shadow: var(--wl-btn-big); }
+  .foot button.primary { box-shadow: var(--wl-btn-big-gold); }
+  .preview { font-size: 12.5px; color: var(--wl-dim); }
+  .preview b { color: var(--wl-fg); }
+  .muted { color: var(--wl-dim); font-size: 12px; }
   .presetBox { padding-top: 4px; }
   .presetBox .row { gap: 6px; margin-top: 6px; }
-  .presetFold { margin-top: 16px; border-top: 1px solid #23262f; padding-top: 8px; }
-  .presetFold > summary { cursor: pointer; color: #8a8f9c; font-size: 12.5px; }
-  .presetFold > summary:hover { color: #e8c268; }
-  .partyHead { margin-bottom: 16px; }
-  .partyHead h2 { font-size: 20px; letter-spacing: 1px; margin: 2px 0 8px; }
-  .partyHead .muted { max-width: 720px; line-height: 1.7; }
-  #sParty .card h3 { font-size: 12px; }
-  .presetMessage { min-height: 18px; margin-top: 5px; font-size: 12px; color: #6fe3b0; overflow-wrap: anywhere; }
-  .presetMessage.error { color: #ff8b7a; }
-  button:disabled { opacity: .45; cursor: default; }
+  .presetFold { margin-top: 16px; border-top: 3px solid var(--wl-lo); padding-top: 10px; }
+  .partyHead { margin-bottom: 18px; }
+  .partyHead h2 { font-size: 33px; margin: 8px 0 14px; text-shadow: 0 3px 0 var(--wl-gold-lo), 0 6px 0 var(--wl-ink); }
+  .partyHead .muted { max-width: 720px; line-height: 1.7; font-size: 13px; }
+  .presetMessage { min-height: 18px; margin-top: 5px; font-size: 12px; color: #9fd98a; overflow-wrap: anywhere; }
+  .presetMessage.error { color: var(--wl-red); }
   /* D81 내 캐릭터 + 동료 칸 — 왼쪽은 편집 카드 하나, 오른쪽은 고르기만 하는 동료 둘. 좁은 화면은 한 줄로 */
-  .partyGrid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  .partyGrid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 22px; align-items: start; }
   .partyGrid[hidden] { display: none; }
   .partyGrid #cards { grid-template-columns: minmax(0, 1fr); }
-  #mates { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-  .mate .mateInfo { margin-top: 10px; font-size: 12.5px; color: #b9bec9; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
-  .mate .lookPrev { width: 104px; height: 104px; }
-  .mate .look { gap: 14px; }
+  #mates { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+  .mate .mateInfo { margin-top: 12px; font-size: 12.5px; color: var(--wl-fg); display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+  .mate .lookPrev { width: 104px; height: 104px; background-size: 26px 26px; }
   .histBox { margin: -4px 0 10px; }
-  .histList { font-size: 12.5px; color: #b9bec9; margin-top: 6px; display: flex; flex-direction: column; gap: 8px; }
-  .histList .page { color: #8a8f9c; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 90px; overflow: auto; }
-  details.advanced { margin-top: 14px; border-top: 1px solid #23262f; padding-top: 8px; }
-  details.advanced > summary { font-size: 13px; color: #b9bec9; }
+  .histList { font-size: 12.5px; color: var(--wl-fg); margin-top: 6px; display: flex; flex-direction: column; gap: 8px; }
+  .histList .page { color: var(--wl-dim); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 90px; overflow: auto; }
+  details.advanced { margin-top: 18px; border-top: 3px solid var(--wl-lo); padding-top: 10px; }
+  /* 원정 모드·스킬 카드 — skills.css 는 관전 화면과 같이 쓰니 여기서만 덮는다(관전 화면은 아직 옛 색) */
+  #sParty .wl-alpha-panel { background: var(--wl-panel); border: 0; border-radius: 0; box-shadow: var(--wl-board); padding: 18px; }
+  #sParty .wl-alpha-panel h3 { font: 700 22px/1.3 var(--wl-px); color: var(--wl-gold); }
+  #sParty .wl-alpha-panel label b { font: 400 11px/1.4 var(--wl-px); }
+  #sParty .wl-skill { border: 0; border-radius: 0; background: var(--wl-panel2); box-shadow: var(--wl-chip); }
+  #sParty .wl-skill-head strong { font: 700 11px/1.4 var(--wl-px); color: var(--wl-gold); }
+  #sParty .wl-skill p { color: var(--wl-fg); }
+  #sParty .wl-skill small, #sParty .wl-skill-note { color: var(--wl-dim); }
+  #sParty .wl-skill-state { color: #9fd98a; }
+  footer a { color: var(--wl-gold); }
   @media (max-width: 760px) { .partyGrid { grid-template-columns: minmax(0, 1fr); } }
 </style>
 <link rel="stylesheet" href="/viewer/assets/skills.css">
 </head>
-<body>
+<body data-screen="sTitle">
 <header>
   <a class="brand" href="/launcher/">
     <svg class="brandMark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
@@ -196,92 +215,102 @@
 </header>
 <main>
 
-<!-- ═══ 1. 타이틀 — 액자(담아 둔 판)가 도는 진입 화면 ═══ -->
+<!-- ═══ 1. 타이틀 — 담아 둔 판이 화면 가득 도는 진입 화면(09-21 시안 A2) ═══ -->
 <section id="sTitle">
   <div class="hero">
-    <div class="heroHead">
-      <div class="heroLogo">에이전트 던전</div>
-      <p class="heroTag">캐릭터를 만들어 마을에 보낸다. 그 다음은 그들이 정한다.</p>
-    </div>
-    <!-- 호출 한도 예고 — 공개 서버가 /api/presets 로 준 값이 있을 때만. 문장은 initProviders 가 쓴다 ⚠️ 문구 임시 -->
-    <div class="hint" id="tBudgetNote" hidden></div>
-    <!-- 키를 맡기라고 하기 전에 먼저 말한다. 여기 적은 것은 verify_public 이 매번 확인한다
-         (세션 폴더 전체와 서버 로그에 키 문자열이 0회인지). ⚠️ 문구 임시 -->
-    <div class="hint" id="tKeyNote" style="max-width:660px;margin:12px auto 0;padding:11px 15px;border:1px solid #2c303c;background:#1d2029;border-radius:8px;font-size:12.5px;line-height:1.7;color:#9aa0ad;text-align:left">
-      <span id="tByokNote">원정은 <b>직접 가져온 API 키</b>로 돕니다. 키는 서버에 저장하지 않습니다 —
-      판이 도는 동안 그 판의 프로세스 안에만 있고, 판 기록에도 서버 로그에도 남지 않습니다.
-      계정을 만들 때도 키가 아니라 <b>키의 지문</b>만 보관합니다. 비용은 키 주인에게 청구됩니다.</span>
-      <a href="https://github.com/minoak/dungeon" target="_blank" rel="noopener">코드 보기 ↗</a>
-      <!-- D98 운영자 키 판 — 서버가 /api/presets.house 를 켰을 때만. 문장은 initProviders 가 쓴다 ⚠️ 문구 임시 -->
-      <div id="tHouseNote" hidden style="margin-top:8px;color:#c9cdd6"></div><!-- 인라인 display 를 주면 hidden 을 이긴다(.row 09-16 결함과 같은 부류) — div 로 -->
-    </div>
+    <div class="stage">
+      <!-- 포스터가 먼저 뜨고, 잠시 뒤 담아 둔 판이 소리 없이 돈다(game 의 ?embed=1).
+           판 파일이 없거나 늦으면 포스터가 그대로 남는다. 첫 화면이 무거워지지 않게 늦게 붙인다. -->
+      <figure class="frame" id="introFrame">
+        <img id="introPoster" src="poster-town.jpg" alt="모험가의 마을" width="1120" height="630">
+      </figure>
+      <div class="heroTop">
+        <div class="heroHead">
+          <div class="heroLogo">에이전트 던전</div>
+          <p class="heroTag">캐릭터를 만들어 마을에 보낸다. 그 다음은 그들이 정한다.</p>
+        </div>
+      </div>
+      <div class="heroBot">
+        <div class="row center heroStart">
+          <button class="primary big" id="bNew">새 원정</button>
+          <button class="big" id="bReplays">지난 판 보기</button>
+        </div>
+        <div class="status" id="tStatus">상태 확인 중</div>
 
-    <!-- 액자 — 포스터가 먼저 뜨고, 잠시 뒤 담아 둔 판이 소리 없이 돈다(game 의 ?embed=1).
-         판 파일이 없거나 늦으면 포스터가 그대로 남는다. 첫 화면이 무거워지지 않게 늦게 붙인다. -->
-    <figure class="frame" id="introFrame">
-      <img id="introPoster" src="poster-town.jpg" alt="모험가의 마을" width="1120" height="630">
-      <figcaption>
-        <span class="frameNow"><i class="dot"></i><span id="introCap">모험가의 마을</span></span>
-        <button class="small ghost" id="bIntroFull" hidden>이 판을 처음부터 보기</button>
-      </figcaption>
-    </figure>
+        <!-- D97 미리 담아 둔 판. demo/index.json 이 있을 때만 나타난다 ⚠️ 문구 임시 -->
+        <div id="demoBox" hidden>
+          <div class="hint">담아 둔 다른 판</div>
+          <div class="row center" id="demoList"></div>
+        </div>
 
-    <div class="row center heroStart">
-      <button class="primary big" id="bNew">새 원정</button>
-      <button class="big" id="bReplays">지난 판 보기</button>
-    </div>
-    <div class="status" id="tStatus">상태 확인 중</div>
+        <div class="row center" id="tRunRow" hidden>
+          <button id="bWatch" title="관전 화면으로 간다. 지금 도는 판을 캐릭터 시점으로 따라간다">관전으로</button>
+          <button id="bGame" title="예전 지도 뷰어">옛 뷰어로</button>
+          <button class="danger" id="bStop">진행 중인 판 중지</button>
+          <span class="muted">신의 한마디</span>
+          <input id="oracleIn" maxlength="200" placeholder="어디에 있든 캐릭터들이 듣는다. 명령이 아니라 청이다" style="width:30ch">
+          <button id="bOracle">보내기</button> <button id="bOracleClear" title="걸어 둔 청을 거둔다">거둠</button>
+        </div>
 
-    <!-- D97 미리 담아 둔 판. demo/index.json 이 있을 때만 나타난다 ⚠️ 문구 임시 -->
-    <div id="demoBox" hidden>
-      <div class="hint">담아 둔 다른 판</div>
-      <div class="row center" id="demoList"></div>
-    </div>
+        <div class="row center" id="tResumeRow" hidden><!-- 멈춘 판이 있을 때만 -->
+          <span class="muted" id="tResumeText"></span>
+          <!-- ⚠️ 문구 임시: 검토표 131~138 -->
+          <select id="resumeProvider" aria-label="계속할 때 쓸 회사" style="width:auto"></select>
+          <select id="resumeModel" aria-label="계속할 때 쓸 모델" style="width:auto;max-width:100%"></select>
+          <input type="text" id="resumeModelCustom" aria-label="계속할 때 쓸 모델 ID 직접 입력" maxlength="200" placeholder="모델 ID 직접 입력" style="width:27ch;max-width:100%" hidden>
+          <input type="password" id="resumeKey" autocomplete="off" spellcheck="false" placeholder="이 원정에만 쓰는 API 키" style="width:28ch" hidden>
+          <button class="primary" id="bResume">멈춘 원정 계속하기</button>
+        </div>
 
-    <div class="row center" id="tRunRow" hidden>
-      <button id="bWatch" title="관전 화면으로 간다. 지금 도는 판을 캐릭터 시점으로 따라간다">관전으로</button>
-      <button id="bGame" title="예전 지도 뷰어">옛 뷰어로</button>
-      <button class="danger" id="bStop">진행 중인 판 중지</button>
-      <span class="muted">신의 한마디</span>
-      <input id="oracleIn" maxlength="200" placeholder="어디에 있든 캐릭터들이 듣는다. 명령이 아니라 청이다" style="width:30ch">
-      <button id="bOracle">보내기</button> <button id="bOracleClear" title="걸어 둔 청을 거둔다">거둠</button>
-    </div>
+        <div class="card" id="stopPanel" hidden><!-- 종료 전 알림 ⚠️문구 임시 -->
+          <div id="stopText"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="primary" id="bStopPages">수첩 쓰고 멈춤</button>
+            <button id="bStopNow">바로 멈춤</button>
+            <button id="bStopCancel">계속 진행</button>
+          </div>
+        </div>
 
-    <div class="row center" id="tResumeRow" hidden><!-- 멈춘 판이 있을 때만 -->
-      <span class="muted" id="tResumeText"></span>
-      <!-- ⚠️ 문구 임시: 검토표 131~138 -->
-      <select id="resumeProvider" aria-label="계속할 때 쓸 회사" style="width:auto"></select>
-      <select id="resumeModel" aria-label="계속할 때 쓸 모델" style="width:auto;max-width:100%"></select>
-      <input type="text" id="resumeModelCustom" aria-label="계속할 때 쓸 모델 ID 직접 입력" maxlength="200" placeholder="모델 ID 직접 입력" style="width:27ch;max-width:100%" hidden>
-      <input type="password" id="resumeKey" autocomplete="off" spellcheck="false" placeholder="이 원정에만 쓰는 API 키" style="width:28ch" hidden>
-      <button class="primary" id="bResume">멈춘 원정 계속하기</button>
-    </div>
-
-    <div class="card" id="stopPanel" hidden><!-- 종료 전 알림 ⚠️문구 임시 -->
-      <div id="stopText"></div>
-      <div class="row" style="margin-top:8px">
-        <button class="primary" id="bStopPages">수첩 쓰고 멈춤</button>
-        <button id="bStopNow">바로 멈춤</button>
-        <button id="bStopCancel">계속 진행</button>
+        <!-- 판 이름 · 처음부터 보기 · 아래 안내로 ⚠️ 문구 임시 -->
+        <div class="heroCap">
+          <span class="frameNow"><span id="introCap">모험가의 마을</span></span>
+          <button class="small ghost" id="bIntroFull" hidden>이 판을 처음부터 보기</button>
+          <a href="#below">▼ 키와 비용 안내</a>
+        </div>
       </div>
     </div>
 
-    <!-- 세계 소개 세 칸 — 처음 온 사람이 무엇을 보게 되는지 -->
-    <div class="tri">
-      <div class="triCard">
-        <h3>마을</h3>
-        <p>장을 보고 사람을 만나고 길드에서 의뢰를 받는다. 던전에 내려갈지도 캐릭터가 정한다.</p>
+    <!-- 스크롤 아래 — 세 줄 소개 · 키 안내 · 이어서 하기 -->
+    <div class="below" id="below">
+      <!-- 세계 소개 세 줄 — 처음 온 사람이 무엇을 보게 되는지 -->
+      <div class="tri">
+        <div class="triCard">
+          <h3>마을</h3>
+          <p>장을 보고 사람을 만나고 길드에서 의뢰를 받는다. 던전에 내려갈지도 캐릭터가 정한다.</p>
+        </div>
+        <div class="triCard">
+          <h3>던전</h3>
+          <p>지하에 무엇이 있는지는 내려가 봐야 안다. 쓰러지면 거기서 끝이다.</p>
+        </div>
+        <div class="triCard">
+          <h3>기록</h3>
+          <p>모든 판단이 남는다. 누가 무엇을 보고 왜 그렇게 했는지 되짚을 수 있다.</p>
+        </div>
       </div>
-      <div class="triCard">
-        <h3>던전</h3>
-        <p>지하에 무엇이 있는지는 내려가 봐야 안다. 쓰러지면 거기서 끝이다.</p>
+
+      <!-- 키를 맡기라고 하기 전에 먼저 말한다. 여기 적은 것은 verify_public 이 매번 확인한다
+           (세션 폴더 전체와 서버 로그에 키 문자열이 0회인지). ⚠️ 문구 임시 -->
+      <div class="keyNote" id="tKeyNote">
+        <span id="tByokNote">원정은 <b>직접 가져온 API 키</b>로 돕니다. 키는 서버에 저장하지 않습니다 —
+        판이 도는 동안 그 판의 프로세스 안에만 있고, 판 기록에도 서버 로그에도 남지 않습니다.
+        계정을 만들 때도 키가 아니라 <b>키의 지문</b>만 보관합니다. 비용은 키 주인에게 청구됩니다.</span>
+        <!-- D98 운영자 키 판 — 서버가 /api/presets.house 를 켰을 때만. 문장은 initProviders 가 쓴다 ⚠️ 문구 임시 -->
+        <div id="tHouseNote" hidden style="margin-top:8px;color:var(--wl-fg)"></div><!-- 인라인 display 를 주면 hidden 을 이긴다(.row 09-16 결함과 같은 부류) — div 로 -->
+        <!-- 호출 한도 예고 — 공개 서버가 /api/presets 로 준 값이 있을 때만. 문장은 initProviders 가 쓴다 ⚠️ 문구 임시 -->
+        <div class="hint" id="tBudgetNote" hidden></div>
+        <!-- 코드 링크는 판 끝에 — 운영자 키 판이면 위의 키 문장이 숨어 링크가 맨 위에 혼자 떴다 -->
+        <div style="margin-top:8px"><a href="https://github.com/minoak/dungeon" target="_blank" rel="noopener">코드 보기 ↗</a></div>
       </div>
-      <div class="triCard">
-        <h3>기록</h3>
-        <p>모든 판단이 남는다. 누가 무엇을 보고 왜 그렇게 했는지 되짚을 수 있다.</p>
-      </div>
-    </div>
-  </div>
 
   <!-- 계정 — 접어 둔다. 처음 온 사람은 키 없이도 담아 둔 판을 볼 수 있다 -->
   <details class="acctFold" id="acctCard" hidden>
@@ -314,6 +343,8 @@
       <div id="acctErr"></div>
     </div>
   </details>
+    </div>
+  </div>
 </section>
 
 <!-- ═══ 2. 내 캐릭터와 동료(D81, 2026-09-17) — 옵션 화면 없이 바로 마을로. 나머지 선택은 '고급 설정' 접이식 ═══ -->
@@ -554,7 +585,7 @@ async function api(path, body) {
   if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
   return j;
 }
-function show(id) { for (const s of ['sTitle', 'sParty']) $(s).hidden = (s !== id); }   // D81: 옵션 화면(sOpts)은 파티 화면의 '고급 설정' 접이식으로 들어갔다
+function show(id) { for (const s of ['sTitle', 'sParty']) $(s).hidden = (s !== id); document.body.dataset.screen = id; window.scrollTo(0, 0); }   // 09-21: 헤더는 첫 화면에서만 숨긴다(CSS body[data-screen])   // D81: 옵션 화면(sOpts)은 파티 화면의 '고급 설정' 접이식으로 들어갔다
 
 /* ═══ 계정(D77) — 공개 서버(server.py)에서만. 키는 이 페이지 메모리에만: 들어온 키를 원정 키 칸에 채워 준다 ═══ */
 let account = null, isPublic = false;
@@ -813,13 +844,17 @@ function modeName(mode) { return mode === 'alpha' ? '스킬 알파' : mode === '
   const RUN = 'demo/intro-loop.jsonl';
   const box = $('introFrame');
   if (!box || !window.fetch) return;
+  // 09-21 A2: 판 창을 작게 띄워 확대한다. 화면 크기 그대로 띄우면 마을 전체가 보여 캐릭터가 풍경에 묻혔다.
+  //   폰(900px 미만)은 1배 — 1.6배를 걸면 말풍선이 제목을 덮었다.
+  const zoom = () => box.style.setProperty('--introZ', Math.max(1, window.innerWidth / 900).toFixed(3));
+  zoom(); window.addEventListener('resize', zoom);
   const light = () => {
     const fr = document.createElement('iframe');
     fr.src = '/game/?run=' + encodeURIComponent(RUN) + '&embed=1&focus=1';
     fr.title = '담아 둔 판이 도는 액자';
     fr.setAttribute('scrolling', 'no');
     fr.addEventListener('load', () => { fr.classList.add('on'); });
-    box.insertBefore(fr, box.querySelector('figcaption'));
+    box.append(fr);
   };
   fetch('/' + RUN, { method: 'HEAD', cache: 'no-store' })
     .then(r => { if (r.ok) setTimeout(light, 800); })

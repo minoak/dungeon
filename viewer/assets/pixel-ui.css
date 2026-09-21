@@ -1,0 +1,49 @@
+/* 도트 화면 공용 부품(2026-09-21) — 론처가 먼저 쓰고, 관전 화면(game/)도 나중에 이 파일을 불러 쓴다.
+   왜 이렇게 했나: docs/CHANGELOG.md '2026-09-21 (밤)' 절
+   원칙: 도트는 보는 곳에, 고딕은 읽는 곳에. 제목·단추·칩·짧은 라벨만 도트 글꼴이고 입력칸·안내문·기록은 고딕이다.
+   도트 글꼴은 원래 크기의 정수배(11·22·33px)에서만 선명하다. 그 밖의 크기를 쓰면 획이 번진다. */
+
+/* 갈무리(Galmuri) — SIL OFL 1.1, 원본 그대로(잘라내지 않음 = 수정본이 아니다). 라이선스는 fonts/Galmuri-OFL.txt */
+@font-face { font-family: 'Galmuri11'; font-weight: 400; font-style: normal; font-display: swap;
+  src: url('fonts/Galmuri11.woff2') format('woff2'); }
+@font-face { font-family: 'Galmuri11'; font-weight: 700; font-style: normal; font-display: swap;
+  src: url('fonts/Galmuri11-Bold.woff2') format('woff2'); }
+
+:root {
+  /* 색 — 마을 그림에서 뽑은 돌과 나무 */
+  --wl-bg: #17120e;       /* 바탕 */
+  --wl-panel: #231b14;    /* 나무판 */
+  --wl-panel2: #30251a;   /* 한 겹 밝은 판(단추·칩) */
+  --wl-ink: #0b0705;      /* 테두리 먹선 */
+  --wl-hi: #4d3c2b;       /* 판의 밝은 모서리 */
+  --wl-lo: #1a130d;       /* 판의 어두운 모서리 */
+  --wl-well: #110c08;     /* 파인 홈(입력칸) */
+  --wl-fg: #ecdfc2;       /* 글 */
+  --wl-dim: #a8987c;      /* 흐린 글 */
+  --wl-faint: #6f6250;    /* 더 흐린 글(자리표시) */
+  --wl-gold: #f2c14e;     /* 금 */
+  --wl-gold-hi: #ffe29a;
+  --wl-gold-lo: #b07a24;
+  --wl-red: #ff9b87;
+
+  --wl-px: 'Galmuri11', 'Malgun Gothic', monospace;                       /* 도트 글꼴 */
+  --wl-sans: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+
+  /* 판 셋 — box-shadow 한 줄로 쓴다. 테두리를 한쪽 축 그림자로만 그려서 모서리가 한 칸 깎인다(도트 판처럼) */
+  --wl-edge3: 0 -3px 0 0 var(--wl-ink), 0 3px 0 0 var(--wl-ink), -3px 0 0 0 var(--wl-ink), 3px 0 0 0 var(--wl-ink);
+  --wl-edge2: 0 -2px 0 0 var(--wl-ink), 0 2px 0 0 var(--wl-ink), -2px 0 0 0 var(--wl-ink), 2px 0 0 0 var(--wl-ink);
+  --wl-board: 0 0 0 3px var(--wl-ink), inset 3px 3px 0 0 var(--wl-hi), inset -3px -3px 0 0 var(--wl-lo);        /* 나무판 */
+  --wl-well-in: inset 3px 3px 0 0 #000, inset -2px -2px 0 0 var(--wl-hi), 0 0 0 2px var(--wl-ink);            /* 파인 홈 */
+  --wl-btn: var(--wl-edge2), inset -3px -3px 0 0 var(--wl-lo), inset 3px 3px 0 0 var(--wl-hi);                 /* 나무 단추 */
+  --wl-btn-gold: var(--wl-edge2), inset -3px -3px 0 0 var(--wl-gold-lo), inset 3px 3px 0 0 var(--wl-gold-hi);  /* 금 단추 */
+  --wl-btn-big: var(--wl-edge3), 0 9px 0 0 #000a, inset -4px -5px 0 0 var(--wl-lo), inset 4px 4px 0 0 var(--wl-hi);
+  --wl-btn-big-gold: var(--wl-edge3), 0 9px 0 0 #000a, inset -4px -5px 0 0 var(--wl-gold-lo), inset 4px 4px 0 0 var(--wl-gold-hi);
+  --wl-chip: 0 0 0 2px var(--wl-ink), inset -2px -2px 0 0 var(--wl-lo), inset 2px 2px 0 0 var(--wl-hi);
+  --wl-chip-gold: 0 0 0 2px var(--wl-ink), inset -2px -2px 0 0 var(--wl-gold-lo), inset 2px 2px 0 0 var(--wl-gold-hi);
+  /* 글자 테두리(지도 위에 올린 글) */
+  --wl-outline2: 2px 0 0 var(--wl-ink), -2px 0 0 var(--wl-ink), 0 2px 0 var(--wl-ink), 0 -2px 0 var(--wl-ink),
+                 2px 2px 0 var(--wl-ink), -2px 2px 0 var(--wl-ink), 2px -2px 0 var(--wl-ink), -2px -2px 0 var(--wl-ink), 0 4px 0 var(--wl-ink);
+  --wl-outline1: 1px 0 0 var(--wl-ink), -1px 0 0 var(--wl-ink), 0 1px 0 var(--wl-ink), 0 -1px 0 var(--wl-ink);
+  /* 드롭다운 화살표(도트) */
+  --wl-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' shape-rendering='crispEdges'%3E%3Cpath fill='%23f2c14e' d='M0 0h10v2H0zM2 2h6v2H2zM4 4h2v2H4z'/%3E%3C/svg%3E");
+}
