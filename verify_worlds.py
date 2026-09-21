@@ -348,8 +348,8 @@ check("⑥ 러너: 스위치·틱 몸통 둘(_tick_world·_shift_world)·옆 파
       'os.environ.get("DUNGEON_PARTYFORM", "0") == "1" and TOWN_ON' in src and "def _tick_world(w, turn):" in src
       and "def _shift_world(w, turn):" in src and "stream_side.jsonl" in src and '"worlds": worlds, "parties": parties' in src)
 lp, lh = text("launcher.py"), text("launcher", "index.html")
-check("⑥ 론처: 고급 설정의 체크박스(기본 끔)·옵션·러너 환경변수 — 옵션이 없으면 끈다",
-      'id="partyform">' in lh and 'id="partyform" checked' not in lh and "partyform: $('partyform').checked" in lh
+check("⑥ 론처: 고급 설정의 체크박스(화면 기본 켬 — 파트너 09-21 '파티를 직접 맺는다 … 활성화')·옵션·러너 환경변수 — 옵션이 없으면 끈다",
+      'id="partyform" checked>' in lh and "partyform: $('partyform').checked" in lh
       and 'env["DUNGEON_PARTYFORM"] = "1" if opts.get("partyform") is True else "0"' in lp)
 fmt = text("STREAM_FORMAT.md")
 check("⑥ STREAM_FORMAT: partyform · depart · arrive · stream_side.jsonl", all(s in fmt for s in ("partyform", "depart", "arrive", "stream_side.jsonl")))

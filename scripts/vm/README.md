@@ -48,7 +48,11 @@
 모델 `gemini-3.8-flash` 고정 · 한 판 최대 600틱 · 판당 모델 호출 400회 · 서버 전체 하루 10판 · 주소당 하루 2판 · **이어가기 없음**
 (⚠️값 임시 — 파트너 확정 전). 하루는 한국 시간 자정에 바뀐다. 쓴 판 수는 `<BOTPIKDUN_DATA>/house_usage.json`(주소는 지문만).
 최악 비용 = 하루 판 수 × 판당 호출 수 × 콜 단가. 이어가기를 막는 까닭은 이어간 판이 새 러너라 호출 한도를 0부터 다시 세기 때문이다(D96).
-자기 키를 넣은 판은 옛날 그대로다(1800틱 · `DUNGEON_API_CALL_LIMIT` · 이어가기).
+**창을 닫으면 멈춘다**: 운영자 키 판은 관전 요청(론처 3초·관전 1.5초마다)이 **30초** 없으면 멈춘다(`BOTPIKDUN_HOUSE_UNWATCHED_SEC`, D91 의 10분 대신).
+새로고침·론처↔관전 이동은 요청이 곧 다시 와서 안 멈춘다. ⚠️크롬은 5분 넘게 숨긴 탭의 타이머를 1분에 한 번으로 늦추므로 오래 다른 탭에 두면 멈출 수 있다(화면이 그렇게 말한다).
+화면: 운영자 키 판이 열려 있으면(오늘 남은 판이 있으면) 모험 준비의 **두뇌·API 키 카드를 숨기고** 'Gemini 3.8 Flash · 데모라 한도를 빡빡하게 잡았다' 카드를 띄운다.
+오늘 판이 다 차면 두뇌·키 카드가 다시 보인다(자기 키로는 계속 시작할 수 있다).
+자기 키를 넣은 판은 옛날 그대로다(1800틱 · `DUNGEON_API_CALL_LIMIT` · 이어가기 · 안 보면 10분).
 
 **⚠️켜기 전에 — 키와 5만 원 가드.** 누적 5만 원 가드(`budget-guard/`)는 **프로젝트 `botpikdun` 의 모든 서비스·크레딧 차감 전 금액**을 센다.
 운영자 키를 `botpikdun` 프로젝트에서 만들면(2026-09-21 파트너가 이렇게 만들었다) 심사위원들이 쓴 Gemini 비용이 그 5만 원에 합쳐져
@@ -75,7 +79,7 @@ sudo journalctl -u botpikdun -n 20 --no-pager | grep D98
 마지막 줄에 `운영자 키 판(D98): 켜짐 / 모델 gemini-3.8-flash / 최대 600틱 / …` 이 보이면 켜진 것이다(키 문자열은 어디에도 찍지 않는다).
 `systemctl show -p Environment` 에는 **안 보이는 게 정상**이다 — EnvironmentFile 은 파일 경로만 남긴다(그래서 이 방식을 쓴다).
 값을 바꾸려면 같은 파일에 줄을 더한다: `BOTPIKDUN_HOUSE_PER_DAY=10` · `BOTPIKDUN_HOUSE_PER_IP_DAY=2` · `BOTPIKDUN_HOUSE_CALL_LIMIT=400` ·
-`BOTPIKDUN_HOUSE_TURNS=600` (`sudo nano /etc/botpikdun/house.env` → 재시작). 끄기: `BOTPIKDUN_HOUSE_PER_DAY=0` 을 넣고 재시작하거나
+`BOTPIKDUN_HOUSE_TURNS=600` · `BOTPIKDUN_HOUSE_UNWATCHED_SEC=30` (`sudo nano /etc/botpikdun/house.env` → 재시작). 끄기: `BOTPIKDUN_HOUSE_PER_DAY=0` 을 넣고 재시작하거나
 `house.conf` 를 `house.conf.disabled` 로 바꾸고 `daemon-reload` + 재시작. 밖에서 확인:
 ```bash
 curl -s -c /tmp/c -o /dev/null https://botpicdun.duckdns.org/launcher/

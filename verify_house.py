@@ -13,7 +13,10 @@
   ⑦ 이어가기 금지(실제 dummy 판을 곱게 멈춰서): 멈춘 몸(스냅샷)은 있다 · 그래도 status.resume 은 없다 · 대신 status.house_end(사유·틱) ·
      이어가기 400(키를 넣어도) · 론처 Runner.start 도 거절 · 표식만 걷으면 이어갈 몸이 보인다(= 거절의 이유가 표식이다)
   ⑧ 키 미기록: 데이터 폴더 전체·서버 로그·presets 응답에 운영자 키·자기 키 문자열 0회
-  ⑨ 화면(정적): 키를 비우고 출발하면 key 를 싣지 않는다 · 관전 정지 패널이 house_end 를 읽는다 · 첫 화면 안내 자리 · 조건 문장은 서버 값에서
+  ⑨ 화면(정적): 키를 비우고 출발하면 key 를 싣지 않는다 · 관전 정지 패널이 house_end 를 읽는다 · 첫 화면 안내 자리 · 조건 문장은 서버 값에서 ·
+     운영자 키 판이 열려 있으면 두뇌·키 카드를 숨기고 안내 카드(파트너 09-21 "모델이랑 api키 입력 창을 숨기는 편이")
+  ⑩ 페이지를 나가면 멈춤(파트너 09-21 "이 때 페이지를 나가면 바로 판이 중지"): 운영자 키 판만 짧은 제한 시간 — 보는 동안은 돌고,
+     관전이 끊기면 그 시간 뒤 멈춘다(house_end unwatched) · 같은 서버의 자기 키 판은 같은 시간 안 봐도 돈다(D91 그대로)
 """
 import http.client
 import io
@@ -159,17 +162,17 @@ try:
     check("① 사용량 파일도 안 생긴다", not os.path.exists(os.path.join(d_off, "house_usage.json")))
     srv_off.shutdown(); srv_off.server_close()
     os.environ.update(BOTPIKDUN_HOUSE_KEY=HKEY, BOTPIKDUN_HOUSE_PER_DAY="5", BOTPIKDUN_HOUSE_TURNS="321",
-                      BOTPIKDUN_HOUSE_CALL_LIMIT="123", BOTPIKDUN_HOUSE_PER_IP_DAY="4")
+                      BOTPIKDUN_HOUSE_CALL_LIMIT="123", BOTPIKDUN_HOUSE_PER_IP_DAY="4", BOTPIKDUN_HOUSE_UNWATCHED_SEC="45")
     s_env = server.make_public_server("127.0.0.1", 0, root=HERE, data_dir=os.path.join(TMP, "env"), brain="dummy")
     os.environ["BOTPIKDUN_HOUSE_PER_DAY"] = "0"
     s_zero = server.make_public_server("127.0.0.1", 0, root=HERE, data_dir=os.path.join(TMP, "env0"), brain="dummy")
     for k in ("BOTPIKDUN_HOUSE_KEY", "BOTPIKDUN_HOUSE_PER_DAY", "BOTPIKDUN_HOUSE_TURNS", "BOTPIKDUN_HOUSE_CALL_LIMIT",
-              "BOTPIKDUN_HOUSE_PER_IP_DAY"):
+              "BOTPIKDUN_HOUSE_PER_IP_DAY", "BOTPIKDUN_HOUSE_UNWATCHED_SEC"):
         os.environ.pop(k, None)
     se = s_env.sessions
-    check("① 환경변수로 켠다(키·하루 5·주소 4·321틱·123콜) · 하루 판 수 0 = 끔",
+    check("① 환경변수로 켠다(키·하루 5·주소 4·321틱·123콜·안 보면 45초) · 하루 판 수 0 = 끔",
           se.house_on() and se.house_key == HKEY and se.house_per_day == 5 and se.house_per_ip_day == 4
-          and se.house_turns == 321 and se.house_call_limit == 123 and not s_zero.sessions.house_on(),
+          and se.house_turns == 321 and se.house_call_limit == 123 and se.house_unwatched == 45 and not s_zero.sessions.house_on(),
           "%s %s %s %s" % (se.house_per_day, se.house_turns, se.house_call_limit, s_zero.sessions.house_on()))
     for s_ in (s_env, s_zero):
         s_.sessions.stop_all(); s_.server_close()
@@ -187,9 +190,9 @@ try:
     A = judge(port, "10.0.0.1")
     pa = A.call("/api/presets")
     ha = (pa[2] or {}).get("house") or {}
-    check("② presets.house = 켜짐 · 이 주소 남은 2 · 하루 3 · 모델·600틱·400콜 · 이어가기 없음",
+    check("② presets.house = 켜짐 · 이 주소 남은 2 · 하루 3 · 모델·600틱·400콜 · 이어가기 없음 · 안 보면 30초",
           ha == {"on": True, "left": 2, "per_day": 3, "per_ip_day": 2, "model": "gemini-3.8-flash", "turns": 600,
-                 "call_limit": 400, "resume": False}, str(ha))
+                 "call_limit": 400, "resume": False, "unwatched": 30} and server.HOUSE_UNWATCHED_SEC == 30, str(ha))
     check("② presets 응답에 운영자 키 없음", HKEY.encode() not in pa[1])
     st, raw, obj = start_spied(A, dict(STD, provider="anthropic_api", brain="anthropic_api", model="claude-x", house=False))
     env = captured[-1] if captured else {}
@@ -357,15 +360,55 @@ try:
     print("── ⑨ 화면(정적)")
     with io.open(os.path.join(HERE, "launcher", "index.html"), encoding="utf-8") as f:
         html = f.read()
-    i = html.find("if (houseOpen())")
+    j = html.find("$('bStart').onclick")                                 # 출발 버튼 처리 안에서 찾는다(houseOpen 은 화면 곳곳에 있다)
+    i = html.find("if (houseOpen())", j) if j >= 0 else -1
     branch = html[i:i + 400] if i >= 0 else ""
     check("⑨ 키를 비우고 출발하면 key 를 싣지 않는다(서버가 운영자 키 판으로 판단)", "delete body.key" in branch)
     with io.open(os.path.join(HERE, "viewer", "assets", "brain-pause.js"), encoding="utf-8") as f:
         bp = f.read()
     check("⑨ 관전 화면 정지 패널이 status.house_end 를 읽고 시작 화면으로 보낸다(이어가기 버튼 없음)",
           "status?.house_end" in bp and "(budget || houseEnd)" in bp and "시작 화면으로" in bp)
+    check("⑨ 운영자 키 판이 열려 있으면 두뇌·키 카드를 숨기고 안내 카드 · 첫 화면의 '직접 가져온 키로' 문단도 숨긴다",
+          'id="brainCard"' in html and 'id="houseCard" hidden' in html and "$('brainCard').hidden = houseOpen();" in html
+          and "$('keyCard').hidden = houseOpen() ||" in html and "$('houseCard').hidden = !houseOpen();" in html
+          and 'id="tByokNote"' in html and "$('tByokNote').hidden = houseOpen();" in html)
+    check("⑨ 첫 화면 안내 자리는 인라인 display 없이(hidden 을 이기지 않게)",
+          '<div id="tHouseNote" hidden style="margin-top:8px' in html and 'id="tHouseNote" hidden style="display' not in html)
     check("⑨ 첫 화면 안내 자리(tHouseNote) · 조건 문장은 서버 값(house.turns·house.model·house.left)에서",
           'id="tHouseNote"' in html and "${house.turns}" in html and "${house.model}" in html and "${house.left}" in html)
+    print("── ⑩ 페이지를 나가면 멈춤(운영자 키 판만 짧게 — 2초로 줄여서)")
+    os.environ.update(DUNGEON_TURNS="400", DUNGEON_STEP_DELAY="0.5")   # 멈출 때까지 끝나지 않는 판(seed 11 = 102틱, 0콜 실측 — verify_public ⑩ 과 같은 판)
+    d_uw = os.path.join(TMP, "unwatched")
+    srv4, port4 = serve(d_uw, house_key=HKEY, house_per_day=5, house_per_ip_day=5, house_turns=400, house_unwatched=2,
+                        key_check=fake_alive)
+    CUR["srv"] = srv4
+    check("⑩ 살피기 스레드가 떠 있다(D91 은 10분이어도 가장 짧은 제한 2초에 맞춰 살핀다)", srv4.sessions.watcher is not None
+          and srv4.sessions.unwatched_limit == 600)
+    H, K = judge(port4, "10.3.0.1"), judge(port4, "10.3.0.2")        # H = 운영자 키 판 · K = 같은 서버의 자기 키 판
+    stH = H.call("/api/start", dict(OLD, seed=11))[0]
+    stK = K.call("/api/start", dict(OLD, seed=11, key=OWN))[0]
+    ctxH, ctxK = srv4.sessions.get(H.cookie), srv4.sessions.get(K.cookie)
+    t0, n_poll = time.time(), 0
+    while time.time() - t0 < 6:                                      # 보는 동안 — 제한 시간(2초)의 세 배
+        H.call("/api/status"); K.call("/api/status"); n_poll += 1
+        time.sleep(0.4)
+    check("⑩ 보는 동안은 제한 시간의 세 배가 지나도 둘 다 돈다", stH == 200 and stK == 200 and ctxH.runner.running()
+          and ctxK.runner.running() and getattr(ctxH, "house", None) is True and getattr(ctxK, "house", None) is False,
+          "%s %s polls %d" % (stH, stK, n_poll))
+    t_last = time.time()                                             # 이제 아무도 안 본다 — 서버 안에서만 지켜본다(HTTP 로 물으면 그게 관전이다)
+    while ctxH.runner.running() and time.time() - t_last < 40:
+        time.sleep(0.2)
+    gone = time.time() - t_last
+    check("⑩ 운영자 키 판: 관전이 끊기면 제한 시간 뒤 멈춘다(그 전에는 아니다)", not ctxH.runner.running() and gone >= 2, "%.1fs" % gone)
+    check("⑩ 같은 서버의 자기 키 판은 같은 시간 동안 안 봤어도 돈다(D91 10분 그대로)", ctxK.runner.running())
+    stH2 = H.call("/api/status")[2] or {}
+    check("⑩ 멈춘 자리 = house_end.stopped 'unwatched' · 이어갈 몸은 없다", (stH2.get("house_end") or {}).get("stopped") == "unwatched"
+          and stH2.get("resume") is None, str(stH2.get("house_end")))
+    ctxK.runner.stop(graceful=False)
+    srv4.sessions.stop_all()
+    srv4.shutdown(); srv4.server_close()
+    os.environ.update(DUNGEON_TURNS="6")
+    os.environ.pop("DUNGEON_STEP_DELAY", None)
 finally:
     sys.stderr = old_err
     launcher.subprocess.Popen = real_popen

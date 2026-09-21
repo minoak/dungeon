@@ -82,6 +82,10 @@ HOUSE_TURNS = 600                                            # 파트너 "600턴
 HOUSE_CALL_LIMIT = 400                                       # 판당 호출 — 첫 완주 판 실측 0.499콜/틱 × 600 ≈ 300 + 던전 쪽(0.53~0.64콜/틱) 여유. 닿으면 곱게 멈춘다(이어가기 없음)
 HOUSE_PER_DAY = 10                                           # 서버 전체 하루 판 수(한국 시간 자정에 새로)
 HOUSE_PER_IP_DAY = 2                                         # 주소당 하루 판 수 — 한 사람이 하루 몫을 다 쓰지 못하게
+HOUSE_UNWATCHED_SEC = 30                                     # 파트너 09-21 "이 때 페이지를 나가면 바로 판이 중지" — 운영자 키 판은 관전 요청(론처 3초·관전 1.5초마다)이
+                                                             #   이만큼 없으면 멈춘다(D91 의 10분 대신). 새로고침·론처↔관전 이동은 몇 초 안에 요청이 다시 와서 안 멈춘다
+                                                             #   (창을 닫을 때 보내는 신호로 즉시 멈추면 새로고침에도 죽는다 — 이어가기가 없는 판이라 되살릴 길이 없다).
+                                                             #   ⚠️크롬은 5분 넘게 숨긴 탭의 타이머를 1분에 한 번으로 늦춘다 → 오래 다른 탭에 두면 멈출 수 있다(화면이 그렇게 말한다).
 KST = 9 * 3600                                               # VM 시계가 UTC 여도 '하루'는 한국 자정에 바뀐다
 MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1"
 ACCOUNT_POSTS = ("/api/login", "/api/logout", "/api/keys/link", "/api/keys/unlink", "/api/nick")
@@ -139,7 +143,7 @@ class Sessions:
                  login_per_hour=LOGIN_PER_HOUR, key_check=None, pause_limit=PAUSE_LIMIT_SEC,
                  unwatched_limit=UNWATCHED_LIMIT_SEC, api_call_limit=API_CALL_LIMIT,
                  house_key="", house_model=HOUSE_MODEL, house_turns=HOUSE_TURNS, house_call_limit=HOUSE_CALL_LIMIT,
-                 house_per_day=HOUSE_PER_DAY, house_per_ip_day=HOUSE_PER_IP_DAY):
+                 house_per_day=HOUSE_PER_DAY, house_per_ip_day=HOUSE_PER_IP_DAY, house_unwatched=HOUSE_UNWATCHED_SEC):
         self.root, self.brain = root, brain
         self.max_runs, self.starts_per_hour, self.ttl = int(max_runs), int(starts_per_hour), ttl
         self.login_per_hour, self.key_check = int(login_per_hour), key_check
@@ -158,6 +162,7 @@ class Sessions:
         self.house_call_limit = max(0, int(house_call_limit))
         self.house_per_day = max(0, int(house_per_day))
         self.house_per_ip_day = max(0, int(house_per_ip_day))
+        self.house_unwatched = max(0, int(house_unwatched))   # 운영자 키 판의 '안 보면 멈춤' 초(0 = D91 값을 따른다)
         self.house_file = os.path.join(data_dir, "house_usage.json")
         self.house_lock = threading.Lock()
         self.lock = threading.Lock()            # ctx/seen/starts 보호
@@ -267,8 +272,9 @@ class Sessions:
     def stop_unwatched(self, now=None):
         """돌고 있는데 unwatched_limit 초 동안 관전 요청이 없던 판을 곱게 멈춘다 → 멈춘 수.
         사람이 누르는 멈춤과 같은 길(Runner.stop graceful — 다음 틱 머리에서 stopped 줄·스냅샷을 남기고 스스로 닫는다 = 이어가기 가능)이고,
-        수첩은 쓰지 않는다(pages=False — 읽을 사람 없는 자리에서 두뇌 콜을 쓰지 않는다). 사유 'unwatched' 는 러너가 기록에 그대로 적는다."""
-        if not self.unwatched_limit:
+        수첩은 쓰지 않는다(pages=False — 읽을 사람 없는 자리에서 두뇌 콜을 쓰지 않는다). 사유 'unwatched' 는 러너가 기록에 그대로 적는다.
+        D98: 운영자 키 판(ctx.house)은 제한 시간이 house_unwatched(짧다)다 — _unwatched_limit_of."""
+        if not self.unwatched_limit and not self._house_watch():
             return 0
         with self.lock:
             ctxs = list(self.ctx.values()) + list(self.actx.values())
@@ -277,19 +283,32 @@ class Sessions:
             t = time.monotonic() if now is None else now
             if not hasattr(ctx, "watched"):       # 시계가 없는 Ctx 는 지금부터 잰다(바로 멈추지 않는다)
                 ctx.watched = t
-            if ctx.runner.running() and t - ctx.watched >= self.unwatched_limit:
+            limit = self._unwatched_limit_of(ctx)
+            if limit and ctx.runner.running() and t - ctx.watched >= limit:
                 res = ctx.runner.stop(graceful=True, pages=False, reason="unwatched")
                 if res.get("stopped"):
                     n += 1
-                    print("[server] 관전 요청이 %d초 없던 판을 멈췄다(%s) — 이어가기 가능"
-                          % (self.unwatched_limit, "곱게" if res.get("graceful") else "끊음"), file=sys.stderr)
+                    print("[server] 관전 요청이 %d초 없던 판을 멈췄다(%s) / %s"
+                          % (limit, "곱게" if res.get("graceful") else "끊음",
+                             "운영자 키 판(이어가기 없음)" if getattr(ctx, "house", False) else "이어가기 가능"), file=sys.stderr)
         return n
 
+    def _house_watch(self):
+        """D98 운영자 키 판의 짧은 '안 보면 멈춤'이 살아 있나(운영자 키가 켜져 있고 값이 0 이 아닐 때)."""
+        return self.house_on() and self.house_unwatched > 0
+
+    def _unwatched_limit_of(self, ctx):
+        """이 Ctx 의 판에 걸린 '안 보면 멈춤' 초 — 운영자 키 판(D98)은 house_unwatched, 나머지는 D91 unwatched_limit. 0 = 없음."""
+        if getattr(ctx, "house", False) and self._house_watch():
+            return self.house_unwatched
+        return self.unwatched_limit
+
     def start_watcher(self):
-        """자동 멈춤을 살피는 데몬 스레드 하나 — 간격은 제한 시간의 1/4(상한 15초). 끔(0)이면 안 띄운다. 두 번 불러도 하나."""
-        if not self.unwatched_limit or self.watcher is not None:
+        """자동 멈춤을 살피는 데몬 스레드 하나 — 간격은 가장 짧은 제한 시간의 1/4(상한 15초). 둘 다 끔(0)이면 안 띄운다. 두 번 불러도 하나."""
+        limits = [x for x in (self.unwatched_limit, self.house_unwatched if self._house_watch() else 0) if x]
+        if not limits or self.watcher is not None:
             return self.watcher
-        every = min(15.0, max(0.2, self.unwatched_limit / 4.0))
+        every = min(15.0, max(0.2, min(limits) / 4.0))
 
         def loop():
             while not self.closed.wait(every):
@@ -641,7 +660,8 @@ class PublicHandler(Handler):
             s = self.sessions                                             # D98 additive — 운영자 키 판(키 없이 시작)의 조건과 이 주소의 오늘 남은 판
             obj["house"] = {"on": s.house_on(), "left": s.house_left(self._ip()), "per_day": s.house_per_day,
                             "per_ip_day": s.house_per_ip_day, "model": s.house_model, "turns": s.house_turns,
-                            "call_limit": s.house_call_limit, "resume": False}
+                            "call_limit": s.house_call_limit, "resume": False,
+                            "unwatched": s.house_unwatched or s.unwatched_limit}   # 보는 창이 없으면 몇 초 뒤 멈추나(화면이 말한다)
             return self._json(200, obj)
         if p == "/api/me":                                            # D77 계정 상태 — 론처 화면의 계정 카드
             return self._json(200, self._me())
@@ -748,6 +768,7 @@ class PublicHandler(Handler):
         extra["OPENAI_BASE_URL"] = openai_base_url()
         extra["DUNGEON_PAUSE_LIMIT_SEC"] = self.sessions.pause_limit   # F1 재시도를 아무도 안 누르는 판이 자리를 쥐고 있지 못하게
         extra["DUNGEON_API_CALL_LIMIT"] = self.sessions.api_call_limit   # D96 한 판이 쓰는 LLM 호출 수 — /api/presets 로 화면이 예고한 그 값이 러너로 간다(이어가는 판도 새 프로세스라 여기서 다시 0부터)
+        self.ctx.house = bool(house)                 # D98 이 Ctx 의 지금 판이 운영자 키 판인가 — '안 보면 멈춤'이 짧아진다(stop_unwatched)
         if house:                                     # D98 운영자 키 판 — 판당 호출·틱 상한은 서버 것, run_opts 에 표식(이어가기 금지의 근거)
             body["house"] = True
             extra["DUNGEON_API_CALL_LIMIT"] = self.sessions.house_call_limit
@@ -772,7 +793,8 @@ def make_public_server(host, port, root=HERE, data_dir=None, brain=None, max_run
                  "house_turns": _env_int("BOTPIKDUN_HOUSE_TURNS", HOUSE_TURNS),
                  "house_call_limit": _env_int("BOTPIKDUN_HOUSE_CALL_LIMIT", HOUSE_CALL_LIMIT),
                  "house_per_day": _env_int("BOTPIKDUN_HOUSE_PER_DAY", HOUSE_PER_DAY),
-                 "house_per_ip_day": _env_int("BOTPIKDUN_HOUSE_PER_IP_DAY", HOUSE_PER_IP_DAY)}
+                 "house_per_ip_day": _env_int("BOTPIKDUN_HOUSE_PER_IP_DAY", HOUSE_PER_IP_DAY),
+                 "house_unwatched": _env_int("BOTPIKDUN_HOUSE_UNWATCHED_SEC", HOUSE_UNWATCHED_SEC)}
     unknown = set(house) - set(env_house)
     if unknown:
         raise TypeError("모르는 인자: %s" % ", ".join(sorted(unknown)))

@@ -359,8 +359,8 @@ def text(*p):
     with open(os.path.join(HERE, *p), encoding="utf-8") as f:
         return f.read()
 lp9, lh9 = text("launcher.py"), text("launcher", "index.html")
-check("⑨ 론처: 고급 설정의 체크박스(기본 끔)·옵션·러너 환경변수 — 옵션이 없으면 끈다",
-      'id="strangers">' in lh9 and 'id="strangers" checked' not in lh9 and "strangers: $('strangers').checked" in lh9
+check("⑨ 론처: 고급 설정의 체크박스(화면 기본 켬 — 파트너 09-21 '서로를 모르고 시작 … 활성화')·옵션·러너 환경변수 — 옵션이 없으면 끈다",
+      'id="strangers" checked>' in lh9 and "strangers: $('strangers').checked" in lh9
       and 'env["DUNGEON_STRANGERS"] = "1" if opts.get("strangers") is True else "0"' in lp9)
 hd, fmt = text("design", "HARNESS_DESIGN.md"), text("STREAM_FORMAT.md")
 check("⑨ HARNESS D85(활성화 규칙 표·조건 a·c) · STREAM_FORMAT(strangers·person_note·obs.people·looks)",

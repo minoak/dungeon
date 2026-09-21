@@ -888,9 +888,9 @@ NPC 두뇌를 켠 판에서 NPC 가 답을 쓸 때만 쓰인다. `{name}` `{role
 
 | # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
 |---|---|---|---|---|
-| 580 | launcher.title.house_note | launcher/index.html:673 (요소 #tHouseNote, 첫 화면 '키를 맡기라고 하기 전에' 상자 안) — 공개 서버가 운영자 키 판을 켰고 이 주소에 오늘 남은 판이 있을 때. 숫자·모델은 서버 값 | 키가 없어도 됩니다. 운영자 키(gemini-3.8-flash)로 한 판 최대 600틱까지 돌려 볼 수 있습니다. 이어가기는 없고, 이 주소에서 오늘 2판 남았습니다. | |
+| 580 | launcher.title.house_note | launcher/index.html:683 (요소 #tHouseNote, 첫 화면 '키를 맡기라고 하기 전에' 상자 안) — 공개 서버가 운영자 키 판을 켰고 이 주소에 오늘 남은 판이 있을 때. 이때 같은 상자의 '직접 가져온 키로 돕니다' 문단은 숨는다. 숫자·모델은 서버 값(09-21 오후 개정 — 파트너 "데모라 api를 빡빡하게 잡은 사정을 알려줘야") | 이 데모의 원정은 운영자가 비용을 내는 Gemini 3.8 Flash로 돕니다. 키를 가져오지 않아도 됩니다. 여럿이 나눠 쓰는 데모라 한도를 빡빡하게 잡았습니다. 한 판은 최대 600틱이고 이어가기가 없으며, 창을 닫거나 오래 다른 탭에 두면 판이 멈춥니다. 이 주소에서 오늘 2판 남았습니다. | |
 | 581 | launcher.title.house_note.spent | launcher/index.html:674 — 같은 자리, 오늘 운영자 키 판이 다 찼을 때 | 오늘 운영자 키로 돌 수 있는 판은 다 찼습니다. 한국 시간 자정에 다시 열립니다. 자기 키로는 지금도 시작할 수 있습니다. | |
-| 582 | launcher.key_hint.house | launcher/index.html:646·639 (#keyHint, 모험 준비 화면의 키 칸 아래) — 앞 문장 '입력한 키는 이 원정에만 …' 뒤에 붙는다 | 키가 없으면 운영자 키(gemini-3.8-flash)로 돌려 볼 수 있다: 한 판 최대 600틱 · 모델 호출 400회까지 · 이어가기 없음 · 이 주소에서 오늘 남은 판 2. 비워 두면 이 조건으로 출발한다. | |
+| 582 | launcher.key_hint.house | launcher/index.html:655 (#keyHint) — ⚠️09-21 오후부터 거의 안 보인다: 운영자 키 판이 열려 있으면 키 카드 자체를 숨긴다(파트너 "모델이랑 api키 입력 창을 숨기는 편이"). 남은 판이 0 이면 이 문장 대신 #583 이 붙는다 | 키가 없으면 운영자 키(gemini-3.8-flash)로 돌려 볼 수 있다: 한 판 최대 600틱 · 모델 호출 400회까지 · 이어가기 없음 · 이 주소에서 오늘 남은 판 2. 비워 두면 이 조건으로 출발한다. | |
 | 583 | launcher.key_hint.house_spent | launcher/index.html:640 — 같은 자리, 오늘 판이 다 찼을 때 '공개 서버에서는 키 입력이 필요하다.' 뒤에 붙는다 | (오늘 운영자 키 판은 다 찼다) | |
 | 584 | launcher.start.err.house_spent | launcher/index.html:1287 (#err2) — 오늘 판이 다 찬 날 키 없이 출발을 누르면 | 오늘 운영자 키 판은 다 찼다. 선택한 회사의 API 키를 넣어 줘. 이 판에만 쓰이고 서버에 남지 않는다. | |
 | 585 | server.error.house_spent_total | server.py:327 — 429 응답(화면 #err2 에 그대로 뜬다) · 서버 전체 하루 판 수가 찼을 때 | 오늘 운영자 키로 돌 수 있는 판 10판이 다 찼다. 한국 시간 자정에 다시 열린다. 자기 API 키로는 지금도 시작할 수 있다 | |
@@ -903,3 +903,6 @@ NPC 두뇌를 켠 판에서 NPC 가 답을 쓸 때만 쓰인다. `{name}` `{role
 | 592 | viewer.brain_pause.house.next | viewer/assets/brain-pause.js:52 — 같은 패널 둘째 줄 | 운영자 키 판은 이어갈 수 없어요. 시작 화면에서 새 원정을 열 수 있어요. | |
 | 593 | viewer.brain_pause.house.button | viewer/assets/brain-pause.js:53 — '판단 재시도' 버튼이 뜨던 자리 | 시작 화면으로 | |
 | 594 | server.log.house | server.py:819·822 — 서버 기동 stdout 운영 로그(검토표 #576 과 같은 급 · 키 문자열은 안 찍는다) | [server] 운영자 키 판(D98): 켜짐 / 모델 gemini-3.8-flash / 최대 600틱 / 판당 호출 400회 / 하루 10판(주소당 2) / 이어가기 없음 — 꺼져 있으면 '[server] 운영자 키 판(D98): 꺼짐 / 자기 키 판만' | |
+| 595 | launcher.house_card.title | launcher/index.html:688 (#houseCardTitle — 모험 준비 화면에서 두뇌·키 카드 대신 뜨는 카드의 제목) — 운영자 키 판이 열려 있을 때 | 두뇌: Gemini 3.8 Flash (데모 제공) | |
+| 596 | launcher.house_card.text | launcher/index.html:689 (#houseCardText — 같은 카드 본문) · 숫자는 서버 값 | 이 데모는 운영자가 비용을 내는 Gemini 3.8 Flash로 돈다. 모델과 API 키는 고르지 않는다. 여럿이 나눠 쓰는 데모라 한도를 빡빡하게 잡았다: 한 판 최대 600틱 · 모델 호출 400회까지 · 이어가기 없음 · 이 주소에서 하루 2판(오늘 남은 판 2). 창을 닫거나 오래 다른 탭에 두면 판이 멈춘다. | |
+| 597 | server.log.unwatched_stop | server.py:291 — 서버 stderr 운영 로그(검토표 #576 과 같은 급) · 관전 요청이 끊긴 판을 멈출 때 | [server] 관전 요청이 30초 없던 판을 멈췄다(곱게) / 운영자 키 판(이어가기 없음) — 자기 키 판이면 끝이 '/ 이어가기 가능' | |

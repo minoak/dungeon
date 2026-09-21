@@ -208,12 +208,12 @@
     <!-- 키를 맡기라고 하기 전에 먼저 말한다. 여기 적은 것은 verify_public 이 매번 확인한다
          (세션 폴더 전체와 서버 로그에 키 문자열이 0회인지). ⚠️ 문구 임시 -->
     <div class="hint" id="tKeyNote" style="max-width:660px;margin:12px auto 0;padding:11px 15px;border:1px solid #2c303c;background:#1d2029;border-radius:8px;font-size:12.5px;line-height:1.7;color:#9aa0ad;text-align:left">
-      원정은 <b>직접 가져온 API 키</b>로 돕니다. 키는 서버에 저장하지 않습니다 —
+      <span id="tByokNote">원정은 <b>직접 가져온 API 키</b>로 돕니다. 키는 서버에 저장하지 않습니다 —
       판이 도는 동안 그 판의 프로세스 안에만 있고, 판 기록에도 서버 로그에도 남지 않습니다.
-      계정을 만들 때도 키가 아니라 <b>키의 지문</b>만 보관합니다. 비용은 키 주인에게 청구됩니다.
+      계정을 만들 때도 키가 아니라 <b>키의 지문</b>만 보관합니다. 비용은 키 주인에게 청구됩니다.</span>
       <a href="https://github.com/minoak/dungeon" target="_blank" rel="noopener">코드 보기 ↗</a>
       <!-- D98 운영자 키 판 — 서버가 /api/presets.house 를 켰을 때만. 문장은 initProviders 가 쓴다 ⚠️ 문구 임시 -->
-      <span id="tHouseNote" hidden style="display:block;margin-top:8px;color:#c9cdd6"></span>
+      <div id="tHouseNote" hidden style="margin-top:8px;color:#c9cdd6"></div><!-- 인라인 display 를 주면 hidden 을 이긴다(.row 09-16 결함과 같은 부류) — div 로 -->
     </div>
 
     <!-- 액자 — 포스터가 먼저 뜨고, 잠시 뒤 담아 둔 판이 소리 없이 돈다(game 의 ?embed=1).
@@ -332,7 +332,13 @@
   <div class="preview" id="defaultPreview" hidden></div>
   <div id="err"></div>
   <div class="opts" style="margin-top:14px">
-    <div class="card">
+    <!-- D98 운영자 키 판이 열려 있으면(공개 서버 · 오늘 남은 판 있음) 두뇌·키 카드 대신 이 카드 — 파트너 09-21 "모델이랑 api키 입력 창을 숨기는 편이 …
+         괜히 오해를 살것 같거든" · "기본 제미나이 3.8 플래시를 쓴다고 알리고 데모라 api를 빡빡하게 잡은 사정을 알려줘야". 문장은 initProviders ⚠️ 문구 임시 -->
+    <div class="card" id="houseCard" hidden>
+      <h3 id="houseCardTitle">두뇌</h3>
+      <div class="hint" id="houseCardText"></div>
+    </div>
+    <div class="card" id="brainCard">
       <h3>두뇌</h3>
       <select id="brain">
         <option value="gemini_api">Gemini API (사용량에 따라 과금)</option>
@@ -386,8 +392,8 @@
       <label class="f"><input type="checkbox" id="town" checked> 마을에서 시작한다</label>
       <label class="f" title="끄면 셋이 광장에 함께 선 채로 시작한다. 켜면 길드와 주점, 신전 문턱에 각자 흩어져 서서 시작해 저마다 볼일을 보다가 만난다."><input type="checkbox" id="townApart"> 흩어져 출발한다</label>
       <label class="f" title="접수원이나 주점 주인, 성직자에게 말을 걸면 그 사람의 대답을 모델이 그 자리에서 쓴다. 마을 사람이 먼저 말을 걸지는 않는다. 끄면 정해진 대사로 답한다."><input type="checkbox" id="npcBrain" checked> 마을 사람이 스스로 답한다</label>
-      <label class="f" title="켜면 셋이 한 일행으로 출발하지 않는다. 모험가 길드 구역에서 서로 청하고 맞받아야 파티가 되고, 계단은 파티원끼리만 함께 쓴다. 누가 먼저 내려가도 마을에 남은 사람의 시간은 계속 흐른다."><input type="checkbox" id="partyform"> 파티를 직접 맺는다 (실험)</label>
-      <label class="f" title="켜면 남의 이름과 직업을 저절로 알지 못한다. 기록이 없는 사람은 '낯선 사람'으로 겉모습만 보이고, 겪으면서 직접 적어 둔 것만 나중에 떠오른다. 관전 화면에 뜨는 이름은 그대로다."><input type="checkbox" id="strangers"> 서로를 모르고 시작한다 (실험)</label>
+      <label class="f" title="켜면 셋이 한 일행으로 출발하지 않는다. 모험가 길드 구역에서 서로 청하고 맞받아야 파티가 되고, 계단은 파티원끼리만 함께 쓴다. 누가 먼저 내려가도 마을에 남은 사람의 시간은 계속 흐른다."><input type="checkbox" id="partyform" checked> 파티를 직접 맺는다 (실험)</label>
+      <label class="f" title="켜면 남의 이름과 직업을 저절로 알지 못한다. 기록이 없는 사람은 '낯선 사람'으로 겉모습만 보이고, 겪으면서 직접 적어 둔 것만 나중에 떠오른다. 관전 화면에 뜨는 이름은 그대로다."><input type="checkbox" id="strangers" checked> 서로를 모르고 시작한다 (실험)</label>
       <label class="f" title="마을에서 지금 서 있는 구역만 보인다. 다른 구역에 건물이 어디 있는지는 알지만 누가 있는지는 가 봐야 안다. 새 구역에 들어서면 멈춰서 다시 살피므로 마을에서의 판단 횟수가 는다."><input type="checkbox" id="townSight" checked> 선 자리에서 보이는 것만 본다 (실험)</label>
       <!-- 09-20 추가 여섯(D90·D92·D93·D94·D95) ⚠️ 문구 임시 — 첫 자리(켬/끔)는 서버의 NIGHT_DEFAULTS 가 정한다(여기엔 checked 를 적지 않는다) -->
       <label class="f" title="그림으로만 있던 마을 물건 열다섯 가지를 쓸 수 있게 된다. 분수와 우물, 석상, 게시판, 벤치, 좌판, 화덕 같은 것들이다. 주민 일곱과 행인 둘이 더 서고, 구역마다 지나가는 말이 들린다."><input type="checkbox" id="townLife"> 마을 생활 (물건, 주민, 들리는 말)</label>
@@ -633,7 +639,9 @@ function changeBrain() {
   setModel(provider, 'brainModel');
   $('apiKey').value = '';                      // 다른 회사에 이전 키를 보내지 않는다
   $('keyTitle').textContent = (providerLabels[provider] || provider) + ' API 키 (이 판에만)';
-  $('keyCard').hidden = !(provider in modelDefaults);
+  $('keyCard').hidden = houseOpen() || !(provider in modelDefaults);   // D98 운영자 키 판이 열려 있으면 두뇌·키 카드를 숨기고 안내 카드를 띄운다
+  $('brainCard').hidden = houseOpen();
+  $('houseCard').hidden = !houseOpen();
   $('keyHint').textContent = '입력한 키는 이 원정에만 사용하며 파일이나 브라우저 저장소에 저장하지 않는다. ' +
     (!isPublic ? '비워 두면 로컬 .env에 설정된 해당 회사 키를 사용한다.'
       : houseOpen() ? houseLine() + ' 비워 두면 이 조건으로 출발한다.'        // D98 ⚠️ 문구 임시
@@ -643,6 +651,7 @@ function changeBrain() {
 // D98(09-21) 운영자 키 판 — 키를 비우고 출발하면 서버의 키로 돈다(모델 고정·틱 상한·이어가기 없음·하루 판 수). 조건은 서버가 준다.
 let house = null;
 const houseOpen = () => !!(isPublic && house && house.on && house.left > 0);
+const houseModelName = () => String(house.model || '').split('-').map(w => w ? w[0].toUpperCase() + w.slice(1) : w).join(' ');   // gemini-3.8-flash → Gemini 3.8 Flash
 const houseLine = () => `키가 없으면 운영자 키(${house.model})로 돌려 볼 수 있다: 한 판 최대 ${house.turns}틱 · 모델 호출 ${house.call_limit}회까지 · 이어가기 없음 · 이 주소에서 오늘 남은 판 ${house.left}.`;
 async function initProviders() {
   const config = await api('/api/presets');
@@ -667,11 +676,20 @@ async function initProviders() {
   const budget = Number(config.api_call_limit || 0);
   $('tBudgetNote').hidden = !budget;
   if (budget) $('tBudgetNote').textContent = `이 서버는 한 판에 쓸 수 있는 모델 호출을 ${budget}회로 정해 두었다. 거기 닿으면 원정이 그 자리에서 멈추고, 같은 키로 이어가면 멈춘 자리에서 계속된다.`;
-  // D98 운영자 키 판 안내(첫 화면) — 켜져 있을 때만 · 오늘 자리가 없으면 그 사실을 말한다 ⚠️ 문구 임시
+  // D98 운영자 키 판 안내(첫 화면·모험 준비 카드) — 켜져 있을 때만 · 오늘 자리가 없으면 그 사실을 말한다 ⚠️ 문구 임시
   $('tHouseNote').hidden = !(isPublic && house && house.on);
+  $('tByokNote').hidden = houseOpen();                                  // 키를 받지 않는 동안은 '직접 가져온 키로 돕니다'를 말하지 않는다
   if (isPublic && house && house.on) $('tHouseNote').textContent = house.left > 0
-    ? `키가 없어도 됩니다. 운영자 키(${house.model})로 한 판 최대 ${house.turns}틱까지 돌려 볼 수 있습니다. 이어가기는 없고, 이 주소에서 오늘 ${house.left}판 남았습니다.`
+    ? `이 데모의 원정은 운영자가 비용을 내는 ${houseModelName()}로 돕니다. 키를 가져오지 않아도 됩니다. `
+      + `여럿이 나눠 쓰는 데모라 한도를 빡빡하게 잡았습니다. 한 판은 최대 ${house.turns}틱이고 이어가기가 없으며, `
+      + `창을 닫거나 오래 다른 탭에 두면 판이 멈춥니다. 이 주소에서 오늘 ${house.left}판 남았습니다.`
     : `오늘 운영자 키로 돌 수 있는 판은 다 찼습니다. 한국 시간 자정에 다시 열립니다. 자기 키로는 지금도 시작할 수 있습니다.`;
+  if (houseOpen()) {
+    $('houseCardTitle').textContent = `두뇌: ${houseModelName()} (데모 제공)`;
+    $('houseCardText').textContent = `이 데모는 운영자가 비용을 내는 ${houseModelName()}로 돈다. 모델과 API 키는 고르지 않는다. `
+      + `여럿이 나눠 쓰는 데모라 한도를 빡빡하게 잡았다: 한 판 최대 ${house.turns}틱 · 모델 호출 ${house.call_limit}회까지 · 이어가기 없음 · `
+      + `이 주소에서 하루 ${house.per_ip_day || house.per_day}판(오늘 남은 판 ${house.left}). 창을 닫거나 오래 다른 탭에 두면 판이 멈춘다.`;
+  }
   providerReady = true;
 }
 $('loginProvider').onchange = () => { $('loginKey').value = ''; };
