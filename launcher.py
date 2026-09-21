@@ -109,6 +109,7 @@ MAP_DEFAULT = "concept"                           # 09-20 오후(파트너 "이�
 #   그래서 1800틱 판의 콜 수는 마을/던전 혼합비에 따라 약 780~1,780콜 사이에서 크게 흔들린다.
 #   공개 서버(호출 한도 1200)에서는 틱 상한보다 호출 한도가 먼저 닿을 수 있다 — 그때는 D96 대로 곱게 멈추고 이어간다.
 STANDARD_RUN = {"DUNGEON_DEPTHS": "3", "DUNGEON_TURNS": "1800", "DUNGEON_SOLO": "0"}
+HOUSE_NO_RESUME = "운영자 키로 돈 판은 이어갈 수 없다. 새 원정으로 시작해 줘"   # D98 이어가기 거절 문장(서버·론처가 같은 말) ⚠️문구 임시
 NIGHT_DEFAULTS = {"town_life": True, "npc_reply": True, "floor_life": True, "bestiary_plus": True, "loop": True,
                   "offer": False}   # ⚠️offer(D95 신에게 바치기)는 러너 쪽 구현이 아직 합쳐지지 않았다 — 켜도 아무 일이 없으므로 화면에서 끄고 감춘다(파트너 09-20 "천천히 구현해보자")
 OLD_DEFAULTS = {k: False for k in NIGHT_DEFAULTS}   # 화면의 '09-20 추가 전으로' 버튼이 돌아가는 자리(맵은 안 돌아간다 — 화면에 없다)
@@ -163,6 +164,7 @@ class Runner:
         return dst
 
     RUN_OPTS = "run_opts.json"                   # D79: 이 판을 시작한 옵션 — 이어가기가 같은 세계 설정으로 러너를 띄우는 데 쓴다
+                                                 #   D98: 공개 서버의 운영자 키 판은 여기에 house:true 가 남는다 → 이어갈 몸이 없다(resumable None · 이어가기 400)
 
     def _write_run_opts(self, opts):
         clean = {k: v for k, v in opts.items() if k not in ("key", "resume")}   # 키는 절대 안 남긴다(BYOK 는 프로세스 env 만)
@@ -172,8 +174,8 @@ class Runner:
         doc = run_control.read_json(os.path.join(self.state_dir, self.RUN_OPTS))
         return doc if isinstance(doc.get("opts"), dict) else None
 
-    def resumable(self, status=None):
-        """D79 이어갈 몸이 있나 — 러너가 없고 snapshot.json 이 있고 그 판이 state/stream.jsonl 의 판과 같고 끝나지 않았을 때 요약 dict, 아니면 None."""
+    def _stopped_meta(self, status=None):
+        """멈춘(끝나지 않은) 판의 스냅샷 요약 — 러너가 없고 snapshot.json 이 있고 그 판이 state/stream.jsonl 의 판과 같을 때. 아니면 None."""
         if self.running():
             return None
         meta = snapshot.read_meta(self.state_dir)
@@ -182,8 +184,24 @@ class Runner:
         st = status or {}
         if st.get("outcome") or (st.get("seed") is not None and st.get("seed") != meta.get("seed")):
             return None                           # 끝난 판·다른 판의 스냅샷(러너가 시작·끝에 지우지만 한 번 더 본다)
+        return meta
+
+    def house_end(self, status=None):
+        """D98 운영자 키 판이 멈춘 자리 {stopped, turn_last} — 이어갈 몸이 아니라 '여기서 끝났다'를 화면이 말하는 데 쓴다. 아니면 None."""
+        meta = self._stopped_meta(status)
+        if not meta or not ((self._read_run_opts() or {}).get("opts") or {}).get("house"):
+            return None
+        return {"stopped": (meta.get("stop") or {}).get("reason"), "turn_last": meta.get("turn_last")}
+
+    def resumable(self, status=None):
+        """D79 이어갈 몸이 있나 — 러너가 없고 snapshot.json 이 있고 그 판이 state/stream.jsonl 의 판과 같고 끝나지 않았을 때 요약 dict, 아니면 None."""
+        meta = self._stopped_meta(status)
+        if not meta:
+            return None
         stop = meta.get("stop") or {}
         saved = (self._read_run_opts() or {}).get("opts", {})
+        if saved.get("house"):                    # D98 운영자 키 판은 이어가지 않는다(파트너 09-21 "이 판은 이어가기 금지") — 멈춘 자리는 house_end 가 말한다
+            return None
         return {k: meta.get(k) for k in ("run_id", "seed", "started", "turn_last", "depth", "segment", "party", "saved_at", "backend")} | {
             "stopped": stop.get("reason"), "pages": sorted(stop.get("pages") or {}),
             "provider": saved.get("provider") or saved.get("brain") or meta.get("backend"), "model": saved.get("model", "")}
@@ -207,6 +225,8 @@ class Runner:
             resume = bool(opts.get("resume"))
             meta = None
             if resume:
+                if ((self._read_run_opts() or {}).get("opts") or {}).get("house"):   # D98 먼저 — resumable 이 None 이라 아래 문장으로 새지 않게
+                    raise BadRequest(HOUSE_NO_RESUME)
                 meta = self.resumable(self.status())
                 if not meta:
                     raise BadRequest("이어갈 원정이 없다 — 멈춘 판의 스냅샷이 없거나 그 판은 이미 끝났다")
@@ -339,6 +359,8 @@ class Runner:
             #   '틱 예산을 새로'가 아니다. 그래서 틱 상한은 한도와 무관하게 '한 원정 완주에 필요한 값'으로 잡는다.
             if mode == "standard":
                 env.update(**STANDARD_RUN)
+            if extra_env and "DUNGEON_TURNS" in extra_env:   # D98(09-21): 공개 서버의 운영자 키 판은 서버가 준 틱 상한(600)이 마지막이다 —
+                env["DUNGEON_TURNS"] = str(extra_env["DUNGEON_TURNS"])   #   표준 원정 값(1800)·맵 값(big 500)보다 앞선다(어느 모드든)
             if opts.get("town"):
                 env["DUNGEON_TOWN"] = "1"
             else:
@@ -493,6 +515,7 @@ class Runner:
         out["brain_pause"] = paused if out["running"] and paused.get("pid") == out["pid"] else None
         out["stopping"] = bool(out["running"] and run_control.stop_requested(self.state_dir))   # D79 곱게 멈추는 중(수첩을 쓰는 중) — additive
         out["resume"] = self.resumable(out)                                                     # D79 이어갈 몸(멈춘 판 요약) — additive
+        out["house_end"] = self.house_end(out)                                                  # D98 운영자 키 판이 멈춘 자리(이어갈 수 없음) — additive
         return out
 
     def retry(self, pause_id):

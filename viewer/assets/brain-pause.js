@@ -1,6 +1,7 @@
 // 런처와 관전 화면이 같은 정지 사유·재시도 버튼을 보여준다. 모델 원문은 HTML로 해석하지 않는다.
 // D96(09-20): 호출 한도로 멈춘 판(status.resume.stopped === 'budget')은 같은 자리에서 사실과 이어가는 길을 말한다 —
 //   러너가 이미 닫혔으니 재시도할 판단이 없다. options.budgetNotice = false 면 이 안내를 끈다(론처 첫 화면은 제 이어가기 줄이 있다).
+// D98(09-21): 운영자 키 판은 이어갈 몸이 없다(status.resume 없음) — 대신 status.house_end 로 '여기서 끝났다'와 다음 길을 말한다.
 export function createBrainPause(options = {}) {
   const budgetNotice = options.budgetNotice !== false;
   const style = document.createElement('style');
@@ -31,15 +32,27 @@ export function createBrainPause(options = {}) {
     missing_target: '행동할 대상을 지정하지 못했어요.', invalid_item: '현재 소지품에 없는 물건을 선택했어요.',
     invalid_type: '처리할 수 없는 행동을 선택했어요.', missing_item: '사용할 물건을 지정하지 못했어요.',
     unexpected_item: '이 행동에 물건을 지정할 수 없어요.', unexpected_target: '이 행동의 대상 입력을 확인해야 해요.' };
-  let paused = null, pendingId = null, budget = null;
+  let paused = null, pendingId = null, budget = null, houseEnd = null;
   const update = status => {
     const next = status?.running ? status.brain_pause : null;
     if (next?.id !== paused?.id) { error.textContent = ''; pendingId = null; }
     paused = next;
     // D96: 러너가 닫힌 뒤의 안내 — 이어갈 몸이 '호출 한도' 사유로 남아 있을 때만(멈춘 판 = 이어갈 판)
     budget = (budgetNotice && !paused && !status?.running && status?.resume?.stopped === 'budget') ? status.resume : null;
-    panel.hidden = !paused && !budget;
+    houseEnd = (budgetNotice && !paused && !budget && !status?.running && status?.house_end) ? status.house_end : null;
+    panel.hidden = !paused && !budget && !houseEnd;
     if (!paused) {
+      if (houseEnd) {                                                                   // ⚠️ 문구 임시(D98)
+        error.textContent = '';
+        title.textContent = '운영자 키 판이 여기서 끝났어요';
+        const why = { budget: '이 판에 정해 둔 모델 호출을 다 썼어요.', unwatched: '보는 사람이 없는 채로 시간이 지나 멈췄어요.',
+          pause_timeout: '판단 정지가 오래 이어져 멈췄어요.', user: '멈춤을 눌러 멈췄어요.', user_paused: '판단 정지 중에 멈췄어요.' }[houseEnd.stopped]
+          || '원정이 멈췄어요.';
+        summary.textContent = `${why} ${houseEnd.turn_last ?? 0}틱까지의 기록은 남아 있어요.`;
+        reasons.textContent = '운영자 키 판은 이어갈 수 없어요. 시작 화면에서 새 원정을 열 수 있어요.';
+        button.disabled = false; button.textContent = '시작 화면으로';
+        return;
+      }
       if (!budget) return;
       error.textContent = '';
       title.textContent = '호출 한도에 닿아 원정이 멈췄어요';                       // ⚠️ 문구 임시
@@ -56,7 +69,7 @@ export function createBrainPause(options = {}) {
     button.disabled = !!busy; button.textContent = busy ? '판단 중…' : '판단 재시도';
   };
   button.onclick = async () => {
-    if (!paused && budget) { location.href = '/launcher/'; return; }   // D96: 이어가기는 회사·키를 받는 시작 화면에서 한다
+    if (!paused && (budget || houseEnd)) { location.href = '/launcher/'; return; }   // D96: 이어가기는 회사·키를 받는 시작 화면에서 한다 · D98 새 원정도
     if (!paused || button.disabled) return;
     const id = paused.id;
     pendingId = id; error.textContent = ''; update({ running: true, brain_pause: paused });

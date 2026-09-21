@@ -22,6 +22,12 @@ launcher.py 는 로컬 도구다: 리포 루트 전체를 정적으로 내주고
      달라도 같은 키면 같은 계정, 같은 Ctx(러너 하나). 로그인 전 익명 세션의 저장 캐릭터는 들어올 때 계정으로 옮긴다.
      /api/me · /api/logout · /api/keys/link · /api/keys/unlink · /api/nick. 키는 여기서도 저장·기록되지 않는다(지문·별명만).
      로그인(=생존 확인) IP 시간당 상한 — 우리 서버를 남의 키 검사기로 못 쓰게.
+  6. 운영자 키 판(D98, 2026-09-21 파트너 "우리쪽에서 재미나이3.8 플래시 모델을 제공" · "서버 하루 한도나 한판당 제한량은 필요" ·
+     "600턴으로 다시 롤백" · "이 판은 이어가기 금지") — BOTPIKDUN_HOUSE_KEY 가 있으면, 키를 비우고 시작한 판은 그 키로 돈다.
+     모델 고정(HOUSE_MODEL) · 틱 상한 HOUSE_TURNS · 판당 호출 HOUSE_CALL_LIMIT · 하루(한국 시간 자정 기준) 서버 전체 HOUSE_PER_DAY판 ·
+     주소당 HOUSE_PER_IP_DAY판 · 이어가기 없음. 최악 비용 = 하루 판 수 × 판당 호출 수 × 콜 단가 — 곱셈 하나로 닫히게 하려고 이어가기를 막는다
+     (D96: 이어간 판은 새 러너라 호출 한도를 0부터 다시 센다). 쓴 판 수는 <data>/house_usage.json(주소는 서버 비밀 HMAC 지문으로만).
+     자기 키를 넣은 판은 1~5 그대로다.
 
 실행:  python server.py --host 127.0.0.1 --port 8000     (외부는 Caddy 가 HTTPS 로 받아 넘긴다 — scripts/vm/)
 환경:  BOTPIKDUN_DATA(세션·계정 폴더 뿌리, 기본 <리포>/state/public) · BOTPIKDUN_MAX_RUNS · BOTPIKDUN_START_PER_HOUR ·
@@ -29,7 +35,10 @@ launcher.py 는 로컬 도구다: 리포 루트 전체를 정적으로 내주고
        BOTPIKDUN_PAUSE_LIMIT_SEC(판단 정지를 기다려 주는 초, 기본 600 · 0 = 끝없이) ·
        BOTPIKDUN_UNWATCHED_LIMIT_SEC(관전 요청이 없는 판을 멈추기까지의 초, 기본 600 · 0 = 끔) ·
        BOTPIKDUN_API_CALL_LIMIT(한 판이 쓰는 LLM 호출 수, 기본 500 · 0 = 끝없이 — 없으면 DUNGEON_API_CALL_LIMIT 를 따른다) ·
-       BOTPIKDUN_BRAIN(기본 gemini_api — 게이트 verify_public·verify_account 만 dummy)
+       BOTPIKDUN_BRAIN(기본 gemini_api — 게이트 verify_public·verify_account 만 dummy) ·
+       D98 운영자 키 판: BOTPIKDUN_HOUSE_KEY(없으면 이 기능 꺼짐 — ⚠️리포·유닛 파일에 쓰지 말고 권한 600 EnvironmentFile 로) ·
+       BOTPIKDUN_HOUSE_PER_DAY(서버 전체 하루 판 수, 0 = 끔) · BOTPIKDUN_HOUSE_PER_IP_DAY(주소당 하루 판 수, 0 = 주소 상한 없음) ·
+       BOTPIKDUN_HOUSE_CALL_LIMIT(판당 LLM 호출 수) · BOTPIKDUN_HOUSE_TURNS(틱 상한) · BOTPIKDUN_HOUSE_MODEL
 """
 import argparse
 import os
@@ -44,6 +53,7 @@ from http.server import SimpleHTTPRequestHandler
 from urllib.parse import unquote, urlparse
 
 import launcher                                   # noqa: E402
+import run_control                                # noqa: E402  # D98 운영자 키 판 사용량 파일(반쪽 JSON 없이 교체 쓰기)
 import accounts as ACC                            # noqa: E402  # D77 계정 = 키 지문(파일 저장소)
 from launcher import BadRequest, Conflict, Ctx, Handler, LauncherServer   # noqa: E402
 from brain_config import HTTP_BACKENDS, KEY_ENV, MODEL_ENV, LEGACY_MODEL_ENV, MODEL_IDS, openai_base_url, clean_model
@@ -66,12 +76,23 @@ API_CALL_LIMIT = 500                                         # D96(09-20 파트�
                                                              #   실측 ~0.5콜/틱이라 600틱 판은 여유가 있고, 긴 판은 여기 닿아 곱게 멈춘다(사유 'budget' → 이어가기는 새 러너 = 다시 0부터).
 UNWATCHED_LIMIT_SEC = 600                                    # D91(09-20 파트너: 10분) 관전 요청(/api/status·/state/…)이 이만큼 없는 판은 곱게 멈춘다(이어가기 가능) · 0 = 끔.
                                                              #   근거(실측): 숨긴 탭도 폴링은 이어지고 탭을 닫으면 바로 끊긴다 — '요청 없음 = 아무도 안 봄'. "실사용을 보며 수정이 필요할 수도 있다"(파트너) — 값은 여기 한 곳
+# D98 운영자 키 판(2026-09-21) — 값은 전부 환경변수로 덮을 수 있다(배포 없이 systemd 값만 고쳐 바꾼다). ⚠️값 임시(파트너 확정 전).
+HOUSE_MODEL = "gemini-3.8-flash"                             # 파트너 "재미나이3.8 플래시 모델을 제공" — 운영자 키 판은 모델을 고르지 않는다
+HOUSE_TURNS = 600                                            # 파트너 "600턴으로 다시 롤백" — 자기 키 판(STANDARD_RUN 1800)과 따로
+HOUSE_CALL_LIMIT = 400                                       # 판당 호출 — 첫 완주 판 실측 0.499콜/틱 × 600 ≈ 300 + 던전 쪽(0.53~0.64콜/틱) 여유. 닿으면 곱게 멈춘다(이어가기 없음)
+HOUSE_PER_DAY = 10                                           # 서버 전체 하루 판 수(한국 시간 자정에 새로)
+HOUSE_PER_IP_DAY = 2                                         # 주소당 하루 판 수 — 한 사람이 하루 몫을 다 쓰지 못하게
+KST = 9 * 3600                                               # VM 시계가 UTC 여도 '하루'는 한국 자정에 바뀐다
 MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1"
 ACCOUNT_POSTS = ("/api/login", "/api/logout", "/api/keys/link", "/api/keys/unlink", "/api/nick")
 
 
 class KeyCheckUnavailable(Exception):
     """해당 회사에 닿지 못했다(네트워크·5xx) — 키의 생사를 모른다. 계정을 만들지도 열지도 않는다."""
+
+
+class HouseSpent(Exception):
+    """D98 오늘 운영자 키 판 자리가 없다(서버 전체 또는 이 주소) — 429. 문장이 곧 화면에 나가는 이유다."""
 
 
 def key_alive(key, provider="gemini_api", timeout=8):
@@ -116,7 +137,9 @@ class Sessions:
 
     def __init__(self, root, data_dir, brain="gemini_api", max_runs=3, starts_per_hour=12, ttl=SESSION_TTL,
                  login_per_hour=LOGIN_PER_HOUR, key_check=None, pause_limit=PAUSE_LIMIT_SEC,
-                 unwatched_limit=UNWATCHED_LIMIT_SEC, api_call_limit=API_CALL_LIMIT):
+                 unwatched_limit=UNWATCHED_LIMIT_SEC, api_call_limit=API_CALL_LIMIT,
+                 house_key="", house_model=HOUSE_MODEL, house_turns=HOUSE_TURNS, house_call_limit=HOUSE_CALL_LIMIT,
+                 house_per_day=HOUSE_PER_DAY, house_per_ip_day=HOUSE_PER_IP_DAY):
         self.root, self.brain = root, brain
         self.max_runs, self.starts_per_hour, self.ttl = int(max_runs), int(starts_per_hour), ttl
         self.login_per_hour, self.key_check = int(login_per_hour), key_check
@@ -128,6 +151,15 @@ class Sessions:
         self.dir = os.path.join(data_dir, "sessions")
         os.makedirs(self.dir, exist_ok=True)
         self.accounts = ACC.Accounts(data_dir)   # D77 계정 저장소(<data>/accounts·keyindex·logins·secret)
+        # D98 운영자 키 판 — 키가 없거나 하루 판 수가 0 이면 꺼진다(자기 키 판만 남는다)
+        self.house_key = house_key.strip() if isinstance(house_key, str) else ""
+        self.house_model = clean_model(house_model) or HOUSE_MODEL
+        self.house_turns = max(1, int(house_turns))
+        self.house_call_limit = max(0, int(house_call_limit))
+        self.house_per_day = max(0, int(house_per_day))
+        self.house_per_ip_day = max(0, int(house_per_ip_day))
+        self.house_file = os.path.join(data_dir, "house_usage.json")
+        self.house_lock = threading.Lock()
         self.lock = threading.Lock()            # ctx/seen/starts 보호
         self.start_lock = threading.Lock()      # 전체 동시 판 상한 검사 + 시작을 한 덩어리로
         self.ctx = {}                           # sid → Ctx(익명)
@@ -270,6 +302,77 @@ class Sessions:
         return self.watcher
 
     # ── D77 계정 = 키 지문 ──
+    # ── D98 운영자 키 판: 하루 판 수 ──
+    def house_on(self):
+        return bool(self.house_key) and self.house_per_day > 0
+
+    @staticmethod
+    def house_today():
+        return time.strftime("%Y-%m-%d", time.gmtime(time.time() + KST))
+
+    def _house_ip(self, ip):
+        return self.accounts.fingerprint("house-ip:" + (ip or ""))   # 파일에 주소를 그대로 남기지 않는다(서버 비밀 HMAC)
+
+    def _house_doc_locked(self):
+        doc = run_control.read_json(self.house_file)
+        if doc.get("day") != self.house_today() or not isinstance(doc.get("ip"), dict):
+            doc = {"day": self.house_today(), "total": 0, "ip": {}}   # 날이 바뀌면 새로(어제 기록은 덮는다 — 비용은 회사 청구서가 원본)
+        return doc
+
+    def _house_block(self, doc, tag):
+        """이 주소가 지금 운영자 키 판을 못 여는 이유(문장) 또는 None."""
+        if not self.house_on():
+            return "이 서버는 운영자 키 판을 열지 않았다. 자기 API 키를 넣어 줘"
+        if int(doc.get("total", 0)) >= self.house_per_day:
+            return ("오늘 운영자 키로 돌 수 있는 판 %d판이 다 찼다. 한국 시간 자정에 다시 열린다. "
+                    "자기 API 키로는 지금도 시작할 수 있다" % self.house_per_day)
+        if self.house_per_ip_day and int(doc["ip"].get(tag, 0)) >= self.house_per_ip_day:
+            return ("이 주소에서 오늘 운영자 키 판 %d판을 다 썼다. 한국 시간 자정에 다시 열린다. "
+                    "자기 API 키로는 지금도 시작할 수 있다" % self.house_per_ip_day)
+        return None
+
+    def house_left(self, ip):
+        """오늘 이 주소가 더 열 수 있는 운영자 키 판 수 — 서버 전체 남은 수와 주소 남은 수 중 작은 쪽(꺼져 있으면 0)."""
+        if not self.house_on():
+            return 0
+        tag = self._house_ip(ip)
+        with self.house_lock:
+            doc = self._house_doc_locked()
+        left = self.house_per_day - int(doc.get("total", 0))
+        if self.house_per_ip_day:
+            left = min(left, self.house_per_ip_day - int(doc["ip"].get(tag, 0)))
+        return max(0, left)
+
+    def house_check(self, ip):
+        """자리만 본다(쓰지 않는다) — 없으면 HouseSpent."""
+        tag = self._house_ip(ip)
+        with self.house_lock:
+            why = self._house_block(self._house_doc_locked(), tag)
+        if why:
+            raise HouseSpent(why)
+
+    def take_house(self, ip):
+        """한 판을 쓴다 — 파일에 바로 적는다(서버를 다시 띄워도 오늘 쓴 수는 남는다). 돌려받을 때 쓰는 표(주소 지문)를 준다."""
+        tag = self._house_ip(ip)
+        with self.house_lock:
+            doc = self._house_doc_locked()
+            why = self._house_block(doc, tag)
+            if why:
+                raise HouseSpent(why)
+            doc["total"] = int(doc.get("total", 0)) + 1
+            doc["ip"][tag] = int(doc["ip"].get(tag, 0)) + 1
+            run_control.write_json(self.house_file, doc)
+        return tag
+
+    def give_back_house(self, tag):
+        """러너가 뜨지 못한 시작은 한 판으로 치지 않는다."""
+        with self.house_lock:
+            doc = self._house_doc_locked()
+            doc["total"] = max(0, int(doc.get("total", 0)) - 1)
+            if int(doc["ip"].get(tag, 0)) > 0:
+                doc["ip"][tag] = int(doc["ip"][tag]) - 1
+            run_control.write_json(self.house_file, doc)
+
     def allow_login(self, ip):
         """로그인(=구글 생존 확인) IP 시간당 상한 — 우리 서버를 남의 키 검사기로 못 쓰게."""
         now = time.time()
@@ -535,6 +638,10 @@ class PublicHandler(Handler):
                        pause_limit=self.sessions.pause_limit,              # D91 additive — 화면이 '얼마 뒤 멈추는지'를 말할 수 있게(초 · 0 = 없음)
                        unwatched_limit=self.sessions.unwatched_limit,
                        api_call_limit=self.sessions.api_call_limit)        # D96 additive — 시작 화면이 '한 판에 몇 콜까지'를 말할 수 있게(0 = 없음). 화면은 이 값을 그대로 쓴다
+            s = self.sessions                                             # D98 additive — 운영자 키 판(키 없이 시작)의 조건과 이 주소의 오늘 남은 판
+            obj["house"] = {"on": s.house_on(), "left": s.house_left(self._ip()), "per_day": s.house_per_day,
+                            "per_ip_day": s.house_per_ip_day, "model": s.house_model, "turns": s.house_turns,
+                            "call_limit": s.house_call_limit, "resume": False}
             return self._json(200, obj)
         if p == "/api/me":                                            # D77 계정 상태 — 론처 화면의 계정 카드
             return self._json(200, self._me())
@@ -566,12 +673,24 @@ class PublicHandler(Handler):
             return super().do_POST()                                  # party·characters·retry·oracle·stop — 세션(또는 계정)의 Ctx 로
         try:
             body = self._body()
-            default_provider = self.sessions.brain if self.sessions.brain in HTTP_BACKENDS else "gemini_api"
-            if body.get("resume") and "provider" not in body:
-                saved = self.ctx.runner._read_run_opts() or {}
-                default_provider = saved.get("opts", {}).get("provider", default_provider)
-            provider = Sessions.provider_name(body.get("provider", default_provider))
-            key = Sessions.key_shape(body.pop("key", None), provider)
+            body.pop("house", None)                       # D98 운영자 키 판인지는 서버가 정한다 — 화면이 보낸 표식은 버린다
+            raw_key = body.pop("key", None)
+            resume = bool(body.get("resume"))
+            saved_opts = (self.ctx.runner._read_run_opts() or {}).get("opts", {}) if resume else {}
+            if resume and saved_opts.get("house"):        # D98 파트너 "이 판은 이어가기 금지" — 키 검사보다 먼저(이유를 바로 말한다)
+                raise BadRequest(launcher.HOUSE_NO_RESUME)
+            # D98: 키를 비우고 새 원정을 열면 운영자 키 판(켜져 있을 때만 — 꺼져 있으면 아래 key_shape 가 옛날처럼 '키를 넣어야 한다')
+            house = (not resume and self.sessions.house_on()
+                     and not (isinstance(raw_key, str) and raw_key.strip()))
+            if house:
+                provider, key = "gemini_api", self.sessions.house_key
+                body["model"] = self.sessions.house_model  # 모델은 고르지 않는다(화면이 보낸 회사·모델은 무시)
+            else:
+                default_provider = self.sessions.brain if self.sessions.brain in HTTP_BACKENDS else "gemini_api"
+                if resume and "provider" not in body:
+                    default_provider = saved_opts.get("provider", default_provider)
+                provider = Sessions.provider_name(body.get("provider", default_provider))
+                key = Sessions.key_shape(raw_key, provider)
             if "base_url" in body or "OPENAI_BASE_URL" in body:
                 raise BadRequest("호환 API 주소는 서버 운영자 설정으로만 바꿀 수 있다")
             if "model" in body:
@@ -591,43 +710,73 @@ class PublicHandler(Handler):
             # 생존 확인이 IP 상한 뒤인 까닭 = 로그인과 같다: 이 경로를 남의 키 검사기로 못 쓰게. 죽은 키의 시도도 시작 횟수 한 번을 쓴다.
             if no_room():
                 return
+            if house:
+                self.sessions.house_check(self._ip())      # D98 오늘 자리가 없으면 시간당 시작 횟수를 쓰기 전에 429
             if not self.sessions.allow_start(self._ip()):
                 return self._json(429, {"error": "이 주소에서 시작한 판이 너무 많다 — 한 시간에 %d판까지"
                                         % self.sessions.starts_per_hour})
-            self.sessions.check_start_key(key, provider)
+            if not house:                                  # 운영자 키는 생존 확인을 하지 않는다(우리 키 — 회사에 한 번 더 묻지 않는다)
+                self.sessions.check_start_key(key, provider)
             with self.sessions.start_lock:
                 if no_room():                             # 생존 확인(수 초)을 기다리는 사이 자리가 찼을 수 있다
                     return
-                body["provider"] = provider
-                body["brain"] = "dummy" if self.sessions.brain == "dummy" else provider   # 서버 쪽 0콜 게이트만 예외
-                extra = {k: "" for k in (*KEY_ENV.values(), *MODEL_ENV, *LEGACY_MODEL_ENV.values())}
-                extra.update({KEY_ENV[provider]: key, "DUNGEON_BRAIN_BACKEND": body["brain"], "DUNGEON_BRAIN_FALLBACK": ""})
-                # 러너 __main__의 .env 로더도 목적지를 바꾸지 못하게 서버 설정을 명시한다.
-                extra["OPENAI_BASE_URL"] = openai_base_url()
-                extra["DUNGEON_PAUSE_LIMIT_SEC"] = self.sessions.pause_limit   # F1 재시도를 아무도 안 누르는 판이 자리를 쥐고 있지 못하게
-                extra["DUNGEON_API_CALL_LIMIT"] = self.sessions.api_call_limit   # D96 한 판이 쓰는 LLM 호출 수 — /api/presets 로 화면이 예고한 그 값이 러너로 간다(이어가는 판도 새 프로세스라 여기서 다시 0부터)
-                if getattr(self.ctx, "aid", None):        # D78(09-16) 계정 판: 도감 원장은 계정 폴더에, 저장한 캐릭터(id)만 남는다
-                    body["bestiary"] = True
-                    extra["DUNGEON_BESTIARY_FILE"] = os.path.join(self.ctx.dir, "bestiary.json")
-                    extra["DUNGEON_LEDGER_IDS_ONLY"] = "1"
-                else:
-                    body["bestiary"] = False             # D64 — 익명 세션은 원장 이월 없음(판 안 학습만)
-                self.sessions.touch(self.ctx)            # D91 관전 시계는 판을 시작할 때부터 잰다(이어가기도 같다)
-                return self._json(200, self.ctx.runner.start(body, self.ctx.party_path, self.sessions.brain,
-                                                             extra_env=extra))
+                house_tag = self.sessions.take_house(self._ip()) if house else None   # D98 잠근 채로 한 판을 쓴다(동시 시작이 하루 수를 넘지 못하게)
+                try:
+                    return self._start_locked(body, provider, key, house)
+                except BaseException:
+                    if house_tag is not None:             # 러너가 못 뜬 시작은 한 판으로 치지 않는다
+                        self.sessions.give_back_house(house_tag)
+                    raise
         except BadRequest as e:
             return self._json(400, {"error": str(e)})
         except Conflict as e:
             return self._json(409, {"error": str(e)})
+        except HouseSpent as e:                            # D98 오늘 운영자 키 판 자리 없음
+            return self._json(429, {"error": str(e)})
         except KeyCheckUnavailable:                       # F1: 회사에 못 닿으면 판단도 못 한다 — 자리를 주지 않는다
             return self._json(503, {"error": "선택한 회사에 닿지 못해 키를 확인할 수 없다 — 잠시 뒤 다시"})
         except Exception as e:                            # 이유는 예외 이름만 — 본문(키)이 섞이지 않게
             return self._json(500, {"error": type(e).__name__})
 
+    def _start_locked(self, body, provider, key, house):
+        """start_lock 안에서 러너를 띄운다(자리·상한·키 확인은 끝난 뒤). house = D98 운영자 키 판."""
+        body["provider"] = provider
+        body["brain"] = "dummy" if self.sessions.brain == "dummy" else provider   # 서버 쪽 0콜 게이트만 예외
+        extra = {k: "" for k in (*KEY_ENV.values(), *MODEL_ENV, *LEGACY_MODEL_ENV.values())}
+        extra.update({KEY_ENV[provider]: key, "DUNGEON_BRAIN_BACKEND": body["brain"], "DUNGEON_BRAIN_FALLBACK": ""})
+        # 러너 __main__의 .env 로더도 목적지를 바꾸지 못하게 서버 설정을 명시한다.
+        extra["OPENAI_BASE_URL"] = openai_base_url()
+        extra["DUNGEON_PAUSE_LIMIT_SEC"] = self.sessions.pause_limit   # F1 재시도를 아무도 안 누르는 판이 자리를 쥐고 있지 못하게
+        extra["DUNGEON_API_CALL_LIMIT"] = self.sessions.api_call_limit   # D96 한 판이 쓰는 LLM 호출 수 — /api/presets 로 화면이 예고한 그 값이 러너로 간다(이어가는 판도 새 프로세스라 여기서 다시 0부터)
+        if house:                                     # D98 운영자 키 판 — 판당 호출·틱 상한은 서버 것, run_opts 에 표식(이어가기 금지의 근거)
+            body["house"] = True
+            extra["DUNGEON_API_CALL_LIMIT"] = self.sessions.house_call_limit
+            extra["DUNGEON_TURNS"] = self.sessions.house_turns   # 론처가 표준 원정 값(STANDARD_RUN 1800)보다 이 값을 앞세운다
+        if getattr(self.ctx, "aid", None):        # D78(09-16) 계정 판: 도감 원장은 계정 폴더에, 저장한 캐릭터(id)만 남는다
+            body["bestiary"] = True
+            extra["DUNGEON_BESTIARY_FILE"] = os.path.join(self.ctx.dir, "bestiary.json")
+            extra["DUNGEON_LEDGER_IDS_ONLY"] = "1"
+        else:
+            body["bestiary"] = False             # D64 — 익명 세션은 원장 이월 없음(판 안 학습만)
+        self.sessions.touch(self.ctx)            # D91 관전 시계는 판을 시작할 때부터 잰다(이어가기도 같다)
+        return self._json(200, self.ctx.runner.start(body, self.ctx.party_path, self.sessions.brain,
+                                                     extra_env=extra))
 
 def make_public_server(host, port, root=HERE, data_dir=None, brain=None, max_runs=None, starts_per_hour=None,
                        login_per_hour=None, key_check=None, pause_limit=None, unwatched_limit=None,
-                       api_call_limit=None):
+                       api_call_limit=None, **house):
+    """house(D98 운영자 키 판): house_key·house_model·house_turns·house_call_limit·house_per_day·house_per_ip_day —
+    안 주면 환경변수 BOTPIKDUN_HOUSE_* (없으면 상수). 게이트는 인자로 준다."""
+    env_house = {"house_key": os.environ.get("BOTPIKDUN_HOUSE_KEY", ""),
+                 "house_model": os.environ.get("BOTPIKDUN_HOUSE_MODEL", "") or HOUSE_MODEL,
+                 "house_turns": _env_int("BOTPIKDUN_HOUSE_TURNS", HOUSE_TURNS),
+                 "house_call_limit": _env_int("BOTPIKDUN_HOUSE_CALL_LIMIT", HOUSE_CALL_LIMIT),
+                 "house_per_day": _env_int("BOTPIKDUN_HOUSE_PER_DAY", HOUSE_PER_DAY),
+                 "house_per_ip_day": _env_int("BOTPIKDUN_HOUSE_PER_IP_DAY", HOUSE_PER_IP_DAY)}
+    unknown = set(house) - set(env_house)
+    if unknown:
+        raise TypeError("모르는 인자: %s" % ", ".join(sorted(unknown)))
+    env_house.update(house)
     sessions = Sessions(root,
                         data_dir or os.environ.get("BOTPIKDUN_DATA") or os.path.join(root, "state", "public"),
                         brain or os.environ.get("BOTPIKDUN_BRAIN") or "gemini_api",
@@ -640,7 +789,8 @@ def make_public_server(host, port, root=HERE, data_dir=None, brain=None, max_run
                                          else _env_int("BOTPIKDUN_UNWATCHED_LIMIT_SEC", UNWATCHED_LIMIT_SEC)),
                         # D96: 서비스 환경값에 이미 DUNGEON_API_CALL_LIMIT 가 있으면 그 값을 따른다 — 운영에 걸린 수와 화면이 말하는 수를 하나로
                         api_call_limit=(api_call_limit if api_call_limit is not None
-                                        else _env_int("BOTPIKDUN_API_CALL_LIMIT", _env_int("DUNGEON_API_CALL_LIMIT", API_CALL_LIMIT))))
+                                        else _env_int("BOTPIKDUN_API_CALL_LIMIT", _env_int("DUNGEON_API_CALL_LIMIT", API_CALL_LIMIT))),
+                        **env_house)
     srv = LauncherServer((host, port), partial(PublicHandler, sessions=sessions))
     srv.daemon_threads = True
     srv.sessions = sessions
@@ -665,6 +815,11 @@ def main():
           % (s.pause_limit, s.unwatched_limit))
     print("[server] 호출 한도(D96): 한 판에 LLM 호출 %d회(0 = 끝없이) / 닿으면 곱게 멈추고 이어가기로 계속"
           % s.api_call_limit)
+    if s.house_on():                                  # D98 - 키 문자열은 찍지 않는다(켜졌다는 사실과 조건만)
+        print("[server] 운영자 키 판(D98): 켜짐 / 모델 %s / 최대 %d틱 / 판당 호출 %d회 / 하루 %d판(주소당 %d) / 이어가기 없음"
+              % (s.house_model, s.house_turns, s.house_call_limit, s.house_per_day, s.house_per_ip_day))
+    else:
+        print("[server] 운영자 키 판(D98): 꺼짐 / 자기 키 판만")
 
     def sweeper():
         while True:

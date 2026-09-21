@@ -6,5 +6,7 @@ export interface BrainPauseStatus {
 export interface BrainPauseResume { stopped?: string | null; turn_last?: number | null; }
 export function createBrainPause(options?: { budgetNotice?: boolean }): {
   update(status: { running: boolean; brain_pause?: BrainPauseStatus | null;
-                   resume?: BrainPauseResume | null } | null): void;
+                   resume?: BrainPauseResume | null;
+                   /** D98(09-21) 운영자 키 판이 멈춘 자리(/api/status.house_end) — 이어갈 수 없는 판의 '여기서 끝났다' 안내 */
+                   house_end?: BrainPauseResume | null } | null): void;
 };

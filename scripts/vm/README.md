@@ -43,6 +43,51 @@
 러너당 500회 제한은 이 서버의 정상 코드에만 적용되며, 유출된 키의 외부 사용이나 키 프로젝트의 총비용을 제한하지 않는다.
 키 제한 방법: https://ai.google.dev/gemini-api/docs/api-key#restricting-and-securing-your-keys
 
+## D98 운영자 키 판 (2026-09-21 — 키 없이 한 판)
+키를 비우고 출발하면 **서버의 Gemini 키**로 돈다. 조건은 서버가 정하고 화면이 그대로 말한다(`/api/presets.house`):
+모델 `gemini-3.8-flash` 고정 · 한 판 최대 600틱 · 판당 모델 호출 400회 · 서버 전체 하루 10판 · 주소당 하루 2판 · **이어가기 없음**
+(⚠️값 임시 — 파트너 확정 전). 하루는 한국 시간 자정에 바뀐다. 쓴 판 수는 `<BOTPIKDUN_DATA>/house_usage.json`(주소는 지문만).
+최악 비용 = 하루 판 수 × 판당 호출 수 × 콜 단가. 이어가기를 막는 까닭은 이어간 판이 새 러너라 호출 한도를 0부터 다시 세기 때문이다(D96).
+자기 키를 넣은 판은 옛날 그대로다(1800틱 · `DUNGEON_API_CALL_LIMIT` · 이어가기).
+
+**⚠️켜기 전에 — 키와 5만 원 가드.** 누적 5만 원 가드(`budget-guard/`)는 **프로젝트 `botpikdun` 의 모든 서비스·크레딧 차감 전 금액**을 센다.
+운영자 키를 `botpikdun` 프로젝트에서 만들면(2026-09-21 파트너가 이렇게 만들었다) 심사위원들이 쓴 Gemini 비용이 그 5만 원에 합쳐져
+**심사 도중 VM 이 꺼질 수 있다.** 그래서:
+1. 예산 `botpikdun-total-50000-krw` 의 **'서비스' 범위에서 Gemini(Generative Language API)만 뺀다.** 이름·금액은 그대로 둔다 —
+   가드 코드(`budget-guard/main.py` `should_stop`)는 예산 이름·통화(KRW)·**예산 금액이 정확히 50000** 인지만 보므로 범위를 바꿔도 그대로 작동한다.
+   ⚠️**예산 금액만 올리면 가드가 조용히 멈춘다**(`budgetAmount == 50000` 이 아니면 VM 을 끄지 않는다 — 메일만 온다). 올리려면 함수 코드도 같이.
+2. Gemini 만 보는 **알림 예산**(메일만)을 따로 하나 건다. Gemini 비용의 자동 상한은 서버의 하루 판 수(D98)다.
+3. 키 제한 — 콘솔 **API 및 서비스 → 사용자 인증 정보**(`https://console.cloud.google.com/apis/credentials?project=botpikdun`) → 키 이름 →
+   **애플리케이션 제한사항 = IP 주소 `34.47.94.178`** · **API 제한사항 = 키 제한 → Generative Language API** → 저장(적용까지 최대 5분).
+   새어 나가도 이 서버 밖에서는 못 쓴다. 한도(RPM 등)는 키가 아니라 **프로젝트 단위**라(구글 문서) 같은 프로젝트의 다른 Gemini 사용과 나눠 쓴다 —
+   `botpikdun` 에는 다른 Gemini 사용처가 없다.
+
+켜기(콘솔 SSH 창 — 키는 명령줄·셸 기록에 남기지 않는다):
+```bash
+sudo install -d -m 700 /etc/botpikdun
+sudo install -m 600 /dev/null /etc/botpikdun/house.env
+read -rsp 'Gemini key: ' K; echo
+printf 'BOTPIKDUN_HOUSE_KEY=%s\n' "$K" | sudo tee /etc/botpikdun/house.env >/dev/null; unset K
+printf '[Service]\nEnvironmentFile=/etc/botpikdun/house.env\n' | sudo tee /etc/systemd/system/botpikdun.service.d/house.conf >/dev/null
+sudo systemctl daemon-reload && sudo systemctl restart botpikdun
+sudo journalctl -u botpikdun -n 20 --no-pager | grep D98
+```
+마지막 줄에 `운영자 키 판(D98): 켜짐 / 모델 gemini-3.8-flash / 최대 600틱 / …` 이 보이면 켜진 것이다(키 문자열은 어디에도 찍지 않는다).
+`systemctl show -p Environment` 에는 **안 보이는 게 정상**이다 — EnvironmentFile 은 파일 경로만 남긴다(그래서 이 방식을 쓴다).
+값을 바꾸려면 같은 파일에 줄을 더한다: `BOTPIKDUN_HOUSE_PER_DAY=10` · `BOTPIKDUN_HOUSE_PER_IP_DAY=2` · `BOTPIKDUN_HOUSE_CALL_LIMIT=400` ·
+`BOTPIKDUN_HOUSE_TURNS=600` (`sudo nano /etc/botpikdun/house.env` → 재시작). 끄기: `BOTPIKDUN_HOUSE_PER_DAY=0` 을 넣고 재시작하거나
+`house.conf` 를 `house.conf.disabled` 로 바꾸고 `daemon-reload` + 재시작. 밖에서 확인:
+```bash
+curl -s -c /tmp/c -o /dev/null https://botpicdun.duckdns.org/launcher/
+curl -s -b /tmp/c https://botpicdun.duckdns.org/api/presets | python3 -c 'import sys,json; print(json.load(sys.stdin)["house"])'
+```
+VM 에서 키가 통하는지(IP 제한 포함 — 모델 목록 한 번, 생성 호출·과금 없음, 키는 파일에서 읽어 명령줄에 안 남는다):
+```bash
+sudo bash -c 'source /etc/botpikdun/house.env; curl -s -o /dev/null -w "%{http_code}\n" -H "x-goog-api-key: $BOTPIKDUN_HOUSE_KEY" "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1"'
+```
+`200` = 통한다 · `403` = IP 제한이 VM 주소와 안 맞거나 API 제한에 Gemini 가 빠졌다.
+게이트: `verify_house.py`(실 API 0콜 — 모델 고정·틱 상한·판당 호출·하루 판 수·이어가기 거절·키 미기록).
+
 ## 구성
 - VM 하나(Ubuntu 24.04) · `server.py`(공개용 서버, D68 — 게이트 `verify_public`)가 127.0.0.1:8000 · Caddy 가 443 에서 HTTPS 로 받아 넘긴다.
 - 리포는 `/opt/botpikdun` 에 읽기 전용으로, 세션 데이터(심사위원별 `state/`·`runs/`·파티 파일)는 `/var/lib/botpikdun/sessions/<id>/` 에.

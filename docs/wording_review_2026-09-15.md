@@ -877,3 +877,29 @@ NPC 두뇌를 켠 판에서 NPC 가 답을 쓸 때만 쓰인다. `{name}` `{role
 | 577 | launch.standard.floors_turns | launcher/index.html:226 (기본 원정 설명 문단 · ⚠️문구 임시 주석 그대로) | 던전 1~3층 · 최대 1800틱 · 기본은 마을(0층)에서 시작해 던전 입구로 간다 — 아래 '마을에서 시작'을 끄면 던전 1층에서 시작 | |
 | 578 | map.concept.label | launcher/index.html 맵 라디오(#mapMode) 라벨 · 검토표 #384 의 개정 — ⚠️09-20 오후 화면에서 맵 고르는 자리가 걷혔다(MAP_DEFAULT). 지금 화면에 안 보이지만 옛 화면·MAP_NAMES 쪽에 같은 문자열이 남아 있으니 검토표에는 둔다 | 석조 던전 (새 건축 · 54×42) | |
 | 579 | map.concept.title | launcher/index.html 맵 라디오 title · 검토표 #385 의 개정 (같은 이유로 지금 화면에는 안 보인다) | 새 던전 생성 방식(D88, 2026-09-20): 넓은 통로 · 큰 홀 · 기둥이 있는 석조 던전. 크기는 54×42 로 고정된다 | |
+
+## 2026-09-21 추가분 (D98 — 운영자 키 판)
+
+> 키 없이 한 판을 여는 길이 새로 생기며 들어간 임시 문장이다. 위와 같은 규칙: '교정' 칸을 채우면 그대로 옮기고,
+> 비우면 지금 문장을 유지하며 `삭제` 라 쓰면 그 칸을 없앤다. 숫자(600틱·400회·10판·2판)와 모델 이름은 서버 값이 들어가는 자리다.
+> ⚠️'운영자 키'라는 이름부터 임시다(다른 후보: 서버 키 · 제공 키 · 체험 키).
+
+### house
+
+| # | 키 | 언제 어디서 보이나 | 지금 문장(임시) | 교정 |
+|---|---|---|---|---|
+| 580 | launcher.title.house_note | launcher/index.html:673 (요소 #tHouseNote, 첫 화면 '키를 맡기라고 하기 전에' 상자 안) — 공개 서버가 운영자 키 판을 켰고 이 주소에 오늘 남은 판이 있을 때. 숫자·모델은 서버 값 | 키가 없어도 됩니다. 운영자 키(gemini-3.8-flash)로 한 판 최대 600틱까지 돌려 볼 수 있습니다. 이어가기는 없고, 이 주소에서 오늘 2판 남았습니다. | |
+| 581 | launcher.title.house_note.spent | launcher/index.html:674 — 같은 자리, 오늘 운영자 키 판이 다 찼을 때 | 오늘 운영자 키로 돌 수 있는 판은 다 찼습니다. 한국 시간 자정에 다시 열립니다. 자기 키로는 지금도 시작할 수 있습니다. | |
+| 582 | launcher.key_hint.house | launcher/index.html:646·639 (#keyHint, 모험 준비 화면의 키 칸 아래) — 앞 문장 '입력한 키는 이 원정에만 …' 뒤에 붙는다 | 키가 없으면 운영자 키(gemini-3.8-flash)로 돌려 볼 수 있다: 한 판 최대 600틱 · 모델 호출 400회까지 · 이어가기 없음 · 이 주소에서 오늘 남은 판 2. 비워 두면 이 조건으로 출발한다. | |
+| 583 | launcher.key_hint.house_spent | launcher/index.html:640 — 같은 자리, 오늘 판이 다 찼을 때 '공개 서버에서는 키 입력이 필요하다.' 뒤에 붙는다 | (오늘 운영자 키 판은 다 찼다) | |
+| 584 | launcher.start.err.house_spent | launcher/index.html:1287 (#err2) — 오늘 판이 다 찬 날 키 없이 출발을 누르면 | 오늘 운영자 키 판은 다 찼다. 선택한 회사의 API 키를 넣어 줘. 이 판에만 쓰이고 서버에 남지 않는다. | |
+| 585 | server.error.house_spent_total | server.py:327 — 429 응답(화면 #err2 에 그대로 뜬다) · 서버 전체 하루 판 수가 찼을 때 | 오늘 운영자 키로 돌 수 있는 판 10판이 다 찼다. 한국 시간 자정에 다시 열린다. 자기 API 키로는 지금도 시작할 수 있다 | |
+| 586 | server.error.house_spent_ip | server.py:330 — 429 응답 · 이 주소의 하루 판 수가 찼을 때 | 이 주소에서 오늘 운영자 키 판 2판을 다 썼다. 한국 시간 자정에 다시 열린다. 자기 API 키로는 지금도 시작할 수 있다 | |
+| 587 | server.error.house_off | server.py:325 — 운영자 키 판이 꺼진 서버에서만 나오는 안쪽 문장(화면이 먼저 막으므로 거의 안 보인다) | 이 서버는 운영자 키 판을 열지 않았다. 자기 API 키를 넣어 줘 | |
+| 588 | launcher.error.house_no_resume | launcher.py:112 (HOUSE_NO_RESUME) — 운영자 키 판을 이어가려 할 때 400(서버·로컬 론처 같은 문장). 화면은 이어가기 버튼을 안 띄우므로 거의 안 보인다 | 운영자 키로 돈 판은 이어갈 수 없다. 새 원정으로 시작해 줘 | |
+| 589 | viewer.brain_pause.house.title | viewer/assets/brain-pause.js:47 — 관전 화면(게임 클라이언트·옛 뷰어)의 정지 패널 제목, 운영자 키 판이 멈췄을 때(검토표 #571 의 짝) | 운영자 키 판이 여기서 끝났어요 | |
+| 590 | viewer.brain_pause.house.why | viewer/assets/brain-pause.js:48~50 — 같은 패널 본문 앞 문장(사유별) | budget: 이 판에 정해 둔 모델 호출을 다 썼어요. / unwatched: 보는 사람이 없는 채로 시간이 지나 멈췄어요. / pause_timeout: 판단 정지가 오래 이어져 멈췄어요. / user: 멈춤을 눌러 멈췄어요. / user_paused: 판단 정지 중에 멈췄어요. / 그 밖: 원정이 멈췄어요. | |
+| 591 | viewer.brain_pause.house.summary | viewer/assets/brain-pause.js:51 — 같은 본문 뒤 문장(158 = 멈춘 틱) | 158틱까지의 기록은 남아 있어요. | |
+| 592 | viewer.brain_pause.house.next | viewer/assets/brain-pause.js:52 — 같은 패널 둘째 줄 | 운영자 키 판은 이어갈 수 없어요. 시작 화면에서 새 원정을 열 수 있어요. | |
+| 593 | viewer.brain_pause.house.button | viewer/assets/brain-pause.js:53 — '판단 재시도' 버튼이 뜨던 자리 | 시작 화면으로 | |
+| 594 | server.log.house | server.py:819·822 — 서버 기동 stdout 운영 로그(검토표 #576 과 같은 급 · 키 문자열은 안 찍는다) | [server] 운영자 키 판(D98): 켜짐 / 모델 gemini-3.8-flash / 최대 600틱 / 판당 호출 400회 / 하루 10판(주소당 2) / 이어가기 없음 — 꺼져 있으면 '[server] 운영자 키 판(D98): 꺼짐 / 자기 키 판만' | |
