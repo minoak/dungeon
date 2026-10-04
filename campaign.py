@@ -72,6 +72,8 @@ def project(path, running=False):
                 c["hp"] = b.get("hp", c["hp"])
                 if c["alive"] and b.get("alive") is False:
                     c["alive"], c["died_turn"] = False, turn_last
+                elif not c["alive"] and b.get("alive") is True:   # D99(10-04) 부활 판: 쓰러졌던 사람이 신전에서 깨어났다 — '살아 있나'를 거짓으로
+                    c["alive"] = True                              #   두지 않는다(쓰러진 틱 died_turn 은 그대로 남아 '쓰러짐' 표시가 산다). 옛 판에선 일어나지 않는 길
             for ch, d in (rec.get("decisions") or {}).items():
                 bl = (d or {}).get("book_line") if isinstance(d, dict) else None
                 if bl and str(ch) in chars and bl.get("text"):

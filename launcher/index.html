@@ -290,7 +290,7 @@
         </div>
         <div class="triCard">
           <h3>던전</h3>
-          <p>지하에 무엇이 있는지는 내려가 봐야 안다. 쓰러지면 거기서 끝이다.</p>
+          <p>지하에 무엇이 있는지는 내려가 봐야 안다. 쓰러지면 신전에서 다시 깨어난다.</p>
         </div>
         <div class="triCard">
           <h3>기록</h3>
@@ -915,7 +915,7 @@ async function loadPresets() {
   presets = await api('/api/presets');
   if (!presets.text_limits || presets.ruleset !== 'skills-v1' || presets.brain_failure_policy !== 'retry-pause-v1' || presets.model_ui_version !== 2
       || presets.party_ui_version !== 1                                 // D81: 동료 목록(companions)을 모르는 옛 서버면 빈 동료 칸 대신 재시작 안내
-      || presets.options_ui_version !== 2) {                            // 09-20: 새 맵·새 스위치를 모르는 옛 서버(떠 있던 옛 론처)면 이 화면이 보낸 옵션이 무시된다 — 먼저 재시작 안내
+      || presets.options_ui_version !== 3) {                            // 09-20: 새 맵·새 스위치를 모르는 옛 서버(떠 있던 옛 론처)면 이 화면이 보낸 옵션이 무시된다 — 먼저 재시작 안내(3 = 10-04 부활)
     presets = null;
     throw new Error(modelUpgradeMessage);
   }
@@ -1319,6 +1319,7 @@ $('bStart').onclick = async () => {
     floor_life: $('floorLife').checked,        // D92 던전의 물건들(09-20 추가)
     bestiary_plus: $('bestiaryPlus').checked,  // D92 새 몬스터(09-20 추가)
     loop: $('loop').checked,                   // D94 원정 고리(09-20 추가) — 보고가 판을 닫지 않는다
+    revive: $('loop').checked,                 // D99(10-04) 부활 — 칸이 따로 없다(세계의 규칙). 원정 고리 판에서만 뜻이 있어 그 칸 값을 그대로 싣는다
     bestiary: $('bestiary').checked,   // D64 도감 이월(기본 끔) — 켠 판만 로컬 원장에 읽고 쓴다
     boss: $('boss').checked,           // D65 보스층·귀환(기본 켬) — 최심층 보스·봉인 워프게이트·마을 귀환
     brain: $('brain').value,

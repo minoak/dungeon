@@ -5846,6 +5846,9 @@ class Dungeon:
         · 기억(events): 목격자마다 지속 기억 fallen {누가, 무엇에게, 어디서(그 봇의 사람말 이름),
           언제} — view 가 매 결정 재제시(휘발 0). 좌표 금지 — 구역 이름만(D19 사람의 공간 언어)."""
         x, y = bot['x'], bot['y']
+        bot['down_by'] = {'by': by, **({'by_kind': by_kind} if by_kind != 'monster' else {}),   # D99(10-04) 쓰러진 사연 —
+                          'turn': self.turn, 'depth': self.depth}   # 러너의 부활(신전에서 깨어남)이 '어디서 무엇에 쓰러졌나'를 기억으로 옮긴다.
+        #   몸에만 적고 관측·스트림(bot_snapshot 은 고른 칸만)에는 안 실린다 — 부활을 끈 판은 아무도 읽지 않는다
         g = None
         if self.graves:
             gname = '%s의 묘' % (bot.get('name') or bot['job'])

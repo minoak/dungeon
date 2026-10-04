@@ -200,6 +200,15 @@ export interface DescendLine {
   kind: 'descend' | 'ascend'; turn: number; to_depth: number;
   party: { char: Char; hp: number; bag: number; potions?: number; boons?: number }[]; fallen: Char[];   // boons=D74 additive
   pages?: Record<Char, string>;                                        // D59 수첩 — 층을 떠나는 순간 캐릭터가 쓴 한 장(실패한 캐릭터는 키 없음)
+  gate?: boolean;                                                      // D65 워프게이트로 귀환한 상행
+  fell?: Char;                                                         // D99(10-04) 메인이 쓰러져 일행이 마을로 돌아온 상행(게이트가 아니다)
+}
+
+/** D99(10-04) 부활 — 쓰러졌던 사람이 신전 앞에서 다시 깨어났다(부활 판에만). 전이와 같은 방식으로 직전 틱에 붙인다. */
+export interface ReviveLine {
+  kind: 'revive';
+  turn: number; where?: string;
+  party?: { char: Char; depth?: number; by?: string; by_kind?: string }[];
 }
 
 /** D94(09-20) 원정 결산 — 길드 보고로 한 원정이 닫힐 때 한 줄(고리 판에만). 판은 닫히지 않는다. */
@@ -254,6 +263,7 @@ export interface Frame {
   overheard?: Overheard[];                       // D90 들린 말 — 로그 줄
   descend?: DescendLine;                         // 이 틱 뒤에 층 전이(다음 프레임이 level)
   expedition?: ExpeditionLine;                   // D94(09-20) 이 틱에 원정이 결산됐다(고리 판에만) — 전이와 같은 방식으로 직전 틱에 붙인다
+  revive?: ReviveLine;                           // D99(10-04) 이 틱에 누군가 신전 앞에서 깨어났다(부활 판에만) — 같은 방식
   facing: Record<Char, Dir>;                     // 직전 프레임과의 좌표 차(안 움직이면 유지, 처음은 front)
   moved: Record<Char, boolean>;                  // 이 프레임에서 걸었나(트윈·걷기 애니의 방아쇠)
   vis: Record<Char, Set<string>>;                // 이 프레임에서 그 봇이 보는 칸 "x,y"(죽음·하강=빈 집합, 마을=전부)

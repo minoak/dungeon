@@ -409,8 +409,10 @@ export function groupHtml(f: Frame, run: Run, focus: Char | null): string {
   if (f.descend) {
     const who = arr(f.descend.party).map(p => esc(nameOf(run, obj(p)?.char))).join('·');
     const chars = arr(f.descend.party).map(p => str(obj(p)?.char)).filter(c => isBotChar(run, c));
-    const html = f.descend.kind === 'ascend' ? `▲ ${who} — 마을로 돌아간다` : `▼ ${who} — 지하 ${f.descend.to_depth}층으로 내려간다`;
-    parts.push(lineHtml('ev gold', html, chars, focus));
+    const fell = str(f.descend.fell);              // D99(10-04) 메인이 쓰러져 일행이 마을로 — 게이트도 계단도 아니다
+    const html = fell ? `✝ ${esc(nameOf(run, fell))} 쓰러짐 — 일행이 마을로 돌아온다`
+      : f.descend.kind === 'ascend' ? `▲ ${who} — 마을로 돌아간다` : `▼ ${who} — 지하 ${f.descend.to_depth}층으로 내려간다`;
+    parts.push(lineHtml('ev gold', html, fell && isBotChar(run, fell) ? [fell, ...chars] : chars, focus));
     if (f.descend.reaction_summary) parts.push(lineHtml('ev notable',
       '이 층의 반응 결산<br>' + reactionSummaryHtml(f.descend.reaction_summary, run), chars, focus));
   }
@@ -424,6 +426,10 @@ export function groupHtml(f: Frame, run: Run, focus: Char | null): string {
     if (arr(x.fallen).length) bits.push(`쓰러짐 ${arr(x.fallen).map(c => esc(nameOf(run, str(c)))).join('·')}`);
     const chars = arr(x.party).map(c => str(c)).filter(c => isBotChar(run, c));
     parts.push(lineHtml('ev gold', `■ ${num(x.n, 1)}차 원정 결산 — ${bits.join(' · ')}`, chars, focus));
+  }
+  if (f.revive) {                                // D99(10-04) 부활 — 쓰러졌던 사람이 신전 앞에서 다시 깨어났다(지닌 것·기억 그대로)
+    const rc = arr(f.revive.party).map(p => str(obj(p)?.char)).filter(c => isBotChar(run, c));
+    if (rc.length) parts.push(lineHtml('ev gold', `✦ ${rc.map(c => esc(nameOf(run, c))).join('·')} — 신전 앞에서 다시 깨어났다`, rc, focus));
   }
   const body = parts.join('');
   if (!body) return '';

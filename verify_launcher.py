@@ -484,7 +484,7 @@ else:
           and OD == {k: False for k in NIGHT_OPTS})
     check("⑥ /api/presets: night_defaults·old_defaults·map_default = 론처 상수 그대로 · options_ui_version(옛 론처 구별)",
           pre.get("night_defaults") == ND and pre.get("old_defaults") == OD and pre.get("map_default") == launcher.MAP_DEFAULT
-          and pre.get("options_ui_version") == launcher.OPTIONS_UI_VERSION == 2)
+          and pre.get("options_ui_version") == launcher.OPTIONS_UI_VERSION == 3)   # 3 = 10-04 D99 부활(화면이 revive 를 싣는다)
     with io.open(os.path.join(HERE, "launcher", "index.html"), encoding="utf-8") as f_html:
         lh = f_html.read()
     check("⑥ 화면: 맵 고르는 자리가 없다(라디오·mapMode·본문 map 전부) · '보스방 앞에서 시작' 체크박스와 본문 start 도 없다",
@@ -512,7 +512,7 @@ else:
           len(html_js) > 10000 and bool(called_ids) and not (called_ids - html_ids))
     check("⑥ 화면: 첫 자리는 서버 값으로(applyStartDefaults(presets.night_defaults)) · '09-20 추가 전으로' 버튼 = old_defaults · 옛 서버면 재시작 안내",
           "applyStartDefaults(presets.night_defaults)" in lh and 'id="bOldDefaults"' in lh and "setStartOptions(presets && presets.old_defaults)" in lh
-          and "presets.options_ui_version !== 2" in lh and "LLM 호출이 조금 늘어난다" in lh)
+          and "presets.options_ui_version !== 3" in lh and "LLM 호출이 조금 늘어난다" in lh)
     lp_src = io.open(os.path.join(HERE, "launcher.py"), encoding="utf-8").read()
     check("⑥ launcher.py: 스위치 여섯의 env 줄(옵션 없으면 끈다) · 떠 있던 옛 론처를 다시 쓰는 조건에 시작 옵션 판 번호 · start==boss 는 이어가기에서만(멈춰 둔 옛 판이 제 세계로 이어가게)",
           all(('env["%s"] = "1" if opts.get("%s") is True else "0"' % (v, o)) in lp_src for v, o in zip(NIGHT_ENV, NIGHT_OPTS))

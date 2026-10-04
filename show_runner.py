@@ -263,6 +263,16 @@ LOOP_ON = os.environ.get("DUNGEON_LOOP", "0") == "1" and TOWN_ON and QUESTS_ON a
 #   축복·능력치·장비·관계·기억·수첩·도감)는 층 전이가 하는 그대로 이어진다 — 새 이월 목록을 만들지 않는다. 판을 닫는 것은 틱 상한(MAX_TURNS)과
 #   전멸뿐(원정 횟수 상한 없음). **러너 기본 0**(론처가 켠다) = 끈 판은 옛 판과 비트까지 같다. 고리는 길드 보고에서 닫히므로 의뢰 장부가
 #   있는 마을 판에만 선다(quests 와 같은 조건 — 없으면 보고할 데가 없어 옛 D65 그대로 워프 귀환이 판을 닫는다).
+REVIVE_ON = os.environ.get("DUNGEON_REVIVE", "0") == "1" and LOOP_ON and not PARTYFORM_ON   # D99(10-04, 파트너 "3층에서 죽음을 맞이하면 무덤이
+#   죽은 자리에 생기고 캐릭터는 성당에서 다시 살아나 일단 아이템을 가지고 부활할수 있게 해주자 기억도 죽기 전까지 유지하는거고" · "어차피 이 게임은
+#   에이전트 1인칭의 시점을 보는거였잖아 … 동료 캐릭터는 일단 마을에서 규칙엔진으로 돌아가게 하거나 대기 시키고 메인 플레이어가 죽으면 다시
+#   돌아가게 하자") 부활 — 쓰러진 자리에 묘(D22)가 서고, 몸(소지품·장비·능력치·관계·기억·수첩)은 대기 장부(waiting)로 간다. 일행이 마을에
+#   들어서는 순간(워프 귀환·계단 귀환·메인의 쓰러짐) 대기하던 사람은 **신전 문턱 곁에서** 깨어난다 — HP 는 가득, 상태 이상은 걷히고,
+#   지닌 것과 기억은 쓰러지기 전 그대로. 메인(론처 1번 칸 = chars[0], D81)이 던전에서 쓰러지면 그 틱에 살아 있던 동료도 함께 마을로 돌아온다
+#   (원정이 끝난다 — 워프 귀환과 같은 길이라 보고하면 결산). 마을에서 쓰러지면(출혈 등) 그 틱에 신전에서 깨어난다. 그래서 '전멸'은 없다 —
+#   판을 닫는 것은 틱 상한 하나. 대기 중인 동료는 그려지지도 판단하지도 않는다(세계를 둘 돌리지 않는다 — 파트너 '대기'). 원정 고리 판에서만
+#   선다(마을로 돌아온 뒤 판이 흘러야 뜻이 있다) · 파티 결성 판(D84 세계 여럿)에서는 꺼진다. **러너 기본 0**(론처가 켠다) = 끈 판은 옛 판과
+#   비트까지 같다. 세계 지문·run_meta 에는 켠 판에만 적는다. ⚠️'메인이 쓰러지면 동료도 돌아온다'는 세션 해석을 파트너가 "좋아"로 받은 것(임시).
 OFFER_ON = os.environ.get("DUNGEON_OFFER", "0") == "1"   # D95(09-20, 파트너 "원정을 돌고 나서 보물이나 특정 재물을 신에게 바치면 신이
 #   모험가의 능력치를 올려줄수 있어야 한다고 생각해. 캐릭터를 관리하는건 신의 몫으로 두는거지") 공물 — 신전 문턱에서 use(쓰임 부품 kind
 #   'offer', D89 밑)로 모은 보물을 바치면 몸의 한 칸(힘·민첩·최대 HP)이 1 오른다(무엇이 오를지는 신이 고른다 — 결정론, 판정 rng 무접촉).
@@ -1261,7 +1271,9 @@ def npc_facts(d, npc_name, bots, fallen, quests, expedition=0):
     if fallen:
         facts.append("이번 원정에서 쓰러진 사람: " + ", ".join(str(c) for c in fallen))
     ex_ = int(expedition or 0)               # D94(09-20) 원정 고리 판의 원정 번호 — 끈 판은 0(아래 분기가 옛 문장 그대로)
-    facts.append("지금은 원정에서 돌아온 뒤다(워프게이트로 귀환)" if getattr(d, "expedition_returned", False)
+    fell_ = getattr(d, "expedition_fell", None)   # D99(10-04) 부활 판: 메인이 쓰러져 끝난 원정 — 게이트로 돌아온 게 아니다(⚠️문구 임시)
+    facts.append(("지금은 원정에서 돌아온 뒤다(%s이(가) 던전에서 쓰러져 원정이 끝났다 — %s은(는) 신전에서 깨어났고 일행도 함께 마을로 돌아왔다)" % (fell_, fell_)
+                  if fell_ else "지금은 원정에서 돌아온 뒤다(워프게이트로 귀환)") if getattr(d, "expedition_returned", False)
                  else ("앞선 원정 %d번이 길드 보고로 끝났다 — 지금은 %d번째 원정을 떠나기 전이다" % (ex_ - 1, ex_) if ex_ >= 2   # D94(⚠️문구 임시): 두 번째 원정부터는 '아직 안 내려갔다'가 거짓이다
                        else "이 사람들은 아직 던전에 내려가지 않았다"))   # D83(09-18): 옛 '지금은 원정을 떠나기 전이다'는 내려감을 전제했다 — 사실만(⚠️문구 임시)
     if nd.get("report") and quests is not None:
@@ -1373,6 +1385,7 @@ def _world_fingerprint():
             **({"floor_life": True} if FLOOR_LIFE_ON else {}),   # D92: 같은 규율 — 안 가 본 층의 피처(통·석판·모닥불) 구성이 달라지는 스위치
             **({"partyform": True} if PARTYFORM_ON else {}),   # D84: 켠 판에만 적는다 — 옛 스냅샷의 지문과 글자까지 같게
             **({"loop": True} if LOOP_ON else {}),   # D94(09-20): 같은 규율 — 보고 뒤에도 판이 흐르고 원정마다 시드가 갈리는 판(옛 몸을 이 세계에 놓지 않는다)
+            **({"revive": True} if REVIVE_ON else {}),   # D99(10-04): 같은 규율 — 쓰러진 몸이 대기 장부에 있고 판에 전멸이 없는 판
             **({"town_life": True} if (TOWN_LIFE_ON and TOWN_ON) else {}),   # D90(09-20): 같은 규율 — 마을의 부품 구성이 다른 판(이어가는 러너가 같아야 한다)
             **({"offer": True} if (OFFER_ON and TOWN_ON) else {}),   # D95(09-20): 같은 규율 — 신전의 쓰임·축복 횟수가 다른 판(몸에 적히는 표식도 다르다)
             **({"npc_reply": True} if (NPC_REPLY_ON and TOWN_ON) else {}),   # D93(09-20): 같은 규율 — 관측(npc_ears)·되받기 장부가 다른 판
@@ -1631,6 +1644,8 @@ def main():
         gm_thread = threading.Thread(target=_gm_worker, daemon=True)
         gm_thread.start()
     fallen = list(snap["fallen"]) if snap is not None else []   # 이전 층에서 쓰러진 영웅(층 전이 때 bots 에서 빠짐 — 기록만 남긴다) · D79 얼린 그대로
+    waiting = (dict(snap.get("waiting") or {}) if snap is not None else {}) if REVIVE_ON else {}   # D99 대기 장부 {char: 쓰러진 몸 dict} —
+    #   층 전이 때 bots 에서 빠진 쓰러진 사람의 몸을 버리지 않고 둔다(소지품·장비·관계·기억 그대로). 일행이 마을에 들어설 때 신전 곁에서 깨어난다
 
     if snap is None:                       # ── 새 판: 스트림 머리 ──
         # 스트림 머리: run_meta(1회 — started 가 유일한 비결정 필드) + 첫 level
@@ -1644,6 +1659,7 @@ def main():
                 **({"town_sight": "zone"} if (TOWN_SIGHT == "zone" and TOWN_ON) else {}),   # D86(09-19 additive, 켠 판에만) 마을의 시야 = 지금 선 구역 — 시야·정지 물리 메타(town_hear 급)
                 **({"strangers": True} if STRANGERS_ON else {}),   # D85(09-19 additive, 켠 판에만) 인물 기록 판 — 프롬프트의 호칭이 캐릭터마다 다르다(내가 적은 이름|낯선 사람) · decisions.person_note
                 **({"loop": True} if LOOP_ON else {}),   # D94(09-20 additive, 켠 판에만) 원정 고리 판 — 길드 보고가 판을 닫지 않는다: 원정마다 expedition 줄(결산) 하나가 실리고 다음 원정은 새 시드의 1층부터. 판을 닫는 것은 틱 상한·전멸뿐
+                **({"revive": True} if REVIVE_ON else {}),   # D99(10-04 additive, 켠 판에만) 부활 판 — 쓰러진 사람은 일행이 마을에 들어설 때 신전 곁에서 깨어난다(revive 줄) · 메인이 쓰러지면 ascend 에 fell · 전멸 없음(판을 닫는 것은 틱 상한)
                 **({"town_life": True} if (TOWN_LIFE_ON and TOWN_ON) else {}),   # D90(09-20 additive, 켠 판에만) 마을 생활 판 — 구역의 들린 말(tick.overheard · 관측 notices kind 'overheard') 등 마을의 생활 부품. 0콜
                 **({"offer": True} if (OFFER_ON and TOWN_ON) else {}),   # D95(09-20 additive, 켠 판에만) 공물 판 — 신전 문턱의 use(interact result 'offered'·'offer_short')가 열리고 신의 축복은 판당 한 번. 0콜
                 **({"npc_reply": True} if (NPC_REPLY_ON and npc_brain) else {}),   # D93(09-20 additive, 켠 판에만) NPC 되받기 판 — decisions.to 가 'npc:<이름>'일 수 있고 tick.npc_replies 가 실린다(NPC 두뇌가 도는 판에만 — 더미 판은 꺼진 것과 같다)
@@ -1798,6 +1814,7 @@ def main():
                 "reaction_book": reaction_book, "last_oracle_id": last_oracle_id, "returned": returned,
                 "returned_party": returned_party, "segment": segment,
                 **({"expedition": expedition} if LOOP_ON else {}),   # D94: 켠 판에만(같은 규율) — 이어가는 러너가 몇 번째 원정인지 알아야 다음 던전의 시드가 같다
+                **({"waiting": waiting} if REVIVE_ON else {}),   # D99: 켠 판에만 — 대기 중인 몸도 얼린다(이어간 판에서 그 사람이 사라지지 않게)
                 **({"worlds": worlds, "parties": parties, "side_pos": side.tell()} if PARTYFORM_ON else {})}   # D84: 켠 판에만(옛 스냅샷과 같은 열쇠)
 
     def _snap_meta(next_turn, stop=None):    # 론처가 읽는 요약(json) — 피클을 열지 않고도 '지하 3층 t158 에서 멈춤'을 안다
@@ -1855,6 +1872,8 @@ def main():
         returned_party = [b["char"] for b in bots if b["alive"]]   # 수선(09-20 리뷰): 이 원정을 마치고 마을에 선 사람들 = '던전에서 살아 돌아온
         #   사람'의 단일 원천. 판은 틱 상한까지 더 흐르므로 returned(판을 닫는 표식)는 세우지 않는다 — 판 끝의 생환 줄만 이 명단을 읽는다
         d.expedition_returned = False                         # 마을은 더 이상 '원정에서 돌아온 참'이 아니다(관측·접수원 문장의 단일 원천)
+        if REVIVE_ON:
+            d.expedition_fell = None                          # D99: '메인이 쓰러져 끝난 원정'이라는 사연도 결산과 함께 닫는다(켠 판에만 적히는 칸)
         drop = [k for k in sorted(saved) if k >= 1 and not any(x["d"] is saved[k]["d"] for x in worlds)]
         for k in drop:                                        # 다음 원정은 새 시드의 1층부터 — 사람이 아직 있는 층은 그대로 둔다(D84 판)
             del saved[k]
@@ -2124,23 +2143,136 @@ def main():
         w.update(d=d, bots=bots, inbox=inbox, pending=pending, open_props=open_props, open_acts=open_acts)
         return None
 
+    def _carry(b, n, d, turn, floors, lm):
+        """층 전이의 이월 목록 — 옛 몸 b 의 것을 새로 스폰한 몸 n 에 옮긴다(층 전이 = 재스폰 = 새 dict).
+        floors = 이월할 층 결산 목록(떠나는 층을 얼린 것) · lm = 가 본 층의 봇별 기억(seen_keys·searched·aware_of·ledger).
+        D99(10-04): 신전에서 깨어나는 몸(_wake)도 같은 목록을 쓴다 — 한 곳에서만 고친다. 줄 순서는 옛 인라인 그대로(옛 판 비트 보존)."""
+        n["hp"], n["bag"] = b["hp"], b["bag"]     # HP·보물 이월     외부 시트 봇('3'+)이 2층서 죽는다
+        n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
+        n["boons"] = b.get("boons", 0)            # 축복의 물약도 이월(D74, 09-15)
+        n["str"], n["dex"] = b["str"], b["dex"]   # 축복으로 오른 능력치는 이 판 안에서 영구(D74) — 시트 초기값을 덮는다
+        n["maxhp"] = b["maxhp"]                   # D95(09-20): 공물로 오른 최대 HP 도 같은 급(힘·민첩과 함께). 아무도 안 올린 판에선 시트 값 그대로 = 무변화
+        if b.get("blessed"):                      # D95: 신의 축복을 받은 적 — 공물 판에서 축복은 판당 한 번이라 층·원정을 넘어 몸을 따라간다
+            n["blessed"] = True                   #   (켠 판에만 적히는 표식 — 끈 판은 키 자체가 없다)
+        n["weapon"] = b.get("weapon")             # 장비도 이월(07-30) — 걸치고 내려간다
+        n["armor"] = b.get("armor")
+        d.adopt_gear(n)                           # D57: 개체 번호는 층-로컬 — 새 층의 번호를 받는다
+        n["status"] = {t: dict(e) for t, e in (b.get("status") or {}).items()}   # 상태 태그(D34)
+        n["bleed_steps"] = b.get("bleed_steps", 0)   #   도 이월 — 몸은 층을 넘어도 그 몸이다
+        G.SK.inherit(d, b, n)
+        n["relations"] = {oc: {**e, "bones": {k: dict(v) for k, v in e["bones"].items()},
+                               "queue": list(e.get("queue") or []),
+                               "acts": [dict(a) for a in (e.get("acts") or [])]}   # D47 ② 상세 기록도 이월
+                          for oc, e in (b.get("relations") or {}).items()}   # 관계 장부(D36)도 이월
+        if b.get("people") is not None:
+            n["people"] = b["people"]                 # D85 인물 기록도 이월 — 사람에 대한 기억은 층을 넘어도 그대로(같은 객체)
+        n["memories"] = list(b.get("memories") or [])   # 기억도 이월(D22) — 전사는 원정급
+                                                  # 사건(장부=층의 기억과 대비. 구역 이름은
+                                                  # 그 층의 것 — 층수 없인 모호하나 v0 수용)
+        n["notes"] = ([] if brains.NOTEBOOK_ON else   # D59: 수첩이 층의 기억을 흡수 — 단기 절(한 줄들)은 층에서 닫힌다
+                      list(b.get("notes") or []))     # (수첩 끔 = D26 그대로 이월)
+        n["floors"] = floors   # 결산(D40 ②) 이월
+        n["floor"] = {"since": turn, "n": {}, "w": {}}   # 새 층의 집계는 지금부터(스폰 시각이 아니라 이 틱)
+        n["critical"] = bool(b.get("critical"))   # 위급 플래그(D40) — 몸은 층을 넘어도 그 몸이다
+        n["known"] = iss.known(ledger_keys[b["char"]])  # 도감은 층을 넘어도 그대로(지식=영속층) · 09-19 수선: 열쇠는 시작 때와 같은
+        n["book"] = iss.record(ledger_keys[b["char"]])  # D78 원장 키(id|이름) — 이름으로 묶으면 저장 캐릭터는 첫 계단에서 지식을 잃는다
+        if LEDGER_ON:
+            n["ledger"] = G.new_ledger()          # 장부는 새 원장(층의 기억 — id 층-로컬, D17)
+        # 가 본 층 = 그 층의 기억도 그대로(D29 —
+        for k in ("seen_keys", "searched", "aware_of", "ledger"):   # 낯익은 곳을 낯설게
+            if lm.get(k) is not None:             # 다시 배우게 하지 않는다)
+                n[k] = lm[k]
+
+    def _temple_cells(d, k, taken=()):
+        """D99 신전 문턱 곁의 빈 칸 k개(BFS 순 = 결정론) — 깨어나는 자리. 신전이 없는 마을(옛 스텁)이면 던전 입구 곁."""
+        res = getattr(d, "layout_result", None) or {}
+        defs = {s["id"]: s.get("entity") for s in ((res.get("spaces") or {}).get("buildings") or [])}
+        cell = next(((int(e["cell"][0]), int(e["cell"][1])) for e in (res.get("entrances") or [])
+                     if defs.get(e.get("building")) == "temple"), None)
+        ax, ay = cell or d.exit
+        return arrive_cells(d, ax, ay, k, taken=taken)
+
+    def _wake(b, d, others, spot, turn, lm):
+        """D99 신전에서 깨어난다 — 쓰러진 몸 b 를 마을 d 에 다시 세운 새 몸을 돌려준다. 지닌 것·장비·능력치·관계·기억·수첩은
+        쓰러지기 전 그대로(파트너 10-04 "일단 아이템을 가지고 부활할수 있게 해주자 기억도 죽기 전까지 유지하는거고"), 몸은 다시
+        온전하다(HP 가득 · 상태 이상·출혈·위급이 걷힌다). 깨어난 사람의 첫 관측에 '어디서 쓰러져 신전에서 깨어났다'(last) 한 번,
+        기억에 '네가 쓰러짐' 한 줄(사인은 엔진의 down_by — 관측에 실릴 때 도감이 모르는 종을 가린다). ⚠️문장은 brains 쪽에서 임시."""
+        c = b["char"]
+        n = G.spawn(d, c, others, sheet=sheets[c])
+        if spot:
+            d.visited.discard((n["x"], n["y"]))
+            n["x"], n["y"] = spot
+            d.visited.add(spot)
+        db = dict(b.get("down_by") or {})
+        dep, t_down = int(db.get("depth", d.depth)), int(db.get("turn", turn))
+        _carry(b, n, d, turn, (G.floor_freeze(b, dep, t_down) if FLOOR_ON     # 쓰러진 층의 집계를 쓰러진 틱에 얼린다(살아서 떠난 사람과 같은 결산)
+                               else [dict(x) for x in (b.get("floors") or [])]), lm)
+        n["notes"] = list(b.get("notes") or [])   # 쓰러진 사람은 층을 떠나며 수첩을 쓰지 못했다 — 단기 절을 닫지 않고 그대로 둔다(기억 유지)
+        n["hp"] = n["maxhp"]
+        n["status"], n["bleed_steps"], n["critical"] = {}, 0, False
+        n["last"] = {"type": "revived", "depth": dep}
+        n["memories"].append({"kind": "died", "char": c, **{k: db[k] for k in ("by", "by_kind") if k in db},
+                              "depth": dep, "turn": t_down})
+        return n
+
+    def _wake_waiting(d, others, turn, mem):
+        """D99 일행이 마을에 들어섰다 — 대기 장부의 사람 전부를 신전 곁에 깨운다(번호 순 = 결정론). 깨운 새 몸 목록을 돌려준다."""
+        woke = []
+        spots = _temple_cells(d, len(waiting), taken={(o["x"], o["y"]) for o in others})
+        for i, c in enumerate(sorted(waiting)):
+            b = waiting.pop(c)
+            woke.append(_wake(b, d, others + woke, spots[i] if i < len(spots) else None, turn, mem.get(c) or {}))
+        return woke
+
+    def _emit_revive(out, turn, woke):
+        """D99 스트림 revive 한 줄(additive — 관전자 데이터라 사인을 가리지 않는다) + 이벤트 로그 한 줄."""
+        out.emit("revive", turn=turn, where="temple",
+                 party=[{"char": n["char"], "depth": n["last"]["depth"],
+                         **{k: n["memories"][-1][k] for k in ("by", "by_kind") if k in n["memories"][-1]}} for n in woke])
+        event("=== %s — 신전 앞에서 다시 깨어났다 (지닌 것과 기억은 그대로) ===" % "·".join(names[n["char"]] for n in woke))   # ⚠️문구 임시
+
     def _shift_world(w, turn):
         """층 전이 — 계단을 쓴 사람들을 간 곳의 세계로 옮긴다. 돌려주는 값: None | "break"(판을 닫는다).
         옛 판(세계 하나): 전원이 떠났을 때만, 이 세계의 내용이 간 곳으로 통째로 바뀐다(몸통은 옛 전이 그대로).
         파티 결성 판(D84): 계단을 쓴 무리만 옮긴다 — 남은 사람의 세계는 그대로 흐르고, 간 층에 사람이 있으면 그 세계에 합류한다."""
         nonlocal fallen, returned, returned_party, W
         d, bots, inbox, pending, open_props, open_acts = (w[k] for k in _WK)
+        main_down = False                     # D99: 메인(chars[0])이 던전에서 쓰러져 일행이 마을로 돌아오는 틱인가(부활을 끈 판은 늘 거짓)
+        if REVIVE_ON:
+            if d.depth == 0 and any(not b["alive"] for b in bots):   # D99 마을에서 쓰러졌다(출혈 등) — 일행은 이미 마을에 있으니 그 틱에 신전 곁에서 깨어난다
+                down = sorted((b for b in bots if not b["alive"]), key=lambda b: b["char"])
+                fallen += [b["char"] for b in down]
+                up_ = [b for b in bots if b["alive"]]
+                spots = _temple_cells(d, len(down), taken={(o["x"], o["y"]) for o in up_})
+                woke = []
+                for i, b in enumerate(down):
+                    woke.append(_wake(b, d, up_ + woke, spots[i] if i < len(spots) else None, turn,
+                                      {k: b.get(k) for k in ("seen_keys", "searched", "aware_of", "ledger")}))   # 같은 마을 — 제 기억 그대로
+                byc = {n["char"]: n for n in woke}
+                bots[:] = [byc.get(b["char"], b) for b in bots]   # 같은 자리에 새 몸(편지함·장부의 열쇠는 번호라 그대로)
+                _emit_revive(sw, turn, woke)
+            main_down = d.depth >= 1 and any(b["char"] == chars[0] and not b["alive"] for b in bots)
+            if main_down:                     # D99 메인이 던전에서 쓰러졌다 — 살아 있는 동료도 이 틱에 함께 마을로 돌아온다(원정이 끝난다).
+                for b in bots:                #   길은 워프 귀환(D65)과 같다 — 다만 게이트를 탄 것이 아니므로 스트림·문장은 그렇게 말하지 않는다
+                    if b["alive"]:
+                        b["won"], b["warp"], b["went"], b["recalled"] = True, True, "up", chars[0]
         if all(b["won"] or not b["alive"] for b in bots) or (PARTYFORM_ON and any(b["won"] for b in bots)):
             survivors = [b for b in bots if b["won"]]
             if PARTYFORM_ON and survivors:    # 한 번에 한 무리(같은 길을 고른 사람들) — 같은 틱에 길이 갈린 나머지는 다음 틱에 옮긴다
                 way = (bool(survivors[0].get("warp")), survivors[0].get("went"))
                 survivors = [b for b in survivors if (bool(b.get("warp")), b.get("went")) == way]
-            fallen += [b["char"] for b in bots if not b["alive"] and b["char"] not in fallen]
+            fallen += [b["char"] for b in bots if not b["alive"] and (REVIVE_ON or b["char"] not in fallen)]   # D99: 부활 판은 같은 사람이 여러 번 쓰러진다 — 쓰러질 때마다 센다
+            if REVIVE_ON:
+                for b in bots:
+                    if not b["alive"]:
+                        waiting[b["char"]] = b    # D99 대기 — 몸을 버리지 않는다(소지품·장비·관계·기억 그대로). 일행이 마을에 들어설 때 깨어난다
             warp = bool(survivors) and all(b.get("warp") for b in survivors)   # D65 워프게이트 — 최심층에서 바로 마을(0층)로
             up = bool(survivors) and all(b.get("went") == "up" for b in survivors) and (TOWN_ON or warp)
+            if main_down:
+                warp = up = True              # D99: 살아 있던 동료가 없어도(모두 쓰러짐) 일행은 마을로 — 판을 닫지 않는다
             # 행선 혼합(위/아래)은 여기 못 온다 — 파티는 모임 규칙이 한 계단을 강제하고,
             # 솔로+마을은 main() 초입에서 거부(v0 — 서랍: 다중 층 동시 진행).
-            if not survivors or (not up and d.depth >= DEPTHS):
+            if (not survivors and not main_down) or (not up and d.depth >= DEPTHS):
                 if PARTYFORM_ON and not survivors and any(b["alive"] for x in worlds if x is not w for b in x["bots"]):
                     worlds[:] = [x for x in worlds if x is not w]   # D84: 이 세계엔 산 사람이 없다 — 다른 세계는 계속 흐른다
                     return None
@@ -2173,7 +2305,8 @@ def main():
             follow = (not PARTYFORM_ON) or any(b["char"] == _focus() for b in survivors)   # D84: 본 스트림이 좇는 사람이 옮기나(옛 판은 늘 참)
             out = sw if follow else side                      #   좇는 사람이 옮기면 본 스트림에 지금과 같은 모양으로, 아니면 옆 파일에
             out.emit("ascend" if up else "descend", turn=turn, to_depth=nd,
-                    **({'gate': True} if warp else {}),       # D65 additive — 워프게이트로 귀환한 상행
+                    **({'gate': True} if (warp and not main_down) else {}),       # D65 additive — 워프게이트로 귀환한 상행
+                    **({'fell': chars[0]} if main_down else {}),   # D99 additive — 메인이 쓰러져 일행이 마을로 돌아온 상행(게이트가 아니다)
                     **({'pages': pages} if pages else {}),    # D59 additive — 캐릭터별 수첩 한 장(플레이 데이터)
                     **({'reaction_summary': reaction_book.close_floor(turn)} if (reaction_book is not None and follow) else {}),
                     party=[{"char": b["char"], "hp": b["hp"], "bag": b["bag"],
@@ -2237,42 +2370,14 @@ def main():
                     d.visited.discard((n["x"], n["y"]))
                     n["x"], n["y"] = spots[len(nb)]
                     d.visited.add((n["x"], n["y"]))
-                n["hp"], n["bag"] = b["hp"], b["bag"]     # HP·보물 이월     외부 시트 봇('3'+)이 2층서 죽는다
-                n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
-                n["boons"] = b.get("boons", 0)            # 축복의 물약도 이월(D74, 09-15)
-                n["str"], n["dex"] = b["str"], b["dex"]   # 축복으로 오른 능력치는 이 판 안에서 영구(D74) — 시트 초기값을 덮는다
-                n["maxhp"] = b["maxhp"]                   # D95(09-20): 공물로 오른 최대 HP 도 같은 급(힘·민첩과 함께). 아무도 안 올린 판에선 시트 값 그대로 = 무변화
-                if b.get("blessed"):                      # D95: 신의 축복을 받은 적 — 공물 판에서 축복은 판당 한 번이라 층·원정을 넘어 몸을 따라간다
-                    n["blessed"] = True                   #   (켠 판에만 적히는 표식 — 끈 판은 키 자체가 없다)
-                n["weapon"] = b.get("weapon")             # 장비도 이월(07-30) — 걸치고 내려간다
-                n["armor"] = b.get("armor")
-                d.adopt_gear(n)                           # D57: 개체 번호는 층-로컬 — 새 층의 번호를 받는다
-                n["status"] = {t: dict(e) for t, e in (b.get("status") or {}).items()}   # 상태 태그(D34)
-                n["bleed_steps"] = b.get("bleed_steps", 0)   #   도 이월 — 몸은 층을 넘어도 그 몸이다
-                G.SK.inherit(d, b, n)
-                n["relations"] = {oc: {**e, "bones": {k: dict(v) for k, v in e["bones"].items()},
-                                       "queue": list(e.get("queue") or []),
-                                       "acts": [dict(a) for a in (e.get("acts") or [])]}   # D47 ② 상세 기록도 이월
-                                  for oc, e in (b.get("relations") or {}).items()}   # 관계 장부(D36)도 이월
-                if b.get("people") is not None:
-                    n["people"] = b["people"]                 # D85 인물 기록도 이월 — 사람에 대한 기억은 층을 넘어도 그대로(같은 객체)
-                n["memories"] = list(b.get("memories") or [])   # 기억도 이월(D22) — 전사는 원정급
-                                                          # 사건(장부=층의 기억과 대비. 구역 이름은
-                                                          # 그 층의 것 — 층수 없인 모호하나 v0 수용)
-                n["notes"] = ([] if brains.NOTEBOOK_ON else   # D59: 수첩이 층의 기억을 흡수 — 단기 절(한 줄들)은 층에서 닫힌다
-                              list(b.get("notes") or []))     # (수첩 끔 = D26 그대로 이월)
-                n["floors"] = frozen.get(b["char"], [dict(x) for x in (b.get("floors") or [])])   # 결산(D40 ②) 이월
-                n["floor"] = {"since": turn, "n": {}, "w": {}}   # 새 층의 집계는 지금부터(스폰 시각이 아니라 이 틱)
-                n["critical"] = bool(b.get("critical"))   # 위급 플래그(D40) — 몸은 층을 넘어도 그 몸이다
-                n["known"] = iss.known(ledger_keys[b["char"]])  # 도감은 층을 넘어도 그대로(지식=영속층) · 09-19 수선: 열쇠는 시작 때와 같은
-                n["book"] = iss.record(ledger_keys[b["char"]])  # D78 원장 키(id|이름) — 이름으로 묶으면 저장 캐릭터는 첫 계단에서 지식을 잃는다
-                if LEDGER_ON:
-                    n["ledger"] = G.new_ledger()          # 장부는 새 원장(층의 기억 — id 층-로컬, D17)
-                lm = mem.get(b["char"]) or {}             # 가 본 층 = 그 층의 기억도 그대로(D29 —
-                for k in ("seen_keys", "searched", "aware_of", "ledger"):   # 낯익은 곳을 낯설게
-                    if lm.get(k) is not None:             # 다시 배우게 하지 않는다)
-                        n[k] = lm[k]
+                _carry(b, n, d, turn, frozen.get(b["char"], [dict(x) for x in (b.get("floors") or [])]),   # 이월 목록(D99 부활도 같은 목록)
+                       mem.get(b["char"]) or {})
+                if b.get("recalled"):                     # D99 메인이 쓰러져 함께 돌아온 동료 — 첫 관측에 그 사실 한 번(⚠️문장은 brains 쪽 임시)
+                    n["last"] = {"type": "recalled", "fell": b["recalled"], "depth": src_depth}
                 nb.append(n)
+            woke = (_wake_waiting(d, there + nb, turn, mem)   # D99 일행이 마을에 들어섰다(워프·계단·메인의 쓰러짐) — 대기하던 사람이 신전 곁에서 깨어난다
+                    if (REVIVE_ON and nd == 0 and waiting) else [])
+            nb += woke
             if TOWN_ON and fresh and nd >= 1:             # 첫 입장 층에 '위로 오르는 계단' 신설 —
                 c0 = arrive_cells(d, nb[0]["x"], nb[0]["y"], 1)   # 일행이 내려선 자리 곁(왕복의 몸)
                 ux, uy = c0[0] if c0 else (nb[0]["x"], nb[0]["y"])
@@ -2324,13 +2429,17 @@ def main():
             else:                                   # 흐르던 세계 — 있던 사람의 인지 집합은 그대로, 온 사람 것만 새로(스폰 봇의 aware_of 초기화와 짝)
                 for b in nb:
                     (tw.get("iss") or {}).get("_aware", {}).pop(b["char"], None)
+            if woke:
+                _emit_revive(out, turn, woke)       # D99: level(깨어난 사람이 party 에 이미 있다) 뒤에 한 줄 — 관전 로그 '신전 앞에서 다시 깨어났다'
             if PARTYFORM_ON and follow:
                 W = dest                            # 본 스트림이 좇는 세계가 바뀌었다
             elif PARTYFORM_ON and tw is W:          # D84 additive: 좇는 세계에 다른 사람들이 왔다(다음 틱부터 tick.bots 에 있다)
                 sw.emit("arrive", turn=turn, from_depth=src_depth, party=[G.bot_snapshot(b) for b in nb])
             for qv in qv_:
                 event("   \U0001f4dc 의뢰 %s: %s (%d/%d)" % ("완수" if qv.get("done") else "진행", qv.get("title", "?"), qv.get("n", 0), qv.get("need", 0)))
-            if warp:
+            if main_down:                     # D99: 게이트를 탄 게 아니다 — 메인이 쓰러져 원정이 끝났다(⚠️문구 임시)
+                event("=== %s이(가) 쓰러졌다 — 일행은 마을로 돌아온다. 원정이 끝났다 ===" % names.get(chars[0], chars[0]))
+            elif warp:
                 event("=== 워프게이트의 빛이 걷힌다 — 마을이다. 원정에서 돌아왔다 ===")   # D65
             elif up:
                 event("=== 일행은 계단을 올라선다 — 마을이다. 낯익은 지붕들 ===")
@@ -2346,6 +2455,8 @@ def main():
                 if quests is not None:        # D69(09-14 파트너 "원정의 끝을 게이트가 아니라 길드 보고로"): 마을에서 이어 논다 —
                     quests["returned"] = turn  #   접수원에게 말을 걸면 보고(원정 완료). 안 하면 턴 상한으로 끝난다(세계 규칙, 캐릭터 규칙 아님)
                     d.expedition_returned = True
+                    if REVIVE_ON:              # D99: 어떻게 돌아왔나 — NPC 가 아는 사실이 '워프게이트로 귀환'이라 거짓말하지 않게(켠 판에만 적는 칸)
+                        d.expedition_fell = names.get(chars[0], chars[0]) if main_down else None
                     event("=== 원정에서 돌아왔다 — 길드 접수원에게 보고하면 원정이 끝난다 ===")
                 else:
                     returned, returned_party = True, [b["char"] for b in survivors]

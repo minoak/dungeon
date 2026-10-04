@@ -927,6 +927,13 @@ def _last_prose(last, names=None):
         return '스킬에 의해 한 칸 밀려났다' + (' — 함정을 밟았다' if entered.get('trap') else '')
     tgt = str(last.get("target", "") or "")
     _who = lambda c: "%s(봇%s)" % ((names or {}).get(c, (names or {}).get("?", "동료")), c)   # D47 ② 상대 호칭(동료는 이름으로) · D85: names["?"] = 모르는 사람의 호칭
+    if t == "revived":                    # D99(10-04) 신전에서 깨어났다 — 사실만. 사인은 기억 줄(도감이 가린다)이 말한다 ⚠️문구 임시
+        dep = int(last.get("depth") or 0)
+        return ("너는 %s에서 쓰러졌고, 마을 신전 앞에서 다시 깨어났다. 지닌 것과 기억은 쓰러지기 전 그대로다"
+                % ("마을" if dep == 0 else "지하 %d층" % dep))
+    if t == "recalled":                   # D99 메인이 쓰러져 원정이 끝났다 — 함께 마을로 돌아온 동료 쪽 사실 ⚠️문구 임시
+        return ("%s가 지하 %d층에서 쓰러져 원정이 끝났다. 너도 일행과 함께 마을로 돌아왔다"
+                % (_who(last.get("fell")), int(last.get("depth") or 0)))
     if r == "approaching":
         return "%s — %s 실행 거리까지 접근을 시작했다" % (_tgt_name(tgt, names), t)
     if r == "no_path" and last.get("parent_action_id"):
@@ -1934,6 +1941,11 @@ def _wire(obs, names=None, compose=False):
             if e.get("kind") == "grave_found":      # 묘 발견 — 죽음을 못 봤어도 묘를 본 순간 안다
                 M.append("- [%s의 죽음을 발견] %s — %s에서 (%s)"
                          % (nm_, e.get("grave", "묘"), e.get("zone", "?"), ago(e.get("turn", 0))))
+            elif e.get("kind") == "died":           # D99(10-04) 내가 쓰러졌다 — 신전에서 깨어났다(사인은 도감이 가린 그대로) ⚠️문구 임시
+                dep = int(e.get("depth") or 0)
+                M.append("- [네가 쓰러짐] %s에서 %s쓰러졌다. 마을 신전에서 다시 깨어났다 (%s)"
+                         % ("마을" if dep == 0 else "지하 %d층" % dep, (_by_phrase(e) + " ") if e.get("by") else "",
+                            ago(e.get("turn", 0))))
             else:                                   # 목격 — 사인·장소(D22 기억층 v0=fallen)
                 M.append("- [%s의 죽음을 목격] %s 죽었다 — %s에서 (%s)"
                          % (nm_, _by_phrase(e), e.get("zone", "?"), ago(e.get("turn", 0))))

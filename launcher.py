@@ -113,7 +113,8 @@ HOUSE_NO_RESUME = "운영자 키로 돈 판은 이어갈 수 없다. 새 원정�
 NIGHT_DEFAULTS = {"town_life": True, "npc_reply": True, "floor_life": True, "bestiary_plus": True, "loop": True,
                   "offer": False}   # ⚠️offer(D95 신에게 바치기)는 러너 쪽 구현이 아직 합쳐지지 않았다 — 켜도 아무 일이 없으므로 화면에서 끄고 감춘다(파트너 09-20 "천천히 구현해보자")
 OLD_DEFAULTS = {k: False for k in NIGHT_DEFAULTS}   # 화면의 '09-20 추가 전으로' 버튼이 돌아가는 자리(맵은 안 돌아간다 — 화면에 없다)
-OPTIONS_UI_VERSION = 2                            # 09-20 시작 옵션(MAPS·위 스위치)의 판 번호 — 화면이 보내는 옵션을 이 서버가 아는가.
+OPTIONS_UI_VERSION = 3                            # 09-20 시작 옵션(MAPS·위 스위치)의 판 번호 — 화면이 보내는 옵션을 이 서버가 아는가.
+                                                  #   3 = 10-04 D99 부활(화면이 revive 를 싣는다 — 모르는 옛 서버면 조용히 무시돼 부활 없는 판이 된다).
                                                   #   8000번에 떠 있던 옛 론처를 다시 쓰는 조건(main)과 화면의 '이전 런처' 안내가 이 값을 본다.
                                                   #   MAPS 에 키를 더하거나 화면이 새 옵션을 보내게 되면 올린다(index.html 의 비교 값도 같이).
                                                   #   2 = 09-20 오후(맵 고르기를 화면에서 걷음 · 스위치 둘 추가: loop·offer).
@@ -378,6 +379,8 @@ class Runner:
             env["DUNGEON_BESTIARY_PLUS"] = "1" if opts.get("bestiary_plus") is True else "0"  # D92 새 몬스터
             env["DUNGEON_LOOP"] = "1" if opts.get("loop") is True else "0"                    # D94 원정 고리(길드 보고가 판을 닫지 않는다 — 러너는 마을·의뢰·게시판이 있는 판에서만 켠다)
             env["DUNGEON_OFFER"] = "1" if opts.get("offer") is True else "0"                  # D95 신에게 바치기
+            env["DUNGEON_REVIVE"] = "1" if opts.get("revive") is True else "0"                # D99(10-04) 부활 — 화면에 칸이 없다(세계의 규칙): 화면은 원정 고리 칸 값을 그대로
+            #   싣는다(러너도 고리 판에서만 켠다). 멈춰 둔 옛 판의 run_opts.json 에는 이 키가 없어 꺼진 채 같은 세계로 이어간다(D79 지문)
             env["DUNGEON_BOSS"] = "1" if opts.get("boss") else "0"   # D65 보스층·귀환 — 화면 기본 켬, 러너 기본 0(옵션 없으면 끔)
             # 09-20 오후(파트너 "설정도 보스방 앞에서 시작을 빼곤"): D67 관찰용 프리셋(start=boss)은 화면에서도 여기서도 걷었다.
             # 러너의 DUNGEON_START 자체는 남아 있다 — 게이트 verify_boss 가 env 로 직접 쓴다. 부모 env 의 값은 물려주지 않는다.

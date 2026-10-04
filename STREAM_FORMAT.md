@@ -260,6 +260,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | `npc_hail` | (2026-09-14 D71 additive) NPC 가 먼저 거는 인사 여부(bool, `DUNGEON_NPC_HAIL` 러너 기본 1, 마을만). true 면 캐릭터가 NPC 와 같은 구역(D70)·6칸 안에 들어오는 틱에 NPC 가 정의의 상황별 인사(접수원 hail_return/hail_no_potion/hail_board/hail · 주점 주인 hail_rumor(실측 수)/hail · 성직자 hail_oracle/hail — ⚠️문장 임시)를 **잡담**으로 건넨다(캐릭터당 NPC 당 방문당 1회, 정지·뼈·콜 없음). `tick.npc_hails[]`·그 틱 `inbox` 의 `from:'npc:<이름>'`. `DUNGEON_NPC_HAIL_BRAIN=1` 이면 인사 문장을 LLM 이 쓴다(인사당 1콜, `line_src:'brain'`) |
 | `town_walkers` | (2026-09-14 D73 additive) 마을 행인 여부(bool, `DUNGEON_TOWN_WALKERS` 러너 기본 1, 마을 판만). true 면 정의에 `npc.walk{region, rate}` 가 있는 NPC(떠돌이 모험자·견습 모험자·노점 상인)가 제 구역의 빈 칸에 서고(`features[].walker: true`) 틱마다 확률로 한 걸음 걷는다(`tick.events[] npc_move{id, npc, to}` — 관전은 스냅샷 `features` 좌표로 그린다). 행인은 사람이라 마을 구역 지각(D70)을 탄다(같은 구역에서만 보인다), 정착 NPC 는 장소처럼 늘 보인다. 말 걸기(npc_talk)·인사(D71)는 같다. 걸음은 전용 RNG(walk_rng)라 판정용 rng 를 안 건드린다 |
 | `npc_brain` | (2026-09-14 D69 additive) 마을 NPC 두뇌 여부(bool, `DUNGEON_NPC_BRAIN` 러너 기본 1 — 더미 백엔드면 false). true 면 `npc_talk/npc_gift/npc_report` 의 `line` 이 LLM 문장일 수 있다(`line_src:'brain'`, 원문은 `line_fixed`; 실패면 필드 없음=고정 대사). NPC 는 캐릭터가 말을 걸 때만 1콜, 먼저 말하지 않는다. 그 답은 다음 틱 `inbox` 에 `{from:'npc:<이름>', text, turn, to:<말 건 봇>}` 잡담으로(정지·뼈·사교 콜 없음). 표현층 메타(prompt_context 급) |
+| `revive` | (2026-10-04 D99 additive, 켠 판에만) 부활 판(bool, `DUNGEON_REVIVE` 러너 기본 0 — 원정 고리 판(`loop`)에서만 서고 파티 결성 판에서는 꺼진다. 론처는 화면의 원정 고리 칸 값을 그대로 싣는다). true 면 ①쓰러진 사람의 몸(소지품·장비·능력치·관계·기억·수첩)은 층 전이 때 버려지지 않고 대기 장부로 간다(스냅샷 `waiting`) ②일행이 마을(0층)에 들어서는 순간(워프·계단·메인의 쓰러짐) 대기하던 사람이 **신전 문턱 곁에서** 깨어난다 — `level` 의 `party` 에 이미 있고 바로 뒤에 `revive` 줄 ③메인(`chars[0]` = 론처 1번 칸)이 던전에서 쓰러지면 그 틱에 살아 있던 동료도 함께 마을로 — `ascend.fell` ④마을에서 쓰러지면 그 틱에 깨어난다(`revive` 줄, depth 0) ⑤전멸(`end.outcome wiped`)이 없다 — 판을 닫는 것은 틱 상한. `end.fallen`·`expedition.fallen` 은 쓰러질 때마다 센다(같은 char 가 여러 번). 판 모양(종료 조건)을 바꾸는 실행모드 메타(loop 급) |
 | `graves` | (2026-07-20 D22 additive) 묘 여부(bool, `DUNGEON_GRAVES` 러너 기본 1·엔진 기본 0). true면 봇 사망 이벤트에 `grave={id,name,x,y}` 가 병기되고 그 칸에 '~의 묘' 피처(글리프 `T`)가 생긴다 — 피처 셋을 바꾸는 세계 물리 메타 |
 | `events` | (2026-07-20 D22 additive) 사건층 여부(bool, `DUNGEON_EVENTS` 러너 기본 1·엔진 기본 0). true면 obs 에 목격 어휘가 늘고(witnessed: ally_hit/kill/trap/heal + ally_loot/spot/mishap(07-29 — 상자 결과는 D30 확장으로 ally_use 이관) + ally_use{what,id,result?}(D30 09-05: 문 타일 밟기 · 계단 하강/상행·마을 입구(남는 사람만 본다) · 상자{result=보물을 꺼냈다/독침에 당했다}) + 비몬스터 ally_down) 목격한 전사가 memories(fallen, 휘발 0)로 재제시된다 — obs 를 바꾸는 실행모드 메타(스트림 이벤트 자체는 불변, `grave` 병기 제외) |
 | `scan` | 스캐너(D19) 여부(bool, `DUNGEON_SCAN`, 기본 false — 2026-07-12 additive, 암 B 판정 전 실험 스위치). true 면 ①**격자에 문 타일 `+` 가 실재**(2026-07-15 정정 — 생성기가 방↔통로 관통점에 스탬프. 벽처럼 빛을 막고 바닥처럼 지나간다, 개폐 상태 없음) ②obs.zone 이 구조 조회로 확장(`{id,kind, checked{full,todo?}, doors[], size/at(다 본 방만), len(다 본 통로만)/ends(본 것만)}` — 전부 방위·거리·딱지뿐, **좌표 없음**. **시야·기억 제한**(2026-07-15 정정 "스캐너=시야에 들어온 격자의 번역기"): 문은 눈에 든 적 있는 것만 실리고, 크기·상대위치는 그 공간을 다 봤을 때만. 문턱(문 타일) 위=`kind:'문턱'`. id 는 기하 구역 `r<n>`/`c<n>` — level.rooms 와 조인 금지. **계단은 구조에 없다** — 내용물이라 광학(sights.exit)으로만) ③`sights.traps[]`(드러난 함정 시야 어휘) ④문 id(`d<n>`)가 goto 핑·옵션에 등장 ⑤**걸음 정지 물리가 달라진다**(walk `sighted` — 아래. `entered` 는 2026-07-15 폐지) ⑥장부 주소도 기하 구역 명의. 리플레이·판 비교는 이 필드까지 맞춰야 한다(ledger 와 같은 급) |
@@ -304,6 +305,17 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 ### `ascend` — 마을 판(D29) 상행 전이(전원 won·went=up) 때. 직후 라인은 반드시 `level`
 필드는 `descend` 와 동일(`to_depth`=올라가는 층 — 마을이면 0; **2026-09-13 D65** 워프게이트 귀환이면 `gate: true` 이고 최심층에서 바로 0). 마을 판의 `level` 은 같은 depth 가
 여러 번 나올 수 있다(재입장 — **같은 층 보존**: level_seed·격자 동일, 세계 상태는 떠날 때 그대로).
+**2026-10-04 D99** 부활 판(`run_meta.revive`)에서 메인이 던전에서 쓰러지면 그 틱에 `ascend` 가 나온다 — `fell: <메인 char>` 이고 `gate` 는 없다(게이트를 탄 게 아니다), `to_depth` 0, `party[]` = 함께 돌아온 살아 있던 동료(모두 쓰러졌으면 빈 목록). 직후 `level`(마을) → `revive`.
+
+### `revive` — (2026-10-04 D99, 부활 판에만) 쓰러졌던 사람이 신전 문턱 곁에서 다시 깨어났다
+일행이 마을에 들어선 전이(`ascend` → `level`) 바로 뒤, 또는 마을에서 쓰러진 그 틱의 `tick` 뒤에 한 줄. 프레임이 아니다 — 소비자는 직전 틱에 붙인다(`descend` 와 같은 방식).
+깨어난 몸은 같은 틱의 `level.party`(전이 뒤) 또는 다음 `tick.bots` 에 있다 — HP 가득 · 상태 이상 없음 · 소지품·장비·능력치는 쓰러지기 전 그대로.
+
+| 필드 | 내용 |
+|---|---|
+| `turn` | 깨어난 틱(= 전이 틱, 또는 마을에서 쓰러진 틱) |
+| `where` | 깨어난 곳 — 지금은 늘 `"temple"`(신전 문턱 곁. 신전이 없는 옛 마을이면 던전 입구 곁) |
+| `party[]` | `{char, depth, by?, by_kind?}` — 쓰러졌던 층(마을이면 0)과 사인(엔진 `_on_down` 의 by·by_kind — 관전자 데이터라 도감이 가리지 않는다. 캐릭터의 관측에서는 가린다) · char 순 |
 
 | 필드 | 내용 |
 |---|---|
