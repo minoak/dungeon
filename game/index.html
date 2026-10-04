@@ -31,9 +31,9 @@
   <section id="bottom">
     <div id="controls"></div>         <!-- 재생 컨트롤(Controls) -->
     <div id="journalHead"><span class="journal-title">원정 기록</span><div class="log-tabs" aria-label="기록 표시">
-      <button data-log-view="story" class="on" aria-pressed="true">이야기</button><button data-log-view="all" aria-pressed="false">모든 기록</button>
-    </div><span class="journal-hint">대화와 주요 사건</span></div>
-    <div id="log" data-view="story" tabindex="0" aria-label="원정 기록"></div>
+      <button data-log-view="talk" class="on" aria-pressed="true">대화</button><button data-log-view="event" aria-pressed="false">사건</button><button data-log-view="all" aria-pressed="false">전체</button>
+    </div><button id="bWho" class="who-toggle on" aria-pressed="true" title="이 사람이 보고 들은 것만 — 끄면 일행 전부">이 사람만</button><span class="journal-hint">말과 속내, 그리고 굵직한 사건</span></div>
+    <div id="log" data-view="talk" data-who="focus" tabindex="0" aria-label="원정 기록"></div>
   </section>
   <aside id="codex" hidden data-open="0" aria-label="도감·수첩"></aside>   <!-- 도감·수첩 창(Codex, D63) — 헤더 버튼으로 여닫는 별개 창 -->
 </div>

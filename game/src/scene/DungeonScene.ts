@@ -24,6 +24,13 @@ export const DEPTH = { ground: 0, footprint: 5, feature: 10, trap: 12, corpse: 1
                        fx: 50, fog: 60, label: 70 } as const;
 export const ZOOMS = [0.25, 0.5, 1, 1.5, 2] as const;
 
+/** 한 걸음(한 칸)에 쓰는 시간 — 틱 길이의 이만큼을 걷는 데 쓴다. 라이브 실측 2.2초/틱에서 0.32초만 걷고
+ *  1.9초를 얼어 있던 것이 "움직임이 뚝뚝 끊긴다"의 정체였다(2026-09-27). 상한은 한 칸이 늘어지지 않게. */
+const STEP_SHARE = 0.8;
+const STEP_MAX_MS = 1000;
+const NPC_STEP_MAX_MS = 1100;
+export const stepMs = (paceMs: number, max = STEP_MAX_MS): number => Math.max(160, Math.min(paceMs * STEP_SHARE, max));
+
 export interface Actor {
   char: Char;
   sprite: Phaser.GameObjects.Sprite;
@@ -519,7 +526,7 @@ export class DungeonScene extends Phaser.Scene {
       this.tweens.killTweensOf(s);
       const ak = walkAnimKey(a.key, dir);
       if (!s.anims.isPlaying || s.anims.currentAnim?.key !== ak) s.play(ak);
-      const dur = Math.min(320, this.app.playback.tickMs * 0.8);
+      const dur = stepMs(this.app.playback.paceMs);
       this.tweens.add({ targets: s, x: target.x, y: target.y, duration: dur, ease: 'Linear',
         // 트윈이 끝났는데 아직 같은 프레임이면(다음 걸음이 안 왔으면) 정지 프레임으로. 이어 걸으면 다음 프레임이 애니를 잇는다.
         onComplete: () => { if (this.frame === cur) { s.anims.stop(); s.setFrame(frameIndex(this.atlas, dir, -1)); } } });
@@ -549,7 +556,7 @@ export class DungeonScene extends Phaser.Scene {
     s.setScale(this.characterScale).setData('dir', dir).setDepth(DEPTH.stand + ft.y * 0.01 - 0.005);
     this.tweens.killTweensOf(s);
     if (!snap && moved) {
-      const duration = Math.min(400, this.app.playback.tickMs * 0.8);
+      const duration = stepMs(this.app.playback.paceMs, NPC_STEP_MAX_MS);
       s.play(npcWalk(texture, dir), true);
       s.anims.timeScale = 500 / duration;
       const frame = this.frame, sprite = s;
@@ -593,7 +600,7 @@ export class DungeonScene extends Phaser.Scene {
       this.tweens.killTweensOf(s);
       if (art) s.play(monsterWalk(art.texture, dir), true);
       const frame = this.frame;
-      this.tweens.add({ targets: s, x: c.x, y: c.y, duration: Math.min(320, this.app.playback.tickMs * 0.8), ease: 'Linear',
+      this.tweens.add({ targets: s, x: c.x, y: c.y, duration: stepMs(this.app.playback.paceMs), ease: 'Linear',
         onComplete: () => { if (this.frame === frame && art) { s!.anims.stop(); s!.setFrame(monsterFrame(dir)); } } });
     } else {
       this.tweens.killTweensOf(s); s.anims.stop(); s.setPosition(c.x, c.y);

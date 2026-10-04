@@ -231,8 +231,24 @@ kbd { display: inline-block; font-family: inherit; font-size: 10px; line-height:
 #app #log .ev.dim { color: #7b899b; font-size: 10px; }
 #app #log .grp > .focus { background: #ffffff03; box-shadow: inset 2px 0 0 #b29c6b55; margin-left: -8px; padding: 2px 8px; }
 #app #log .grp.lvl, #app #log .grp.fin { padding: 9px 0; color: var(--gold); font-size: 11px; }
-#log[data-view="story"] .rsn, #log[data-view="story"] .ev.dim { display: none; }
-#log[data-view="story"] .grp:not(.lvl):not(.fin):not(:has(.say, .ev:not(.dim))) { display: none; }
+/* 기록 탭 — 대화(말·속내가 주인공, 굵은 사건만 곁들임) / 사건(세계가 한 일) / 전체.
+   .talk = 사람 아닌 입에서 나온 말(NPC 인사·되받음·구역에서 들린 말)도 대화다. */
+#log[data-view="talk"] .ev:not(.talk):not(.combat):not(.gold):not(.notable) { display: none; }
+#log[data-view="talk"] .grp:not(.lvl):not(.fin):not(:has(.say, .rsn, .talk, .ev.combat, .ev.gold, .ev.notable)) { display: none; }
+#log[data-view="event"] .say, #log[data-view="event"] .rsn, #log[data-view="event"] .talk { display: none; }
+#log[data-view="event"] .grp:not(.lvl):not(.fin):not(:has(.ev:not(.talk))) { display: none; }
+
+/* 초점 필터 — 이 세계의 규칙("같은 자리에 있어야 보이고 들린다")을 관전 화면에도 적용한다.
+   줄마다 data-c 에 관련 캐릭터가 박혀 있고, 초점이 그 안에 있으면 .focus 가 붙는다(evline.lineHtml).
+   data-c 가 없는 줄(신탁·층 전이 같은 세계의 목소리)은 늘 남는다. 끄는 법 = 머리의 '이 사람만' 또는 디버그 모드. */
+#log[data-who="focus"] .grp > [data-c]:not(.focus) { display: none; }
+#log[data-who="focus"] .grp:not(.lvl):not(.fin):not(:has(> [data-c].focus, > *:not([data-c]))) { display: none; }
+#app #log .say { font-size: 12.5px; }                    /* 대화는 기록에서 제일 읽히는 줄이어야 한다 */
+.who-toggle { margin-left: auto; background: none; border: 1px solid #ffffff1f; border-radius: 4px; color: #76869a;
+  font-size: 9.5px; letter-spacing: .5px; padding: 3px 8px; cursor: pointer; }
+.who-toggle.on { color: #d9c79a; border-color: #b29c6b66; background: #ffffff08; }
+#journalHead .journal-hint { margin-left: 10px; }
+body[data-debug="1"] .who-toggle::after { content: ' · 디버그'; color: #e0a0a0; }
 
 /* 머리 위 대사 — 캐릭터별 색은 작은 화자 표식에만, 본문은 차분한 종이색. */
 #app #overlay .bubble { max-width: min(300px, calc(100% - 24px)); padding: 11px 14px 9px; font-size: 13px; line-height: 1.7; color: #26323e; background: #f0f1ed; border: 1px solid #c8cfcf; border-radius: 12px 12px 12px 3px; box-shadow: 0 6px 24px #0005; }

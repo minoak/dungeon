@@ -10,6 +10,7 @@ import { installControls } from './ui/Controls';
 import { installChips } from './ui/Chips';
 import { installFocusCard } from './ui/FocusCard';
 import { installLog } from './ui/Log';
+import { installDebug } from './ui/Debug';
 import { installBubbles } from './scene/Bubbles';
 import { installFog } from './scene/Fog';
 import { installHandoff } from './fx/Handoff';
@@ -49,6 +50,7 @@ async function boot(): Promise<void> {
   game.scene.add('dungeon', new DungeonScene(), true, { app, atlas, tiles });
   app.scene = await sceneReady;
 
+  installDebug();
   installControls(app); installChips(app);
   installFocusCard(app); installLog(app); installBubbles(app); installFog(app); installHandoff(app);   // Phase B 카드
   installLive(app);                                                                                     // B5 라이브 배지(론처 /api/status)

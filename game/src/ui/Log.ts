@@ -7,6 +7,7 @@
 import type { App } from '../app';
 import type { Char } from '../stream/types';
 import { endGroupHtml, groupHtml } from '../text/evline';
+import { debugOn, onDebugChange } from './Debug';
 
 export const LOG_WINDOW = 90;                    // 로그에 유지할 최근 그룹 수(결말 그룹 포함)
 
@@ -40,7 +41,12 @@ export function installLog(app: App): void {
   }
   const root = app.dom.log;
   root.innerHTML = '';
-  // 표시만 거른다. 원본 사건·속내는 모든 기록에서 그대로 볼 수 있다.
+  // 표시만 거른다. 원본 사건·속내는 '전체' 탭에서 그대로 볼 수 있다(거르는 규칙은 style.css).
+  const HINTS: Record<string, string> = {
+    talk: '말과 속내, 그리고 굵직한 사건',
+    event: '세계가 한 일 — 이동 · 전투 · 함정 · 획득',
+    all: '모든 줄. 말도 사건도 사소한 것까지',
+  };
   document.querySelectorAll<HTMLButtonElement>('[data-log-view]').forEach(button => {
     button.onclick = () => {
       const stick = atBottom();
@@ -50,10 +56,26 @@ export function installLog(app: App): void {
         b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
       });
       const hint = document.querySelector('.journal-hint');
-      if (hint) hint.textContent = root.dataset.view === 'story' ? '대화와 주요 사건' : '이동 · 속내 · 모든 사건';
+      if (hint) hint.textContent = HINTS[root.dataset.view || 'talk'] || '';
       if (stick) scrollBottom();
     };
   });
+
+  // '이 사람만' — 초점 캐릭터가 보고 들은 것만 남긴다(세계 규칙과 같은 원칙).
+  // 초점이 없으면 걸 수 없고(전부 숨겨진다), 디버그 모드에서는 일행 전부를 본다.
+  const whoBtn = document.getElementById('bWho') as HTMLButtonElement | null;
+  let whoOnly = true;
+  const applyWho = (): void => {
+    const on = whoOnly && !!app.focus.char && !debugOn();
+    root.dataset.who = on ? 'focus' : 'all';
+    if (whoBtn) {
+      whoBtn.classList.toggle('on', on);
+      whoBtn.setAttribute('aria-pressed', String(on));
+      whoBtn.disabled = !app.focus.char && !debugOn();
+    }
+  };
+  if (whoBtn) whoBtn.onclick = () => { const stick = atBottom(); whoOnly = !whoOnly; applyWho(); if (stick) scrollBottom(); };
+  onDebugChange(applyWho);
   let lastIdx = -1;                              // 마지막으로 반영한 프레임 번호(-1 = 비어 있음)
 
   const atBottom = (): boolean => root.scrollTop + root.clientHeight >= root.scrollHeight - 12;
@@ -104,7 +126,8 @@ export function installLog(app: App): void {
     else rebuild(idx);
   });
   app.bus.on('run', () => { root.innerHTML = ''; lastIdx = -1; });
-  app.focus.on('change', ({ char }) => remark(char));
+  app.focus.on('change', ({ char }) => { remark(char); applyWho(); });
+  applyWho();
   // 라이브: end 라인만 뒤늦게 붙는 경우(프레임 성장 없음) — 결말 그룹을 보이게 한다
   app.bus.on('live', on => { if (!on && lastIdx >= 0 && showEnd(lastIdx) && !root.querySelector('.grp.fin')) append(lastIdx); });
 }

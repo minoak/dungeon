@@ -56,7 +56,9 @@ export function installBubbles(app: App): void {
   const npcs = new Map<string, Float>();         // D69 마을 NPC 의 답(이벤트 npc_talk/npc_gift/npc_report 의 line) — 키 = NPC 이름
   let raf = 0;
 
-  const life = (): number => Math.max(app.playback.tickMs * 1.2, 900);
+  // 수명은 재생 클록이 아니라 '실제로 다음 틱이 오는 데 걸리는 시간'을 따른다(paceMs).
+  // 라이브 2.2초/틱에서 옛 식은 900ms 였다 — 말풍선이 뜬 시간의 곱절을 빈 화면으로 기다렸다(2026-09-27).
+  const life = (): number => Math.max(app.playback.paceMs * 1.2, 900);
   const speakerVisible = (c: Char): boolean => { const a = app.scene?.actorOf(c); return !!a && a.sprite.visible; };
 
   function clearAll(): void {
