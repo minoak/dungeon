@@ -14,7 +14,7 @@
       "status": "중독"
     },
     "knowledge": {
-      "deep": "벽에서 독침이 날아온다. 가시보다 얕지만 피하기 어렵다."
+      "deep": "@prompts"
     }
   }
 }

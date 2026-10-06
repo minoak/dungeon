@@ -19,25 +19,20 @@
       "texture": "equipment_store"
     },
     "story": {
-      "trait": "무기와 방어구를 진열할 가게",
-      "history": "문턱과 마당이 길에 닿아 있다. 장비점의 서비스는 아직 준비 중이다."
+      "trait": "@prompts",
+      "history": "@prompts"
     },
     "life": {
       "building": {
-        "role": "진열된 것 구경(아직 사고팔 수는 없다)"
+        "role": "@prompts"
       },
       "story": {
-        "trait": "무기와 방어구를 진열한 가게. 구경만 된다(사고팔기는 아직 없다)",
-        "history": "문턱과 마당이 길에 닿아 있다. 진열대의 물건엔 아직 값이 붙어 있지 않다."
+        "trait": "@prompts",
+        "history": "@prompts"
       },
       "use": {
         "kind": "browse",
-        "wares": [
-          "날 없는 연습용 검",
-          "가죽 장갑",
-          "징 박은 장화",
-          "둥근 나무 방패"
-        ]
+        "wares": "@prompts"
       }
     }
   },

@@ -19,16 +19,16 @@
       "texture": "ordinary_inn"
     },
     "story": {
-      "trait": "독립 객실을 둘 여관",
-      "history": "문턱과 마당이 길에 닿아 있다. 일반 여관의 서비스는 아직 준비 중이다."
+      "trait": "@prompts",
+      "history": "@prompts"
     },
     "life": {
       "building": {
-        "role": "묵어 가는 곳"
+        "role": "@prompts"
       },
       "story": {
-        "trait": "독립 객실이 있는 여관. 문턱에서 묵을 수 있다",
-        "history": "문턱과 마당이 길에 닿아 있다. 방은 작지만 문이 따로 달려 있어, 원정에서 돌아온 사람이 혼자 몸을 누이러 온다."
+        "trait": "@prompts",
+        "history": "@prompts"
       },
       "use": {
         "kind": "lodge"

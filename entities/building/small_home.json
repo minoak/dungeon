@@ -19,12 +19,12 @@
       "texture": "small_home"
     },
     "story": {
-      "trait": "작은 현관과 생활 마당이 있는 집",
-      "history": "문턱과 마당이 길에 닿아 있다. 주민의 집의 서비스는 아직 준비 중이다."
+      "trait": "@prompts",
+      "history": "@prompts"
     },
     "life": {
       "story": {
-        "history": "문턱과 마당이 길에 닿아 있다. 주민이 사는 집이다 — 손님을 받는 곳이 아니다."
+        "history": "@prompts"
       }
     }
   },

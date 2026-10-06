@@ -170,9 +170,10 @@ python tools/make_replay_viewer.py runs/stream-XXXX.jsonl -o tools/replay_viewer
 
 ## 리포 지도
 
-엔진·러너·론처는 루트, 프롬프트는 `prompts/`, 정의는 `entities/`, 도구는 `tools/`, 관전 클라이언트는 `game/`, 판 기록은 `runs/`,
+엔진·러너·론처는 루트, 프롬프트와 세계의 말은 `prompts/`([설명서](prompts/README.md) — 엔티티의 대사·설명·지식 본문은 `prompts/world/`),
+정의(숫자·규칙)는 `entities/`, 도구는 `tools/`, 관전 클라이언트는 `game/`, 판 기록은 `runs/`,
 그림 원본은 `art/`. 코드와 파일명에 남아 있는 `wonderland`(원더랜드)는 내부 코드명이다. 전체 지도와 정리 기준은 [docs/repo-map.md](docs/repo-map.md).
-설계 정본은 [`design/HARNESS_DESIGN.md`](design/HARNESS_DESIGN.md)(D1~D96), 변경 기록은 [docs/CHANGELOG.md](docs/CHANGELOG.md),
+설계 정본은 [`design/HARNESS_DESIGN.md`](design/HARNESS_DESIGN.md)(D1~D100), 변경 기록은 [docs/CHANGELOG.md](docs/CHANGELOG.md),
 판 하나를 이야기로 쓴 [연대기](docs/chronicles)와 [개발일지](docs/devlog)도 있다.
 
 ## 상태 (2026-09-20)

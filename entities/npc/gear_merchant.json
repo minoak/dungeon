@@ -8,21 +8,21 @@
   ],
   "comps": {
     "npc": {
-      "line": "좋은 검을 찾나? 빈손이면 이 단검을 가져가게 — 던전에선 맨손이 제일 비싸.",
-      "line_again": "아까 왔잖아. 이미 무장했으니 줄 건 없어 — 더 좋은 물건은 아직 들여오는 중이야.",
+      "line": "@prompts",
+      "line_again": "@prompts",
       "gift": {
         "weapon": "단검"
       }
     },
     "life": {
       "npc": {
-        "role": "장비점의 상인 · 빈손인 사람에게 단검 하나",
-        "persona": "물건 자랑을 좋아한다. 아직 값을 못 매겨 팔지는 못하고, 빈손으로 던전에 가는 사람만은 그냥 못 보낸다.",
-        "hail": "{name}, 구경하고 가. 만져 봐도 돼."
+        "role": "@prompts",
+        "persona": "@prompts",
+        "hail": "@prompts"
       },
       "story": {
-        "trait": "장비점의 상인. 빈손인 사람에게 단검을 하나 준다",
-        "history": "가게로 가는 길목에 나와 지나가는 사람의 허리춤부터 본다. 진열대의 물건엔 아직 값을 못 붙였다."
+        "trait": "@prompts",
+        "history": "@prompts"
       }
     }
   },

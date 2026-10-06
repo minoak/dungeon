@@ -34,8 +34,8 @@
       }
     },
     "knowledge": {
-      "brief": "칼날에 독을 바른 고블린",
-      "deep": "칼날에 독을 바른 고블린. 베인 상처는 얕지만 독이 돈다 — 독이 도는 동안은 명중과 회피가 무뎌지고, 쉬어야 빠진다. 겁이 많은 건 다른 고블린과 같아서 피를 많이 보면 달아난다.",
+      "brief": "@prompts",
+      "deep": "@prompts",
       "unlock": {
         "event": "encounter",
         "count": 5

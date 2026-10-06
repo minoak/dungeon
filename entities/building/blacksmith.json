@@ -19,25 +19,20 @@
       "texture": "blacksmith"
     },
     "story": {
-      "trait": "화덕과 모루 작업장을 둔 건물",
-      "history": "문턱과 마당이 길에 닿아 있다. 대장간의 서비스는 아직 준비 중이다."
+      "trait": "@prompts",
+      "history": "@prompts"
     },
     "life": {
       "building": {
-        "role": "진열된 것 구경(아직 사고팔 수는 없다)"
+        "role": "@prompts"
       },
       "story": {
-        "trait": "화덕과 모루 작업장을 둔 건물. 문턱에서 걸어 둔 것을 구경할 수 있다",
-        "history": "문턱과 마당이 길에 닿아 있다. 벽에 걸린 것은 주문받아 만든 것들이라 임자가 따로 있다."
+        "trait": "@prompts",
+        "history": "@prompts"
       },
       "use": {
         "kind": "browse",
-        "wares": [
-          "벼린 낫",
-          "말편자",
-          "문고리",
-          "날을 세우는 중인 도끼"
-        ]
+        "wares": "@prompts"
       }
     }
   },

@@ -42,6 +42,28 @@ entities/
 - `sprite`: 클라이언트 텍스처 참조 `wl-<이름>[#프레임]`. 검증은 `game/src/assets/world/<이름>.png` 존재까지 —
   프레임 번호는 `game/src/assets/world.ts`가 소유하며 수동 동기다.
 
+## 말은 `prompts/world/` 에 (D100, 2026-10-06)
+
+정의는 숫자·규칙·식별자만 들고, 사람과 캐릭터가 읽는 **말**(대사·인사·성격·역할·특징·이야기·지식 본문·게시판 글·진열품·들리는 말)은
+같은 이름의 `prompts/world/<종류>/<id>.md` 가 든다. 정의의 그 칸에는 `"@prompts"` 표시만 남고 `entities.read()` 가 둘을 합친다 —
+엔진·러너·게이트는 합쳐진 정의만 보므로 코드는 무수정이다(옮기기 전후 정의가 글자·순서까지 같다, `verify_words`). 이름(`name`)은 정의에 남는다.
+
+```json
+"npc": { "line": "@prompts", "line_again": "@prompts", "role": "@prompts", "walk": { "region": "guild_district", "rate": 0.4 } }
+```
+```
+## `npc.line` — 첫 대사 — 캐릭터가 말을 걸면 · 관전 말풍선
+여기 마당에 있으면 지나가는 분들이 한마디씩 해 주세요. …
+```
+
+- 말 칸인지는 `words.is_word_path`(경로의 마지막 키 — `line`·`line_*`·`hail*`·`role`·`persona`·`trait`·`history`·`brief`·`deep`·`text`·
+  `texts`·`wares`·`goal`·`reward`·`client`·`overheard`·`speech`·`background`. `space.role` 은 구역 종류 id 라 말이 아니다).
+  목록 칸은 `texts`·`wares`·`overheard`(한 줄에 하나씩 `- `).
+- 정의와 말 파일이 어긋나면(자리는 있는데 칸이 없다 · 칸은 있는데 자리가 없다 · 말 파일이 없다 · 말 칸이 아닌 자리에 표시) 모르는 부품과 같은 급의
+  정의 오류다 — `EntityError` 로 전부 나열한다. 고친 뒤 `python tools/check_words.py`. 정의가 없는 말 파일(초안)은 경고로만.
+- 경계: `prompts/` 안은 파트너의 말, 밖은 코드. 말 파일의 꼴·지킬 것은 [prompts/README.md](../prompts/README.md).
+- 게이트가 정의를 임시 폴더에 복사해 검사하는 관행은 그대로다 — 복사본도 리포의 말 파일로 합쳐 읽힌다(`read(root, words_root=…)` 의 기본).
+
 ## 엔진이 지금 읽는 것
 
 | 정의 | 엔진 | 비고 |

@@ -26,6 +26,8 @@ import glob
 import json
 import os
 
+import words   # D100(10-06): 말 칸은 prompts/world/ 의 말 파일 — read() 가 합친다
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, 'entities')
 SPRITE_DIR = os.path.join(HERE, 'game', 'src', 'assets', 'world')
@@ -318,14 +320,21 @@ def _problems(pairs, root):
     return out
 
 
-def read(root=ROOT):
-    """폴더의 정의 전부 → {id: def}. 문제가 하나라도 있으면 EntityError(전부 나열)."""
+def read(root=ROOT, words_root=None):
+    """폴더의 정의 전부 → {id: def}. 문제가 하나라도 있으면 EntityError(전부 나열).
+    D100(10-06): 말 칸("@prompts" 자리)은 prompts/world/<종류>/<id>.md 에서 채운다(words.merge). 말 파일은 root 가 아니라 리포의
+    prompts/world 에서 읽는다(words_root 기본) — 게이트가 정의를 임시 폴더에 복사해 검사하는 관행 그대로, 복사본도 리포의 말로 읽힌다.
+    정의와 말 파일이 어긋나면(자리는 있는데 칸이 없다 · 칸은 있는데 자리가 없다 · 말 파일이 없다) 그것도 정의 오류다."""
+    words_root = words_root or words.WORDS_ROOT
     files = sorted(glob.glob(os.path.join(root, '*', '*.json')))
-    pairs = []
+    pairs, problems = [], []
     for p in files:
         with open(p, encoding='utf-8') as f:
-            pairs.append((p, json.load(f)))
-    problems = _problems(pairs, root) if pairs else ['정의가 없다: %s' % root]
+            d = json.load(f)
+        if isinstance(d, dict):
+            problems += words.merge(d, os.path.basename(os.path.dirname(p)), os.path.splitext(os.path.basename(p))[0], words_root)
+        pairs.append((p, d))
+    problems += _problems(pairs, root) if pairs else ['정의가 없다: %s' % root]
     if problems:
         raise EntityError('\n'.join(problems))
     return {d['id']: d for _, d in pairs}

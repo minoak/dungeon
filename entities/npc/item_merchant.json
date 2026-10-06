@@ -8,21 +8,21 @@
   ],
   "comps": {
     "npc": {
-      "line": "물약 하나 가져가게. 한 사람에 하나씩이야 — 던전에선 그게 목숨값이지.",
-      "line_again": "아까 왔잖아. 이번 원정 몫은 이미 줬어 — 살아 돌아오면 또 하나 주지.",
+      "line": "@prompts",
+      "line_again": "@prompts",
       "gift": {
         "potions": 1
       }
     },
     "life": {
       "npc": {
-        "role": "잡화점의 상인 · 한 사람에 물약 하나",
-        "persona": "셈이 빠르고 말이 짧다. 물약만은 값을 안 따지고 한 사람에 하나씩 쥐여 준다.",
-        "hail": "{name}, 잠깐 들렀다 가."
+        "role": "@prompts",
+        "persona": "@prompts",
+        "hail": "@prompts"
       },
       "story": {
-        "trait": "잡화점의 상인. 한 사람에 물약을 하나 준다",
-        "history": "잡화점 문 앞에 나와 있는 날이 많다. 물약을 왜 그냥 주느냐고 물으면, 돌아와야 단골이 된다고 답한다."
+        "trait": "@prompts",
+        "history": "@prompts"
       }
     }
   },

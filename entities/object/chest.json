@@ -9,7 +9,7 @@
   "sprite": "wl-props#2",
   "comps": {
     "knowledge": {
-      "deep": "열면 보물 두 개 — 하지만 독침이 든 것도 있다. 손재주(민첩)가 좋을수록 안전하다."
+      "deep": "@prompts"
     }
   }
 }

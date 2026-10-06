@@ -45,6 +45,16 @@ def _variant(text, solo):
     return text.replace("<!--%s-->\n" % keep, "").replace("<!--/%s-->\n" % keep, "")
 
 
+_COMMENT = re.compile(r"<!--.*?-->\n?", re.S)
+
+
+def _strip_comments(text):
+    """D100(10-06): 지침 파일의 `<!-- … -->` 는 사람용 메모다 — 캐릭터·NPC 에게 가지 않는다. 그 전엔 npc_prompt.md 맨 위의 개발 메모가
+    NPC 두뇌에 그대로 갔다(prompts/ 가 파트너의 '말' 폴더가 되면서 상자 안에 메모를 적게 되므로 걷는다). PARTY/SOLO 표식은 _variant 가
+    먼저 가르고 나서 걷는다(먼저 걷으면 표식도 주석이라 두 쪽이 다 남는다)."""
+    return _COMMENT.sub("", text)
+
+
 def _load_prompt(fname, required=True):
     try:
         with open(os.path.join(HERE, fname), encoding="utf-8") as f:
@@ -53,7 +63,7 @@ def _load_prompt(fname, required=True):
         if required:
             raise
         return "", ""
-    return _variant(raw, False), _variant(raw, True)
+    return _strip_comments(_variant(raw, False)), _strip_comments(_variant(raw, True))
 
 
 LEGACY_PROMPT_DIR = os.path.join("prompts", "legacy", "2026-09-10")   # 2026-09-13 정리: backups/prompts → prompts/legacy
@@ -195,7 +205,7 @@ def _load_context():
     콘텐츠 정책 블록은 제외). 파일이 없으면 D54 한 줄. 문장을 바꾸면 채집 차단 원문으로 재측정(1콜/건)."""
     try:
         with open(os.path.join(HERE, "prompts", "context_prompt.md"), encoding="utf-8") as f:
-            txt = f.read().strip()
+            txt = _strip_comments(f.read()).strip()
         return txt or _CONTEXT_FALLBACK
     except OSError:
         return _CONTEXT_FALLBACK
@@ -318,7 +328,7 @@ _NPC_PROMPT_FALLBACK = ("# 마을 사람 — 너는 {name}이다\n- 역할: {rol
 def _npc_prompt_raw():
     try:
         with open(os.path.join(HERE, NPC_PROMPT_FILE), encoding="utf-8") as f:
-            return f.read()
+            return _strip_comments(f.read())
     except OSError:
         return _NPC_PROMPT_FALLBACK
 

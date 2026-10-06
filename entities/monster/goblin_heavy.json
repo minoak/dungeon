@@ -27,8 +27,8 @@
       }
     },
     "knowledge": {
-      "brief": "쇠붙이를 두른 느린 고블린",
-      "deep": "쇠붙이를 온몸에 두른 고블린. 공격이 잘 들어가지 않고 오래 버틴다. 대신 걸음이 느려서, 쫓아올 때 한 칸 걷고 나면 다음 한 틱은 서 있다. 달아나지 않는다.",
+      "brief": "@prompts",
+      "deep": "@prompts",
       "unlock": {
         "event": "encounter",
         "count": 5

@@ -19,16 +19,16 @@
       "texture": "garden_inn"
     },
     "story": {
-      "trait": "넓은 객실과 작은 정원을 둔 숙소",
-      "history": "문턱과 마당이 길에 닿아 있다. 정원 숙소의 서비스는 아직 준비 중이다."
+      "trait": "@prompts",
+      "history": "@prompts"
     },
     "life": {
       "building": {
-        "role": "묵어 가는 곳"
+        "role": "@prompts"
       },
       "story": {
-        "trait": "넓은 객실과 작은 정원이 있는 숙소. 문턱에서 묵을 수 있다",
-        "history": "문턱과 마당이 길에 닿아 있다. 창마다 정원이 내다보인다."
+        "trait": "@prompts",
+        "history": "@prompts"
       },
       "use": {
         "kind": "lodge"

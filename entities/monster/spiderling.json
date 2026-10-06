@@ -27,8 +27,8 @@
       }
     },
     "knowledge": {
-      "brief": "셋씩 모여 사는 작은 거미",
-      "deep": "셋씩 모여 사는 작은 거미. 하나하나는 고블린보다 약하다. 숨어 있지 않고 눈에 보이는 곳에 있다. 달아나지 않는다.",
+      "brief": "@prompts",
+      "deep": "@prompts",
       "unlock": {
         "event": "encounter",
         "count": 5

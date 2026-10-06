@@ -8,9 +8,9 @@
   ],
   "comps": {
     "quest": {
-      "client": "모험가 길드",
-      "goal": "던전 1층의 고블린을 셋 처치한다",
-      "reward": "길드가 이름을 기억한다",
+      "client": "@prompts",
+      "goal": "@prompts",
+      "reward": "@prompts",
       "note": "⚠️임시 초안(2026-09-14 D69) — 문장은 파트너 대기. req = 엔진이 세는 완료 조건(kill/reach/loot).",
       "req": {
         "kind": "kill",

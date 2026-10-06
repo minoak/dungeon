@@ -19,25 +19,20 @@
       "texture": "craft_workshop"
     },
     "story": {
-      "trait": "목재와 도구를 놓는 작업 건물",
-      "history": "문턱과 마당이 길에 닿아 있다. 공방의 서비스는 아직 준비 중이다."
+      "trait": "@prompts",
+      "history": "@prompts"
     },
     "life": {
       "building": {
-        "role": "진열된 것 구경(아직 사고팔 수는 없다)"
+        "role": "@prompts"
       },
       "story": {
-        "trait": "목재와 도구를 놓는 작업 건물. 문턱에서 만든 것을 구경할 수 있다",
-        "history": "문턱과 마당이 길에 닿아 있다. 마을의 걸상과 좌판은 대개 여기서 나왔다."
+        "trait": "@prompts",
+        "history": "@prompts"
       },
       "use": {
         "kind": "browse",
-        "wares": [
-          "다듬다 만 의자 다리",
-          "나무 그릇",
-          "수레바퀴 살",
-          "새 두레박"
-        ]
+        "wares": "@prompts"
       }
     }
   },
