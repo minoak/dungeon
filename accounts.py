@@ -25,6 +25,8 @@ import tempfile
 import threading
 import time
 
+import savedata
+
 FP_LEN = 32              # 지문 길이(hex) — 128비트면 충돌 걱정 없이 폴더 이름으로 충분
 TAG_LEN = 8              # 화면에 보이는 열쇠 표식 = 지문 앞 8자(키 문자열의 일부가 아니다)
 NICK_MAX = 20
@@ -114,12 +116,13 @@ class Accounts:
             return None
         try:
             with io.open(self._path(aid), encoding="utf-8") as f:
-                return json.load(f)
+                return savedata.upgrade("account", json.load(f))   # p0.5.1 이관 틀 — 옛 판은 현재 판으로 올려 읽는다
         except (OSError, ValueError):
             return None
 
     def _save(self, data):
-        _atomic_write(self._path(data["id"]), json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+        # p0.5.1: 저장소 공용 저장(덮기 전 .v<n>.bak · 판 번호 · 원자적 교체). 백업을 못 하면 BackupError(OSError) — 덮지 않는다
+        savedata.save("account", self._path(data["id"]), data, indent=2)
         return data
 
     def lookup(self, fp):

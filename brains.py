@@ -407,6 +407,32 @@ def action_metadata():
             **({"compose_profile": G.CA.PROFILE, "auto_approach": True} if COMPOSE else {})}
 
 
+def prompt_files(social=False, npc=False):
+    """p0.5.1(10-11): 이 판에서 LLM 에 실제로 들어가는 지침 파일(리포 기준 상대 경로) — run_meta.prompts 지문(buildinfo)의 대상.
+    행동 지침은 판의 행동 방식에 따라 하나(조합형 = prompts/, 메뉴·자유 = 비교용 백업), 나머지는 켠 것만. 엔티티의 말(prompts/world/,
+    D100)은 관측·NPC 지침에 실려 가므로 폴더째 하나의 지문. 수첩·멈춤 장 같은 코드 안 문장은 git 칸이 맡는다."""
+    legacy = LEGACY_PROMPT_DIR.replace(os.sep, "/")
+    out = ["prompts/adventurer_prompt.md" if COMPOSE else
+           legacy + ("/adventurer_prompt_menu.md" if MENU else "/adventurer_prompt.md")]
+    if PROMPT_CONTEXT_ON:
+        out.append("prompts/context_prompt.md")
+    if social and SOCIAL_PROMPT:
+        out.append("prompts/social_prompt.md")
+    if npc:
+        out.append(NPC_PROMPT_FILE.replace(os.sep, "/"))
+    out.append("prompts/world/")
+    return out
+
+
+def model_name():
+    """p0.5.1(10-11): run_meta 기록용 모델 이름. 캐릭터·NPC 판단은 모두 'haiku' 슬롯이다(_call_claude 호출부) — HTTP 두뇌는 그 슬롯의
+    모델 id, claude_cli 는 별칭 그대로, 더미는 None(모델이 없다)."""
+    be = backend_name()
+    if be == "dummy":
+        return None
+    return "haiku" if be == "claude_cli" else model_id(be, "haiku")
+
+
 def _compose_types():
     """기본 동사 + 켜진 기능. 대상·거리·소지품에 따라 행동 목록을 좁히지 않는다."""
     types = ["goto", "follow", "explore", "search", "attack", "interact", "drink"]

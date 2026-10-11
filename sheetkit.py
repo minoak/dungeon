@@ -17,6 +17,8 @@ import json
 import os
 import re
 
+import savedata
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 TRAITS_FILE = os.path.join(HERE, "traits.json")
 
@@ -388,10 +390,9 @@ def build_party(slots, data=None, companions=None):
 
 
 def write_party(sheets, path, about=None):
-    """party.json 형태로 저장(_readme 메타 포함, UTF-8·LF)."""
+    """party.json 형태로 저장(_readme 메타 포함, UTF-8·LF). p0.5.1: 저장소 공용 저장 — 덮기 전 .v<n>.bak · 판 번호(_schema_version) ·
+    임시 파일에 다 쓴 뒤 교체(p0.5.1b 리뷰: 그 전엔 제자리에서 잘라 써서 쓰는 도중 실패하면 파티 파일을 잃었다). 백업을 못 하면 BackupError — 덮지 않는다."""
     doc = {"_readme": about or "론처(D31)가 조립한 커스텀 파티 — sheetkit.build_party 산출물. "
                                "손으로 고쳐도 되지만 load_party 검증을 통과해야 한다."}
     doc.update(sheets)
-    with io.open(path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(doc, f, ensure_ascii=False, indent=2)
-        f.write("\n")
+    savedata.save("party", path, doc, indent=2)

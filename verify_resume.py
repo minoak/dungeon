@@ -4,7 +4,7 @@
   ① 곱게 멈춤: 판을 띄워 틱 ≥ 4 에서 stop(graceful) → 러너가 스스로 닫힘(코드 0) · `stopped` 줄(turn=마지막 틱)·`end` 없음 · snapshot.pkl+json ·
      /status.resume {turn_last, depth, party, stopped:"user"} · 새 원정 시작은 스냅샷을 지운다
   ② 이어간 판 = 끊기지 않은 판: 같은 시드로 멈춤 없이 돌린 대조군과 재개 뒤 tick/level/end 줄이 바이트 동일(obs 제외) · 틱 번호 연속 · run_id 같음 ·
-     `resume` 줄(turn=멈춘 틱·segment 1·stopped "user"·pages) · 이어간 첫 관측에 floor_notice("이어간다")+notes 에 수첩 장 · 끝나면 스냅샷 삭제
+     `resume` 줄(turn=멈춘 틱·segment 1·stopped "user"·pages · p0.5.1 game_version·git·prompts) · 이어간 첫 관측에 floor_notice("이어간다")+notes 에 수첩 장 · 끝나면 스냅샷 삭제
   ③ 끊김(kill) 뒤 이어가기: 스냅샷 자리까지 자르고 이어 씀 — 틱 중복 0·연속 · resume.stopped null · 재개 뒤 줄이 대조군과 동일
   ④ 되살리기 실패 폴백: 피클을 깨뜨리고 이어가기 → 새 판(run_meta.resume_failed{reason, kept}) · 옛 기록 runs/ 대피(내용 동일) · 수첩 장은 새 몸의 notes 에
   ⑤ stop_page(인프로세스, 두뇌 몽키패치): 물음에 STOP_MARK·t 가 들어가고 JSON page 를 장으로 · 실패면 None
@@ -170,6 +170,9 @@ tB2 = ticks(recsB2)
 check("② resume 줄 하나: turn=멈춘 틱·segment 1·stopped user·pages·backend dummy",
       len(resume) == 1 and resume[0]["turn"] == tB[-1]["turn"] and resume[0].get("segment") == 1 and resume[0].get("stopped") == "user"
       and resume[0].get("pages") == {"1": "여기까지 한 일을 적어 둔다"} and resume[0].get("backend") == "dummy", resume)
+check("② resume 줄에 이 조각의 판 정보(p0.5.1 additive): game_version·prompts 가 있고 같은 코드로 이었으니 run_meta 와 같다",
+      resume and resume[0].get("game_version") and resume[0].get("prompts")
+      and all(resume[0].get(k) == recsB2[0].get(k) for k in ("game_version", "git", "prompts")), resume[:1])
 check("② stopped 줄은 남고 그 다음이 resume", [r.get("kind") for r in recsB2].index("stopped") + 1 == [r.get("kind") for r in recsB2].index("resume"))
 check("② run_meta 하나 = 같은 판(run_id 그대로)", sum(1 for r in recsB2 if r.get("kind") == "run_meta") == 1 and recsB2[0]["started"] == recsB[0]["started"])
 check("② 틱 번호 연속 1..14·중복 0", [t["turn"] for t in tB2] == list(range(1, 15)), [t["turn"] for t in tB2])

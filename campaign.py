@@ -19,8 +19,8 @@ import glob
 import io
 import json
 import os
-import tempfile
-import time
+
+import savedata
 
 VERSION = 1
 OUTCOME_KR = {"returned": "귀환", "escaped": "탈출", "wiped": "전멸", "timeout": "시간 초과"}
@@ -125,7 +125,7 @@ class Book:
     def _load(self):
         try:
             with io.open(self.path, encoding="utf-8") as f:
-                doc = json.load(f)
+                doc = savedata.upgrade("campaign", json.load(f))   # p0.5.1 이관 틀 — 옛 판은 현재 판으로 올려 읽는다
             if isinstance(doc, dict) and doc.get("version") == VERSION and isinstance(doc.get("characters"), dict):
                 doc.setdefault("sources", {})
                 return doc
@@ -140,24 +140,9 @@ class Book:
         return {"version": VERSION, "characters": {}, "sources": {}}
 
     def _save(self):
-        folder = os.path.dirname(self.path)
-        os.makedirs(folder, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(prefix=".campaign-", suffix=".tmp", dir=folder)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-                json.dump(self.data, f, ensure_ascii=False, indent=1)
-                f.write("\n")
-            for i in range(20):                       # Windows: 방금 쓴 파일을 색인기·백신이 잠깐 잡으면 replace 가 WinError 5 —
-                try:                                  #   bestiary.save 와 같은 처방(짧게 물러섰다 재시도)
-                    os.replace(tmp, self.path)
-                    break
-                except PermissionError:
-                    if i == 19:
-                        raise
-                    time.sleep(0.05 * (i + 1))
-        finally:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
+        """p0.5.1: 저장소 공용 저장(덮기 전 .v<n>.bak · 판 번호 · 임시 파일에 다 쓴 뒤 교체 — Windows 잠금 재시도 포함).
+        백업을 못 하면 BackupError(OSError) — 덮지 않는다(론처 campaign_refresh 가 OSError 를 받아 목록은 산다)."""
+        savedata.save("campaign", self.path, self.data, indent=1)
 
     @staticmethod
     def _sig(path):

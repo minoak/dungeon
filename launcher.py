@@ -59,6 +59,7 @@ import campaign                                   # noqa: E402  # D78 캠페인 
 import skill_schema                              # noqa: E402
 import run_control                               # noqa: E402
 import snapshot                                  # noqa: E402  # D79 이어가기 — 멈춘 판의 요약(snapshot.json)만 읽는다(피클은 러너 몫)
+import savedata                                  # noqa: E402  # p0.5.1 저장 데이터 이관 틀 — 기본 파티 미리보기도 러너와 같은 판으로 읽는다
 from brain_config import BACKENDS, HTTP_BACKENDS, KEY_ENV, MODEL_ENV, clean_model, model_id, provider_catalog
 from character_presets import PresetStore         # noqa: E402
 
@@ -567,7 +568,7 @@ def default_party_preview(root):
     """party.json 미리보기 — 검증은 러너 몫이라 여기선 읽기만(메타 키 제외). look(09-20) = 시트에 적힌 외형(없으면 None)."""
     try:
         with io.open(os.path.join(root, "party.json"), encoding="utf-8") as f:
-            raw = json.load(f)
+            raw = savedata.upgrade("party", json.load(f))   # p0.5.1 이관 틀 — 러너의 load_party 와 같은 판으로 읽는다
     except (OSError, ValueError):
         return []
     out = []

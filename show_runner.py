@@ -71,10 +71,12 @@ import dungeon_gm as G
 import dungeon_concept          # D88(09-20) 던전 생성 프로필 'concept'(DUNGEON_ARCH) — 리포 루트 모듈이라 이어가기(D79)의 피클이
                                 #   'dungeon_concept.ConceptDungeon' 으로 되살린다. import 만으로는 굴림·판정에 안 닿는다
 import brains
+import buildinfo                # p0.5.1(10-11) 판 기록의 게임 버전·git·지침 지문(run_meta·resume 줄 — 프롬프트 무접촉)
 import run_control
 import snapshot                 # D79(09-16) 이어가기 — 판의 몸을 틱마다 얼려 둔다(마지막 기록에서 이어간다)
 import gm
 import stream
+import savedata                 # p0.5.1(10-11) 저장 데이터 이관 틀 — load_party 가 옛 판 파티 파일을 올려 읽는다
 import run_summary                 # D58 판 결산 — 스트림 소비자(Tap 으로 모든 레코드를 흘려 세고, end.summary + events.log 표)
 import bestiary
 import sheetkit                 # D31(09-05) 배경 정제(자유 입력 격리) — 러너도 같은 자를 쓴다
@@ -356,6 +358,7 @@ def load_party(path):
             raw = json.load(f)
         if not isinstance(raw, dict):
             raise ValueError("최상위가 객체가 아님")
+        raw = savedata.upgrade("party", raw)   # p0.5.1 이관 틀 — 옛 판은 현재 판으로 올려 읽는다(판 번호 칸은 '_' 메타라 아래에서 건너뛴다)
         sheets = {}
         for char, s in raw.items():
             char = str(char)
@@ -1647,11 +1650,17 @@ def main():
     waiting = (dict(snap.get("waiting") or {}) if snap is not None else {}) if REVIVE_ON else {}   # D99 대기 장부 {char: 쓰러진 몸 dict} —
     #   층 전이 때 bots 에서 빠진 쓰러진 사람의 몸을 버리지 않고 둔다(소지품·장비·관계·기억 그대로). 일행이 마을에 들어설 때 신전 곁에서 깨어난다
 
+    # p0.5.1(10-11) 이 조각을 돌리는 코드·지침 — 새 판은 run_meta, 이어간 판은 resume 줄에(이어가는 사이 지침이 바뀌었을 수 있다)
+    build = buildinfo.run_fields(brains.prompt_files(social=SOCIAL_ON, npc=bool(npc_brain))
+                                 + (["prompts/gm_prompt.md"] if GM_ON else []))   # GM 지침은 파일이 있을 때만 지문(없으면 빠진다)
+    model = brains.model_name()
     if snap is None:                       # ── 새 판: 스트림 머리 ──
         # 스트림 머리: run_meta(1회 — started 가 유일한 비결정 필드) + 첫 level
         reaction_book = G.SR.book(d)
         run_started = time.strftime("%Y-%m-%dT%H:%M:%S")
         sw.emit("run_meta", v=1, started=run_started,
+                **build,                   # p0.5.1(10-11 additive) game_version · git?(git describe --tags --dirty, 못 물으면 없음) ·
+                                           #   prompts{리포 경로: SHA-256 앞 12자(LF 정규화)} — 어느 코드·지침의 판인가. 판정·프롬프트 무접촉
                 **alpha_metadata(),
                 **({"resume_failed": resume_fail} if resume_fail else {}),   # D79(09-16 additive) 이어가기를 청했으나 못 함 — 새 판을 열었다(사유·대피한 옛 기록·들고 온 수첩)
                 **({'reaction': True, 'reaction_schema': 'social-v0.4'} if reaction_book is not None else {}),
@@ -1729,6 +1738,7 @@ def main():
                 notebook=brains.NOTEBOOK_ON,  # D59 수첩 여부 — 층 전이 descend/ascend.pages·floors[].page·notes 층에서 닫힘
                 prompt_context=brains.PROMPT_CONTEXT_ON,   # D54(09-12 additive) 판단 요청 맨 앞 맥락 한 줄 여부 — 같은 급
                 block_degrade=brains.BLOCK_DEGRADE_ON,     # D62(09-13 additive) 안전 차단 때 몸짓 서술 줄만 접고 재요청(지문 고정) 여부 — 같은 급
+                **({"model": model} if model else {}),   # p0.5.1(10-11 additive) 판단 모델 이름(haiku 슬롯) — 더미 판엔 없음
                 backend=brains.backend_name(),   # 두뇌 백엔드(2026-07-25 additive) — claude_cli/
                                            #   anthropic_api/gemini_api/dummy. gm·menu 와 같은 급의
                                            #   실행모드 메타: 같은 시드라도 백엔드가 다르면 다른 판이다
@@ -1775,6 +1785,7 @@ def main():
                                                 RESUME_NOTICE_PAGE if pg else "")
         sw.emit("resume", turn=int(snap["next_turn"]) - 1, started=time.strftime("%Y-%m-%dT%H:%M:%S"), segment=segment,
                 backend=brains.backend_name(), depth=d.depth,
+                **build, **({"model": model} if model else {}),   # p0.5.1(10-11 additive) 이 조각의 버전·지침 지문·모델(run_meta 와 같은 칸)
                 stopped=(stop_info.get("reason") or None),          # 앞 조각이 어떻게 끝났나: user(수첩 쓰고 멈춤)·user_paused(판단 정지 중 멈춤)·pause_timeout(F1 판단 정지 제한 시간)·unwatched(D91 관전자 없는 판 — 공개 서버)·budget(D96 호출 한도)·None(끊김·크래시)
                 **({"pages": pages_prev} if pages_prev else {}),   # 멈출 때 쓴 수첩 장(캐릭터별) — 이어가는 몸이 들고 간다
                 party=[{"char": b["char"], "hp": b["hp"], "alive": b["alive"]} for b in bots])
@@ -2110,7 +2121,11 @@ def main():
             else:
                 event('   \U0001f4d6 %s — 도감 등재: %s' % (nm, bestiary.label(key, lore)))
         if iss.dirty and BESTIARY_FILE:         # 조우 수만 올라도 저장(원장의 n 이 스트림 투영과 어긋나지 않게)
-            iss.save(BESTIARY_FILE)
+            try:
+                iss.save(BESTIARY_FILE)
+            except OSError as e:                # p0.5.1b: 덮기 전 백업(savedata.BackupError)·쓰기 실패 — 원장 파일은 그대로 두고 판은 계속한다.
+                brains._warn_once("[경고] 도감 원장(%s) 저장 실패: %s — 파일은 그대로, 다음 틱에 다시 시도"   # dirty 로 남아 다음 틱에 다시 시도 ·
+                                  % (BESTIARY_FILE, e if isinstance(e, savedata.BackupError) else type(e).__name__))   # 경고는 한 번(임시 파일 이름이 섞인 문구는 매번 달라 뺀다)
 
         # ④ GM 진행자(옵션 소비자): 이번 틱 events를 장면으로 연출.
         #    party 도 스트림 스냅샷의 projection — GM 이 별도 진실 조립을 갖지 않는다(이중화 제거).

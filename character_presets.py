@@ -5,10 +5,10 @@
 """
 import json
 import os
-import tempfile
 import threading
 import uuid
 
+import savedata
 import sheetkit
 
 
@@ -54,6 +54,7 @@ class PresetStore:
             return []
         except json.JSONDecodeError as e:
             raise ValueError("프리셋 파일을 읽을 수 없다. JSON 형식을 확인해 주세요.") from e
+        doc = savedata.upgrade("presets", doc)   # p0.5.1 이관 틀 — 옛 판은 현재 판으로 올려 읽는다
         if not isinstance(doc, dict) or doc.get("version") != 1 or not isinstance(doc.get("presets"), list):
             raise ValueError("지원하지 않는 프리셋 파일 형식이다")
         entries, ids = [], set()
@@ -66,18 +67,9 @@ class PresetStore:
         return entries
 
     def _write(self, entries):
-        folder = os.path.dirname(self.path)
-        os.makedirs(folder, exist_ok=True)
         # 쓰기가 끝난 파일로 교체한다. 저장 도중 실패해도 이전 프리셋 파일이 남는다.
-        fd, temporary = tempfile.mkstemp(prefix=".character-presets-", suffix=".tmp", dir=folder)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-                json.dump({"version": 1, "presets": entries}, f, ensure_ascii=False, indent=2)
-                f.write("\n")
-            os.replace(temporary, self.path)
-        finally:
-            if os.path.exists(temporary):
-                os.unlink(temporary)
+        # p0.5.1: 저장소 공용 저장(덮기 전 .v<n>.bak · 판 번호 · 원자적 교체). 백업을 못 하면 BackupError(OSError) — 덮지 않는다.
+        savedata.save("presets", self.path, {"version": 1, "presets": entries}, indent=2)
 
     def list(self):
         with self.lock:

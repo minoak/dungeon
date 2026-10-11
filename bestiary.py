@@ -33,7 +33,8 @@
 import json
 import os
 import sys
-import time
+
+import savedata
 
 UNKNOWN_BEAST = '낯선 짐승'
 
@@ -161,6 +162,7 @@ class Issuer:
             print('[경고] 도감 원장(%s) 읽기 실패: %s — 원본은 %s 보존, 이번 판은 빈 도감으로 시작'
                   % (path, e, bak), file=sys.stderr)
             return self
+        raw = savedata.upgrade('bestiary', raw)       # p0.5.1 이관 틀 — 옛 판은 현재 판으로 올려 읽는다(판 번호 칸은 '_' 라 아래에서 건너뛴다)
         for name, entries in raw.items():
             if name.startswith('_') or not isinstance(entries, dict):
                 continue
@@ -173,7 +175,7 @@ class Issuer:
         return self
 
     def save(self, path):
-        """원자적 저장(tmp+rename) — 판 도중 크래시에도 원장이 반쪽으로 깨지지 않는다."""
+        """원자적 저장(임시 파일+교체) — 판 도중 크래시에도 원장이 반쪽으로 깨지지 않는다."""
         body = {'_readme': '도감 원장 — 캐릭터의 죽어도 남는 지식(D4·D9). '
                            '획득 규칙=bestiary.py(스트림 소비자), 본문=entities/*/*.json knowledge.brief/deep(D50 — 수정해도 여기 불침). '
                            'turn·depth=처음 안 순간, n=조우 수, deep={turn, depth, n}=심층 해금 순간(D53 — 정의의 knowledge.unlock 을 채운 때). '
@@ -183,17 +185,9 @@ class Issuer:
             if name in self.skip_keys:
                 continue                          # D78: 1회용 캐릭터는 판 안에서만 배우고 파일엔 안 남는다
             body[name] = {k: self.meta[name][k] for k in sorted(self.meta[name])}
-        tmp = path + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(body, f, ensure_ascii=False, indent=1)
-        for i in range(20):                       # Windows: 방금 쓴 파일을 색인기·백신이 잠깐 잡으면 rename 이 WinError 5 —
-            try:                                  #   D53 뒤 조우마다 저장해 빈도가 늘자 게이트에서 1회 재현(09-12). 짧게 물러섰다 재시도.
-                os.replace(tmp, path)
-                break
-            except PermissionError:
-                if i == 19:
-                    raise
-                time.sleep(0.05 * (i + 1))
+        # p0.5.1: 저장소 공용 저장(덮기 전 .v<n>.bak · 판 번호 · 임시 파일에 다 쓴 뒤 교체 — D53 뒤 조우마다 저장해 게이트에서 1회 재현된(09-12)
+        #   Windows 잠금 재시도 포함). 백업을 못 하면 BackupError(OSError) — 덮지 않고 dirty 로 남는다(러너가 다음 틱에 다시 시도)
+        savedata.save('bestiary', path, body, indent=1)
         self.dirty = False
 
     def _acquire(self, char, key, turn, out):
