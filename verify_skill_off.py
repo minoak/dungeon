@@ -7,7 +7,10 @@
 obs 에 더해져 세 시드 전부 관측 해시가 달라졌다(행동·난수는 같은 코드 경로 — 의도된 관측 계약 변경). 새 해시는 D66 커밋의 코드에서 뽑았다.
 **2026-10-11 t13c 갱신**: 관리자 승인으로 공격 표시용 선택 필드
 attack_mode/source_xy/target_xy가 결과와 관측에 추가된 세 시드 해시를 갱신했다.
-세 필드만 제거하면 D66 해시와 모두 일치한다(verify_combat_stream). 게임 판정·상태·난수 변경은 없다."""
+세 필드만 제거하면 D66 해시와 모두 일치한다(verify_combat_stream). 게임 판정·상태·난수 변경은 없다.
+**2026-10-12 p0.5.5 갱신**: 관측 계약 문자열 obs.action_schema 가 compose-v0.4 → compose-v0.5(행동 등록부·추가 행동 블록 자리,
+master_plan §7.1). 등록부가 비어 관측의 다른 칸·행동·상태·난수는 그대로다 — 그 문자열만 v0.4 로 되돌리면(schema_v04) t13c 해시와
+세 시드 모두 일치한다(아래 main 이 함께 확인). 새 해시는 p0.5.5 작업 트리 코드에서 뽑았다."""
 import hashlib
 import json
 import os
@@ -59,16 +62,34 @@ PRE_FX_EXPECTED = {   # 2026-09-13 D66 기준선 — 표시 필드만 뺀 회귀
     217: 'b4645146ea661824cb7b7da8321cdb9a562ab8a5e93c4f3e5ea5bd214418bbe3',
 }
 
-EXPECTED = {   # 2026-10-11 t13c 관리자 승인: 표시 필드 세 개만 추가
+T13C_EXPECTED = {   # 2026-10-11 t13c 관리자 승인: 표시 필드 세 개만 추가 — 관측 계약 compose-v0.4 시절(p0.5.5 회귀 비교용으로 보존)
     7: 'b8960e27e3ab2f2ec9d8e564515fb16dee68d908e16fa175ec1def61bf8ab671',
     37: '5fbea318e72f871ed2f1346b889f349f28d46d1a69ad745ac6641c6132e0538e',
     217: 'bb58b87d5eb01f20406d903e7cc057e2a68731c6585a7ca1ecaf9b8643c9a11c',
 }
 
+EXPECTED = {   # 2026-10-12 p0.5.5: obs.action_schema compose-v0.4 → compose-v0.5 만
+    7: '77fcaf5d80d38e7893873184c59afd450e85474d9fb321f44cd5f2ddaa84e7ac',
+    37: 'dbf56f21d5b3043268edb19b7cfafc86008370a4c2cf50e1c08ef897a8d22b05',
+    217: 'bad308c563016eceebdfdc6941309468740080ea8cebe75a4ea5b9e11d9fe614',
+}
+
+
+def schema_v04(value):
+    """p0.5.5 관측 계약 문자열만 옛 값으로 되돌린 사본 — 그 밖의 바이트가 t13c 기준선과 같은지 보는 데 쓴다."""
+    if isinstance(value, dict):
+        return {k: ('compose-v0.4' if k == 'action_schema' and v == 'compose-v0.5' else schema_v04(v)) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [schema_v04(v) for v in value]
+    return value
+
 
 if __name__ == '__main__':
     for seed in (7, 37, 217):
-        actual = trace(seed)
+        records = trace_records(seed)
+        actual = digest(records)
         assert actual == EXPECTED[seed], (seed, actual, EXPECTED[seed])
-        print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치' % seed)
-    print('ALL PASS — verify_skill_off (3시드 × 80틱, 기준선 = 78fbe84 + D51 + D66 + t13c 2026-10-11)')
+        old = digest(schema_v04(records))
+        assert old == T13C_EXPECTED[seed], (seed, old, T13C_EXPECTED[seed])
+        print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치 · 관측 계약 문자열만 되돌리면 t13c 기준선과 일치' % seed)
+    print('ALL PASS — verify_skill_off (3시드 × 80틱, 기준선 = 78fbe84 + D51 + D66 + t13c + p0.5.5 2026-10-12)')

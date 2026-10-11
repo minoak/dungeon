@@ -22,6 +22,15 @@ PENALTIES = ('hp_cost', 'cooldown', 'self_status', 'condition')
 ABILITIES = ('str', 'dex', 'mind')
 
 
+def _ext_verbs():
+    """p0.5.5: 행동 등록부(composed_actions.COMMON_EXT)의 동사도 스킬 이름으로 못 쓴다 — 위 COMMON(옛 상시 동사 + follow) 옆의 예약.
+    등록부가 늘면 따라 는다(두 곳을 손으로 맞추지 않는다). 지연 import — composed_actions 가 skill_core → 이 모듈 순으로 import 한다.
+    순환 import 도중(이 모듈이 처음 읽히며 아래 PRESETS 를 만들 때 composed_actions 는 아직 반쯤 읽힌 상태)에는 빈 것으로 본다 —
+    기본 스킬 이름과 등록부의 충돌은 verify_common_registry 가 따로 본다."""
+    import composed_actions as CA
+    return getattr(CA, 'COMMON_EXT', ())
+
+
 def effect_key(effect):
     return effect.get('status') if effect.get('type') == 'status' else effect.get('type')
 
@@ -50,7 +59,7 @@ def validate(skill):
         if not isinstance(skill, dict):
             return ['skill_not_object']
         sid = skill.get('id')
-        if not isinstance(sid, str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,63}', sid) or sid in COMMON:
+        if not isinstance(sid, str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,63}', sid) or sid in COMMON or sid in _ext_verbs():
             return ['invalid_id']
         if not isinstance(skill.get('name'), str) or not 1 <= len(skill['name']) <= 40:
             return ['invalid_name']

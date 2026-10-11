@@ -274,6 +274,8 @@ def event_tags(rec, names=None):
         return [('misc', '접근 불가', place_word(tgt, 'decide'))]
     if r == 'no_effect':
         return [('misc', '변화 없음', '%s %s' % (t, tgt))]
+    if t in CA.COMMON_EXT and r in ('too_far', 'lost'):      # p0.5.5 등록부 동사의 라우터 결과(자동 접근 없음 — §6.3 경로 7). 그 밖의 결과는 동사 단계가 등록 ⚠️문구 임시
+        return [('misc', '헛손질', '%s %s — %s' % (t, place_word(tgt, 'decide'), '닿지 않음' if r == 'too_far' else '대상 없음'))]
     if r == 'drink_boon':                                     # D74(09-15) 축복의 물약 — drink(item=boon) / use(self, i4)
         return [('use', '사용', '축복의 물약 (%s +1 → %d, 남은 %d병)' % (STAT_KR.get(rec.get('stat'), '?'), rec.get('value', 0), rec.get('boons', 0)))]
     if r == 'no_boon':
@@ -2943,8 +2945,9 @@ class Dungeon:
             self._action_serial += 1
             aid = 'd%s:t%s:a%s' % (self.depth, self.turn, self._action_serial)
             action['action_id'] = aid             # 실제 접수된 결정에만 부여. 모델이 만드는 값이 아니다
+            # p0.5.5(§6.3 경로 7): 자동 접근 = 상시 동사 중 DISTANCE_ACTIONS 와 스킬뿐. 등록부 동사(route 'ext')는 접근하지 않는다 — 닿지 않으면 too_far
             res = (self._begin_approach(bot, action, bots)
-                   if self.auto_approach and (typ in (CA.DISTANCE_ACTIONS if self.composed_actions else ('attack', 'interact', 'give', 'bond')) or (self.skills and typ not in CA.COMMON and typ not in CA.PARTY))
+                   if self.auto_approach and (typ in (CA.DISTANCE_ACTIONS if self.composed_actions else ('attack', 'interact', 'give', 'bond')) or CA.route(self, typ) == 'skill')
                    else None)
         else:
             res = None
@@ -2956,7 +2959,7 @@ class Dungeon:
             CA.decorate(bot, action, res)
             SK.complete(self, bot, action, res)
             if bot.get('order'):
-                bot['_active_action'] = {k: v for k, v in action.items() if k in ('type', 'target', 'item', 'form', 'action_id')}
+                bot['_active_action'] = {k: v for k, v in action.items() if k in CA.fields() + ('action_id',)}   # p0.5.5: 등록부 동사의 새 입력 칸도 보존
             else:
                 bot.pop('_active_action', None)
                 bot.pop('_execution_refs', None)
@@ -2968,7 +2971,7 @@ class Dungeon:
         if not self.composed_actions:
             return self._execute_legacy_action(bot, action, bots)
         result = (SK.execute(self, bot, action, bots)
-                  if self.skills and action.get('type') not in CA.COMMON and action.get('type') not in CA.PARTY   # PARTY = D84 조각 3(스킬 아님)
+                  if CA.route(self, action.get('type')) == 'skill'   # 등록부를 먼저 본다(p0.5.5) · PARTY = D84 조각 3(스킬 아님)
                   else CA.execute(self, bot, action, bots))
         SR.physical(self, bot, action, result, bots)
         return result
@@ -3053,9 +3056,9 @@ class Dungeon:
             return None
         if typ == 'attack' and not action.get('target'):
             return None                           # 기존 무대상 공격 API는 현재 사거리 판정 유지
-        base = {'char': bot['char'], **{k: action[k] for k in ('type', 'target', 'item', 'form') if k in action}}
+        base = {'char': bot['char'], **{k: action[k] for k in CA.fields() if k in action}}
         target = self._approach_target(bot, action, bots)
-        if self.skills and typ not in CA.COMMON and typ not in CA.PARTY:
+        if CA.route(self, typ) == 'skill':
             why = SK.preflight(self, bot, SK.lookup(self, bot, typ), target)
             if why:
                 return SK.failure(bot, action, why)
@@ -3072,7 +3075,7 @@ class Dungeon:
         if not path:
             bot['order'], bot['path'], bot['plan'] = None, [], []
             return {**base, 'result': 'no_path'}
-        pending = {k: action[k] for k in ('type', 'target', 'item', 'form', 'action_id') if k in action}
+        pending = {k: action[k] for k in CA.fields() + ('action_id',) if k in action}
         bot['approach'] = pending
         bot['order'], bot['path'] = action['target'], path
         return {**base, 'result': 'approaching', 'len': len(path),

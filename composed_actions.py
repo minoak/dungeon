@@ -10,7 +10,9 @@ import interactables as IA
 import skill_core as SK
 import skill_combat as SC
 
-SCHEMA = 'compose-v0.4'    # 관측 계약(obs.action_schema) — ID 문법·대상 목록은 v0.4 그대로(verify_skill_off 의 78fbe84 기준선 해시에 포함)
+SCHEMA = 'compose-v0.5'    # 관측 계약(obs.action_schema) — p0.5.5(master_plan §4.3·§7.1): 행동 등록부·'추가 행동' 블록·새 입력 칸 자리가 생긴 계약.
+                           #   ID 문법·대상 목록은 v0.4 그대로라 등록부가 빈 지금은 관측 꼴도 v0.4 와 같다(이 문자열만 다름 — verify_skill_off 기준선 이력).
+                           #   분석 도구·--rescore 는 이 값으로 옛(~p0.5.4) 기록과 새 기록을 가른다.
 PROFILE = 'compose-v0.5'   # 행동 계약(run_meta.compose_profile) — D48(2026-09-11): COMMON 에서 follow 제거
 # D48 follow 폐지(파트너 결정 09-11) — 동행은 `goto b<char>`(보이는 동료에게 한 번 걷고, 곁에 닿으면 다시 판단)로만.
 # 엔진의 follow order(D18 A-5)는 메뉴형(비교용 옛 규칙)·구판 리플레이용으로 남는다 — 조합형 파서만 모르는 동사가 된다.
@@ -19,6 +21,84 @@ DISTANCE_ACTIONS = ('search', 'attack', 'use', 'give', 'bond')
 PARTY = ('party_form', 'party_leave')   # D84 조각 3(2026-09-19): 파티 장부가 걸린 판(obs.partyform)에서만 읽는 동사 — COMMON 밖(옛 판의 행동 계약은 그대로).
 #   party_form + target(b<번호>) = 파티 결성(길드 구역에서 청하고 맞받는다 — 거리 무관) · party_leave(대상 없음) = 파티 탈퇴
 ITEM_SLOTS = {'i1': 'potion', 'i2': 'weapon', 'i3': 'armor', 'i4': 'boon'}   # i4=축복의 물약(D74, 09-15) — 병 단위, 있을 때만 관측에
+
+# ── 행동 등록부(p0.5.5, master_plan §7.1) — COMMON 옆의 '추가 행동' ─────────────────────────────────────────────
+# 공용 행동(steal·hide·help …)은 단계가 들어갈 때마다 여기에 한 동사씩 는다(그 단계 커밋에). 지금은 비어 있다.
+# 상시 9개(COMMON)와 달리 '추가 행동' 블록에는 그 판단의 상황에 맞는 동사만 나타난다(DECISIONS 29행 — 지침 분량 관리).
+# 노출은 안내일 뿐 허가가 아니다: 등록된 동사는 노출 밖이어도 parse 가 받는다(알려진 동사를 시도할 자유 — CA §3.2-4).
+# 동사 하나 = {
+#   'expose': view → bool  — 이번 판단에 보일까. view 는 EXPOSE_KEYS 칸만 담은 관측 사본이다(세계·봇 dict 는 받지 않는다:
+#                            숨은 것 때문에 목록이 바뀌면 목록 자체가 누출이다 — §6.3 경로 13). 노출 조건은 그 동사 단계가 정한다.
+#   'run': (d, bot, action, target, bots) → 결과 dict — 효과 판정(거리 확인 뒤). target = entity() 의 (종류, 칸, 실물) | None
+#   'target': True(기본 — 대상 필수) | False(대상 없음 — 적어 와도 버린다, party_leave 꼴)
+#   'range': (d, bot, action, target) → bool — 지금 자리에서 닿나(없으면 in_range). 밖이면 자동 접근 없이 too_far(§6.3 경로 7)
+#   'fields': {칸: 허용 값 튜플 | None(자유 문구, FIELD_LEN 자)} — parse 가 검사하는 새 입력 칸(loot·mode·request …)
+#   'required': (칸, …) — 빠지면 missing_<칸>
+#   'results': (결과 코드, …) — run 이 내는 result 전부(too_far·lost 는 라우터 몫이라 빼도 된다). 코드마다 직전 결과 문장(B._last_prose)과
+#              꼬리표(G.event_tags)를 그 단계가 등록한다 — 최소 기록 {type, result, target}로도 폴백 없이 그려져야 한다(verify_common_registry ⑨)
+# }  문장(관측 '추가 행동' 블록의 한 줄) = prompts/actions/common_extra.md 의 `동사` 칸(D100 말 파일 — tools/check_words.py 가 등록부와 대조).
+COMMON_EXT = {}
+EXPOSE_KEYS = ('actor', 'targets', 'items', 'sights', 'status')   # 노출 조건이 읽는 관측 칸 — 전부 행동자 프롬프트에 그려지는 칸(verify_common_registry ①)
+BASE_FIELDS = ('type', 'target', 'item', 'form')
+FIELD_LEN = 40
+EXTRA_WORDS = 'common_extra'          # prompts/actions/<이것>.md — '추가 행동' 블록의 문장
+_EXTRA_LINES = None
+
+
+def fields():
+    """행동 dict 가 들고 다니는 입력 칸(결과 머리·접근 대기·_active_action 이 보존하는 칸) — 기본 4칸 + 등록부 동사의 새 칸.
+    등록부가 비면 기본 4칸 그대로(p0.5.4 와 같은 dict)."""
+    extra = sorted({f for spec in COMMON_EXT.values() for f in (spec.get('fields') or {})} - set(BASE_FIELDS))
+    return BASE_FIELDS + tuple(extra)
+
+
+def known_types():
+    """parse 가 공용 행동으로 받는 동사 전부 = 상시 9개 + 등록부 전체(노출과 무관)."""
+    return COMMON + tuple(COMMON_EXT)
+
+
+def extra_types(obs):
+    """이번 판단의 '추가 행동' — 등록부 동사 중 노출 조건이 맞는 것(등록 순서). 행동자에게 그려지는 관측 칸만 읽는다."""
+    if not COMMON_EXT:
+        return []
+    view = {k: obs[k] for k in EXPOSE_KEYS if k in obs}
+    return [v for v, spec in COMMON_EXT.items() if spec['expose'](copy.deepcopy(view))]   # 동사마다 새 사본 — 한 조건이 다음 조건의 입력을 못 바꾼다
+
+
+def common_types(obs):
+    """이번 판단에 제시되는 공용 행동 = 상시 9개 + 노출된 추가 행동(§7.1 common_types)."""
+    return COMMON + tuple(obs.get('common_extra') or ())
+
+
+def route(d, typ):
+    """조합형 행동의 갈래(§6.3 경로 7 — 라우터 세 곳이 이 한 함수를 본다). 등록부를 스킬보다 먼저 본다:
+    'common'(상시 9개 — DISTANCE_ACTIONS 만 자동 접근) · 'ext'(등록부 — 자동 접근 없음) · 'party' · 'skill'(스킬 켠 판의 그 밖 동사) · None."""
+    if typ in COMMON:
+        return 'common'
+    if typ in COMMON_EXT:
+        return 'ext'
+    if typ in PARTY:
+        return 'party'
+    return 'skill' if getattr(d, 'skills', False) else None
+
+
+def extra_lines(obs):
+    """관측 '추가 행동' 블록(B._wire 의 COMMON 줄 아래) — 노출된 동사가 있을 때만: 머리 한 줄 + 동사마다 한 줄. 없으면 [].
+    문장은 말 파일(prompts/actions/common_extra.md)에서 — 지침 파일(prompts/adventurer_prompt.md)이 아니라 관측에 붙인다(§7.2):
+    벤치 변형이 지침의 '## 행동 사전' 절을 통째로 바꿔도 모든 변형이 같은 블록을 받는다."""
+    extra = obs.get('common_extra') or []
+    if not extra:
+        return []
+    words = _extra_words()
+    return [words['header']] + ['- %s: %s' % (v, words[v]) for v in extra]
+
+
+def _extra_words():
+    global _EXTRA_LINES
+    if _EXTRA_LINES is None:
+        import words as W
+        _EXTRA_LINES = W.action_words(EXTRA_WORDS)
+    return _EXTRA_LINES
 
 
 def item_value(bot, slot):
@@ -118,6 +198,9 @@ def observe(d, bot, bots, obs):
         targets.append(dict(entry))
     bot['_target_refs'] = refs
     obs.update(action_schema=SCHEMA, actor=actor, targets=targets, items=items, ways=candidates)
+    extra = extra_types(obs)
+    if extra:                                       # 있을 때만 — 노출된 추가 행동이 없으면 관측 꼴이 v0.4 와 같다(§4.3 '없으면 안 나온다' 원칙)
+        obs['common_extra'] = extra
     return SK.observe(d, bot, obs)
 
 
@@ -154,7 +237,8 @@ def plan_step(d, bot, step, bots):
     typ, rid = step['type'], step.get('target')
     remembered = typ == 'goto' and rid in (bot.get('ledger') or {}).get('statics', {})
     refs = bot.get('_plan_refs', bot.get('_target_refs', {}))
-    valid = typ in ('wait', 'rest', 'party_leave') or remembered or entity(d, bot, rid, bots, refs)
+    targetless = typ in ('wait', 'rest', 'party_leave') or (typ in COMMON_EXT and not COMMON_EXT[typ].get('target', True))
+    valid = targetless or remembered or entity(d, bot, rid, bots, refs)   # 새 입력 칸(loot·mode …)은 step 에 그대로 실려 간다 — 값의 뜻은 실행(run)이 그때 세계로 다시 본다
     if step.get('item'):
         valid = valid and entity(d, bot, step['item'], bots, refs)
     if valid:
@@ -174,15 +258,19 @@ def parse(obj, obs):
         typ = 'use'
     elif typ == 'drink':
         typ, target, item = 'use', 'self', 'i1'
-    if (typ not in COMMON and typ not in {s['id'] for s in obs.get('skills', [])}
+    ext = COMMON_EXT.get(typ)                      # p0.5.5 등록부 동사 — 이번 판단에 노출됐는지는 보지 않는다(알려진 동사를 시도할 자유)
+    if (typ not in COMMON and ext is None and typ not in {s['id'] for s in obs.get('skills', [])}
             and not (typ in PARTY and obs.get('partyform') is not None)):
         return None, 'invalid_type'
     out = {'type': typ}
     if typ == 'party_leave':                       # 대상 없는 동사(wait·rest 와 같은 꼴) — 대상을 적어 와도 버린다
         return out, None
+    no_target = ext is not None and not ext.get('target', True)
+    if no_target:
+        target = ''                                # 대상 없는 등록부 동사 — party_leave 처럼 버린다(새 입력 칸은 아래에서 본다)
     if not target and typ == 'search':             # 주변 조사라는 기존 문법의 호환 별칭
         target = 'self'
-    if typ not in ('wait', 'rest') and not target:
+    if typ not in ('wait', 'rest') and not target and not no_target:
         return None, 'missing_target'
     ids = {t['id'] for t in obs.get('targets', [])} | {obs.get('actor'), 'self'}
     if typ == 'goto':
@@ -202,6 +290,19 @@ def parse(obj, obs):
         return None, 'missing_item'
     if typ == 'bond':
         out['form'] = ' '.join(str(obj.get('form') or '').replace('"', '').replace("'", '').split())[:120]
+    if ext is not None:                            # 새 입력 칸 — 꼴만 본다(허용 값·길이). 소유·동의·효과는 실행(run)이 판정한다(CA §3.2-4)
+        for name, allowed in (ext.get('fields') or {}).items():
+            raw = obj.get(name)
+            value = ' '.join(str(raw).replace('"', '').replace("'", '').split())[:FIELD_LEN] if raw is not None else ''
+            if not value:
+                if name in (ext.get('required') or ()):
+                    return None, 'missing_' + name
+                continue
+            if allowed is not None:
+                value = value.lower()
+                if value not in allowed:
+                    return None, 'invalid_' + name
+            out[name] = value
     return out, None
 
 
@@ -212,9 +313,13 @@ def error_detail(obj, obs, error):
     known = sorted(e['id'] for e in obs.get('known', {}).get('statics', []) if e.get('id'))
     subtype = ('missing_target' if not target else 'way_not_current' if target.startswith('w')
                else 'memory_only' if target in known and target not in ids else 'not_observed')
+    ext = COMMON_EXT.get(str(obj.get('type') or '').strip().lower())   # p0.5.5 등록부 동사의 칸 오류 — 받는 값을 함께 돌려준다(있을 때만)
+    field = error.split('_', 1)[1] if ext and error.startswith(('invalid_', 'missing_')) else None
+    allowed = (ext.get('fields') or {}).get(field) if field else None
     return {'code': error, 'target_detail': subtype if error in ('invalid_target', 'missing_target') else None,
             'attempted_action': copy.deepcopy(obj), 'target_ids': ids, 'known_goto_ids': known,
-            'item_ids': [e['id'] for e in obs.get('items', [])]}
+            'item_ids': [e['id'] for e in obs.get('items', [])],
+            **({'field_values': list(allowed)} if allowed else {})}
 
 
 def entity(d, bot, target, bots, refs=None):
@@ -283,7 +388,7 @@ def in_range(d, bot, action, target, at=None):
 
 
 def _base(bot, action, result, **extra):
-    return {'char': bot['char'], **{k: action[k] for k in ('type', 'target', 'item', 'form') if k in action},
+    return {'char': bot['char'], **{k: action[k] for k in fields() if k in action},
             'result': result, **extra}
 
 
@@ -293,6 +398,14 @@ def execute(d, bot, action, bots):
     target = entity(d, bot, rid, bots) if rid else None
     if typ in ('wait', 'rest', 'party_leave'):
         return d._execute_legacy_action(bot, action, bots)
+    ext = COMMON_EXT.get(typ)
+    if ext is not None:                            # p0.5.5 등록부 동사 — 자동 접근을 타지 않는다(라우터 route='ext'): 닿지 않으면 too_far(§6.3 경로 7)
+        if ext.get('target', True):
+            if not target:
+                return _base(bot, action, 'lost')
+            if not (ext.get('range') or in_range)(d, bot, action, target):
+                return _base(bot, action, 'too_far')
+        return ext['run'](d, bot, action, target if ext.get('target', True) else None, bots)
     if typ == 'party_form':                        # D84 조각 3: 사람만 대상 — 판정(길드 구역·맞받기·전원 모임)은 엔진 한 곳에서
         if target and target[0] == 'bot' and target[2] is not bot:
             return d._party_form(bot, rid, bots)

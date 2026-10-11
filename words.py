@@ -25,6 +25,7 @@ import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WORDS_ROOT = os.path.join(HERE, "prompts", "world")
+ACTIONS_ROOT = os.path.join(HERE, "prompts", "actions")   # p0.5.5 행동 말 파일 — 정의 JSON 없이 칸 이름이 곧 열쇠(common_extra.md: header + 등록부 동사)
 WORD_MARK = "@prompts"
 LIST_WORDS = ("texts", "wares", "overheard")       # 목록 칸 — 마지막 키가 이 이름이면 문자열 목록
 _COMMENT = re.compile(r"<!--.*?-->", re.S)
@@ -227,6 +228,32 @@ def merge(d, kind, eid, words_root=WORDS_ROOT):
             node = node[k]
         node[ks[-1]] = items[p]
     return []
+
+
+class WordsError(ValueError):
+    """행동 말 파일을 못 읽음 — 정의 오류와 같은 급(게임이 뜨지 않는다). check_words 가 같은 문장을 찍는다."""
+
+
+def action_words(name, root=ACTIONS_ROOT):
+    """p0.5.5 행동 말 파일 prompts/actions/<name>.md → {칸: 문장}. 꼴은 세계 말 파일과 같다(`## \\`칸\\` — 설명` · 주석 무시).
+    엔티티 정의가 없으니 칸 이름이 곧 열쇠다 — 어느 칸이 있어야 하는지는 쓰는 쪽(composed_actions 등록부)이 정하고 check_words 가 대조한다.
+    문장 칸은 한 줄이어야 한다(관측 블록의 한 줄이 된다). 문제가 있으면 WordsError."""
+    path = os.path.join(root, name + ".md")
+    rel = "prompts/actions/%s.md" % name
+    try:
+        with open(path, encoding="utf-8") as f:
+            items, problems = parse(f.read())
+    except OSError as e:
+        raise WordsError("%s: 말 파일을 못 읽는다 — %s" % (rel, type(e).__name__))
+    problems = ["%s: %s" % (rel, p) for p in problems]
+    for k, v in items.items():
+        if not isinstance(v, str) or not v.strip():
+            problems.append("%s: `%s` 칸이 비어 있다" % (rel, k))
+        elif "\n" in v:
+            problems.append("%s: `%s` 칸은 한 줄이어야 한다(관측의 한 줄이 된다)" % (rel, k))
+    if problems:
+        raise WordsError("\n".join(problems))
+    return items
 
 
 def orphans(root, words_root=WORDS_ROOT):

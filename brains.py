@@ -986,6 +986,9 @@ def _last_prose(last, names=None):
         return '%s에 %s을(를) 시도했으나 변화가 없었다 (%s)' % (_tgt_name(tgt, names), t, last.get('reason_code', 'no_effect'))
     if r == 'lost' and t in ('goto', 'explore', 'follow', 'attack'):   # p0.5.4: 조합형 실행이 대상 ID 를 지금 못 찾음(CA.execute) — 옛 판은 결과 dict 통째 JSON 폴백이었다 ⚠️문구 임시
         return '%s에 %s을(를) 하려 했지만 — 그 대상을 지금 찾을 수 없었다(지금 보이는 대상에 없다)' % (_tgt_name(tgt, names), t)
+    if t in G.CA.COMMON_EXT and r in ('too_far', 'lost'):   # p0.5.5 등록부 동사의 라우터 결과 — 자동 접근이 없다(§6.3 경로 7). 그 밖의 결과 문장은 동사 단계가 더한다 ⚠️문구 임시
+        return '%s에 %s을(를) 하려 했지만 — %s' % (_tgt_name(tgt, names), t, '닿는 거리가 아니었다(먼저 다가가야 한다)' if r == 'too_far'
+                                                 else '그 대상을 지금 찾을 수 없었다(지금 보이는 대상에 없다)')
     if r == 'drink_boon':                 # D74(09-15) 축복의 물약 — 자기 행동의 결과(사실만). drink(item=boon)·use(self, i4) 공용
         return "축복의 물약을 들이켰다 — %s이 1 올랐다(지금 %s %d, 남은 축복의 물약 %d병)" % (
             G.STAT_KR.get(last.get('stat'), '?'), G.STAT_KR.get(last.get('stat'), '?'), last.get('value', 0), last.get('boons', 0))
@@ -1530,7 +1533,8 @@ _WIRE_KEYS = frozenset((
     "gear"))   # 장비(07-30): 아는 키지만 wire 는 일부러 안 그린다 — 착용 정보의 표현은
                #   시트(_sheet 차림 줄, 불변 프리픽스=캐싱)가 소유하고, 비교는 입수 메뉴
                #   라벨에만 나온다(파트너 설계: 상시 가변부 미노출).
-_WIRE_SIDE_KEYS = ("action_schema", "actor", "targets", "items", "ways", "social_events", "skills")   # 조합형 관측의 키 — _wire 의 조합형 절이 그린다
+_WIRE_SIDE_KEYS = ("action_schema", "actor", "targets", "items", "ways", "social_events", "skills",   # 조합형 관측의 키 — _wire 의 조합형 절이 그린다
+                   "common_extra")   # p0.5.5 노출된 추가 행동(등록부 동사, 있을 때만) — COMMON 줄 아래 '추가 행동' 블록(CA.extra_lines)
 
 
 def unwired_keys(obs):
@@ -2097,8 +2101,9 @@ def _wire(obs, names=None, compose=False):
                     (' — ' + at(target)) if ('dist' in target and target['id'] not in placed) else '',
                     (' · %d개' % target['count']) if 'count' in target else '',
                     (' · %s' % target['effect']) if target.get('effect') else ''))   # D74 축복의 물약: 마시면 무엇이 오르나
-        out += ["", "## 행동과 의사소통", "COMMON: " + " / ".join(G.CA.COMMON if obs.get('action_schema') else _compose_types()),
-                "의사소통: 잡담 / 제안"]
+        out += ["", "## 행동과 의사소통", "COMMON: " + " / ".join(G.CA.COMMON if obs.get('action_schema') else _compose_types())]
+        out += G.CA.extra_lines(obs)            # p0.5.5(§7.2) 추가 행동 — 노출된 등록부 동사가 있을 때만(머리 한 줄 + 동사마다 한 줄). 지침 파일이 아니라 관측에 붙는다
+        out += ["의사소통: 잡담 / 제안"]
         if obs.get("people") is not None:       # D85 인물 기록 — 세계의 규칙 한 번(⚠️문구 임시)
             out += ['', 'PEOPLE:',
                     "- 사람의 이름과 직업은 겉으로 보이지 않는다. 네가 기록해 둔 사람만 그 이름으로 불리고, 나머지는 '낯선 사람'이다.",
@@ -2392,7 +2397,8 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
         if obs.get('skills'):
             instructions = instructions.replace('매 판단에 제시되는 COMMON에서 행동 이름을 고른다.',
                                                 '매 판단에 제시되는 COMMON 또는 SKILL에서 행동 이름을 고른다.')
-            instructions = instructions.replace('이어질 행동도 같은 COMMON과', '이어질 행동도 같은 COMMON 또는 SKILL과')
+            # p0.5.5(§7.3): '이어질 행동도 같은 COMMON과' 치환은 지웠다 — 그 문장은 2026-09-11 지침(then 설명 단락)에만 있었고 지금 지침엔 없다(죽은 치환,
+            #   결과 바이트 불변). 새 기능은 지침 문자열 치환에 기대지 않는다 — 관측(_wire)에 붙인다(추가 행동 블록).
         prompt = (_sheet(bot, roster) + "\n" + instructions
                   + "\n\n" + _wire(obs, names, compose=True)
                   + "\n\n오직 JSON 한 줄로만 답하라.")
