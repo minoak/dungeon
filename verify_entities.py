@@ -105,9 +105,11 @@ check('⑤ 생성 층 피처(type, name)가 전부 정의(+숨은 보물 변형)
 check('⑤ 몬스터 kind 가 전부 정의에 있다', {m.kind for m in dg.monsters} <= {o['name'] for o in ENT.by_kind('monster')})
 
 # ⑥ 조합형 관측 태그 = 정의 tags(옛 리터럴과 같다)
-check('⑥ 관측 태그 — 장비·물약=object+item, 상자·계단=object, 모르는 type(마을 npc)=object',
+check('⑥ 관측 태그 — 장비·물약=object+item, 상자·계단=object, 마을 인물(npc)=object+npc(10-11), 모르는 type=object',
       ENT.feature_tags('weapon') == ['object', 'item'] and ENT.feature_tags('potion') == ['object', 'item']
-      and ENT.feature_tags('chest') == ['object'] and ENT.feature_tags('exit') == ['object'] and ENT.feature_tags('npc') == ['object'])
+      and ENT.feature_tags('chest') == ['object'] and ENT.feature_tags('exit') == ['object'] and ENT.feature_tags('npc') == ['object', 'npc']
+      and ENT.feature_tags('no_such_type') == ['object']
+      and not any('npc' in ENT.feature_tags(o['type']) for o in ENT.by_kind('object')))   # 상자·샘·보물·시설·장비엔 안 붙는다
 
 # ⑦ 검증기의 거절 — 임시 사본에 나쁜 정의를 넣으면 전부 나열하며 죽는다
 with tempfile.TemporaryDirectory() as tmp:

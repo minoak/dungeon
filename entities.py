@@ -442,7 +442,11 @@ def object_name(eid):
 
 
 def feature_tags(ftype):
-    """조합형 관측의 피처 태그 — 정의의 tags(없는 type, 예: 마을 npc 피처 = ['object'])."""
+    """조합형 관측의 피처 태그 — 정의의 tags(없는 type = ['object']).
+    마을 인물(npc 피처) = ['object', 'npc'] — 10-11: 대상 목록에서 상자·시설과 똑같이 (object) 하나라 사람인 줄 몰랐다.
+    'npc' 는 entities/npc/*.json 정의가 모두 맨 앞에 쓰는 태그(마을 인물 어휘)를 그대로 쓴다. 판정은 피처 type 으로 갈리니 표지일 뿐."""
+    if ftype == 'npc':
+        return ['object', 'npc']
     d = next((d for d in by_kind('object') if d.get('type') == ftype), None)
     return list(d['tags']) if d and d.get('tags') else ['object']
 
