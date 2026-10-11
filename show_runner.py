@@ -80,6 +80,7 @@ import savedata                 # p0.5.1(10-11) 저장 데이터 이관 틀 — 
 import run_summary                 # D58 판 결산 — 스트림 소비자(Tap 으로 모든 레코드를 흘려 세고, end.summary + events.log 표)
 import bestiary
 import sheetkit                 # D31(09-05) 배경 정제(자유 입력 격리) — 러너도 같은 자를 쓴다
+import judge                    # p0.5.3 정신·숙련 칸 이름(PROF_KEYS) — 손 시트 검증·층 이월
 
 STATE = os.environ.get("DUNGEON_STATE_DIR") or os.path.join(HERE, "state")
 os.makedirs(STATE, exist_ok=True)
@@ -334,6 +335,10 @@ SHEET_OPT = ("name", "speech", "goal")     # + relationships(dict) 별도 취급
 # 선택 **수치** 필드: 없으면 기본값, 있으면 범위 검증. 위 SHEET_OPT(프롬프트 전용)와 달리
 # **엔진 판정이 읽는다** — 그래서 상한을 둔다(시트=UGC, 사거리 999 같은 값이 오면 안 된다).
 SHEET_OPT_NUM = {"atk_range": (1, 1, 3)}   # 공격 사거리(맨해튼): 기본 1(근접) · 궁수 2
+# p0.5.3 정신·숙련(master_plan §8.1) — 선택 수치지만 위 고리와 달리 **있을 때만** 싣는다(기본값을 시트 dict 에 써 넣지 않는다:
+# 없으면 스폰이 직업표에서 읽는다 — judge.prof). (하한, 상한) — 정신은 힘·민첩과 같은 규칙(정수, 범위 없음 — 힘·민첩도 여기 범위가 없다),
+# 숙련은 0~6(class_design §2.5 — 직업 기본값은 0·2·4).
+SHEET_OPT_PROF = {"mind": (None, None), "search_prof": (0, 6), "steal_prof": (0, 6)}
 FREETEXT_MAX = 300                          # 말투·목표·관계 등 기존 필드. 성격·배경은 sheetkit의 별도 상한.
 
 
@@ -392,6 +397,13 @@ def load_party(path):
                 v = s.get(k, dflt)
                 if not isinstance(v, int) or isinstance(v, bool) or not (lo <= v <= hi):
                     raise ValueError("봇%s %s 는 %d~%d 정수여야 함: %r" % (char, k, lo, hi, v))
+                out[k] = v
+            for k, (lo, hi) in SHEET_OPT_PROF.items():   # p0.5.3 — 있을 때만(None 은 없는 것)
+                v = s.get(k)
+                if v is None:
+                    continue
+                if not isinstance(v, int) or isinstance(v, bool) or (lo is not None and not lo <= v <= hi):
+                    raise ValueError("봇%s %s 는 %s정수여야 함: %r" % (char, k, "%d~%d " % (lo, hi) if lo is not None else "", v))
                 out[k] = v
             bg = s.get("background")            # D31(09-05) 자유 입력 2호 — 시트 UGC 인젝션 관문:
             if bg is not None:                  #   막지 않고 격리한다(sheetkit.sanitize_background —
@@ -2167,6 +2179,9 @@ def main():
         n["boons"] = b.get("boons", 0)            # 축복의 물약도 이월(D74, 09-15)
         n["str"], n["dex"] = b["str"], b["dex"]   # 축복으로 오른 능력치는 이 판 안에서 영구(D74) — 시트 초기값을 덮는다
         n["maxhp"] = b["maxhp"]                   # D95(09-20): 공물로 오른 최대 HP 도 같은 급(힘·민첩과 함께). 아무도 안 올린 판에선 시트 값 그대로 = 무변화
+        for k in judge.PROF_KEYS:                 # p0.5.3 정신·숙련도 몸을 따라간다(힘·민첩과 같은 급). 이관 전 옛 몸엔 없을 수 있어 있을 때만
+            if k in b:
+                n[k] = b[k]
         if b.get("blessed"):                      # D95: 신의 축복을 받은 적 — 공물 판에서 축복은 판당 한 번이라 층·원정을 넘어 몸을 따라간다
             n["blessed"] = True                   #   (켠 판에만 적히는 표식 — 끈 판은 키 자체가 없다)
         n["weapon"] = b.get("weapon")             # 장비도 이월(07-30) — 걸치고 내려간다

@@ -1,0 +1,43 @@
+{
+ "version": 1,
+ "saved_at": "2026-10-12T00:22:41",
+ "run_id": "7@2026-10-12T00:22:39",
+ "seed": 7,
+ "started": "2026-10-12T00:22:39",
+ "next_turn": 7,
+ "turn_last": 6,
+ "depth": 0,
+ "segment": 0,
+ "backend": "dummy",
+ "party": [
+  {
+   "char": "1",
+   "name": "두란",
+   "id": null,
+   "job": "전사",
+   "hp": 14,
+   "alive": true
+  },
+  {
+   "char": "2",
+   "name": "카야",
+   "id": null,
+   "job": "도적",
+   "hp": 10,
+   "alive": true
+  },
+  {
+   "char": "3",
+   "name": "피른",
+   "id": null,
+   "job": "궁수",
+   "hp": 11,
+   "alive": true
+  }
+ ],
+ "fallen": [],
+ "stop": {
+  "reason": "user",
+  "pages": {}
+ }
+}

@@ -2,6 +2,7 @@
 """기존 조합형 행동에 붙는 알파 스킬. 거리·접근·피격·목격은 기존 엔진을 경유한다."""
 import copy
 
+import judge
 import skill_combat as combat
 import skill_schema as schema
 
@@ -134,8 +135,11 @@ def failure(bot, action, why):
 
 def ability(target, name):
     # 몬스터에 6능력치를 도입하지 않는다. 기존 atk/AC에서 알파용 STR/DEX 보정만 유도한다.
+    # 정신(p0.5.3): 봇은 몸의 칸(없으면 직업 기본값 — judge.prof), 몬스터는 0(master_plan §2.1).
     if target[0] == 'bot':
-        return target[2][name]
+        return judge.prof(target[2], name) if name == 'mind' else target[2][name]
+    if name == 'mind':
+        return 0
     return target[2].atk if name == 'str' else max(0, target[2].ac - 10)
 
 

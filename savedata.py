@@ -5,7 +5,8 @@
   · 파일마다 종류(kind)와 현재 판(CURRENT[kind])이 있다. 저장할 때 `_schema_version` 을 붙이고(stamp),
     읽을 때 그 칸이 없거나(= 0판, p0.5.1 이전에 쓰인 파일) 낮으면 이관 함수를 한 판씩 거쳐 올린다(upgrade).
   · 이관 함수 = MIGRATIONS[kind][n] : n판 문서(dict) → n+1판 문서. 판 번호는 upgrade 가 붙인다(함수는 내용만 바꾼다).
-    새 패치가 꼴을 바꾸면 CURRENT[kind] 를 한 칸 올리고 함수 하나를 더한다 — 예) 정신 능력치: party·presets 에 1→2 (시트마다 mind 기본값).
+    새 패치가 꼴을 바꾸면 CURRENT[kind] 를 한 칸 올리고 함수 하나를 더한다 — 예) 어떤 칸을 시트마다 채워 넣어야 하는 패치면 party·presets 에 1→2.
+    (p0.5.3 정신·숙련은 해당 없음: 시트에 기본값을 쓰지 않고 스폰이 직업표에서 읽는다 — 옛 파일이 그대로 돈다, 판을 올리지 않았다)
   · 칸 이름이 `_` 로 시작하는 이유: 파티 시트(party*.json)·도감 원장(bestiary.json)은 최상위 키가 캐릭터 칸이고 `_` 로 시작하는 키만
     메타로 건너뛴다 — 밑줄 없는 이름이면 패치를 되돌린 옛 코드(v0.5.0)가 파티 파일을 통째로 거부한다(되돌리기 = 패치 단위 커밋/태그).
     파일 고유의 `version`(캠페인·프리셋·스냅샷)은 그대로 둔다 — 옛 코드가 그 값을 보고 읽는다.
@@ -23,7 +24,8 @@
   bestiary  bestiary.json(도감 원장 — 죽어도 남는 지식)                                        — bestiary.Issuer
   account   accounts/<id>/account.json(공개 서버 계정 — 열쇠 지문·별명)                       — accounts.Accounts
   ⚠️이관을 거치지 않는 읽기: tools/run_notes.py ledger_notes 가 bestiary.json 을 직접 읽는다 — 도감 꼴을 바꾸는 패치에서 upgrade 를 거치게 할 것(후속).
-  빠짐: state/snapshot.json·run_opts.json(멈춘 판의 몸 — 피클이라 이관이 아니라 되살리기 실패 → 새 판, D79) ·
+  빠짐: state/snapshot.pkl·snapshot.json(멈춘 판의 몸 — 피클이라 이 틀이 아니라 snapshot.py 가 제 판 번호(state_version)와 이관 체인을 쓴다, p0.5.3) ·
+       run_opts.json(그 판을 시작한 옵션 — 론처가 이어가기에 그대로 쓴다) ·
        house_usage.json(서버 하루 판 수, 날마다 새로) · oracle/stop/brain_pause/brain_retry.json(러너와 주고받는 1회용 쪽지) ·
        판 기록(stream.jsonl — run_meta.v, additive 규칙).
 LLM 0콜 · 엔진 무접촉 · 순수 파일.

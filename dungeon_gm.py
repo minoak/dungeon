@@ -29,6 +29,7 @@ import skill_core as SK
 import skill_combat as SC
 import entities as ENT           # 엔티티 저장소(D50, 09-11) — 몬스터·함정·오브젝트·NPC 정의(수치·이름·지식 본문)
 import interactables as IA       # 쓰임 부품(D89, 09-20) — 정의의 use{kind} 가 오브젝트·건물 상호작용을 낸다(엔진 무의존 모듈 — 순환 import 없음)
+import judge                     # p0.5.3 판정 함수 묶음 — 지금은 숙련 접근자(prof)만: 스폰이 몸에 정신·숙련을 붙인다(엔진 무의존 모듈)
 import town_layout as TL         # 마을 layout(town-layout-v1, 맵 트랙 저작 원본) → 격자 컴파일(엔진 무의존 모듈)
 import hashlib                  # D90(09-20) 들린 말 고르기 — 판정 rng 를 건드리지 않는 결정론 해시
 import math
@@ -6282,6 +6283,8 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'str': sheet['str'], 'dex': sheet['dex'], 'wdmg': sheet['wdmg'],
             'stealth': sheet['stealth'],    # 발각 DC 가산(은신) — 도적이 잘 안 들킴
             'search_r': sheet['search_r'],  # 인지 반경(Stage 3) — 도적 2 / 전사 1
+            **judge.body_fields(sheet),     # p0.5.3 정신·수색 숙련·손재주 숙련 — 시트 값 → 직업 기본값 → 0(master_plan §8.1).
+                                            # 아직 읽는 판정이 없다(0.5 judge). 스트림 스냅샷(bot_snapshot)은 화이트리스트라 안 실린다
             'atk_range': int(sheet.get('atk_range') or 1),   # 공격 사거리(맨해튼, 2026-07-26)
                                             # 근접 1(기본·하위호환) / 궁수 2. 2 이상이면 사선이
                                             # 필요하고(벽·문이 막는다. 동료는 안 막는다) 명중을

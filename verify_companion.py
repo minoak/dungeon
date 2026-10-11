@@ -72,7 +72,7 @@ with tempfile.TemporaryDirectory() as root:
         return {'id': cid, 'name': name, 'kind': 'companion', 'tags': ['companion'], 'comps': {'sheet': sheet, **over}}
     bad = {
         'nosheet': {'id': 'nosheet', 'name': '가', 'kind': 'companion', 'tags': [], 'comps': {'story': {'trait': 'x'}}},
-        'badjob': good('badjob', '나', sheet={'job': '마법사'}),
+        'badjob': good('badjob', '나', sheet={'job': '성기사'}),   # p0.5.3: 마법사는 이제 직업표에 있다 — 표 밖 예시를 바꿨다
         'stats': good('stats', '다', sheet={'hp': 99}),
         'badtrait': good('badtrait', '라', sheet={'traits': ['없는 키워드']}),
         'noline': good('noline', '마', npc={'hail': '안녕'}),

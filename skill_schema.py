@@ -18,6 +18,8 @@ COMPONENTS = {
     'bleed': {'requires': ['living'], 'forbids': ['healing'], 'tags': ['hostile'], 'cost': 2},
 }
 PENALTIES = ('hp_cost', 'cooldown', 'self_status', 'condition')
+# 굴림·내성 능력치. 'mind'(정신)는 p0.5.3 — 검증만 넓힌다. 랜덤 생성기는 아래 generate 의 ['str', 'dex'] 그대로라 3층 스킬이 바뀌지 않는다.
+ABILITIES = ('str', 'dex', 'mind')
 
 
 def effect_key(effect):
@@ -57,9 +59,9 @@ def validate(skill):
         if skill.get('target') not in ('living', 'self'):
             return ['invalid_target_mode']
         roll = skill['roll']
-        if roll['type'] not in ('none', 'attack', 'save') or roll.get('ability') not in ('str', 'dex'):
+        if roll['type'] not in ('none', 'attack', 'save') or roll.get('ability') not in ABILITIES:
             return ['invalid_roll']
-        if roll['type'] == 'save' and roll.get('save_ability') not in ('str', 'dex'):
+        if roll['type'] == 'save' and roll.get('save_ability') not in ABILITIES:
             return ['invalid_save']
         effects = skill['effects']
         if not isinstance(effects, list) or not 1 <= len(effects) <= 2:
@@ -88,7 +90,7 @@ def validate(skill):
                 return ['invalid_push']
             if key == 'bleed' and effect.get('type') != 'status':
                 return ['invalid_status']
-            if effect.get('save') not in (None, 'str', 'dex'):
+            if effect.get('save') not in (None,) + ABILITIES:
                 return ['invalid_effect_save']
         penalties = skill.get('penalties', [])
         if not isinstance(penalties, list) or len(penalties) > 4:

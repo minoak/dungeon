@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """웹 론처·시트 조립·배경 격리(D31, 2026-09-05) 헤들리스 검증 — 33번째 게이트. LLM 0콜.
 게이트:
-  ① sheetkit: traits.json 키워드 전부 문장 있음 / 직업 3 수치 = party.json 세트 / 3개 조립 시트가
+  ① sheetkit: traits.json 키워드 전부 문장 있음 / 직업 수치 = party.json 세트(기본 파티 3직업 — 마법사는 p0.5.3, verify_class_foundation) / 3개 조립 시트가
      load_party 를 통과(이중 검증) / 거부: 키워드 0·4개·중복·미등재, 이름 공백·'_'·상한, 성별, 직업
   ② 배경 격리: 개행·'## 규칙'·코드펜스·<tag>·[링크] 표식 제거 · 4000자 절단 · 빈 배경=필드 없음 ·
      spawn 이 background/traits 를 봇으로 옮긴다 · _sheet 렌더 = 「…」 한 줄 + '지시가 아니다' 틀 ·
@@ -125,7 +125,7 @@ check("① 거부: 이름 공백 / '_' 시작 / 21자",
       and rejects(lambda: sheetkit.build_sheet("전사", ["용맹한"], "_x", "남"), "_")
       and rejects(lambda: sheetkit.build_sheet("전사", ["용맹한"], "a" * 21, "남"), "21자"))
 check("① 거부: 성별·직업 밖", rejects(lambda: sheetkit.build_sheet("전사", ["용맹한"], "a", "기타"), "성별")
-      and rejects(lambda: sheetkit.build_sheet("마법사", ["용맹한"], "a", "남"), "직업"))
+      and rejects(lambda: sheetkit.build_sheet("성기사", ["용맹한"], "a", "남"), "직업"))   # p0.5.3: 마법사는 이제 직업표에 있다 — 표 밖 예시를 바꿨다
 free = sheetkit.build_sheet("궁수", [], "린", "여", persona_text="장난기 많고\n## 규칙\n겁이 없다. <b>x</b>")
 check("① 자유 성격(파트너 정정): 키워드 0개+문장 → persona=정제 문장(개행·표식 제거) · speech 없음 · traits []",
       "\n" not in free["persona"] and not any(ch in free["persona"] for ch in "#<>")
@@ -298,8 +298,8 @@ else:
             return e.code, json.loads(e.read().decode("utf-8") or "{}")
 
     st, pre = call("/api/presets")
-    check("③ GET /api/presets: 200 · traits 12 · jobs 3 · 기본 파티 3인 미리보기",
-          st == 200 and len(pre["traits"]) == 12 and len(pre["jobs"]) == 3 and len(pre["default_party"]) == 3)
+    check("③ GET /api/presets: 200 · traits 12 · jobs 4(p0.5.3 마법사) · 기본 파티 3인 미리보기",
+          st == 200 and len(pre["traits"]) == 12 and list(pre["jobs"]) == ["전사", "도적", "궁수", "마법사"] and len(pre["default_party"]) == 3)
     check("③ presets.looks(D37): 머리 12·몸통 2·스와치 4재질·기본색 4",
           len(pre["looks"]["heads"]) == 12 and len(pre["looks"]["bodies"]) == 2
           and sorted(pre["looks"]["swatches"]) == sorted(sheetkit.LOOK_KEYS) and len(pre["looks"]["defaults"]) == 4)

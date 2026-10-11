@@ -42,7 +42,7 @@ _WS = re.compile(r"\s+")
 
 
 def load_traits(path=TRAITS_FILE):
-    """traits.json → dict. 형식 검증(traits = 키워드 문자열 목록·중복 없음, jobs 수치 전수).
+    """traits.json → dict. 형식 검증(traits = 키워드 문자열 목록·중복 없음, jobs 몸 수치 전수 · p0.5.3 정신·숙련·스킬 칸은 있으면 형식만).
     옛 형식(키워드→{persona,speech} 사전, 2026-09-05~09-11)은 키 목록으로 읽는다 — 문장은 버린다."""
     with io.open(path, encoding="utf-8") as f:
         data = json.load(f)
@@ -62,6 +62,15 @@ def load_traits(path=TRAITS_FILE):
         for f in ("hp", "str", "dex", "wdmg", "stealth", "search_r", "atk_range"):
             if not isinstance(v.get(f), int) or isinstance(v.get(f), bool):
                 raise ValueError("traits.json: 직업 %r 수치 %s 누락/비정수" % (j, f))
+        for f in ("mind", "search_prof", "steal_prof"):           # p0.5.3 정신·숙련 — 없으면 0(judge.prof). 시트에 복사하지 않는다
+            if f in v and (not isinstance(v[f], int) or isinstance(v[f], bool)):
+                raise ValueError("traits.json: 직업 %r 수치 %s 비정수" % (j, f))
+        for f in ("skills", "skill_list"):                        # p0.5.3 시작 스킬 기본값·직업 스킬 목록(아직 읽는 곳 없음 — 형식만)
+            ids = v.get(f, [])
+            if not isinstance(ids, list) or not all(isinstance(s, str) and s for s in ids) or len(set(ids)) != len(ids):
+                raise ValueError("traits.json: 직업 %r %s 는 중복 없는 스킬 id 목록" % (j, f))
+        if not set(v.get("skills", [])) <= set(v.get("skill_list", v.get("skills", []))):
+            raise ValueError("traits.json: 직업 %r 시작 스킬이 직업 스킬 목록 밖이다" % j)
     data["max_traits"] = int(data.get("max_traits", 3))
     return data
 
@@ -315,7 +324,9 @@ def build_sheet(job, traits, name, sex, background=None, data=None, persona_text
     if len(sheet["persona"]) > PERSONA_TOTAL_MAX:
         raise ValueError("성격 문장 합계가 %d자를 넘는다(%d자) — 키워드를 줄이거나 문장을 줄여라"
                          % (PERSONA_TOTAL_MAX, len(sheet["persona"])))
-    # 직업은 몸 수치만 정한다. 사용자가 쓰지 않은 행동 목표를 직업 사전에서 보충하지 않는다.
+    # 시트에 복사하는 것은 직업의 몸 수치(위 7칸)뿐이다. 직업이 정하는 정신·숙련·시작 스킬(p0.5.3 traits.json)은 복사하지 않는다 —
+    # 스폰이 직업표에서 읽는다(judge.prof: 시트 값 → 직업 기본값 → 0). 그래서 직업표를 고치면 옛 시트도 따라간다.
+    # 사용자가 쓰지 않은 행동 목표를 직업 사전에서 보충하지 않는다.
     # 직접 작성한 시트의 선택 필드 goal은 기존 load_party → 프롬프트 경로에서 그대로 지원한다.
     bg = sanitize_background(background)
     if bg:
