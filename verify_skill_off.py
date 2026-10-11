@@ -4,7 +4,10 @@
 의도적으로 바뀌어(파트너 결정) 시드 7의 흔적이 달라졌다(37·217 은 그대로) — 새 해시는 D51 커밋의 코드에서 뽑았다. 그 외(엔티티 저장소 D50·거미 도주 제거)는
 해시가 그대로였다. 기준선을 옮길 때는 반드시 여기 이력과 커밋 메시지에 사유를 적는다.
 **2026-09-13 D66 갱신**: 관측 `exit.gather`(모임 규칙을 계단 줄에 미리 — 파트너 "팀원이 전부 모여야 계단을 내려갈 수 있다고 가르쳐줘야")가
-obs 에 더해져 세 시드 전부 관측 해시가 달라졌다(행동·난수는 같은 코드 경로 — 의도된 관측 계약 변경). 새 해시는 D66 커밋의 코드에서 뽑았다."""
+obs 에 더해져 세 시드 전부 관측 해시가 달라졌다(행동·난수는 같은 코드 경로 — 의도된 관측 계약 변경). 새 해시는 D66 커밋의 코드에서 뽑았다.
+**2026-10-11 t13c 갱신**: 관리자 승인으로 공격 표시용 선택 필드
+attack_mode/source_xy/target_xy가 결과와 관측에 추가된 세 시드 해시를 갱신했다.
+세 필드만 제거하면 D66 해시와 모두 일치한다(verify_combat_stream). 게임 판정·상태·난수 변경은 없다."""
 import hashlib
 import json
 import os
@@ -13,7 +16,8 @@ os.environ['DUNGEON_SIGHT'] = '5'
 import dungeon_gm as G
 
 
-def trace(seed):
+def trace_records(seed):
+    """해시 전 원본 기록. 비교 검증도 같은 실행 경로를 사용한다."""
     d = G.Dungeon(seed=seed, w=44, h=18, n_monsters=2, n_traps=3, n_lurkers=1,
                   scan=True, loops=True, status=True, rest_verb=True, events=True, relations=True,
                   auto_approach=True, composed_actions=True)
@@ -38,13 +42,27 @@ def trace(seed):
         records.append({'turn': turn, 'observations': observations, 'events': results,
                         'bots': [G.bot_snapshot(b) for b in bots], 'monsters': [m.as_dict() for m in d.monsters]})
     records.append({'rng_state': d.rng.getstate()})
+    return records
+
+
+def digest(records):
     return hashlib.sha256(json.dumps(records, ensure_ascii=False, sort_keys=True).encode('utf-8')).hexdigest()
 
 
-EXPECTED = {   # 2026-09-13 D66 갱신 — 그 전: 7 bda3f388… / 37 f8467088… / 217 c0e26313…(D51 갱신 2026-09-11)
+def trace(seed):
+    return digest(trace_records(seed))
+
+
+PRE_FX_EXPECTED = {   # 2026-09-13 D66 기준선 — 표시 필드만 뺀 회귀 비교용으로 보존
     7: '7381c95b866374db5bf05e6e9d2024ce46ac1aff3d7a961fab48f5ede06f967e',
     37: '1f61907254608ef7ba9eb18cbebf5563a1d4b835bb4e372734f3b349884f648e',
     217: 'b4645146ea661824cb7b7da8321cdb9a562ab8a5e93c4f3e5ea5bd214418bbe3',
+}
+
+EXPECTED = {   # 2026-10-11 t13c 관리자 승인: 표시 필드 세 개만 추가
+    7: 'b8960e27e3ab2f2ec9d8e564515fb16dee68d908e16fa175ec1def61bf8ab671',
+    37: '5fbea318e72f871ed2f1346b889f349f28d46d1a69ad745ac6641c6132e0538e',
+    217: 'bb58b87d5eb01f20406d903e7cc057e2a68731c6585a7ca1ecaf9b8643c9a11c',
 }
 
 
@@ -53,4 +71,4 @@ if __name__ == '__main__':
         actual = trace(seed)
         assert actual == EXPECTED[seed], (seed, actual, EXPECTED[seed])
         print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치' % seed)
-    print('ALL PASS — verify_skill_off (3 seeds × 80 ticks, 기준선 = 78fbe84 + D51 갱신 2026-09-11 + D66 갱신 2026-09-13)')
+    print('ALL PASS — verify_skill_off (3시드 × 80틱, 기준선 = 78fbe84 + D51 + D66 + t13c 2026-10-11)')

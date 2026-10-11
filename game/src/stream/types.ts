@@ -142,6 +142,9 @@ export interface Decision {
 
 /** 이벤트는 type 별로 필드가 다르다(STREAM_FORMAT '이벤트 어휘 전수'). 소비자가 type/result 로 좁힌다. */
 export interface StreamEvent {
+  attack_mode?: 'melee' | 'ranged';              // t13 표시용 선택 필드
+  source_xy?: [number, number];                 // 밀침·후속 이동 전 발동 시점 타일 좌표
+  target_xy?: [number, number];
   type: string; char?: Char; result?: string; target?: string; target_id?: string;
   to?: unknown;                                  // walk: [x,y] / give·bond: 받는 봇 char
   reason?: string; job?: string;

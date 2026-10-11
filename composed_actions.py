@@ -399,6 +399,8 @@ def attack_actor(d, bot, recipient, bots):
         roll = d.d20()
         hit = roll == 20 or roll + mod >= ac
     res = {'char': bot['char'], 'type': 'attack', 'result': 'attack', 'target_id': 'b' + recipient['char'],
+           'attack_mode': 'ranged' if int(bot.get('atk_range') or 1) > 1 else 'melee',
+           'source_xy': [bot['x'], bot['y']], 'target_xy': [recipient['x'], recipient['y']],
            'target': recipient.get('name') or recipient['job'], 'roll': roll, 'mod': mod,
            'total': roll + mod, 'ac': ac, 'hit': hit}
     if d.trpg_combat:

@@ -5262,6 +5262,8 @@ class Dungeon:
         if self.trpg_combat:
             hit = combat_roll['success']
         res = {**base, 'result': 'attack', 'target': mon.kind, 'target_id': 'm%d' % mon.id,
+               'attack_mode': 'ranged' if int(bot.get('atk_range') or 1) > 1 else 'melee',
+               'source_xy': [bot['x'], bot['y']], 'target_xy': [mon.x, mon.y],
                'roll': r, 'mod': mod, 'total': total, 'ac': mon.ac, 'hit': hit}
         if self.trpg_combat:
             res['combat_roll'] = combat_roll
@@ -5897,6 +5899,7 @@ class Dungeon:
             hit = combat_roll['success']
         ev = {'type': 'monster_attack', 'id': 'm%d' % m.id, 'monster': m.kind,
               'target': b['char'],
+              'attack_mode': 'melee', 'source_xy': [m.x, m.y], 'target_xy': [b['x'], b['y']],
               'roll': r, 'mod': m.atk, 'total': total, 'ac': ac, 'hit': hit}
         if self.trpg_combat:
             ev['combat_roll'] = combat_roll

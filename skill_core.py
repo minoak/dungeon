@@ -180,11 +180,14 @@ def execute(d, bot, action, bots):
         return failure(bot, action, 'too_far')
     kind, xy, obj = target
     res = {'char': bot['char'], 'type': skill['id'], 'target': action.get('target'),
+           'source_xy': [bot['x'], bot['y']], 'target_xy': list(xy),
            'skill_id': skill['id'], 'skill_name': skill['name'], 'skill_cost': skill['cost'],
            'result': 'skill', 'effects': [], 'penalties': [], 'skill_spent': True,
            'cooldown_before': bot.get('skill_cooldowns', {}).get(skill['id'], 0)}
     surprise = kind == 'monster' and (obj.state in ('SLEEPING', 'WANDERING') or obj.waking > 0)
     hostile = any(schema.effect_key(e) != 'heal' for e in skill['effects'])
+    if hostile:
+        res['attack_mode'] = 'ranged' if skill['range'] > 1 else 'melee'
     hit, critical = True, False
     if skill['roll']['type'] == 'save' and d.trpg_combat:
         res['skill_roll'] = saving_throw(d, bot, skill, target, skill['roll']['save_ability'])

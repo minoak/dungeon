@@ -148,6 +148,10 @@ export class DungeonScene extends Phaser.Scene {
   /** 칸 중앙(타일 오브젝트용). */
   centerOf(x: number, y: number): { x: number; y: number } { return { x: (x + 0.5) * TILE, y: (y + 0.5) * TILE }; }
   actorOf(char: Char): Actor | undefined { return this.actors.get(char); }
+  /** 전투 연출이 실제 스프라이트를 참조한다. 이동·시체 상태는 이 씬이 관리한다. */
+  combatSprite(id: string): Phaser.GameObjects.Sprite | undefined {
+    return id.startsWith('m') ? this.mobs.get(Number(id.slice(1))) : this.actors.get(id.replace(/^b/, ''))?.sprite;
+  }
   /** 캐릭터의 발(월드 px) — 트윈 중이면 지금 스프라이트 자리. */
   feetOf(char: Char): { x: number; y: number } | null {
     const a = this.actors.get(char);
