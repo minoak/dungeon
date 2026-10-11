@@ -10,8 +10,9 @@ BACKENDS = ("claude_cli", "anthropic_api", "gemini_api", "openai_api", "dummy")
 KEY_ENV = {"gemini_api": "GEMINI_API_KEY", "anthropic_api": "ANTHROPIC_API_KEY",
            "openai_api": "OPENAI_API_KEY"}
 # 2026-09-17 공식 문서 확인. 출처·실측 한계: docs/model_wiring_2026-09-17.md
+# 2026-10-11 Anthropic Models API 확인: haiku 별칭을 Haiku 5.5 로 올림(4.5 는 선택 목록에 남긴다).
 MODEL_IDS = {
-    "anthropic_api": {"haiku": "claude-haiku-4-5-20251001", "sonnet": "claude-sonnet-5"},
+    "anthropic_api": {"haiku": "claude-haiku-5-5", "sonnet": "claude-sonnet-5"},
     "gemini_api": {"haiku": "gemini-3.8-flash", "sonnet": "gemini-3.1-pro-preview"},
     "openai_api": {"haiku": "gpt-5.6-terra", "sonnet": "gpt-5.6-sol"},
 }
@@ -29,8 +30,11 @@ MODEL_CHOICES = {
         ("gemini-2.5-flash", "Gemini 2.5 Flash"),
     ),
     "anthropic_api": (
+        ("claude-haiku-5-5", "Claude Haiku 5.5"),
         ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+        ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
         ("claude-sonnet-5", "Claude Sonnet 5"),
+        ("claude-opus-5-5", "Claude Opus 5.5"),
         ("claude-opus-5", "Claude Opus 5"),
         ("claude-fable-5-1", "Claude Fable 5.1"),
     ),
@@ -40,6 +44,19 @@ MODEL_CHOICES = {
         ("gpt-5.6-sol", "GPT-5.6 Sol"),
         ("gpt-6-astra", "GPT-6 Astra"),
     ),
+}
+# Anthropic 모델별 사고(thinking) 처리. 2026-10-11 Models API 확인(opus-5 는 09-17 배선 유지).
+#   "off" = disabled 로 꺼서 보낸다(짧은 행동 JSON 의 출력 예산을 사고에 쓰지 않게).
+#   "low" = 끌 수 없는 모델 — disabled 를 보내면 400 → adaptive + effort low + 넉넉한 기본 출력 예산.
+# 표에 없는 모델(직접 입력)엔 thinking 을 아예 안 보낸다 — 모르는 값을 보내 400 나는 것보다 회사 기본값이 낫다.
+ANTHROPIC_THINKING = {
+    "claude-haiku-5-5": "off",
+    "claude-haiku-4-5-20251001": "off",
+    "claude-sonnet-5": "off",
+    "claude-opus-5": "off",
+    "claude-sonnet-5-5": "low",
+    "claude-opus-5-5": "low",
+    "claude-fable-5-1": "low",
 }
 OPENAI_DEFAULT_BASE = "https://api.openai.com/v1"
 MODEL_ENV = ("DUNGEON_MODEL_HAIKU", "DUNGEON_MODEL_SONNET")

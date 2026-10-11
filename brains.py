@@ -24,7 +24,7 @@ import hashlib              # D62(09-13) 몸짓 접기 지문(sha1) — 표현�
 from concurrent.futures import ThreadPoolExecutor
 
 import dungeon_gm as G
-from brain_config import BACKENDS, MODEL_IDS as _MODEL_ID, model_id, openai_base_url, OPENAI_DEFAULT_BASE
+from brain_config import BACKENDS, MODEL_IDS as _MODEL_ID, ANTHROPIC_THINKING, model_id, openai_base_url, OPENAI_DEFAULT_BASE
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -396,6 +396,8 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None):
 NOTE_MAX = 5             # 유지 줄 수(합의 5~7 하한) — 넘치면 오래된 것부터 바랜다(FIFO,
                          #   사람도 옛 기억부터 바래듯). 판 간 영속은 없음(월드 러너 상 재론).
 NOTE_LEN = 80            # 한 줄 상한 — 수필 방지(say 160 의 절반: 기억은 말보다 압축된다)
+REASON_LEN = 2000        # 속마음(reason) 안전 상한 — 지침에 없다(10-11 민옥: 속마음은 동기, 길이를 강제하지 않는다 → 160 폐지).
+                         #   폭주·반복 출력 방지용: 직전 속마음이 다음 판단 프롬프트('이유:')에 되실려 한 번의 폭주가 대물림되지 않게
 
 _TYPES = {"goto", "attack", "interact", "search", "explore", "follow", "drink", "wait", "rest"}
 _BEARINGS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW"}
@@ -634,17 +636,19 @@ def _call_anthropic(prompt, model):
     if not mid:
         return "", "호출 실패 UnknownModel"     # 모르는 별칭이 조용히 딴 모델로 흐르지 않게
 
+    think = ANTHROPIC_THINKING.get(mid)      # 모델별 사고 처리 표(brain_config). 표 밖 모델엔 안 보낸다
     st, obj, why = _http_post(API_URL_ANTHROPIC, {
         "x-api-key": key,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json"}, {
         "model": mid,
-        "max_tokens": int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "4096" if mid == "claude-fable-5-1" else "1024")),
+        "max_tokens": int(os.environ.get("DUNGEON_BRAIN_MAXTOK", "4096" if think == "low" else "1024")),
         "messages": [{"role": "user", "content": prompt}],
-        **({"thinking": {"type": "disabled"}} if mid in ("claude-sonnet-5", "claude-opus-5") else {}),
-        # Fable은 사고를 끌 수 없어 low + 넉넉한 기본 출력 예산으로 보낸다.
+        **({"thinking": {"type": "disabled"}} if think == "off" else {}),
+        # 사고를 끌 수 없는 모델(Fable·Sonnet 5.5·Opus 5.5)은 low + 넉넉한 기본 출력 예산으로 보낸다.
+        # 사고 블록도 max_tokens 를 먹으므로 1024 면 답이 잘릴 수 있다.
         **({"thinking": {"type": "adaptive"}, "output_config": {"effort": "low"}}
-           if mid == "claude-fable-5-1" else {})})
+           if think == "low" else {})})
     if why:
         return "", why
     if st != 200:
@@ -657,6 +661,7 @@ def _call_anthropic(prompt, model):
     _TLS.usage = {"in_tok": u.get("input_tokens"), "out_tok": u.get("output_tokens"),
                   "cache_read": u.get("cache_read_input_tokens"),   # 캐싱 실측용 관측점
                   "stop": (obj or {}).get("stop_reason") or ""}
+    # type == "text" 만 모은다 — adaptive 모델의 thinking/redacted_thinking 블록은 여기서 걸러진다.
     txt = "".join(b.get("text", "") for b in ((obj or {}).get("content") or [])
                   if b.get("type") == "text").strip()
     if not txt:
@@ -2540,7 +2545,7 @@ def _parse_decision(raw, why, obs, char, roster):
             return {**composed, **({"then": then} if then else {}),
                     **({"note": note} if note else {}), **rel, **reaction,
                     "say": str(obj.get("say", "") or "")[:160],
-                    "reason": str(obj.get("reason", "") or "")[:160], "src": "haiku"}
+                    "reason": str(obj.get("reason", "") or "")[:REASON_LEN], "src": "haiku"}
         if MENU:
             act = _pick(obj, obs)
             if act:
@@ -2553,7 +2558,7 @@ def _parse_decision(raw, why, obs, char, roster):
                         **({"note": note} if note else {}),
                         **rel,
                         "say": str(obj.get("say", ""))[:160],
-                        "reason": str(obj.get("reason", ""))[:160],
+                        "reason": str(obj.get("reason", ""))[:REASON_LEN],
                         "src": "haiku"}
             # choice 불량/부재 → 아래 구식(type/target) 관용 파싱으로 폴스루(의지 최대 보존)
         typ = str(obj.get("type", "")).strip().lower()
@@ -2573,7 +2578,7 @@ def _parse_decision(raw, why, obs, char, roster):
                    **({"note": note} if note else {}),
                    **rel,
                    "say": str(obj.get("say", ""))[:160],
-                   "reason": str(obj.get("reason", ""))[:160],
+                   "reason": str(obj.get("reason", ""))[:REASON_LEN],
                    "src": "haiku"}
             if typ in ("search", "drink", "wait", "rest"):
                 return out                          # search·drink·wait·rest 는 target 불필요

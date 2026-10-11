@@ -31,8 +31,8 @@ try {
   await page.locator('#bLogin').click();
   await page.locator('#acctIn').waitFor({state: 'visible'});
   assert.equal(await page.locator('#brain').inputValue(), 'anthropic_api');
-  assert.equal(await page.locator('#brainModel').inputValue(), 'claude-haiku-4-5-20251001');
-  assert.equal(await page.locator('#brainModel option').count(), 5);
+  assert.equal(await page.locator('#brainModel').inputValue(), 'claude-haiku-5-5');
+  assert.equal(await page.locator('#brainModel option').count(), 8);
   assert.equal(await page.locator('#brainModelCustom').isVisible(), false);
   assert.equal(await page.locator('#apiKey').inputValue(), key);
   assert.equal(await page.locator('#resumeKey').inputValue(), ''); // Gemini 이어가기에는 Anthropic 키를 안 채운다
@@ -61,7 +61,7 @@ try {
   assert.equal(await page.locator('#apiKey').inputValue(), '');
   assert.equal(await page.locator('#brainModel').inputValue(), 'gpt-5.6-terra');
   await page.locator('#brainModel').selectOption('gpt-5.6-luna');
-  assert.equal(await page.locator('#costRows tr').count(), 17);
+  assert.equal(await page.locator('#costRows tr').count(), 20);
   assert((await page.locator('#costEstimate').textContent()).includes('$0.00340'));
   await page.locator('#costChars').fill('20000');
   assert((await page.locator('#costEstimate').textContent()).includes('$0.00540'));
@@ -150,9 +150,9 @@ try {
     assert((await local.locator('#tStatus').textContent()).includes('이전 런처'));
     await local.locator('#bNew').click();
     assert((await local.locator('#tStatus').textContent()).includes('이전 런처'));
-    console.log('ALL PASS local key entry: new/resume, blank env fallback, provider key clearing, no storage; prices: 17 rows, length scaling, Fable, unknown, party length, mobile');
+    console.log('ALL PASS local key entry: new/resume, blank env fallback, provider key clearing, no storage; prices: 20 rows, length scaling, Fable, unknown, party length, mobile');
   }
-  console.log('ALL PASS browser model wiring: 17 choices, custom/saved models, preset/custom start/resume, empty guard, key isolation, mobile, no page errors');
+  console.log('ALL PASS browser model wiring: 20 choices, custom/saved models, preset/custom start/resume, empty guard, key isolation, mobile, no page errors');
 } finally {
   await browser.close();
 }

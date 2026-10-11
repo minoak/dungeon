@@ -77,6 +77,11 @@ result = d.act(bots[0], dec, bots)
 check("친목 form 정제와 수신 사건", result["result"] == "done" and result["form"] == "손을 가볍게 잡는다"
       and bots[1]["last"]["type"] == "bonded")
 check("직렬화가 원래 관측을 바꾸지 않음", all(obs[k] == v for k, v in saved.items() if k != "options"))
+dec, _ = decide(d, bots, {"type": "wait", "reason": "가" * 400, "say": "나" * 200})
+check("p0.5.2c 속마음(reason)은 160에서 자르지 않음 · 말(say)은 160 그대로",
+      dec["reason"] == "가" * 400 and dec["say"] == "나" * 160)
+dec, _ = decide(d, bots, {"type": "wait", "reason": "가" * (brains.REASON_LEN + 50)})
+check("속마음 안전 상한(지침 비공개 — 폭주 출력만)", len(dec["reason"]) == brains.REASON_LEN)
 
 d, bots = scene()
 bots[1]["x"] = 4

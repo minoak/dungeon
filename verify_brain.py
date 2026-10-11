@@ -223,7 +223,7 @@ restore()
 
 # ───────────────────────── ⑨ 별칭 매핑 ─────────────────────────
 check("⑨ 'haiku' 별칭이 백엔드별로 갈린다(CLI 어휘 ≠ API 모델 id)",
-      brains._MODEL_ID["anthropic_api"]["haiku"] == "claude-haiku-4-5-20251001"
+      brains._MODEL_ID["anthropic_api"]["haiku"] == "claude-haiku-5-5"
       and brains._MODEL_ID["gemini_api"]["haiku"].startswith("gemini"))
 
 os.environ["DUNGEON_BRAIN_BACKEND"] = "anthropic_api"
@@ -232,8 +232,8 @@ _sent = {}
 brains._http_post = lambda u, h, j: (_sent.update(url=u, hdr=h, body=j), (200, {
     "content": [{"type": "text", "text": '{"choice": 1}'}]}, None))[1]
 _ORIG_CALL("프롬프트", "haiku")
-check("⑨ 요청 바디의 model = claude-haiku-4-5-20251001 (별칭이 그대로 새어나가지 않는다)",
-      _sent["body"]["model"] == "claude-haiku-4-5-20251001")
+check("⑨ 요청 바디의 model = claude-haiku-5-5 (별칭이 그대로 새어나가지 않는다)",
+      _sent["body"]["model"] == "claude-haiku-5-5")
 check("⑨ 프롬프트는 user 메시지 하나로 통째 전송(claude.exe stdin 과 같은 바이트)",
       len(_sent["body"]["messages"]) == 1
       and _sent["body"]["messages"][0]["content"] == "프롬프트"

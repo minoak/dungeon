@@ -51,7 +51,15 @@ def run():
         assert price_info("gemini_api", "gemini-3.8-flash", date(2027, 1, 1))["input"] == 1.5
         assert price_info("openai_api", "gpt-5.6-sol", date(2026, 11, 22)) is None
         assert price_info("openai_api", "custom") is None
-        print("PASS 가격 17종·할인 기한·미확인 가격")
+        haiku55 = price_info("anthropic_api", "claude-haiku-5-5")
+        assert (haiku55["input"], haiku55["output"], haiku55["checked"]) == (0.1, 0.5, "2026-10-11")
+        assert haiku55["long"] == {"above": 100000, "input": 0.5, "output": 2.5}
+        assert price_info("anthropic_api", "claude-sonnet-5-5")["input"] == 2 and price_info("anthropic_api", "claude-opus-5-5")["output"] == 20
+        assert price_info("anthropic_api", "claude-sonnet-5")["checked"] == "2026-09-17"
+        print("PASS 가격 20종·할인 기한·Haiku 5.5 10만 토큰 구간·미확인 가격")
+        # disabled 를 보내면 400 인 모델(2026-10-11 Models API) — 표에서 파생하지 않고 사실로 박는다.
+        assert {m for m, t in C.ANTHROPIC_THINKING.items() if t != "off"} == {"claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1"}
+        assert all(mid in C.ANTHROPIC_THINKING for mid, _ in C.MODEL_CHOICES["anthropic_api"])
         assert list(inspect.signature(B._call_claude).parameters) == ["prompt", "model"]
         for provider in C.HTTP_BACKENDS:
             os.environ["DUNGEON_BRAIN_BACKEND"] = provider
@@ -87,8 +95,17 @@ def run():
                     assert kw["headers"]["Authorization"] == "Bearer " + key
                     assert body["max_completion_tokens"] == 1024 and body["reasoning_effort"] == "none"
             if provider == "anthropic_api":
+                assert body["model"] == "claude-haiku-5-5" and body["thinking"] == {"type": "disabled"}
                 assert B._call_claude("p", "sonnet") == ("ok", None)
                 assert calls[-1][2]["thinking"] == {"type": "disabled"}
+                # adaptive 모델의 사고 블록은 텍스트에 섞이지 않는다. 사고만 오고 잘리면 빈 응답 라벨.
+                reply[:] = [200, {"content": [{"type": "thinking", "thinking": "속내", "signature": "s"},
+                                              {"type": "redacted_thinking", "data": "x"},
+                                              {"type": "text", "text": " ok "}], "usage": {}, "stop_reason": "end_turn"}]
+                assert B._call_claude("p", "haiku") == ("ok", None)
+                reply[:] = [200, {"content": [{"type": "thinking", "thinking": "속내", "signature": "s"}], "stop_reason": "max_tokens"}]
+                assert B._call_claude("p", "haiku") == ("", "빈 응답 rc=200 | max_tokens")
+                reply[:] = [200, expected]
             choices = C.provider_catalog()[provider]["choices"]
             assert len({c["id"] for c in choices}) == len(choices)
             assert all(mid in [c["id"] for c in choices] for mid in C.MODEL_IDS[provider].values())
@@ -103,11 +120,12 @@ def run():
                         think = body["generationConfig"]["thinkingConfig"]
                         assert think == ({"thinkingBudget": 0} if mid == "gemini-2.5-flash" else
                                          {"thinkingLevel": "minimal" if mid in ("gemini-3-flash-preview", "gemini-3.1-flash-lite") else "low"})
-                    elif mid == "claude-fable-5-1":
+                    elif provider == "anthropic_api" and C.ANTHROPIC_THINKING[mid] == "low":
                         assert body["thinking"] == {"type": "adaptive"}
                         assert body["output_config"] == {"effort": "low"} and body["max_tokens"] == 4096
-                    elif mid == "claude-opus-5":
+                    elif provider == "anthropic_api":
                         assert body["thinking"] == {"type": "disabled"}
+                        assert "output_config" not in body and body["max_tokens"] == 1024
                     elif provider == "openai_api":
                         assert body["reasoning_effort"] == ("low" if mid == "gpt-6-astra" else "none")
                         assert body["max_completion_tokens"] == (4096 if mid == "gpt-6-astra" else 1024)
@@ -120,6 +138,7 @@ def run():
                 B._call_claude("p", "sonnet")
                 url, kw, body = calls[-1]
                 assert "large-model" in (url if provider == "gemini_api" else body["model"])
+                assert "thinking" not in body   # 표 밖 모델엔 사고 설정을 안 보낸다
             reply[:] = [200, {}]
             assert B._call_claude("p", "haiku")[1].startswith("빈 응답 rc=200")
             reply[:] = [401, {"error": {"type": "authentication_error", "status": "UNAUTHENTICATED", "message": key}}]
@@ -264,7 +283,8 @@ def run():
             try:
                 _, presets = request("/api/presets")
                 assert set(presets["providers"]) == set(C.HTTP_BACKENDS)
-                assert sum(len(p["choices"]) for p in presets["providers"].values()) == 17
+                assert sum(len(p["choices"]) for p in presets["providers"].values()) == 20
+                assert presets["model_defaults"]["anthropic_api"] == "claude-haiku-5-5"
                 parent = {k: "parent-secret" for k in C.KEY_ENV.values()}
                 parent.update({k: "parent-model" for k in (*C.MODEL_ENV, *C.LEGACY_MODEL_ENV.values())})
                 parent["DUNGEON_BRAIN_FALLBACK"] = "anthropic_api"

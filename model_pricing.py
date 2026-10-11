@@ -3,6 +3,7 @@
 from datetime import date
 
 CHECKED = "2026-09-17"
+CHECKED_LATER = {mid: "2026-10-11" for mid in ("claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5")}
 SOURCES = {
     "gemini_api": "https://ai.google.dev/gemini-api/docs/pricing",
     "anthropic_api": "https://platform.claude.com/docs/en/about-claude/pricing",
@@ -19,8 +20,11 @@ RATES = {
     "gemini-3.1-pro-preview": (2, 12),
     "gemini-3-flash-preview": (0.5, 3),
     "gemini-2.5-flash": (0.3, 2.5),
+    "claude-haiku-5-5": (0.1, 0.5),
     "claude-haiku-4-5-20251001": (1, 5),
+    "claude-sonnet-5-5": (2, 10),
     "claude-sonnet-5": (2, 10),
+    "claude-opus-5-5": (4, 20),
     "claude-opus-5": (5, 25),
     "claude-fable-5-1": (10, 50),
     "gpt-5.6-terra": (2, 12),
@@ -36,7 +40,7 @@ def price_info(provider, mid, today=None):
     rate = RATES.get(mid)
     if rate is None:
         return None
-    info = {"input": rate[0], "output": rate[1], "currency": "USD", "checked": CHECKED,
+    info = {"input": rate[0], "output": rate[1], "currency": "USD", "checked": CHECKED_LATER.get(mid, CHECKED),
             "source": SOURCES[provider]}
     if mid in ("gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash"):
         if today >= date(2027, 1, 1):
@@ -45,6 +49,10 @@ def price_info(provider, mid, today=None):
             info["note"] = "2026-12-31까지 할인 단가"
     if mid == "gemini-3.1-pro-preview":
         info["long"] = {"above": 200000, "input": 4, "output": 18}
+    if mid == "claude-haiku-5-5":
+        # 프롬프트 10만 토큰 이하가 기본 단가. 초과하면 요청 전체가 긴 입력 단가(론처 effectiveRate 가 above 초과로 고른다).
+        info["long"] = {"above": 100000, "input": 0.5, "output": 2.5}
+        info["note"] = "입력 10만 토큰 초과 시 $0.5 / $2.5"
     if provider == "openai_api":
         info["long"] = {"above": 272000, "input": rate[0] * 2, "output": rate[1] * 1.5}
     if mid == "gpt-5.6-sol":
