@@ -1,8 +1,21 @@
 # -*- coding: utf-8 -*-
-"""받은 사회 사건과 자발적인 반응. 집계는 관전 전용이며 봇의 기억·관계 점수에 쓰지 않는다."""
+"""받은 사회 사건과 자발적인 반응. 집계는 관전 전용이며 봇의 기억·관계 점수에 쓰지 않는다.
+
+사건 번호(p0.5.4 — master_plan §6.2 C·D, 누출 경로 4·5·6):
+  · 원장(events)과 관전 스트림은 원정 전체 일련번호 social_N 을 그대로 쓴다(사건 줄을 이어 붙이는 열쇠).
+  · 받는 사람에게는 **그 사람이 받은 순서의 번호**(alias)를 준다. 꼴은 같은 social_N 이다(모험가 지침의 '`social_...` ID' 그대로).
+    전역 번호를 주면 번호 틈으로 '내가 모르는 사건이 몇 개 있었나'가 샌다. 반응(reaction_to)은 받은 번호로 받고 consume 이 원장 번호로 되돌린다.
+    남의 번호로 반응하면 내 번호표에 없으므로 거절된다.
+  · offer 는 recipients·source_action_id·parent_action_id·private 를 빼고, 결과에서 옮겨 온 칸은 공개 투영(info_guard.public)을 거친다.
+  · 비공개 사건(record(..., private=True)): 행동자 결과에 사건 id 를 붙이지 않는다(붙일 곳은 결과의 audit). 받는 사람에게는 보통 사건처럼 간다.
+    앞으로의 목록: 들킨 살핌·들킨 절도(피해자)·매혹 시도·매혹 풀림.
+"""
 import copy
 
+import info_guard as IG
+
 PENDING_MAX = 32
+OFFER_DROP = ('recipients', 'source_action_id', 'parent_action_id', 'private')   # 받는 사람에게 보내지 않는 칸
 
 
 def parse(obj, obs):
@@ -30,7 +43,9 @@ def describe(event):
         return '친목: ' + event.get('form', '몸짓')
     if event['type'] == 'give':
         return '건네기: ' + event.get('what', event.get('item', '물건'))
-    return '물약 사용: HP +%d' % event.get('heal', 0)
+    if event['type'] == 'use':
+        return '물약 사용: HP +%d' % event.get('heal', 0)
+    return '상호작용'   # 모르는 type(p0.5.4, §10.3) — '물약 사용'으로 지어내지 않는다. 새 사건 type 은 위에 가지를 더한다
 
 
 class ReactionBook:
@@ -45,6 +60,7 @@ class ReactionBook:
         self.new_reactions = []
         self.floors = []
         self.floor = None
+        self.alias = {}          # 받는 사람 → {원장 id: 그 사람의 번호}(p0.5.4). 옛 스냅샷의 원장은 snapshot 이관이 rebuild_alias 로 매긴다
         self.start_floor(depth, turn)
 
     def start_floor(self, depth, turn):
@@ -53,16 +69,32 @@ class ReactionBook:
         self.offered.clear()
         self.floor = {'id': 'floor_%d' % (len(self.floors) + 1), 'depth': depth, 'since': turn}
 
-    def record(self, typ, actor, recipients, turn, **details):
+    def local(self, char, eid):
+        """원장 사건 eid 의 char 쪽 번호 — record 가 받는 순간 매긴다(받은 순서 = 원장 순서). 늘 성립: alias[char] = char 가 받은 사건을 원장 순서로 social_1..n."""
+        book = self.alias.setdefault(str(char), {})
+        if eid not in book:
+            book[eid] = 'social_%d' % (len(book) + 1)
+        return book[eid]
+
+    def rebuild_alias(self):
+        """번호표를 원장에서 다시 매긴다 — 옛 스냅샷(번호표 없는 원장)을 이관할 때. 지나간 사건·대기 사건 모두 받은 순서대로 번호를 받아,
+        이어간 뒤 새 사건이 옛 대기 사건보다 앞 번호를 받지 않는다(p0.5.4b, Codex 리뷰)."""
+        self.alias = {}
+        for eid, event in self.events.items():
+            for char in event.get('recipients') or ():
+                self.local(char, eid)
+
+    def record(self, typ, actor, recipients, turn, private=False, **details):
         recipients = sorted({str(c) for c in recipients if str(c) != str(actor)})
         if not recipients:
             return None
         event = {'id': 'social_%d' % (len(self.events) + 1), 'type': typ, 'actor': str(actor),
                  'recipients': recipients, 'turn': turn, 'depth': self.floor['depth'],
-                 'floor_id': self.floor['id'], **details}
+                 'floor_id': self.floor['id'], **details, **({'private': True} if private else {})}
         self.events[event['id']] = event
         self.new_events.append(copy.deepcopy(event))
         for char in recipients:
+            self.local(char, event['id'])
             queue = self.pending.setdefault(char, [])
             queue.append(event['id'])
             del queue[:-PENDING_MAX]
@@ -71,28 +103,31 @@ class ReactionBook:
     def offer(self, char):
         ids = self.pending.pop(char, [])
         self.offered[char] = set(ids)
-        # 집계·다른 수신자·과거 반응을 노출하지 않고 자신이 받은 사건의 사실만 보낸다.
-        return [{k: copy.deepcopy(v) for k, v in self.events[rid].items() if k != 'recipients'} for rid in ids]
+        # 집계·다른 수신자·과거 반응·원장 번호를 노출하지 않고, 자신이 받은 사건의 사실만 자기 번호로 보낸다.
+        return [{**IG.public({k: v for k, v in self.events[rid].items() if k not in OFFER_DROP}), 'id': self.local(char, rid)}
+                for rid in ids]
 
     def consume(self, char, decision, turn):
         offered = self.offered.pop(char, set())
         value, target = decision.get('reaction'), decision.get('reaction_to')
         if value is None and target is None:
             return None
-        valid = (value in ('like', 'dislike') and isinstance(target, str) and target in offered
-                 and (char, target) not in self.responded and not decision.get('skipped')
+        mine = self.alias.get(str(char), {})
+        source_id = next((eid for eid in offered if mine.get(eid) == target), None) if isinstance(target, str) else None
+        valid = (value in ('like', 'dislike') and source_id is not None
+                 and (char, source_id) not in self.responded and not decision.get('skipped')
                  and decision.get('src') != 'plan')
         if not valid:
             decision.pop('reaction', None)
             decision.pop('reaction_to', None)
             decision['reaction_error'] = {'code': 'reaction_not_eligible', 'value': value, 'target': target}
             return None
-        source = self.events[target]
+        source = self.events[source_id]
         reaction = {'id': 'reaction_%d' % (len(self.reactions) + 1), 'actor': char,
-                    'to': source['actor'], 'value': value, 'reaction_to': target,
+                    'to': source['actor'], 'value': value, 'reaction_to': source_id,
                     'turn': turn, 'depth': source['depth'], 'floor_id': source['floor_id'],
                     'source': copy.deepcopy(source)}
-        self.responded.add((char, target))
+        self.responded.add((char, source_id))
         self.reactions.append(reaction)
         self.new_reactions.append(copy.deepcopy(reaction))
         return reaction

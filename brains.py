@@ -24,6 +24,7 @@ import hashlib              # D62(09-13) 몸짓 접기 지문(sha1) — 표현�
 from concurrent.futures import ThreadPoolExecutor
 
 import dungeon_gm as G
+import info_guard as IG     # p0.5.4 정보 보호 — 모르는 결과의 폴백 축소·NPC 두뇌 입력의 공개 투영
 from brain_config import BACKENDS, MODEL_IDS as _MODEL_ID, ANTHROPIC_THINKING, model_id, openai_base_url, OPENAI_DEFAULT_BASE
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -341,6 +342,7 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None):
     D93(09-20) 되받기: res.result 'npc_say' = 캐릭터가 이 NPC 에게 **말로** 건넸다(use 가 아니다 — 판정 없음). said=그 말, res.prev=그 앞에
     이 NPC 가 그 캐릭터에게 한 말(있을 때만 — 대화의 앞 줄). 언제 부를지·상한은 러너(show_runner.npc_say_replies)가 정한다."""
     npc = npc or {}
+    res = IG.public(res)                              # p0.5.4 §6.3 경로 17: NPC 두뇌 입력도 공개 투영 사본만(audit·사람 대상 굴림이 섞이지 않게)
     name = res.get("npc") or npc.get("name") or "마을 사람"
     who = "%s(%s)" % (bot.get("name") or ("모험가 %s" % bot.get("char", "?")), bot.get("job", "모험가"))
     if bot.get("people") is not None:       # D85: 규칙은 평등하다 — NPC 도 통성명하지 않은 사람의 이름·직업을 모른다(겉모습만)
@@ -884,7 +886,7 @@ def _by_phrase(w):
 
 
 def _witness_prose(w):
-    """목격 사실 한 줄(D22 전달층) — 어휘별 사람말. 새 kind 는 마지막 폴백이 정직하게 흘린다."""
+    """목격 사실 한 줄(D22 전달층) — 어휘별 사람말. 새 kind 는 마지막 폴백이 종류(kind)만 흘린다(p0.5.4 — 사실 dict 통째는 싣지 않는다)."""
     who = "%s(봇%s)" % (w.get("name", "동료"), w.get("char", "?"))
     k = w.get("kind")
     if k == "ally_down":
@@ -942,7 +944,7 @@ def _witness_prose(w):
         if w.get("result"):                 # 결과가 있는 사용(상자류) — 괄호 한 마디(파트너 동의 09-05):
             line += " (%s)" % w["result"]   #   동사는 하나로 두고 좋은/나쁜 결과 정보는 잃지 않는다.
         return line                         # 사실만 — 어디로 갔는지·따라가라는 말은 없다.
-    return "%s의 일: %s" % (who, json.dumps(w, ensure_ascii=False))
+    return "%s의 일: %s" % (who, json.dumps({"kind": k}, ensure_ascii=False))
 
 
 def _tgt_name(tgt, names=None):
@@ -958,8 +960,9 @@ def _tgt_name(tgt, names=None):
 
 def _last_prose(last, names=None):
     """직전 결과(obs.last)를 1인칭 사실 문장으로 — show_runner.act_summary(관전 3인칭)의 자매.
-    어휘 전거 = STREAM_FORMAT.md 이벤트 표. 모르는 형태는 컴팩트 JSON 폴백(정보 무소실 —
-    미래 additive 필드의 안전망, verify_wire ③이 실전 폴백 0을 감시)."""
+    어휘 전거 = STREAM_FORMAT.md 이벤트 표. 모르는 형태는 {type,target,status} 만의 JSON 폴백(p0.5.4 §6.3 경로 2 —
+    결과 dict 통째는 상대 수치·숨은 원인을 실어 나를 수 있다). 새 결과는 여기 문장 가지를 더한다 — verify_wire ③·verify_info_guard ⑥이
+    실전 폴백 0을 감시한다."""
     t, r = last.get("type"), last.get("result")
     if last.get('skill_id'):
         return G.SK.summary(last)
@@ -981,6 +984,8 @@ def _last_prose(last, names=None):
         return "%s에게 접근할 길이 없었다" % _tgt_name(tgt, names)
     if r == 'no_effect':
         return '%s에 %s을(를) 시도했으나 변화가 없었다 (%s)' % (_tgt_name(tgt, names), t, last.get('reason_code', 'no_effect'))
+    if r == 'lost' and t in ('goto', 'explore', 'follow', 'attack'):   # p0.5.4: 조합형 실행이 대상 ID 를 지금 못 찾음(CA.execute) — 옛 판은 결과 dict 통째 JSON 폴백이었다 ⚠️문구 임시
+        return '%s에 %s을(를) 하려 했지만 — 그 대상을 지금 찾을 수 없었다(지금 보이는 대상에 없다)' % (_tgt_name(tgt, names), t)
     if r == 'drink_boon':                 # D74(09-15) 축복의 물약 — 자기 행동의 결과(사실만). drink(item=boon)·use(self, i4) 공용
         return "축복의 물약을 들이켰다 — %s이 1 올랐다(지금 %s %d, 남은 축복의 물약 %d병)" % (
             G.STAT_KR.get(last.get('stat'), '?'), G.STAT_KR.get(last.get('stat'), '?'), last.get('value', 0), last.get('boons', 0))
@@ -1301,7 +1306,7 @@ def _last_prose(last, names=None):
         if r == "pathed":
             return ("%s 쪽으로 걷기 시작했다" % _tgt_name(tgt, names)
                     if tgt and tgt != "auto" else "새 길로 걷기 시작했다")
-    return json.dumps(last, ensure_ascii=False)        # 미지 형태 — 정직한 폴백(숨기지 않는다)
+    return IG.fallback_json(last)                      # 미지 형태 — {type,target,status} 만(p0.5.4: 나머지 칸은 싣지 않는다)
 
 
 _TRAIL_RUNS = {"walking": "%d걸음", "following": "%d틱 동행", "beside": "%d틱 곁",   # beside = D48 개정 추적의 곁 유지 틱
@@ -1493,7 +1498,9 @@ def _trail_prose(trail, names=None):
     return " → ".join(parts)
 
 
-# _wire 가 아는 obs 키 전부 — 밖의 키는 '그 밖의 정보' JSON 으로 정직하게 노출(조용한 누락 금지).
+# _wire 가 아는 obs 키 전부. p0.5.4(§6.3 경로 3): 밖의 키는 그리지 않는다 — 옛 '그 밖의 정보' JSON 폴백은 관측 dict 를 통째로
+#   프롬프트에 실어 나르는 길이었다. 새 관측 키는 여기 등록하고 문장으로 그린다. 등록 누락은 verify_wire ③⑩·verify_info_guard ⑥이
+#   unwired_keys() 로 잡는다(조용한 누락 금지는 그대로 — 지키는 자리가 프롬프트에서 검증으로 옮겼다).
 _WIRE_KEYS = frozenset((
     "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "potions",
     "depth", "turn",
@@ -1522,8 +1529,13 @@ _WIRE_KEYS = frozenset((
     "notices",   # D61 건물 역할 부품: 게시판(의뢰)·신의 요청 — 마을 줄 아래, 문턱 근처에 섰을 때만 · D90(09-20) 들린 말(kind 'overheard')
     "gear"))   # 장비(07-30): 아는 키지만 wire 는 일부러 안 그린다 — 착용 정보의 표현은
                #   시트(_sheet 차림 줄, 불변 프리픽스=캐싱)가 소유하고, 비교는 입수 메뉴
-               #   라벨에만 나온다(파트너 설계: 상시 가변부 미노출). 여기 등재를 빼면
-               #   '그 밖의 정보' JSON 덤프로 매턴 새 나간다(화이트리스트 폴백)
+               #   라벨에만 나온다(파트너 설계: 상시 가변부 미노출).
+_WIRE_SIDE_KEYS = ("action_schema", "actor", "targets", "items", "ways", "social_events", "skills")   # 조합형 관측의 키 — _wire 의 조합형 절이 그린다
+
+
+def unwired_keys(obs):
+    """_wire 가 그리지 않는(어디에도 등록되지 않은) 관측 키 — 실전에서 늘 비어 있어야 한다."""
+    return sorted(k for k in obs if k not in _WIRE_KEYS and k not in _WIRE_SIDE_KEYS)
 
 
 def _town_guide_lines(tg, names):
@@ -2112,12 +2124,7 @@ def _wire(obs, names=None, compose=False):
         for event in obs['social_events']:
             out.append('- [%s] t%s · %s(봇%s)에게서: %s' % (
                 event['id'], event['turn'], names.get(event['actor'], '상대'), event['actor'], G.SR.describe(event)))
-    extra = {kk: v for kk, v in obs.items() if kk not in _WIRE_KEYS
-             and kk not in ('action_schema', 'actor', 'targets', 'items', 'ways', 'social_events', 'skills')}
-    if extra:                       # 미래 additive 필드 — 조용한 누락 대신 정직한 노출
-        out += ["", "## 그 밖의 정보", "```json",
-                json.dumps(extra, ensure_ascii=False), "```"]
-    return "\n".join(out)
+    return "\n".join(out)           # 등록되지 않은 키(unwired_keys)는 그리지 않는다 — _WIRE_KEYS 머리글
 
 
 def _pick(obj, obs):
@@ -2596,6 +2603,18 @@ def _parse_decision(raw, why, obs, char, roster):
     return fb
 
 
+def _heard(m, char, book):
+    """들은 말 한 마디의 관측 사본(p0.5.4 §6.3 경로 4) — 사회 사건 번호는 받은 사람의 번호로 바꾼다. 편지함 원본(스트림 tick.inbox)은 원장 번호 그대로."""
+    out = dict(m)
+    if "social_event_id" in out:
+        mine = (book.alias.get(str(char)) or {}).get(out["social_event_id"]) if book is not None else None
+        if mine:
+            out["social_event_id"] = mine
+        else:
+            out.pop("social_event_id")   # 받은 사건이 아니면 번호를 새로 매기지 않는다(번호표 = 받은 사건만, 원장 순서)
+    return out
+
+
 def social_all(d, bots, inbox=None):
     """사교 콜(채널 분리 2026-07-26) — **걷는 중에도 열리는 말의 채널**.
 
@@ -2627,7 +2646,7 @@ def social_all(d, bots, inbox=None):
     obss = {}
     for b in talkers:
         o = d.view(b, bots)
-        o['messages'] = inbox.get(b['char'], [])
+        o['messages'] = [_heard(m, b['char'], G.SR.book(d)) for m in inbox.get(b['char'], [])]
         obss[b['char']] = o
 
     def ask(b):
@@ -2679,7 +2698,7 @@ def think_all(d, bots, inbox=None, on_error=None):
         reaction_book = G.SR.book(d)
         if reaction_book is not None:
             o['social_events'] = reaction_book.offer(b['char'])
-        o["messages"] = [{**m, **({"to_me": True} if (G.addressed_to(m, b["char"]) and m.get("to") != "all") else {})}
+        o["messages"] = [{**_heard(m, b["char"], reaction_book), **({"to_me": True} if (G.addressed_to(m, b["char"]) and m.get("to") != "all") else {})}
                          for m in inbox.get(b["char"], [])]   # D41: 나를 지목한 말 표식(렌더용, 스트림 무접촉)
         if b.get("intent"):
             o["intent"] = b["intent"]   # 판단 되먹임(D15①): 자기 직전 판단의 기억 — inbox와 같은

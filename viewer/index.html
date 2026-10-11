@@ -424,7 +424,8 @@ function reactionText(r) {
   const detail = s.type === 'say' ? `${s.say_kind || '잡담'}: 「${s.text || ''}」`
     : s.type === 'bond' ? `친목: ${s.form || '몸짓'}`
     : s.type === 'give' ? `건네기: ${s.what || s.item || '물건'}`
-    : s.skill_id ? `${s.skill_name || s.skill_id}: HP +${s.heal || 0}` : `물약 사용: HP +${s.heal || 0}`;
+    : s.skill_id ? `${s.skill_name || s.skill_id}: HP +${s.heal || 0}`
+    : s.type === 'use' ? `물약 사용: HP +${s.heal || 0}` : `상호작용 (${s.type})`;   // 모르는 type(p0.5.4) — 물약으로 지어내지 않는다
   return `${nameSpan(r.actor)} → ${nameSpan(r.to)} · ${r.value === 'like' ? '좋아함 (like)' : '싫어함 (dislike)'}` +
     ` — ${esc(detail)} (t${esc(s.turn)} · ${esc(r.reaction_to)})`;
 }

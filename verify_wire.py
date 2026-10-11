@@ -4,16 +4,16 @@
   ① 순수성: _wire 는 obs 를 변형하지 않는다(딥카피 대조) + 같은 obs → 같은 문자열(결정론)
   ② 전수성: 실측 스윕에서 sights 의 모든 지칭(계단·피처 id·몹 id·동료·트인 길)과 장부
      (known statics id·last_seen)가 문장에 등장 — 표현 층의 조용한 누락은 조향이다
-  ③ 실전 폴백 0: 스윕 전체에서 '그 밖의 정보'(미지 키)·last JSON 폴백 미발동
+  ③ 실전 폴백 0: 스윕 전체에서 미등록 관측 키(brains.unwired_keys — p0.5.4 부터 그리지 않는다)·last JSON 폴백 미발동
      — 실전 어휘 전부가 문장 어휘로 커버된다는 증명
   ④ 스위치(D17-4): OBS_ASCII=0 → 그림 섹션 부재 / OBS_POS=0 → 좌표 줄 부재 / 켬(기본) → 존재
   ⑤ 시야-온리 보존: concealed 몹 id 가 문장 어디에도 없음(회귀 그물)
   ⑥ last·주입 어휘 합성: 대표 last 형태 전수(피격/조우/함정/길막힘/허탕/동행접음/작정깨짐/
      상자/샘/공격/수색/핑)와 intent·witnessed·messages 주입이 전부 문장으로 렌더 + 미지
-     형태는 JSON 폴백으로 정직하게 노출
+     형태는 {type,target,status} 만의 JSON 폴백(p0.5.4 — 나머지 칸은 싣지 않는다)
   ⑦ 프롬프트 조립: 메뉴·자유서술 모두 obs JSON 덤프(```json) 부재(다이어트 실증) +
      메뉴판에만 번호 목록 존재
-  ⑩ (09-20) 마을 장면: 실제 마을(layout·행인·의뢰·안내)의 관측을 메뉴형·조합형 두 직렬화에 — '그 밖의 정보' 0건
+  ⑩ (09-20) 마을 장면: 실제 마을(layout·행인·의뢰·안내)의 관측을 메뉴형·조합형 두 직렬화에 — 미등록 관측 키 0건
      (③ 의 스윕이 던전만 돌아 마을의 열쇠 여덟이 JSON 으로 한 번 더 새던 것을 못 잡았다) + 문장은 그대로
 (스윕 = dummy 결정론 — LLM 0콜, 초 단위.)
 """
@@ -104,7 +104,7 @@ def sweep():
                 st["mutate"] += (obs != snap)
                 st["det"] += (txt == brains._wire(obs, NAMES))
                 st["census"] += (0 if census_ok(obs, txt) else 1)
-                if "## 그 밖의 정보" in txt or "- 그 결과: {" in txt:
+                if brains.unwired_keys(obs) or "- 그 결과: {" in txt:
                     st["fallback"] += 1
                 if any(_has(txt, "m%d" % m.id) for m in d.monsters
                        if m.alive and m.concealed):
@@ -187,8 +187,9 @@ def synth_checks():
     check("⑥ last 대표 형태 %d종 전부 문장 렌더" % len(LASTS), not bad)
     for b in bad:
         print("         폴백/누락: %s" % b)
-    unk = brains._last_prose({"type": "teleport", "result": "zap"}, NAMES)
-    check("⑥ 미지 형태 → JSON 폴백(정직 노출)", unk.startswith("{"))
+    unk = brains._last_prose({"type": "teleport", "result": "zap", "dc": 17}, NAMES)
+    check("⑥ 미지 형태 → {type,target,status} 만의 JSON 폴백(다른 칸은 싣지 않는다)",
+          json.loads(unk) == {"type": "teleport", "status": "zap"})
 
     obs = {"job": "전사", "sex": "남", "hp": 9, "maxhp": 14, "str": 3, "dex": 1,
            "inventory": 1, "depth": 1, "pos": [5, 5],
@@ -330,14 +331,12 @@ def town_checks():
                     obs = d.view(b, bots)
                     seen_keys |= set(obs)
                     txt = brains._wire(obs, NAMES, compose=compose)
-                    if "## 그 밖의 정보" in txt:
-                        bad.append((compose, returned, tick, b["char"],
-                                    sorted(k for k in obs if k not in brains._WIRE_KEYS
-                                           and k not in ("action_schema", "actor", "targets", "items", "ways", "social_events", "skills"))))
+                    if brains.unwired_keys(obs) or "## 그 밖의 정보" in txt:
+                        bad.append((compose, returned, tick, b["char"], brains.unwired_keys(obs)))
                     goal = "exit" if b is a else next((f["id"] for f in obs["sights"]["features"] if f.get("type") == "building"), "exit")
                     d.act(b, {"type": "goto", "target": goal}, bots)
     want = {"boons", "town_hear", "town_zone", "town_zone_about", "expedition_returned", "quests", "floor_notice", "town_guide"}
-    check("⑩ 마을 장면: 메뉴형·조합형 × 원정 전·귀환 뒤 — '그 밖의 정보' 0건(누수 %d)" % len(bad), not bad)
+    check("⑩ 마을 장면: 메뉴형·조합형 × 원정 전·귀환 뒤 — 미등록 관측 키 0건(누수 %d)" % len(bad), not bad)
     for x in bad[:3]:
         print("         누수: %s" % (x,))
     check("⑩ 표본이 그 열쇠 여덟을 전부 밟았다(%s)" % ",".join(sorted(want - seen_keys)), want <= seen_keys)

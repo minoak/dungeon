@@ -136,11 +136,8 @@ def failure(bot, action, why):
 def ability(target, name):
     # 몬스터에 6능력치를 도입하지 않는다. 기존 atk/AC에서 알파용 STR/DEX 보정만 유도한다.
     # 정신(p0.5.3): 봇은 몸의 칸(없으면 직업 기본값 — judge.prof), 몬스터는 0(master_plan §2.1).
-    if target[0] == 'bot':
-        return judge.prof(target[2], name) if name == 'mind' else target[2][name]
-    if name == 'mind':
-        return 0
-    return target[2].atk if name == 'str' else max(0, target[2].ac - 10)
+    # 규칙은 judge.ability 한 곳(p0.5.4 — 판정 함수 묶음이 같은 능력치를 읽는다).
+    return judge.ability(target[2], name)
 
 
 def saving_throw(d, bot, skill, target, name):

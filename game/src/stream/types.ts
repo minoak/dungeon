@@ -157,8 +157,8 @@ export interface Reply { from: Char; to: Char; kind: string; how: string }
 
 export interface SocialEvent {
   skill_id?: string; skill_name?: string;
-  id: string; type: 'say' | 'give' | 'bond' | 'use' | 'skill'; actor: Char; recipients: Char[];
-  turn: number; depth: number; floor_id: string; source_action_id?: string;
+  id: string; type: 'say' | 'give' | 'bond' | 'use' | 'skill' | (string & {}); actor: Char; recipients: Char[];   // p0.5.4: 새 사건 type 은 문장 가지가 없으면 중립 문장
+  turn: number; depth: number; floor_id: string; source_action_id?: string; private?: boolean;
   text?: string; say_kind?: string; addressed_to?: string; what?: string; item?: string; form?: string; heal?: number;
 }
 export interface Reaction {

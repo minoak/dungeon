@@ -7,7 +7,8 @@ export function socialDescription(e: SocialEvent): string {
   if (e.type === 'say') return `${e.say_kind || '잡담'}: 「${e.text || ''}」`;
   if (e.type === 'bond') return `친목: ${e.form || '몸짓'}`;
   if (e.type === 'give') return `건네기: ${e.what || e.item || '물건'}`;
-  return `물약 사용: HP +${e.heal || 0}`;
+  if (e.type === 'use') return `물약 사용: HP +${e.heal || 0}`;
+  return `상호작용 (${e.type})`;   // 모르는 type(p0.5.4) — '물약 사용'으로 지어내지 않는다. 관전 화면이라 type 이름은 보인다
 }
 
 export function reactionHtml(r: Reaction, run: Run): string {

@@ -22,14 +22,14 @@
   · 시드 RNG 스트림 일원화(self.rng) — 모든 굴림 경유, 마스터→깊이별 파생 = 재현성.
 """
 
-import json                     # 사건 사전(D40) 폴백 — 모르는 결과 형태는 JSON 으로 정직 노출
 import composed_actions as CA
 import social_reactions as SR
 import skill_core as SK
 import skill_combat as SC
 import entities as ENT           # 엔티티 저장소(D50, 09-11) — 몬스터·함정·오브젝트·NPC 정의(수치·이름·지식 본문)
 import interactables as IA       # 쓰임 부품(D89, 09-20) — 정의의 use{kind} 가 오브젝트·건물 상호작용을 낸다(엔진 무의존 모듈 — 순환 import 없음)
-import judge                     # p0.5.3 판정 함수 묶음 — 지금은 숙련 접근자(prof)만: 스폰이 몸에 정신·숙련을 붙인다(엔진 무의존 모듈)
+import judge                     # p0.5.3 판정 함수 묶음 — 엔진이 쓰는 것은 숙련 접근자(prof): 스폰이 몸에 정신·숙련을 붙인다(엔진 무의존 모듈)
+import info_guard as IG          # p0.5.4 정보 보호 — 봇이 보는 결과(last·궤적·목격·받은 일)는 공개 투영 사본, 모르는 결과의 폴백은 {type,target,status}만
 import town_layout as TL         # 마을 layout(town-layout-v1, 맵 트랙 저작 원본) → 격자 컴파일(엔진 무의존 모듈)
 import hashlib                  # D90(09-20) 들린 말 고르기 — 판정 rng 를 건드리지 않는 결정론 해시
 import math
@@ -256,7 +256,7 @@ def place_word(tgt, ctx='walk'):
 
 def event_tags(rec, names=None):
     """사건 사전 투영(D40): 엔진 결과 dict 하나 → [(키, 라벨, 짧은 사실)]. 한 결과가 여러 사실을 담으면
-    (조우: 적 여럿+함정+발견) 여러 꼬리표. 사실만·해석 없음·조향 없음. 모르는 형태=('misc','기타',JSON).
+    (조우: 적 여럿+함정+발견) 여러 꼬리표. 사실만·해석 없음·조향 없음. 모르는 형태=('misc','기타',{type,target,status} JSON — p0.5.4).
     어휘 전거는 STREAM_FORMAT 이벤트 표 — _last_prose 와 같은 결과를 읽되 문장 대신 꼬리표를 낸다."""
     if not isinstance(rec, dict):
         return [('misc', '기타', str(rec))]
@@ -376,7 +376,7 @@ def event_tags(rec, names=None):
             if rec.get('status'):
                 out.append(('status', rec['status'], '걸림'))
             return out
-        return [('misc', '기타', json.dumps(rec, ensure_ascii=False))]
+        return [('misc', '기타', IG.fallback_json(rec))]
     if t == 'give':                                   # D47 ②(09-09) 건네기 — 한 쪽의 자기 사건
         if r == 'given':
             return [('give', '건넴', '%s → %s%s' % (rec.get('what', '?'), nm(rec.get('to')),
@@ -417,6 +417,8 @@ def event_tags(rec, names=None):
         who = nm(tgt[1:]) if (tgt[:1] == 'b' and tgt[1:].isdigit()) else place_word(tgt, 'decide')   # 사람 대상 goto(D48 개정)=이름
         if r == 'pathed':
             return [('start', '이동 시작', (who + ' 쪽') if tgt and tgt != 'auto' else '새 길')]
+        if r == 'lost':                                    # p0.5.4: 조합형 실행이 대상 ID 를 지금 못 찾음(CA.execute) — 옛 판은 JSON 폴백.
+            return [('misc', '놓침', who or '대상')]         #   키는 misc 그대로(층 집계에 안 센다 — 폴백 때와 같은 셈)
         if r == 'already_beside':                          # 옛 판(D48 개정 1) 스트림 호환
             return [('misc', '이미 곁', who + ' — 멈춰 있다, 갈 곳 없음')]
         if r == 'beside':                                  # D48 개정 2: 곁에 붙어 선다(CHASE_IDLE 틱)
@@ -500,7 +502,7 @@ def event_tags(rec, names=None):
             return [('enter', '새 방', '%s %s' % (zz.get('kind', '공간'), zz.get('id', '')))] + extras
         if r == 'sighted':
             return [('spot', '발견', ', '.join(x.get('name', '?') for x in (rec.get('seen') or [])))] + extras
-    return [('misc', '기타', json.dumps(rec, ensure_ascii=False))]
+    return [('misc', '기타', IG.fallback_json(rec))]   # p0.5.4 경로 2: 모르는 형태는 {type,target,status}만(수치·원인은 싣지 않는다)
 
 
 def addressed_to(msg, char):
@@ -3125,8 +3127,9 @@ class Dungeon:
     def _note_last(self, bot, res, plan=False):
         """봇 자기 행동의 최신 결과 메모 — 원칙 "봇은 자기 행동의 결과를 관측할 수 있어야 한다".
         view()가 obs['last']로 노출. 자기 경험만 담으므로 시야-온리 무위반(세계 정보 아님).
-        D38(09-06): 같은 줄을 궤적(bot['trail'])에도 잇는다 — _trail_add 참조(기록은 한 번, 보기 둘)."""
-        bot['last'] = {k: v for k, v in res.items() if k != 'char'}
+        D38(09-06): 같은 줄을 궤적(bot['trail'])에도 잇는다 — _trail_add 참조(기록은 한 번, 보기 둘).
+        p0.5.4(§6.3 경로 1): 원본(res — 스트림이 읽는다)이 아니라 공개 투영 사본을 남긴다 — audit·사람 대상 굴림·전역 사건 번호가 빠진다."""
+        bot['last'] = {k: v for k, v in IG.public(res, bot).items() if k != 'char'}
         self._trail_add(bot, bot['last'], plan=plan)
 
     def _trail_add(self, bot, rec, plan=False):
@@ -5435,7 +5438,7 @@ class Dungeon:
             if o['char'] in exclude or not o['alive'] or o['won']:
                 continue
             if self.hears(o, x, y):                   # 던전=시야, 마을 구역 지각(D70)=같은 구역·곁 — 배달·가시와 같은 판정처
-                o.setdefault('witnessed', []).append(dict(fact))
+                o.setdefault('witnessed', []).append(IG.public(fact, o))   # p0.5.4: 본 사람 몫의 공개 투영 사본
                 self._floor_count_w(o, fact)          # D40 ② 층 집계 — 목격도 센다(같은 사전의 목격 라벨)
 
     def _witness_use(self, bots, x, y, movers, what, fid=None, result=None):
@@ -5547,8 +5550,8 @@ class Dungeon:
     def _receive(self, recv, rec, bots=None):
         """받은 쪽의 자기 사건(D47 ②) — hurt 문법(남이 내게 한 일도 내 경험): last+궤적에 싣는다. 걷는 동료는 안 세운다
         (다음 결정에서 읽는다 — 잡담·친목=무정지 원칙). 대기·휴식 중이면 깨운다(손에 쥐어 주고 어깨를 두드리는 건 사건 —
-        wait 의 '동료 진입'과 같은 급). 판정 무접촉."""
-        recv['last'] = dict(rec)
+        wait 의 '동료 진입'과 같은 급). 판정 무접촉. p0.5.4: 받은 사람 몫의 공개 투영 사본."""
+        recv['last'] = IG.public(rec, recv)
         self._trail_add(recv, recv['last'])
         if str(recv.get('order') or '') in ('wait', 'rest'):
             recv['order'], recv['path'], recv['plan'] = None, [], []

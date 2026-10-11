@@ -16,7 +16,9 @@
       state_version 내용 판 — 몸·장부 꼴이 바뀌는 패치마다 STATE_VERSION 을 올리고 MIGRATIONS 에 n→n+1 함수 하나를 더한다(savedata 와 같은 체인).
                     더 새 내용 판(되돌린 코드가 새 스냅샷을 읽음)은 거절한다 — 요약(read_meta)도 None 이라 론처가 이어가기를 내밀지 않는다.
       0→1(p0.5.3): 몸에 정신·숙련 칸(mind·search_prof·steal_prof)이 생겼다 — 옛 몸에 직업 기본값을 채운다(스폰과 같은 규칙, judge.prof).
-LLM 0콜 · 순수 파일(이관 함수만 몸 dict 를 고친다 — 그때 judge 를 늦게 import).
+      1→2(p0.5.4): 반응 원장(social_reactions.ReactionBook)에 수신자별 번호표(alias)가 생겼다 — 옛 원장은 원장 순서로 번호표를 다시 매긴다
+                   (ReactionBook.rebuild_alias — 지나간·대기 사건 모두 받은 순서대로, 이어간 뒤의 새 사건은 그 뒤 번호).
+LLM 0콜 · 순수 파일(이관 함수만 몸 dict·반응 원장을 고친다 — 그때 judge 를 늦게 import).
 """
 import io
 import json
@@ -27,7 +29,7 @@ import time
 
 VERSION = 2                  # 판형(위 머리글) — 옛 코드(version 1 만 읽음)가 새 스냅샷을 거절하게 하는 문
 READS = (1, 2)               # 이 코드가 읽는 판형. 1 = p0.5.2 까지(내용 판 0)
-STATE_VERSION = 1            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
+STATE_VERSION = 2            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
 PKL = "snapshot.pkl"
 META = "snapshot.json"
 
@@ -55,7 +57,27 @@ def _m0_prof(snap):
     return snap
 
 
-MIGRATIONS = {0: _m0_prof}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
+def _books(snap):
+    """스냅샷 안의 반응 원장 전부(보통 하나 — 세계·보존 층의 던전이 같은 원장을 가리킨다)."""
+    ds = [snap.get("d")] + [w.get("d") for w in (snap.get("worlds") or []) if isinstance(w, dict)]
+    ds += [v.get("d") for v in (snap.get("saved") or {}).values() if isinstance(v, dict)]
+    found, out = set(), []
+    for b in [snap.get("reaction_book")] + [getattr(x, "reaction_book", None) for x in ds]:
+        if b is not None and id(b) not in found:
+            found.add(id(b))
+            out.append(b)
+    return out
+
+
+def _m1_alias(snap):
+    """1→2(p0.5.4): 옛 반응 원장에 번호표 — 원장 순서(= 받은 순서)로 다시 매긴다. 이미 있으면 그대로."""
+    for b in _books(snap):
+        if not hasattr(b, "alias"):
+            b.rebuild_alias()
+    return snap
+
+
+MIGRATIONS = {0: _m0_prof, 1: _m1_alias}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
 
 
 def state_version_of(doc):

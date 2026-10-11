@@ -9,14 +9,15 @@
   ④ 손 시트 범위(load_party): 새 칸은 있을 때만 싣는다 · 정신 = 힘·민첩 규칙(정수, 범위 없음) · 숙련 0~6 ·
      참거짓·문자열·소수·범위 밖 = 폴백 · None = 없는 것 · 새 칸 없는 옛 손 시트의 결과 dict 그대로
   ⑤ 스폰: 몸에 정신·숙련(기본 파티 3직업·마법사·손 시트 값·모르는 직업) · 스킬 배정은 번호 묶음 그대로(시트 skills > 번호, 직업 기본값은 아직 안 읽음) ·
-     러너 판: run_meta.party·level.party(bot_snapshot)에 새 칸 없음 · 스냅샷 = 판형 2·내용 판 1·몸에 새 칸
+     러너 판: run_meta.party·level.party(bot_snapshot)에 새 칸 없음 · 스냅샷 = 판형 2·내용 판 2(p0.5.4)·몸에 새 칸
   ⑥ SK·SS: ability 'mind'(봇 = 몸, 몹 = 0, 힘·민첩 그대로) · validate 가 'mind' 를 굴림·내성·효과 내성에 허용(모르는 능력치는 거절) ·
      등록 스킬 4개·랜덤 생성기 1000시드 = v0.5.2 고정 해시(생성기 풀 그대로)
   ⑦ 옛 프리셋 왕복: v0.5.2 꼴 프리셋 파일을 읽고·저장하고·다시 읽어도 슬롯 그대로(새 칸 없음) · 그 슬롯의 시트·load_party 에도 새 칸 없음 · 마법사 슬롯 저장·복원
-  ⑧ 옛 스냅샷 이관(실제 옛 꼴 = fixtures/snapshot_v052, v0.5.2 코드가 쓴 그대로): 옛 꼴 확인 · 새 로더가 내용 판 0 → 1(몸마다 직업 기본값, 다른 칸 그대로) ·
+  ⑧ 옛 스냅샷 이관(실제 옛 꼴 = fixtures/snapshot_v052, v0.5.2 코드가 쓴 그대로): 옛 꼴 확인 · 새 로더가 내용 판 0 → 지금 판(몸마다 직업 기본값, 다른 칸 그대로) ·
      러너가 이어간다(resume 줄 · resume_failed 없음 · 틱 연속 · end) · 새 스냅샷 → 옛 로더(fixtures 의 v0.5.2 snapshot.py)가 거절 ·
      더 새 내용 판 → 새 로더도 거절 · 이관 등록부 완결 · (있으면) 루트 state/snapshot.pkl 을 복사본으로 읽어 이관
-  ⑨ 문장·뼈대·론처: "직업 = 몸 수치만" 이 traits.json·sheetkit 에서 고쳐졌다 · judge 는 난수를 쓰지 않는다 · /api/presets 의 jobs = 직업표(덧붙이기)·skill_alpha 그대로
+  ⑨ 문장·뼈대·론처: "직업 = 몸 수치만" 이 traits.json·sheetkit 에서 고쳐졌다 · judge 는 난수를 따로 갖지 않는다(p0.5.4 판정 함수는 넘겨받은 던전의 주사위만) ·
+     /api/presets 의 jobs = 직업표(덧붙이기)·skill_alpha 그대로
 """
 import ast
 import contextlib
@@ -224,8 +225,8 @@ check("⑤ 러너 판(마법사 + 정신 적은 손 시트): run_meta.party · l
       and [p["job"] for p in meta5["party"]] == ["마법사", "전사"], [sorted(p) for p in meta5["party"]])
 with open(snapshot.paths(show_runner.STATE)[0], "rb") as f:
     snap5 = pickle.load(f)                            # 방금 이 프로세스의 러너가 쓴 파일
-check("⑤ 새 스냅샷: 판형 2 · 내용 판 1 · 몸에 정신·숙련(마법사 3/2/0 · 손 시트 정신 2) · 요약도 판형 2",
-      snap5["version"] == snapshot.VERSION == 2 and snap5["state_version"] == snapshot.STATE_VERSION == 1
+check("⑤ 새 스냅샷: 판형 2 · 내용 판 2(p0.5.4 반응 원장 번호표) · 몸에 정신·숙련(마법사 3/2/0 · 손 시트 정신 2) · 요약도 판형 2",
+      snap5["version"] == snapshot.VERSION == 2 and snap5["state_version"] == snapshot.STATE_VERSION == 2
       and [tuple(b.get(k) for k in PK) for b in snap5["bots"]] == [(3, 2, 0), (2, 0, 0)]
       and (snapshot.read_meta(show_runner.STATE) or {}).get("version") == 2,
       [(b.get("mind"), b.get("search_prof")) for b in snap5["bots"]])
@@ -373,7 +374,7 @@ tree = ast.parse(io.open(os.path.join(HERE, "judge.py"), encoding="utf-8").read(
 names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)} | {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
 mods = {a.name for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom)) for a in n.names} | \
        {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)}
-check("⑨ judge.py 뼈대: 난수를 쓰지 않는다(random·rng 없음) · 엔진을 import 하지 않는다 · 0.5 함수 자리(notice·contest·own_check·mind_save)",
+check("⑨ judge.py: 난수를 따로 갖지 않는다(random·rng 없음 — 주사위는 넘겨받은 던전의 것) · 엔진을 import 하지 않는다 · 판정 함수 넷(notice·contest·own_check·mind_save)",
       not ({"random", "rng"} & (names | mods)) and "dungeon_gm" not in mods
       and all(callable(getattr(judge, f, None)) for f in ("notice", "contest", "own_check", "mind_save")))
 ctx = launcher.Ctx(HERE, os.path.join(TMP, "lc", "party_custom.json"), os.path.join(TMP, "lc", "state"), os.path.join(TMP, "lc", "runs"))
