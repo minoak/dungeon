@@ -4,8 +4,13 @@
   "kind": "object",
   "type": "treasure",
   "tags": [
-    "object"
+    "object",
+    "item"
   ],
   "sprite": "wl-props#4",
-  "comps": {}
+  "comps": {
+    "item": {
+      "desc": "@prompts"
+    }
+  }
 }

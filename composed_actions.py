@@ -105,6 +105,18 @@ def item_value(bot, slot):
     return bot.get('potions', 0) if slot == 'potion' else bot.get('boons', 0) if slot == 'boon' else bot.get(slot)
 
 
+def item_text(d, bot, ftype, name):
+    """p0.5.6 아이템 설명 두 겹 — {'desc': 물건 설명(정의 item.desc, 중괄호는 채움), 'rule': type 의 다루는 규칙} | {}(아이템이 아니거나 정의를
+    못 찾음 — 거짓 설명보다 빈칸). 캐릭터가 ID 로 집을 수 있는 자리(바닥 f… · 소지 i…)만 부른다(item_desc_design §4.1).
+    관측 dict 에는 줄마다 싣고, 같은 글을 한 번만 찍는 것은 그리는 쪽(brains._wire)의 일이다(자기 두뇌는 줄마다 받는다)."""
+    if ftype not in ENT.ITEM_TYPES:
+        return {}
+    df = ENT.item_def(ftype, name)
+    if df is None:
+        return {}
+    return {'desc': ENT.item_desc(df, **(d.bless_fill(bot) if ftype == 'boon' else {})), 'rule': ENT.item_rule(ftype)}
+
+
 def observe(d, bot, bots, obs):
     """현재 관측에 ID를 붙인다. way는 관측마다 새 이름을 주어 오래된 계획의 오지정을 막는다."""
     actor = 'b' + bot['char']
@@ -122,7 +134,8 @@ def observe(d, bot, bots, obs):
             if kind == 'feature' and obj.get('use'):            # D89(09-20) 쓰임 부품 — 정의에 use 가 있는 오브젝트·건물만 사실 태그가 붙는다
                 tags += [t for t in IA.tags(obj['use']) if t not in tags]   #   (interactable + readable·seat·lodging …). 없는 피처는 옛 목록 그대로
             targets.append({'id': rid, 'kind': kind, 'tags': tags,
-                            **{k: obj[k] for k in ('name', 'dist', 'bearing') if k in obj}})
+                            **{k: obj[k] for k in ('name', 'dist', 'bearing') if k in obj},
+                            **(item_text(d, bot, obj.get('type'), obj.get('name')) if kind == 'feature' else {})})   # p0.5.6 바닥 아이템의 설명(아이템만)
     if sights.get('exit'):
         refs['exit'] = {'kind': 'exit', 'key': 'exit'}
         targets.append({'id': 'exit', 'kind': 'exit', 'name': '계단', 'tags': ['object', 'interactable']})
@@ -162,10 +175,9 @@ def observe(d, bot, bots, obs):
                           else ['item', 'consumable', 'blessing'] if slot == 'boon' else ['item', 'equipment'])}
         if slot in ('potion', 'boon'):
             entry['count'] = value
-            if slot == 'boon':                                   # D74(09-15): 마시면 무엇이 오르나 — 세계의 사실(공격 능력치, Dungeon._bless 와 같은 갈림)
-                entry['effect'] = '마시면 %s +1' % ('민첩' if int(bot.get('atk_range') or 1) > 1 else '힘')
         else:
             entry['bonus'] = value.get('bonus', 0)
+        entry.update(item_text(d, bot, slot, entry['name']))   # p0.5.6 소지품 설명(매 판단) — 축복 물약의 옛 effect('마시면 힘 +1', D74)는 설명이 흡수했다
         items.append(entry)
         targets.append(dict(entry))
     epoch = bot.get('_way_epoch', 0) + 1

@@ -1,0 +1,16 @@
+{
+  "id": "boon",
+  "name": "축복의 물약",
+  "kind": "object",
+  "type": "boon",
+  "tags": [
+    "object",
+    "item"
+  ],
+  "comps": {
+    "item": {
+      "desc": "@prompts"
+    }
+  },
+  "note": "p0.5.6(2026-10-12) 축복의 물약 정의 — 지금은 성직자의 선물로만 몸에 들어온다(바닥에 놓이지 않아 sprite 없음). 효과는 엔진(Dungeon._bless) 그대로: 마신 이의 공격 능력치 +BLESS_GAIN, 마시는 이 자신만(남에게 쓰면 변화 없음)."
+}

@@ -57,7 +57,7 @@ entities/
 ```
 
 - 말 칸인지는 `words.is_word_path`(경로의 마지막 키 — `line`·`line_*`·`hail*`·`role`·`persona`·`trait`·`history`·`brief`·`deep`·`text`·
-  `texts`·`wares`·`goal`·`reward`·`client`·`overheard`·`speech`·`background`. `space.role` 은 구역 종류 id 라 말이 아니다).
+  `texts`·`wares`·`goal`·`reward`·`client`·`overheard`·`speech`·`background`·`desc`·`lore`(p0.5.6 아이템). `space.role` 은 구역 종류 id 라 말이 아니다).
   목록 칸은 `texts`·`wares`·`overheard`(한 줄에 하나씩 `- `).
 - 정의와 말 파일이 어긋나면(자리는 있는데 칸이 없다 · 칸은 있는데 자리가 없다 · 말 파일이 없다 · 말 칸이 아닌 자리에 표시) 모르는 부품과 같은 급의
   정의 오류다 — `EntityError` 로 전부 나열한다. 고친 뒤 `python tools/check_words.py`. 정의가 없는 말 파일(초안)은 경고로만.
@@ -75,8 +75,9 @@ entities/
 | monster `ai.flee.hp_frac·stamina·to·join_range` | `Monster.flee_frac/flee_stamina/flee_to/flee_join_range` | **없으면 도주 안 함**. 고블린만 3·8(옛 전역값), 그림자거미는 없음(파트너 결정 2026-09-11 밤 "도주하는 건 고블린만"). `to: ally` = 근처(BFS `join_range` 걸음) 아무 다른 몹에게 붙어 같이 싸운다(D51) — `away` 는 옛 규칙(봇에게서 멀어짐) |
 | trap `trap.dc·dmg·status` | `TRAP_KINDS` | |
 | object `name` | `_add_feature` 이름 | `'숨은 보물'`은 `treasure`의 숨김 변형 이름(코드 리터럴) |
-| object `equipment.bonus` | `GEAR_KINDS` | `GEAR_CYCLE`(배치 순환)은 코드 — 이름이 정의에 있는지 게이트가 본다 |
-| object `tags` | 조합형 관측 태그(`composed_actions.observe`) | 장비·물약 = `object+item` |
+| object `equipment.bonus` | `GEAR_KINDS` | `GEAR_CYCLE`(배치 순환)은 코드 — p0.5.6 부터 정의 id 목록(`Dungeon.place_def` 로 놓는다) |
+| object `tags` | 조합형 관측 태그(`composed_actions.observe`) | 장비·물약·보물·축복의 물약 = `object+item`(p0.5.6: 태그 `item` ⇔ `item` 부품) |
+| object `item{desc, lore?}` | `entities.item_def(type, 이름)` · `item_desc` · `item_rule` → `composed_actions.item_text` → 대상 목록의 `· 설명:` 줄(`brains._wire`) | **p0.5.6(2026-10-12) 아이템 = 몸에 지닐 수 있는 것**: `entities.ITEM_TYPES`(potion·boon·treasure·weapon·armor) 의 정의는 `item` 부품 필수, 그 밖 type 은 금지. `desc` = 물건 설명(말 파일 `item.desc`, 자리 `{bonus}`=장비 보정 · `{stat}`·`{gain}`=축복 — 검증기가 조건을 본다) + type 마다 다루는 규칙(`prompts/actions/item_rules.md`, 칸 = ITEM_TYPES). 바닥 `f…`·소지 `i…` 줄에만, 같은 글은 관측에 한 번. 메뉴형엔 없다. `lore` = 속(search 로 드러날 내력) 자리만. 피처·몸엔 설명을 적지 않는다(보일 때 정의에서 — 저장 이관 없음). 축복의 물약은 `entities/object/boon.json`(바닥에 안 놓여 sprite 없음) |
 | npc `npc.line·line_again·gift` | `show_runner.build_town` | 마을 v1: `town.json`이 layout 을 참조하고 배치는 `layout.npcs`(id·칸). 옛 마을 `town-v0.json`은 `{"id","x","y"}` 배치. `gift`에 `potions`와 `weapon`을 함께 두면 둘 다 준다(길드 기본 물품). **D74(2026-09-15)** `gift.boon`=축복의 물약 병 수(성직자 — 기도의 답, 방문당 한 번, 마시면 공격 능력치 +1) |
 | npc `npc.role·persona·report·line_report·line_report_failed·line_report_empty` | `Dungeon.npc_defs`(build_town) · `_report_quests` · `brains.npc_reply` | **D69(2026-09-14)**: `role`=관측 한 줄("길드 접수원 (원정 물품 · 의뢰 접수와 귀환 보고)"), `report:true`=원정에서 돌아온 파티가 말을 걸면 보고(원정의 끝)를 받는 NPC, 보고 대사 3종은 `{done}`·`{undone}` 자리에 의뢰 제목이 들어간다. `persona`·`role` 은 NPC 두뇌 프롬프트 재료(캐릭터 시트는 안 들어간다). ⚠️문장 전부 임시(파트너 대기) |
 | npc `npc.hail·hail_no_potion·hail_board·hail_return·hail_rumor·hail_oracle` | `Dungeon.npc_greetings/_npc_hail_line` → 러너가 잡담 배달 | **D71(2026-09-14)**: NPC 가 먼저 거는 인사(상황별, 전부 선택). 자리 채움 `{name}`(캐릭터 이름) `{quests}`(안 맡은 의뢰 수) `{monsters}`·`{traps}`·`{treasure}`(지하 1층 실측). 같은 구역·6칸 안·캐릭터당 NPC 당 방문당 1회. ⚠️문장 임시 |

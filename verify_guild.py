@@ -20,7 +20,7 @@
      · D76(09-15 파트너 "npc가 캐릭터에게 말을 걸릴 떄도 멈추게 하자") 인사에 걸음을 멈춘다(npc_hail_stop · tick.npc_hails[].stopped · DUNGEON_NPC_HAIL_STOP)
      · D76 개정(09-16 파트너 "결함에 대해서는 동의") 곁에 닿아 거래 직전(arrived/ready)인 봇은 세우지 않는다 → 다음 틱 거래 완료
   ⑬ D74 기도의 답 = 축복의 물약(09-15 파트너 "기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자"): 성직자 gift.boon → npc_gift ·
-     관측(obs.boons·[i4]·effect 사실) · 조합형 use self i4 → drink_boon(공격 능력치 +1, 목격) · 메뉴형 drink item=boon(궁수=민첩) ·
+     관측(obs.boons·[i4]·설명 desc 사실 — p0.5.6 전엔 effect) · 조합형 use self i4 → drink_boon(공격 능력치 +1, 목격) · 메뉴형 drink item=boon(궁수=민첩) ·
      빈 손 no_boon · 건네기 · 계단 줄 정합(09-15 수선) · 러너 이월 배선(boons·str/dex) · 문서·클라이언트 배선
   ⑭ D75 장소·사람의 이야기(09-15 파트너 "역사나 이야기 그리고 장소의 특징을 정해두는게"): 정의 story 17·검증기 · place_story/zone_story/town_notice ·
      멀리서 trait(피처 줄·구역 줄)·진입 한마디(한 번) · 곁 2칸 history(notices place) · 스폰 배선 · 문서 배선
@@ -568,8 +568,9 @@ check("⑬ 정의·엔진: 성직자 gift.boon 1 · 곁에서 use → npc_gift i
 o13 = d13.view(a13, [a13, b13])
 i4 = next((t for t in o13["targets"] if t["id"] == "i4"), None)
 w13 = brains._wire(o13, {"1": "두란", "2": "카야"}, compose=True)
-check("⑬ 관측: obs.boons 1 · 조합형 대상 [i4] 축복의 물약(consumable·blessing, 1개, effect '마시면 힘 +1') · 프롬프트 '축복의 물약 1병'·'마시면 힘 +1' · 받은 문장",
-      o13.get("boons") == 1 and i4 is not None and i4.get("count") == 1 and "blessing" in i4["tags"] and i4.get("effect") == "마시면 힘 +1"
+check("⑬ 관측: obs.boons 1 · 조합형 대상 [i4] 축복의 물약(consumable·blessing, 1개, 설명 desc '마시면 힘 +1.' — p0.5.6 옛 effect 칸은 설명이 흡수) · 프롬프트 '축복의 물약 1병'·'마시면 힘 +1' · 받은 문장",
+      o13.get("boons") == 1 and i4 is not None and i4.get("count") == 1 and "blessing" in i4["tags"]
+      and i4.get("desc") == "마시면 힘 +1." and "effect" not in i4
       and "축복의 물약 1병" in w13 and "마시면 힘 +1" in w13
       and "축복의 물약을 받았다" in brains._last_prose(r13, {"1": "두란"}))
 str13 = a13["str"]

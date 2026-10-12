@@ -713,7 +713,8 @@ def act_summary(res):
     if t == "give":                                            # 건네기(D47 ②)
         if res.get("result") == "given":
             return "봇%s에게 %s 건넴%s" % (res.get("to", "?"), res.get("what", "?"),
-                                          " (그의 발밑에 놓임)" if res.get("placed") else "")
+                                          "" if not res.get("placed") else " (건넨 이의 발밑에 놓임)" if res.get("spot") == "mine"   # p0.5.6(D6) 놓인 자리
+                                          else " (그의 발밑에 놓임)")
         return "건네기 — " + {"too_far": "곁에 없다", "nothing": "줄 것이 없다", "no_target": "대상 없음",
                               "no_room": "놓을 자리 없음"}.get(res.get("result"), str(res.get("result")))
     if t == "bond":                                            # 친목(D47 ②)

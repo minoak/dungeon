@@ -9,6 +9,8 @@
     Dungeon(bestiary_plus=True) 인 층의 min_depth 부터 기존 고블린 일부와 바뀌어 놓인다. pack=한 묶음의 마릿수, 없으면 1)
   · 함정: trap.dc·dmg·status → dungeon_gm.TRAP_KINDS
   · 오브젝트: type(엔진 피처 type)·name → _add_feature 이름 / equipment.slot·bonus → GEAR_KINDS / tags → 조합형 관측 태그
+    p0.5.6: item(아이템 표지 — 몸에 지닐 수 있는 것) → item.desc 물건 설명(말 파일, 중괄호 자리는 엔진이 채움) + type 마다 다루는 규칙
+    (prompts/actions/item_rules.md) = 조합형 대상 목록의 '· 설명:' 줄. 찾는 길은 item_def(type, 이름) 하나
   · NPC: npc.line·line_again·gift → show_runner.build_town (town.json 은 배치=id·좌표만)
   · 구역(map): overheard(D90, 09-20 — 들린 말 문장 풀) → show_runner.build_town 이 마을 생활 판에만 Dungeon.zone_overheard 로 건다
   · 지식: knowledge.deep → Dungeon.lore (옛 lore.json 본문 그대로. 키 = monster:<name> / trap:<id> / feature:<type>)
@@ -17,7 +19,7 @@
   · 쓰임(D89, 09-20): 오브젝트·건물의 use{kind, …} — 곁에서 쓰면(use/interact) 무슨 일이 나는가를 정의가 말한다. 엔진은 kind 만 보고
     (interactables.py 의 kind 별 처리), 새 오브젝트·새 건물 기능은 JSON 한 장이다(D69 결정 ② "정의의 부품이 메뉴를 낸다"). 돈·가격은 없다.
     오브젝트의 story(trait·history)는 NPC·건물과 같은 꼴 — 배치한 쪽이 place_story 에 걸면 피처 줄 끝의 한 줄(about)이 된다.
-자리만 있고 아직 안 읽는 것: ai.start·ai.concealed(스폰 코드가 명시),
+자리만 있고 아직 안 읽는 것: ai.start·ai.concealed(스폰 코드가 명시), item.lore(p0.5.6 — 물건의 속, 물건 search 를 설계할 때),
 loot·container·heal·consumable·exit 부품(메모 "부품은 필요할 때 하나씩"). 클라이언트 스프라이트 프레임 번호는
 game/src/assets/world.ts 가 소유 — sprite 필드는 텍스처 참조(wl-<이름>[#프레임])이고 검증은 텍스처 파일 존재까지.
 검증은 로드 단계(verify_entities 게이트): 모르는 kind·부품, id≠파일명, 중복, 없는 텍스처, 모르는 해금 사건, 수치 결손.
@@ -25,6 +27,7 @@ game/src/assets/world.ts 가 소유 — sprite 필드는 텍스처 참조(wl-<�
 import glob
 import json
 import os
+import re
 
 import words   # D100(10-06): 말 칸은 prompts/world/ 의 말 파일 — read() 가 합친다
 
@@ -36,7 +39,8 @@ KINDS = ('monster', 'trap', 'object', 'npc', 'map', 'building', 'quest', 'compan
 COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
          'trap': {'trap', 'knowledge'},
          'object': {'equipment', 'consumable', 'loot', 'container', 'heal', 'exit', 'knowledge',
-                    'use', 'story'},             # D89(09-20): use=쓰임 부품(곁에서 쓰면 무슨 일이 나는가) · story=D75 와 같은 꼴(오브젝트의 특징 한 줄·이야기)
+                    'use', 'story', 'item'},     # D89(09-20): use=쓰임 부품(곁에서 쓰면 무슨 일이 나는가) · story=D75 와 같은 꼴(오브젝트의 특징 한 줄·이야기)
+         #   item=p0.5.6 아이템 표지(몸에 지닐 수 있는 것) + 물건 설명 desc(말 파일) · 속 lore(자리만) — 아래 ITEM_TYPES
          'npc': {'npc', 'knowledge', 'story', 'life'},   # story=D75(09-15) 장소·사람 소개(trait 한 줄·history 본문) — 도감 지식과 다른 층(해금 없음)
          'map': {'space', 'story', 'overheard'}, 'building': {'building', 'board', 'oracle', 'story', 'use', 'life'},   # D61 건물 역할 부품(메모 §4-4 [제안]): 게시판·신탁 · story=D75 · use=D89 문턱에서 쓰는 기능
          #   overheard=D90(09-20) 구역의 '들린 말' 고정 풀(메모 §4-4 "거리 분위기 '들린 말' 한 줄 고정 풀(0콜)") — 문장 목록, 마을 생활 스위치 판에서만 읽는다
@@ -77,6 +81,71 @@ USE_READ_VERBS = ('look',)                     # D90(09-20) read 의 동사 변�
 USE_RESERVED_TYPES = ('exit', 'stairs_up', 'npc', 'treasure', 'potion', 'weapon', 'armor', 'chest', 'fountain', 'grave', 'building')
 #   엔진이 이미 제 뜻으로 다루는 피처 type — 오브젝트 정의가 이 type 에 use 를 달면 거절한다(_interact 의 타입 분기가 먼저 잡아
 #   use 가 영영 안 불리는데 관측은 '쓸 수 있다'고 말하게 된다 = 거짓 선택지). 건물의 use 는 건물 정의(kind building)에 단다.
+
+# p0.5.6(2026-10-12, .orch/drafts/item_desc_design.md) 아이템 = 캐릭터의 몸으로 들어올 수 있는 것(줍기·걸치기·받기·뒤져서 나오기).
+#   엔진이 몸의 소지(물약 수·축복 물약 수·모은 보물·무기 칸·갑옷 칸)에 넣는 type 만 아이템이다 — 새 아이템은 그것을 드는 엔진 코드와 함께
+#   이 목록에 든다. 그 자리에서 쓰고 끝나는 것(상자·샘·통)은 설비이고, 거기서 나와 몸으로 들어오는 것이 아이템이다.
+#   아이템 type 의 오브젝트 정의는 item 부품(물건 설명 desc — 말 파일)이 있어야 하고, 그 밖 type 은 item 부품을 달 수 없다(줍기가 거짓이 된다).
+ITEM_TYPES = ('potion', 'boon', 'treasure', 'weapon', 'armor')
+ITEM_KEYS = ('desc', 'lore')    # desc = 겉(보면 아는 것 — 관측 대상 목록) · lore = 속(search 로만 드러날 것 — 자리만, 아직 아무도 안 읽는다)
+ITEM_FILL = {'bonus': '장비 보정(equipment.bonus) — equipment 부품이 있는 정의만',          # 설명 속 중괄호 자리 → 값의 출처(엔진이 채운다)
+             'stat': '지닌 사람이 공격에 쓰는 능력치(근접 힘 · 원거리 민첩) — boon 만',
+             'gain': '축복의 물약 한 병이 올리는 양(Dungeon.BLESS_GAIN) — boon 만'}
+ITEM_RULES = 'item_rules'       # prompts/actions/<이것>.md — 아이템 type 마다 한 줄인 '다루는 규칙'(설명의 둘째 겹, 중괄호 자리 없음)
+_FILL_RE = re.compile(r'\{([^{}]*)\}')
+
+
+def _fill_problems(rel, path, text, d, comps):
+    """설명 문장의 중괄호 자리(G4) — 모르는 자리 · 조건이 안 맞는 자리(장비 아닌 것의 {bonus} 등) · 짝 없는 중괄호는 관측에 '{…}'로 샌다."""
+    out = []
+    for name in _FILL_RE.findall(text):
+        if name not in ITEM_FILL:
+            out.append('%s: %s 의 {%s} 는 모르는 자리다(쓸 수 있는 자리: %s)' % (rel, path, name, ' '.join('{%s}' % k for k in ITEM_FILL)))
+        elif name == 'bonus' and type((comps.get('equipment') or {}).get('bonus')) is not int:
+            out.append('%s: %s 의 {bonus} 는 장비(equipment.bonus)가 있는 정의만 쓴다' % (rel, path))
+        elif name in ('stat', 'gain') and d.get('type') != 'boon':
+            out.append('%s: %s 의 {%s} 는 축복의 물약(type boon)만 쓴다' % (rel, path, name))
+    rest = _FILL_RE.sub('', text)
+    if '{' in rest or '}' in rest:
+        out.append('%s: %s 에 짝이 맞지 않는 중괄호가 있다' % (rel, path))
+    return out
+
+
+def _item_problems(rel, d, comps):
+    """item 부품의 꼴(p0.5.6 G1~G4) — 설명 빠진 아이템 · 아이템 type 인데 표지 없음 · 엔진이 들 수 없는 것의 표지 · 태그와 부품의 어긋남 ·
+    중괄호 자리. 오브젝트 정의만 부른다."""
+    item, typ, out = comps.get('item'), d.get('type'), []
+    if typ in ITEM_TYPES and item is None:
+        out.append('%s: type %r 은(는) 아이템이다 — item 부품(물건 설명 desc)이 있어야 한다' % (rel, typ))
+    if item is not None and typ not in ITEM_TYPES:
+        out.append('%s: type %r 은(는) 엔진이 몸에 들 수 없다 — item 부품을 달 수 없다(아이템 type: %s)' % (rel, typ, '|'.join(ITEM_TYPES)))
+    if ('item' in (d.get('tags') or [])) != (item is not None):
+        out.append('%s: 태그 item 과 item 부품은 함께 있어야 한다(관측 태그와 속성이 따로 놀지 않게)' % rel)
+    if item is None:
+        return out
+    if not isinstance(item, dict) or set(item) - set(ITEM_KEYS):
+        return out + ['%s: item 부품은 desc(물건 설명)·lore(속) 칸만' % rel]
+    if not (isinstance(item.get('desc'), str) and item['desc'].strip()):
+        out.append('%s: item.desc(물건 설명)가 없다 — 아이템은 모두 설명이 있어야 한다' % rel)
+    if item.get('lore') is not None and not (isinstance(item['lore'], str) and item['lore'].strip()):
+        out.append('%s: item.lore 는 비지 않은 문자열' % rel)
+    for k in ITEM_KEYS:
+        if isinstance(item.get(k), str):
+            out.extend(_fill_problems(rel, 'item.' + k, item[k], d, comps))
+    return out
+
+
+def _rule_problems(rules_root=None):
+    """다루는 규칙 말 파일(G5) — 아이템 type 마다 한 칸, 남는 칸 없음, 중괄호 자리 없음(종류 전체에 참인 문장만)."""
+    rel = 'prompts/actions/%s.md' % ITEM_RULES
+    try:
+        items = words.action_words(ITEM_RULES, rules_root or words.ACTIONS_ROOT)
+    except words.WordsError as e:
+        return str(e).split('\n')
+    out = ['%s: 아이템 type `%s` 의 다루는 규칙 칸이 없다' % (rel, t) for t in ITEM_TYPES if t not in items]
+    out += ['%s: 칸 `%s` 는 아이템 type 이 아니다(entities.ITEM_TYPES)' % (rel, k) for k in items if k not in ITEM_TYPES]
+    out += ['%s: `%s` 칸에 중괄호를 쓸 수 없다(규칙은 종류 전체에 참인 문장만)' % (rel, k) for k, v in items.items() if '{' in v or '}' in v]
+    return out
 
 
 def _use_problems(rel, use):
@@ -148,6 +217,7 @@ def _problems(pairs, root):
     boards, kinds_by_id = [], {}                     # D61 2차 검사 재료
     quest_mons = []                                  # D69 2차 검사 재료(처치형 의뢰의 몬스터 id)
     companion_names = []                             # D81 2차 검사 재료(동료 이름 — 파티 안에서 이름이 곧 열쇠라 서로 달라야 한다)
+    gift_weapons, weapon_names = [], set()           # p0.5.6 G6 2차 검사 재료(마을 인물이 건네는 무기 이름 · 무기 정의 이름)
     for path, d in pairs:
         rel = os.path.relpath(path, root)
         stem = os.path.splitext(os.path.basename(path))[0]
@@ -209,6 +279,14 @@ def _problems(pairs, root):
                 out.append('%s: 없는 스프라이트 텍스처 %r' % (rel, sp))
         if kind == 'object' and not d.get('type'):
             out.append('%s: object 는 type(엔진 피처 type) 필요' % rel)
+        if kind == 'object':                                 # p0.5.6 아이템 표지·설명(G1~G4)
+            out.extend(_item_problems(rel, d, comps))
+            if d.get('type') == 'weapon' and (comps.get('equipment') or {}).get('slot') == 'weapon':
+                weapon_names.add(d.get('name'))
+        if kind in ('npc', 'companion'):                     # G6 재료 — 선물 무기는 이름으로 건너간다(엔진은 GEAR_KINDS 에서 보정을 푼다)
+            gw = ((comps.get('npc') or {}).get('gift') or {}).get('weapon')
+            if gw is not None:
+                gift_weapons.append((rel, gw))
         if kind == 'monster':
             for c, keys in (('health', ('max',)), ('combat', ('atk', 'dmg', 'ac'))):
                 for k in keys:
@@ -317,14 +395,18 @@ def _problems(pairs, root):
         if nm in seen_names:
             out.append('%s: 동료 이름 %r 중복(%s)' % (rel, nm, seen_names[nm]))
         seen_names[nm] = rel
+    for rel, nm in gift_weapons:                     # 2차(p0.5.6 G6): 모르는 이름이면 엔진이 조용히 +1 로 만들고(GEAR_KINDS.get(nm, 1)) 설명도 못 찾는다
+        if nm not in weapon_names:
+            out.append('%s: npc.gift.weapon %r 는 무기 정의의 이름이 아니다(%s)' % (rel, nm, '·'.join(sorted(weapon_names))))
     return out
 
 
-def read(root=ROOT, words_root=None):
+def read(root=ROOT, words_root=None, rules_root=None):
     """폴더의 정의 전부 → {id: def}. 문제가 하나라도 있으면 EntityError(전부 나열).
     D100(10-06): 말 칸("@prompts" 자리)은 prompts/world/<종류>/<id>.md 에서 채운다(words.merge). 말 파일은 root 가 아니라 리포의
     prompts/world 에서 읽는다(words_root 기본) — 게이트가 정의를 임시 폴더에 복사해 검사하는 관행 그대로, 복사본도 리포의 말로 읽힌다.
-    정의와 말 파일이 어긋나면(자리는 있는데 칸이 없다 · 칸은 있는데 자리가 없다 · 말 파일이 없다) 그것도 정의 오류다."""
+    정의와 말 파일이 어긋나면(자리는 있는데 칸이 없다 · 칸은 있는데 자리가 없다 · 말 파일이 없다) 그것도 정의 오류다.
+    p0.5.6: 아이템의 다루는 규칙(prompts/actions/item_rules.md — rules_root 기본 = 리포의 prompts/actions)도 여기서 대조한다(G5)."""
     words_root = words_root or words.WORDS_ROOT
     files = sorted(glob.glob(os.path.join(root, '*', '*.json')))
     pairs, problems = [], []
@@ -335,12 +417,14 @@ def read(root=ROOT, words_root=None):
             problems += words.merge(d, os.path.basename(os.path.dirname(p)), os.path.splitext(os.path.basename(p))[0], words_root)
         pairs.append((p, d))
     problems += _problems(pairs, root) if pairs else ['정의가 없다: %s' % root]
+    problems += _rule_problems(rules_root)
     if problems:
         raise EntityError('\n'.join(problems))
     return {d['id']: d for _, d in pairs}
 
 
 _DEFS = None
+_RULES = None      # p0.5.6 다루는 규칙 {type: 문장} — item_rule() 이 처음 부를 때 읽는다(reload 가 비운다)
 
 
 def load():
@@ -352,8 +436,8 @@ def load():
 
 
 def reload():
-    global _DEFS
-    _DEFS = None
+    global _DEFS, _RULES
+    _DEFS, _RULES = None, None
     return load()
 
 
@@ -449,6 +533,44 @@ def feature_tags(ftype):
         return ['object', 'npc']
     d = next((d for d in by_kind('object') if d.get('type') == ftype), None)
     return list(d['tags']) if d and d.get('tags') else ['object']
+
+
+_ITEM_IDX = {'src': None, 'n': -1, 'by_type': {}}
+
+
+def _item_index():
+    """{엔진 type: [item 부품이 있는 오브젝트 정의(id 순)]} — 정의 사전이 바뀌면(재로드·게이트의 주입) 다시 짓는다(interactables._by_type 과 같은 꼴)."""
+    defs = load()
+    if _ITEM_IDX['src'] is not defs or _ITEM_IDX['n'] != len(defs):
+        idx = {}
+        for d in sorted(defs.values(), key=lambda v: v['id']):
+            if d.get('kind') == 'object' and (d.get('comps') or {}).get('item'):
+                idx.setdefault(d['type'], []).append(d)
+        _ITEM_IDX.update(src=defs, n=len(defs), by_type=idx)
+    return _ITEM_IDX['by_type']
+
+
+def item_def(ftype, name=None):
+    """아이템(피처 또는 소지 칸)의 정의 — 피처·몸은 type 과 이름만 든다(Feature __slots__ · 장비 dict). p0.5.6 item_desc_design §2.4:
+    ① type·이름이 같은 item 정의 ② 아니면 그 type 의 item 정의가 하나뿐이면 그것('숨은 보물' → 보물) ③ 아니면 None(설명 없이 이름만 —
+    거짓 설명보다 빈칸. 한 type 에 정의가 여럿인데 모르는 이름일 때: 장면 저작의 임의 이름). 실판의 생성 길은 verify_items 가 전부 풀리는지 본다."""
+    cands = _item_index().get(ftype) or []
+    return next((d for d in cands if d['name'] == name), None) or (cands[0] if len(cands) == 1 else None)
+
+
+def item_desc(df, stat=None, gain=None):
+    """물건 설명(item.desc)의 중괄호 자리를 채운 문장. {bonus} = 정의의 equipment.bonus · {stat} = 지닌 사람이 공격에 쓰는 능력치 이름
+    (지닌 사람이 없는 자리면 '공격에 쓰는 능력치') · {gain} = 축복 한 병이 올리는 양(엔진 상수 — 호출측이 넘긴다). 자리의 조건은 로드 단계(G4)가 이미 봤다."""
+    vals = {'bonus': (df['comps'].get('equipment') or {}).get('bonus'), 'stat': stat or '공격에 쓰는 능력치', 'gain': gain}
+    return _FILL_RE.sub(lambda m: str(vals[m.group(1)]), df['comps']['item']['desc'])
+
+
+def item_rule(ftype):
+    """아이템 type 의 다루는 규칙 한 줄(prompts/actions/item_rules.md) — 아이템 type 이 아니면 None. 꼴은 로드 단계(G5)가 이미 봤다."""
+    global _RULES
+    if _RULES is None:
+        _RULES = words.action_words(ITEM_RULES)
+    return _RULES.get(ftype)
 
 
 def comps_of(eid, life=False):

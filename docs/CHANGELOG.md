@@ -1,5 +1,29 @@
 # 변경 기록
 
+## 2026-10-12 — p0.5.6 지침 간결화 + 아이템 설명 칸
+
+설계 원본(로컬): `.orch/drafts/prompt_rev_draft.md`(c03b 1절) · `.orch/drafts/item_desc_design.md`(c04) · DECISIONS 10-12 0.5.6·D7.
+
+- **지침 간결화**: `prompts/adventurer_prompt.md` = c03b 초안 1절 그대로(주석 걷은 뒤 3,594 → 2,372자). D1 말 빈도 세 문장 삭제. 코드 의존(SKILL 앵커 문장 ·
+  `## 행동 사전`·`# 모험가 지침` 제목 · 주석 걷기 · PARTY/SOLO 표식 없음 · 접기 줄머리 없음)은 그대로 지켰다. `to` 주소 줄은 현행 + `<!-- c02 후 수정 -->` 메모.
+- **아이템 설명 칸**: 새 부품 `comps.item{desc, lore?}`(아이템 = `entities.ITEM_TYPES` potion·boon·treasure·weapon·armor) · 물건 설명 `item.desc`(말 파일 7장,
+  자리 `{bonus}`·`{stat}`·`{gain}`) + type 마다 다루는 규칙 `prompts/actions/item_rules.md` · 조회 `ENT.item_def(type, 이름)`(정의가 여럿인 type 의 모르는 이름 = None) ·
+  `item.lore` 는 자리만. 로드 검사(설명 없는 아이템 · 부품 없는 아이템 type · 설비의 부품 · 태그⇔부품 · 모르는/조건 안 맞는 중괄호 · 규칙 칸 대조 · 모르는 선물 무기)는
+  `EntityError`(게임이 안 뜬다). 관측: 바닥 `f…`·소지 `i…` 줄에 `desc`·`rule`(줄마다), 프롬프트엔 대상 줄 아래 `  · 설명:` — 같은 글은 관측에 한 번, 소지품은 매 판단.
+  축복 물약의 `effect` 칸은 설명이 흡수. 메뉴형엔 넣지 않는다(D9). 축복의 물약 정의 `entities/object/boon.json` 신설(효과 동작 그대로 — `Dungeon.BLESS_GAIN`·`bless_stat`
+  로 상수·갈림만 뽑았다). 보물 태그에 `item`(D4).
+- **생성 길 한 길**(D5): `Dungeon.place_def(eid, x, y, …)` — 손그림·층 생성·보스 상자·던전 살림이 이것으로 놓는다(`GEAR_CYCLE` = 정의 id). 피처 번호·type·이름·rng 그대로,
+  story 가 있는 정의만 `place_story` — 던전 살림 소품(통·나무 상자·항아리·석판·모닥불)의 특징 한 줄이 던전 관측에 나온다. `interactables.place` 는 바닥 검사를 얹은 겉.
+- **건네기 배치 문장**(D6): `_give` 결과·받은 기록에 `spot`('theirs'|'mine') — 결과 문장·꼬리표·관전 요약이 '그의 발밑'/'네 발밑'(받은 쪽 '건넨 이의 발밑')으로 갈린다. spot 없는 옛 기록은 옛 문장.
+- **벤치**: `tools/freedom_bench.py` 가 지침 전문 변형을 받는다(첫 글줄이 `# …` 제목이면 파일 전체가 지침 — `is_full`·`variant_raw`). 기존 6개 절 변형·`--variants all` 그대로.
+  전문 변형 `tools/bench_variants/prompt-v0.5.5.md`(v0.5.5 지침, HEAD 바이트 그대로) — `--variants baseline,prompt-v0.5.5`.
+- 게이트 `verify_items`(새, 0콜 33검사) · verify_entities ①②(아이템 갈래 · GEAR_CYCLE id) · verify_guild ⑬(effect → desc) · verify_skill_off(새 해시 — desc·rule·보물 태그만
+  되돌리면 p0.5.5 해시, 세 시드) · verify_combat_stream · verify_common_registry ⑥(변형 7개 · 벤치의 variant_raw). 게이트 95/95.
+- 스냅샷 꼴 불변(`STATE_VERSION` 2) — 설명은 피처·몸에 안 적는다(보일 때 정의에서). 이어간 옛 스냅샷의 그 층은 던전 살림의 특징 줄이 없다(다음 층부터).
+- 기준선 차이(전 = 2c97884, 후 = 이 패치 작업 트리, 판 3개 × 120틱 · 게이트 전부): **(나) 0** — 1517건 전부 규칙 34개로 설명. 지침 덩이 8개(모든 조합형 프롬프트) ·
+  dungeon 판의 설명 줄·보물 줄 · 스트림 관측 desc/rule/보물 태그 · 버전·지침·말 폴더 지문 · 스냅샷 피클 길이(값은 버전·시각·stream_pos 뿐, 길이는 문자열 객체 공유) ·
+  게이트 출력 문장. classic(메뉴형) 판의 프롬프트·이벤트 로그는 바이트 동일. 잡음 하나: verify_public ⑨ 의 120자 절단 앞 pid 자릿수.
+
 ## 2026-10-12 — p0.5.5 행동 등록부 · 조건부 노출 · 관측 런타임 주입 · 라우터 · 벤치 연속 판단 장면(master_plan 0.6단계)
 
 설계 원본: `.orch/drafts/master_plan.md`(로컬) §7 전부·§6.3 경로 3·7·13·§10·§11 0.6행. 공용 행동(steal·hide·help …)을 받을 자리만 놓는 단계 —

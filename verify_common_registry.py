@@ -14,6 +14,7 @@
   ⑤ 지침 파일 불변(런타임 주입): 추가 행동이 나타나도 시트+지침 부분은 바이트가 같고 지침 = 게임이 읽은 지침 파일(스킬 치환만) ·
      블록은 관측의 COMMON 줄 바로 아래에만 · 스킬 판의 SKILL 안내 치환은 그대로
   ⑥ 기준선/변형 모두 같은 추가 블록: '## 행동 사전' 절을 벤치 변형(tools/bench_variants/)으로 갈아 끼운 지침에서도 블록 바이트가 같다
+     (p0.5.6: 벤치의 variant_raw 로 짓는다 — 전문 변형 prompt-v0.5.5 는 파일 전체가 지침)
   ⑦ 등록부가 비면 관측 꼴이 v0.4 와 같다: common_extra 키 없음 · 블록 없음 · 입력 칸 = 기본 4칸 · SCHEMA 문자열만 compose-v0.5
   ⑧ 말 파일·이름: check_words 가 등록부와 일치 · 문장 없는 동사를 등록하면 check_words 실패 · 등록부 동사는 스킬 이름으로 못 쓴다 ·
      실제 등록부 동사의 꼴(조건·실행 함수·칸 정의·결과 코드 선언)과 이름 충돌(상시 9개·PARTY·스킬 예약·기본 스킬) 없음
@@ -333,31 +334,28 @@ check("⑤ 스킬 판: SKILL 안내 치환은 그대로 · 추가 행동 블록�
       and "매 판단에 제시되는 COMMON에서 행동 이름을 고른다." not in p_sk and "\nSKILL:\n" in p_sk and block_of(p_sk) == block_of(p_on))
 
 print("── ⑥ 기준선/변형 모두 같은 추가 블록")
-SECTION = "## 행동 사전"
-
-
-def splice(base, draft):
-    a = base.index(SECTION)
-    b = base.find("\n## ", a + len(SECTION))
-    b = len(base) if b < 0 else b + 1
-    da = draft.index(SECTION)
-    db = draft.find("\n## ", da + len(SECTION))
-    db = len(draft) if db < 0 else db + 1
-    return base[:a] + draft[da:db].rstrip("\n") + "\n\n" + base[b:]
-
+import freedom_bench as FB                           # noqa: E402 — 벤치가 변형 지침을 짓는 바로 그 함수(variant_raw)로 짓는다(p0.5.6 전문 변형 포함)
 
 variants = sorted(glob.glob(os.path.join(HERE, "tools", "bench_variants", "*.md")))
-blocks, heads = {}, set()
+blocks, heads, fulls = {}, set(), {}
+base6 = raw_prompt.replace("\r\n", "\n")
 with registered():
     for path in variants:
         with open(path, encoding="utf-8") as f:
-            text = brains._strip_comments(brains._variant(splice(raw_prompt.replace("\r\n", "\n"), f.read().replace("\r\n", "\n")), False))
+            draft6 = f.read().replace("\r\n", "\n")
+        raw6, _added = FB.variant_raw(base6, draft6)
+        fulls[os.path.basename(path)] = (FB.is_full(draft6), raw6 == draft6)
+        text = brains._strip_comments(brains._variant(raw6, False))
         d6, bots6 = world(False)
         p6, _ = prompt_of(d6, bots6, bots6[0], instructions=text)
         blocks[os.path.basename(path)] = block_of(p6)
         heads.add(text in p6)
-check("⑥ 벤치 변형 %d개(tools/bench_variants/) 모두 기준선과 같은 추가 블록 · 변형 지침이 실제로 실렸다" % len(variants),
-      len(variants) == 6 and all(v == block_of(p_on) for v in blocks.values()) and heads == {True}, sorted(blocks))
+check("⑥ 벤치 변형 %d개(tools/bench_variants/ — 절 변형 6 + 전문 변형 1) 모두 기준선과 같은 추가 블록 · 변형 지침이 실제로 실렸다" % len(variants),
+      len(variants) == 7 and all(v == block_of(p_on) for v in blocks.values()) and heads == {True}, sorted(blocks))
+check("⑥ 전문 변형(p0.5.6 prompt-v0.5.5 = v0.5.5 지침 전문)은 파일 그대로 지침이 된다 · 절 변형 6개는 '## 행동 사전' 절만 갈아 끼운다(기존 동작)",
+      fulls.get("prompt-v0.5.5.md") == (True, True)
+      and all(not full for name, (full, _same) in fulls.items() if name != "prompt-v0.5.5.md")
+      and FB.variant_raw(base6, base6) == (base6, False), fulls)
 
 print("── ⑦ 등록부가 비면 관측 꼴이 v0.4 와 같다(SCHEMA 문자열만)")
 with patch.dict(CA.COMMON_EXT, {}, clear=True):

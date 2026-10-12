@@ -13,6 +13,9 @@
     초안 절 끝에는 기준선의 SKILL 치환 앵커 문장을 덧붙여 모든 변형이 같은 스킬 안내를 받게 하고, 치환 여부를 검사해 meta.json 에 남긴다.
     p0.5.5(master_plan §7.2·§7.4): 새 공용 행동의 문장은 지침이 아니라 관측의 '추가 행동' 블록에 붙는다 — 판단 전 검사가
     SKILL 유무 × 추가 행동 유무 4조합에서 치환과 블록(모든 변형이 같은 바이트)을 함께 본다.
+    p0.5.6: 지침 전문 변형 — 변형 파일의 첫 글줄이 지침 제목('# …')이면 절이 아니라 파일 전체가 지침이다(지침 간결화처럼 절 밖도 바뀌는
+    비교용, is_full·variant_raw). 기존 6개 절 변형과 --variants all 은 그대로이고, 전문 변형은 이름으로 부른다 —
+    예: --variants baseline,prompt-v0.5.5 (baseline = 작업 사본 지침, prompt-v0.5.5 = v0.5.5 지침 전문).
   · 채점(모델 판정 없음): 결정을 장면 사본에서 엔진으로 끝까지 굴린다(d.act → 주문이 끝날 때까지 step_order). 판정은 엔진의
     resolution.status(success/no_effect/failed), 결과 꼬리표는 event_tags(모델이 다음 관측에서 보는 그 꼬리표)의 첫 라벨.
     주사위를 쓰는 조합은 고정 시드 여러 개로 굴려 '그 조합이 낼 수 있는 결과'를 모은다(운이 아니라 고른 조합을 잰다).
@@ -75,7 +78,7 @@ KEEP_ENV = ("DUNGEON_MODEL_", "DUNGEON_GEMINI_", "DUNGEON_BRAIN_TIMEOUT", "DUNGE
 
 ACTOR, ALLY, OFFSTAGE = "3", "1", "2"   # party.json 기본 파티: 피른(궁수·사거리 2) 이 판단 주체, 두란(전사) 동료, 카야(도적)는 화면 밖
 VARIANTS = ("baseline", "A-claude", "A-codex", "B-claude", "B-codex", "C-claude", "C-codex")
-VARIANT_DIR = "tools/bench_variants"   # 초안 변형(행동 사전 절) — 리포 루트 기준. p0.5.5 에 .orch/drafts/ 에서 옮겼다(바이트 그대로)
+VARIANT_DIR = "tools/bench_variants"   # 초안 변형(행동 사전 절 · p0.5.6 부터 지침 전문도 — is_full) — 리포 루트 기준. p0.5.5 에 .orch/drafts/ 에서 옮겼다(바이트 그대로)
 SECTION = "## 행동 사전"
 SEEDS = (11, 22, 33, 44, 55)            # 주사위 조합을 굴리는 고정 시드(주사위를 안 쓰는 조합은 첫 시드 한 번만)
 MAX_STEPS = 200                         # 접근·이동을 끝까지 굴리는 틱 상한(마을 끝에서 끝 ~120걸음, 넘으면 '미확정' = 실패로 센다)
@@ -310,10 +313,50 @@ SKILL_ANCHOR = "매 판단에 제시되는 COMMON에서 행동 이름을 고른�
 SKILL_HINT = "매 판단에 제시되는 COMMON 또는 SKILL에서 행동 이름을 고른다."
 
 
-def build_variants(out_dir):
-    """작업 사본 지침에서 '## 행동 사전' 절만 초안으로 바꾼 파일을 만들고 게임 로더(brains._load_prompt)로 읽는다.
-    초안 절에 SKILL_ANCHOR 가 없으면 절 끝에 그 문장 한 줄을 붙인다(초안 파일은 그대로).
-    반환 {이름: {"text", "solo", "sha", "anchor_added"}} — 원문 파일은 out_dir/variants/ 에 남긴다(감사용)."""
+_MEMO = re.compile(r"<!--.*?-->", re.S)
+
+
+def is_full(draft):
+    """변형 파일이 지침 전문인가(p0.5.6) — 주석(<!-- -->)을 걷은 첫 글줄이 '# '(지침 제목 '# 모험가 지침 …')이면 전문,
+    '## 행동 사전'(절 제목)으로 시작하면 절 변형(기존 6개). 표식 칸을 따로 두지 않는다 — 지침 파일을 그대로 복사해 두면 전문 변형이다."""
+    for ln in _MEMO.sub("", draft).split("\n"):
+        if ln.strip():
+            return ln.startswith("# ")
+    return False
+
+
+def variant_raw(base, draft):
+    """(기준선 지침 원문, 변형 파일 원문 — 줄 끝 \\n) → (변형 지침 원문, SKILL 앵커를 덧붙였나).
+    · 절 변형(기존 동작 그대로): 기준선의 '## 행동 사전' 절만 초안의 그 절로 갈아 끼운다.
+    · 전문 변형(p0.5.6 — 지침 간결화처럼 절 밖도 바뀌는 비교): 변형 파일 전체가 지침이다(기준선의 다른 절과 섞지 않는다).
+    두 경우 모두 변형의 '## 행동 사전' 절에 SKILL_ANCHOR 가 없으면 절 끝에 그 문장 한 줄을 붙인다(모든 변형이 같은 스킬 안내를 받게)."""
+    full = is_full(draft)
+    da, db = _section_span(draft)
+    sec = draft[da:db].rstrip("\n")
+    added = SKILL_ANCHOR not in sec
+    if full and not added:
+        return draft, False                        # 전문 변형은 파일 바이트 그대로(지문 = 파일 지문)
+    if added:
+        sec += "\n\n" + SKILL_ANCHOR
+    host = draft if full else base
+    a, b = (da, db) if full else _section_span(base)
+    return host[:a] + sec + "\n\n" + host[b:], added
+
+
+def variant_names(arg):
+    """--variants 값 → 변형 이름 목록. all = VARIANTS(기존 7개 — 기본 동작 그대로). 그 밖 이름은 VARIANTS 이거나
+    tools/bench_variants/<이름>.md 가 있어야 한다(전문 변형 — 예: prompt-v0.5.5 = v0.5.5 지침 전문). 없으면 판단 전에 멈춘다."""
+    names = list(VARIANTS) if arg == "all" else [v for v in arg.split(",") if v]
+    missing = [v for v in names if v not in VARIANTS and not os.path.isfile(os.path.join(ROOT, VARIANT_DIR, v + ".md"))]
+    if missing:
+        raise SystemExit("모르는 변형: %s (VARIANTS 또는 %s/<이름>.md)" % (", ".join(missing), VARIANT_DIR))
+    return names
+
+
+def build_variants(out_dir, extra=()):
+    """작업 사본 지침(기준선)과 변형 파일로 변형 지침을 만들고 게임 로더(brains._load_prompt)로 읽는다 — 절 변형은 '## 행동 사전' 절만,
+    전문 변형은 파일 전체(variant_raw). 만드는 것 = VARIANTS 전부 + extra(요청한 다른 변형 — 전문 변형 파일 이름).
+    반환 {이름: {"text", "solo", "sha", "anchor_added", "full"}} — 원문 파일은 out_dir/variants/ 에 남긴다(감사용)."""
     with open(os.path.join(ROOT, "prompts", "adventurer_prompt.md"), encoding="utf-8") as f:
         base = f.read().replace("\r\n", "\n")
     a, b = _section_span(base)
@@ -322,23 +365,21 @@ def build_variants(out_dir):
     vdir = os.path.join(out_dir, "variants")
     os.makedirs(vdir, exist_ok=True)
     out = {}
-    for name in VARIANTS:
-        added = False
+    for name in list(VARIANTS) + [v for v in extra if v not in VARIANTS]:
+        added, full = False, False
         if name == "baseline":
             raw = base
         else:
             with open(os.path.join(ROOT, VARIANT_DIR, name + ".md"), encoding="utf-8") as f:
                 draft = f.read().replace("\r\n", "\n")
-            da, db = _section_span(draft)
-            sec = draft[da:db].rstrip("\n")
-            if SKILL_ANCHOR not in sec:
-                sec, added = sec + "\n\n" + SKILL_ANCHOR, True
-            raw = base[:a] + sec + "\n\n" + base[b:]
+            full = is_full(draft)
+            raw, added = variant_raw(base, draft)
         path = os.path.join(vdir, name + ".md")
         with open(path, "w", encoding="utf-8", newline="\n") as f:
             f.write(raw)
         text, solo = brains._load_prompt(path)      # 절대 경로 — os.path.join(HERE, 절대경로) 는 절대경로 그대로
-        out[name] = {"text": text, "solo": solo, "sha": hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16], "anchor_added": added}
+        out[name] = {"text": text, "solo": solo, "sha": hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16], "anchor_added": added,
+                     "full": full}
     if (out["baseline"]["text"], out["baseline"]["solo"]) != (brains.COMPOSE_PROMPT, brains.COMPOSE_PROMPT_SOLO):
         raise RuntimeError("기준선 지침이 게임이 읽은 지침(brains.COMPOSE_PROMPT)과 다르다 — 로더 경로가 바뀌었는지 확인")
     return out
@@ -1237,7 +1278,7 @@ def run_seq(args):
     """연속 판단 장면 실행 — dummy(0콜) 또는 gemini(관리자 전용). 결과: <run>/sequences.jsonl · seq_summary.{json,md} · meta.json ·
     prompts/<장면>__<변형>__k<판단>.txt(반복 0 의 판단마다 첫 요청 원문)."""
     names = list(SEQ_SCENES) if args.seq == "all" else args.seq.split(",")
-    variants = list(VARIANTS) if args.variants == "all" else args.variants.split(",")
+    variants = variant_names(args.variants)
     live = args.brain == "gemini"
     run_id = args.run_id or time.strftime("%Y%m%d-%H%M%S") + "-seq-" + args.brain
     run_dir = os.path.join(OUT_ROOT, run_id)
@@ -1250,7 +1291,7 @@ def run_seq(args):
         if not os.environ.get("GEMINI_API_KEY"):
             raise SystemExit("GEMINI_API_KEY 가 없다(.env) — 본 실행을 못 한다")
     t0 = time.time()
-    vtexts = build_variants(run_dir)
+    vtexts = build_variants(run_dir, variants)
     meta = {"run_id": run_id, "brain": args.brain, "reps": args.reps, "seqs": names, "variants": variants,
             "seq_max": SEQ_MAX, "seq_ticks": SEQ_TICKS, "seeds": list(SEEDS), "actor": ACTOR, "game_env": GAME_ENV,
             "model": (brains.model_id("gemini_api", "haiku") if live else None),
@@ -1354,7 +1395,7 @@ def run(args):
     run_dir = os.path.join(OUT_ROOT, run_id)
     os.makedirs(run_dir, exist_ok=True)
     names = list(SCENES) if args.scenes == "all" else args.scenes.split(",")
-    variants = list(VARIANTS) if args.variants == "all" else args.variants.split(",")
+    variants = variant_names(args.variants)
     total = len(names) * len(variants) * args.reps
     live = args.brain == "gemini" and not args.space_only
     # 전송 상한 = 판단마다 최대 2회(입력 오류 재요청) + 한도 물러남 여유 — 넘으면 게임의 D96 라벨이 나고 Pacer 가 실행을 멈춘다
@@ -1386,14 +1427,14 @@ def run(args):
             "bench_sha": _sha("tools/freedom_bench.py"),   # 이 스크립트 자체(채점 규칙이 바뀌면 같은 응답도 다르게 센다)
             "file_sha": {p: _sha(p) for p in ("prompts/adventurer_prompt.md", "brains.py", "composed_actions.py", "dungeon_gm.py",
                                                "dungeon_concept.py", "entities.py", "interactables.py", "show_runner.py", "party.json")
-                         + tuple("%s/%s.md" % (VARIANT_DIR, v) for v in VARIANTS if v != "baseline")},
+                         + tuple("%s/%s.md" % (VARIANT_DIR, v) for v in dict.fromkeys(list(VARIANTS) + variants) if v != "baseline")},
             "fingerprints": {n: sc.fingerprint for n, sc in scenes.items()}}
     if args.space_only:
         _dump(os.path.join(run_dir, "meta.json"), meta)
         _dump(os.path.join(run_dir, "space_summary.json"), {n: {k: v for k, v in sp.items() if k != "rows"} for n, sp in spaces.items()})
         print("끝(%.0fs) — %s" % (time.time() - t0, run_dir))
         return run_dir
-    vtexts = build_variants(run_dir)
+    vtexts = build_variants(run_dir, variants)
     meta["variant_sha"] = {v: vtexts[v]["sha"] for v in variants}
     meta["skill_hint_check"] = skill_hint_check(scenes, {v: vtexts[v] for v in variants})
     meta["skill_hint_prompts"] = {v: [0, 0] for v in variants}   # 실제 판단 프롬프트 중 SKILL 안내가 든 수 / 관측에 SKILL 이 있던 수
@@ -1527,7 +1568,8 @@ def main():
     ap.add_argument("--brain", choices=("dummy", "gemini"), default="dummy",
                     help="dummy = 고정 응답(LLM 0콜) · gemini = 게임과 같은 Gemini Flash 경로(.env 키)")
     ap.add_argument("--scenes", default="all", help="쉼표 목록 또는 all: " + ",".join(SCENES))
-    ap.add_argument("--variants", default="all", help="쉼표 목록 또는 all: " + ",".join(VARIANTS))
+    ap.add_argument("--variants", default="all", help="쉼표 목록 또는 all: " + ",".join(VARIANTS)
+                    + " · 그 밖에 %s/<이름>.md 가 있는 이름(전문 변형 — 예: prompt-v0.5.5)" % VARIANT_DIR)
     ap.add_argument("--reps", type=int, default=3, help="장면 × 변형마다 판단 횟수")
     ap.add_argument("--interval", type=float, default=6.0, help="gemini 호출 사이 최소 간격(초) — 순차 호출, 기본 분당 10회 이하")
     ap.add_argument("--space-only", action="store_true", help="가능 공간만 계산(판단 없음)")

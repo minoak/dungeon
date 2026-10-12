@@ -10,7 +10,10 @@ attack_mode/source_xy/target_xy가 결과와 관측에 추가된 세 시드 해�
 세 필드만 제거하면 D66 해시와 모두 일치한다(verify_combat_stream). 게임 판정·상태·난수 변경은 없다.
 **2026-10-12 p0.5.5 갱신**: 관측 계약 문자열 obs.action_schema 가 compose-v0.4 → compose-v0.5(행동 등록부·추가 행동 블록 자리,
 master_plan §7.1). 등록부가 비어 관측의 다른 칸·행동·상태·난수는 그대로다 — 그 문자열만 v0.4 로 되돌리면(schema_v04) t13c 해시와
-세 시드 모두 일치한다(아래 main 이 함께 확인). 새 해시는 p0.5.5 작업 트리 코드에서 뽑았다."""
+세 시드 모두 일치한다(아래 main 이 함께 확인). 새 해시는 p0.5.5 작업 트리 코드에서 뽑았다.
+**2026-10-12 p0.5.6 갱신**: 조합형 관측의 아이템 줄(바닥 물약·장비·보물, 소지품)에 물건 설명 desc·다루는 규칙 rule 칸이 더해지고 보물 태그에 item 이
+붙었다(item_desc_design D1·D2·D4). 행동·상태·난수는 그대로다 — 그 두 칸과 태그만 되돌리면(items_v055) p0.5.5 해시와 세 시드 모두 일치한다.
+새 해시는 p0.5.6 작업 트리 코드에서 뽑았다."""
 import hashlib
 import json
 import os
@@ -68,11 +71,33 @@ T13C_EXPECTED = {   # 2026-10-11 t13c 관리자 승인: 표시 필드 세 개만
     217: 'bb58b87d5eb01f20406d903e7cc057e2a68731c6585a7ca1ecaf9b8643c9a11c',
 }
 
-EXPECTED = {   # 2026-10-12 p0.5.5: obs.action_schema compose-v0.4 → compose-v0.5 만
+P055_EXPECTED = {   # 2026-10-12 p0.5.5: obs.action_schema compose-v0.4 → compose-v0.5 만(p0.5.6 회귀 비교용으로 보존)
     7: '77fcaf5d80d38e7893873184c59afd450e85474d9fb321f44cd5f2ddaa84e7ac',
     37: 'dbf56f21d5b3043268edb19b7cfafc86008370a4c2cf50e1c08ef897a8d22b05',
     217: 'bad308c563016eceebdfdc6941309468740080ea8cebe75a4ea5b9e11d9fe614',
 }
+
+EXPECTED = {   # 2026-10-12 p0.5.6: 관측 대상의 아이템 줄에 desc·rule(물건 설명·다루는 규칙) · 보물 태그 (object) → (object, item)
+    7: 'ae60a3bdaff121f9af4a9e60791b3c15fa01ace21d706a6076c787a1daa0499f',
+    37: '970fc137ca05d609ba220737ff87dbfb4ae3ab6bb34d0a4312ee4cdb9325b444',
+    217: '559207f5ed5428d284428f4d9d4e5120b5233e850f51b5ec86d1fbd8de69832d',
+}
+
+_TREASURE_NAMES = ('보물', '숨은 보물')
+
+
+def items_v055(value):
+    """p0.5.6 관측 변경만 되돌린 사본 — 대상·소지품 줄의 desc·rule 칸을 빼고 보물 태그를 (object) 로. 그 밖의 바이트(행동·상태·난수)가
+    p0.5.5 기준선과 같은지 보는 데 쓴다. 축복 물약의 옛 effect 칸은 이 판(축복 없음)에 나오지 않아 되돌릴 것이 없다."""
+    if isinstance(value, dict):
+        out = {k: items_v055(v) for k, v in value.items()
+               if not (k in ('desc', 'rule') and value.get('kind') in ('feature', 'item') and 'tags' in value)}
+        if out.get('kind') == 'feature' and out.get('name') in _TREASURE_NAMES and out.get('tags') == ['object', 'item']:
+            out['tags'] = ['object']
+        return out
+    if isinstance(value, (list, tuple)):
+        return [items_v055(v) for v in value]
+    return value
 
 
 def schema_v04(value):
@@ -89,7 +114,9 @@ if __name__ == '__main__':
         records = trace_records(seed)
         actual = digest(records)
         assert actual == EXPECTED[seed], (seed, actual, EXPECTED[seed])
-        old = digest(schema_v04(records))
+        p055 = digest(items_v055(records))
+        assert p055 == P055_EXPECTED[seed], (seed, p055, P055_EXPECTED[seed])
+        old = digest(schema_v04(items_v055(records)))
         assert old == T13C_EXPECTED[seed], (seed, old, T13C_EXPECTED[seed])
-        print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치 · 관측 계약 문자열만 되돌리면 t13c 기준선과 일치' % seed)
-    print('ALL PASS — verify_skill_off (3시드 × 80틱, 기준선 = 78fbe84 + D51 + D66 + t13c + p0.5.5 2026-10-12)')
+        print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치 · 아이템 설명 칸만 되돌리면 p0.5.5 · 관측 계약 문자열까지 되돌리면 t13c 기준선과 일치' % seed)
+    print('ALL PASS — verify_skill_off (3시드 × 80틱, 기준선 = 78fbe84 + D51 + D66 + t13c + p0.5.5 + p0.5.6 2026-10-12)')

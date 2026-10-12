@@ -36,17 +36,24 @@ defs = ENT.load()
 #   그래서 개수 고정은 엔진이 제 뜻으로 아는 코어 오브젝트(use 없는 9장 — 생성기·장비표·도감이 기대는 것)에만 걸고, 쓰임 오브젝트는
 #   '최소 4장(게이트용) 이상'으로만 본다(동료 프리셋 '수는 늘어난다'와 같은 문법). 쓰임 오브젝트의 꼴·동작은 verify_use 가 본다.
 use_objs = [d for d in ENT.by_kind('object') if d['comps'].get('use')]
-core_objs = {d['id'] for d in ENT.by_kind('object') if not d['comps'].get('use')}
+# p0.5.6(2026-10-12): 아이템(item 부품 — 몸에 지닐 수 있는 것)도 '수는 늘어난다' 갈래 — 돌·두건·NPC 고급 장비가 정의 한 장씩 들어온다.
+#   개수 고정은 엔진이 제 뜻으로 아는 설비 셋(출구·상자·샘)에만 걸고, 아이템은 지금 일곱 장(축복의 물약 새 정의 포함)을 하한으로 본다.
+#   아이템의 꼴(설명·규칙·조회·관측)은 verify_items 가 본다.
+item_objs = [d for d in ENT.by_kind('object') if d['comps'].get('item')]
+core_objs = {d['id'] for d in ENT.by_kind('object') if not d['comps'].get('use') and not d['comps'].get('item')}
 # D90(2026-09-20): 마을 생활의 새 주민(정착 넷·행인 둘)도 '내용'이다 — 마을 생활 스위치 판에서만 나오고 JSON 한 장씩 늘어난다. 개수 고정은
 #   코어 NPC 아홉(옛 마을 셋·마을 v1 셋·행인 셋)에만 걸고, 새 주민은 '최소 여섯 이상'으로만 본다(꼴·동작은 verify_townlife 가 본다).
 LIFE_NPC_IDS = {'smith', 'flower_elder', 'fountain_child', 'retired_adventurer', 'town_resident', 'shop_porter'}
 life_npcs = [d for d in ENT.by_kind('npc') if d['id'] in LIFE_NPC_IDS or d['comps']['npc'].get('town_life')]
-check('① 정의 로드 — 마을 v3 공간 정의(맵 9·건물 12, 이전 지도 정의 포함) + 동료 프리셋(D81 — 수는 늘어난다) + 쓰임 오브젝트(D89 — 수는 늘어난다)',
+check('① 정의 로드 — 마을 v3 공간 정의(맵 9·건물 12, 이전 지도 정의 포함) + 동료 프리셋(D81 — 수는 늘어난다) + 쓰임 오브젝트(D89 — 수는 늘어난다)'
+      ' + 아이템(p0.5.6 — 수는 늘어난다)',
       {d['kind'] for d in defs.values()} == set(ENT.KINDS)
-      and len(defs) - len(ENT.by_kind('companion')) - len(use_objs) - len(life_npcs) == 51 and len(ENT.by_kind('companion')) >= 3   # D92(09-20): 새 몬스터 셋(48 → 51)
+      and len(defs) - len(ENT.by_kind('companion')) - len(use_objs) - len(life_npcs) - len(item_objs) == 45 and len(ENT.by_kind('companion')) >= 3   # D92(09-20): 새 몬스터 셋(48 → 51) · p0.5.6: 아이템 여섯이 아이템 갈래로(51 → 45)
       and len(ENT.by_kind('monster')) == 6 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('npc')) - len(life_npcs) == 9       #   monster 3 → 6(옛 세 종 + 새 몬스터 풀 셋 — 아래 ⑨)
       and LIFE_NPC_IDS <= {d['id'] for d in life_npcs}
-      and core_objs == {'exit', 'treasure', 'chest', 'fountain', 'potion', 'dagger', 'longsword', 'leather_armor', 'chain_mail'}
+      and core_objs == {'exit', 'chest', 'fountain'}
+      and {'treasure', 'potion', 'boon', 'dagger', 'longsword', 'leather_armor', 'chain_mail'} <= {d['id'] for d in item_objs}
+      and not any(d['comps'].get('use') for d in item_objs)
       and {'stone_tablet', 'bench', 'well', 'barrel'} <= {d['id'] for d in use_objs}
       and len(ENT.by_kind('map')) == 9 and len(ENT.by_kind('building')) == 12 and len(ENT.by_kind('quest')) == 3)
 
@@ -55,8 +62,9 @@ check('② TRAP_KINDS 가 정의에서 유도되어 옛 리터럴과 같다',
       G.TRAP_KINDS == {'spike': {'name': '가시 함정', 'dc': 13, 'dmg': 3, 'status': '출혈'},
                        'dart': {'name': '독침 함정', 'dc': 14, 'dmg': 2, 'status': '중독'},
                        'alarm': {'name': '경보 함정', 'dc': 13, 'dmg': 0}})
-check('② GEAR_KINDS 유도 · GEAR_CYCLE 의 이름은 전부 정의에 있다',
-      G.GEAR_KINDS == {'단검': 1, '장검': 2, '가죽 갑옷': 1, '사슬 갑옷': 2} and {n for _, n in G.GEAR_CYCLE} <= set(G.GEAR_KINDS))
+check('② GEAR_KINDS 유도 · GEAR_CYCLE(p0.5.6 정의 id)은 전부 장비 정의 — 단검·가죽 갑옷·장검·사슬 갑옷 순(무기·갑옷 번갈아)',
+      G.GEAR_KINDS == {'단검': 1, '장검': 2, '가죽 갑옷': 1, '사슬 갑옷': 2}
+      and [(ENT.get(e)['type'], ENT.object_name(e)) for e in G.GEAR_CYCLE] == [('weapon', '단검'), ('armor', '가죽 갑옷'), ('weapon', '장검'), ('armor', '사슬 갑옷')])
 check('② MON_STATUS 유도(그림자거미 명중=둔화, 고블린 무태그 · D92 독칼 고블린 명중=중독)', G.MON_STATUS == {'그림자거미': '둔화', '독칼 고블린': '중독'})
 g = G.Monster(0, 0, mid=0)
 s = G.Monster(0, 0, kind='그림자거미', mid=1)

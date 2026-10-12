@@ -55,8 +55,8 @@ WEAPON, ARMOR = ')', '['        # 장비(2026-07-30, 뼈대): 슬롯 2(무기·�
 GEAR_KINDS = ENT.gear_kinds()   # ← entities/object/*.json equipment.bonus(D50)   # 이름→보정(피처는 이름만 들고
                                 # 보정은 여기서 푼다 — Feature __slots__/스트림 계약 무접촉).
                                 # 저주·미식별·강화=2차 서랍(07-30 합의).
-GEAR_CYCLE = [('weapon', '단검'), ('armor', '가죽 갑옷'),             # 배치 순환(함정 kinds 선례 —
-              ('weapon', '장검'), ('armor', '사슬 갑옷')]             # RNG 무소비 결정론)
+GEAR_CYCLE = ['dagger', 'leather_armor',                              # 배치 순환(함정 kinds 선례 — RNG 무소비 결정론)
+              'longsword', 'chain_mail']                              # p0.5.6: 정의 id(place_def 한 길 — 피처 type·이름은 정의에서)
 
 
 def gear_bonus(bot, slot):
@@ -382,7 +382,8 @@ def event_tags(rec, names=None):
     if t == 'give':                                   # D47 ②(09-09) 건네기 — 한 쪽의 자기 사건
         if r == 'given':
             return [('give', '건넴', '%s → %s%s' % (rec.get('what', '?'), nm(rec.get('to')),
-                                                  ' (그의 발밑에 놓임)' if rec.get('placed') else ''))]
+                                                  ('' if not rec.get('placed') else ' (내 발밑에 놓임)' if rec.get('spot') == 'mine'   # p0.5.6(D6)
+                                                   else ' (그의 발밑에 놓임)')))]
         return [('misc', '헛손질', {'too_far': '곁에 없음', 'nothing': '줄 것 없음', 'no_room': '놓을 자리 없음'}.get(r, r))]
     if t == 'bond':                                   # D47 ② 친목 — 한 쪽의 자기 사건(형태=자유 문구)
         if r == 'done':
@@ -390,7 +391,8 @@ def event_tags(rec, names=None):
         return [('misc', '헛손질', {'too_far': '곁에 없음'}.get(r, r))]
     if t == 'received':                               # D47 ② 받은 쪽의 자기 사건(hurt 문법 — 남이 내게 한 일)
         return [('received', '받음', '%s (%s)%s' % (rec.get('what', '?'), nm(rec.get('from')),
-                                                   ' — 발밑에 놓임' if rec.get('placed') else ''))]
+                                                   ('' if not rec.get('placed') else ' — 건넨 이의 발밑에 놓임' if rec.get('spot') == 'mine'   # p0.5.6(D6)
+                                                    else ' — 발밑에 놓임')))]
     if t == 'bonded':
         return [('bonded', '친목 받음', '%s: %s' % (nm(rec.get('from')), rec.get('form', '몸짓')))]
     if r == 'zone_enter':                             # D86 — 걷다가 새 구역에 들어서 멈춤
@@ -1164,20 +1166,20 @@ class Dungeon:
                     d.grid[y][x] = DOOR
                     continue
                 d.grid[y][x] = FLOOR
-                if ch == EXIT:
-                    d._exit_fid = d._add_feature('exit', ENT.object_name('exit'), x, y)
+                if ch == EXIT:             # p0.5.6: 정의가 있는 것은 place_def 한 길(type·이름·이야기가 정의에서)
+                    d._exit_fid = d.place_def('exit', x, y)
                 elif ch == TREASURE:
-                    d._add_feature('treasure', ENT.object_name('treasure'), x, y)
+                    d.place_def('treasure', x, y)
                 elif ch == '=':
-                    d._add_feature('chest', ENT.object_name('chest'), x, y)
+                    d.place_def('chest', x, y)
                 elif ch == '~':
-                    d._add_feature('fountain', ENT.object_name('fountain'), x, y)
+                    d.place_def('fountain', x, y)
                 elif ch == POTION:
-                    d._add_feature('potion', ENT.object_name('potion'), x, y)
+                    d.place_def('potion', x, y)
                 elif ch == WEAPON:         # 장비(07-30) — 장면 저작용은 1티어 고정(단검·가죽 갑옷).
-                    d._add_feature('weapon', ENT.object_name('dagger'), x, y)     # 상위 티어 장면은 호출측이
-                elif ch == ARMOR:                              # _add_feature('weapon','장검',…)로 직접
-                    d._add_feature('armor', ENT.object_name('leather_armor'), x, y)
+                    d.place_def('dagger', x, y)                    # 상위 티어 장면은 호출측이
+                elif ch == ARMOR:                                  # place_def('longsword', …)로 직접
+                    d.place_def('leather_armor', x, y)
                 elif ch == STAIRS_UP:      # 마을(D29) — 위로 오르는 계단(복귀. 하강 '>'와 대칭)
                     d._add_feature('stairs_up', '위로 오르는 계단', x, y)
                 elif ch == TRAP:
@@ -1289,12 +1291,12 @@ class Dungeon:
         self.rng.shuffle(floors)
         room_floors = [c for c in floors if self._room_id_at(*c) is not None]
         ex, ey = room_floors[0] if room_floors else floors[-1]
-        self._exit_fid = self._add_feature('exit', ENT.object_name('exit'), ex, ey)
+        self._exit_fid = self.place_def('exit', ex, ey)
         used = {(ex, ey)}
         pool = [c for c in floors if c not in used]
         for _ in range(min(3, len(pool))):
             x, y = pool.pop()
-            self._add_feature('treasure', ENT.object_name('treasure'), x, y)
+            self.place_def('treasure', x, y)
         for i in range(n_monsters):
             if pool:
                 x, y = pool.pop()
@@ -1312,23 +1314,21 @@ class Dungeon:
                 self.traps.append(Trap(x, y, kind=kinds[i % len(kinds)]))
         if pool:                              # 상자: 열면 보물 2개 or 독침(리스크/보상 도박)
             x, y = pool.pop()
-            self._add_feature('chest', ENT.object_name('chest'), x, y)
+            self.place_def('chest', x, y)
         if pool:                              # 샘: 마시면 회복 or 오염(가벼운 도박, 대체로 이득)
             x, y = pool.pop()
-            self._add_feature('fountain', ENT.object_name('fountain'), x, y)
+            self.place_def('fountain', x, y)
         if pool:                              # 숨은 보물: 인지(도적)로만 드러난다 — 직업 보상의 몸통
             x, y = pool.pop()
-            self._add_feature('treasure', '숨은 보물', x, y,
-                              concealed=True, perception_gate=PASSIVE_DC)
+            self.place_def('treasure', x, y, concealed=True, perception_gate=PASSIVE_DC, name='숨은 보물')
         for _ in range(n_potions):            # 회복 물약(07-17): 들고 다니는 확정 회복(PD 문법).
             if pool:                          #   맨 마지막 배치 = 같은 시드의 기존 배치 전부 불변
                 x, y = pool.pop()             #   (pool.pop 은 RNG 무소비 — additive 재현성)
-                self._add_feature('potion', ENT.object_name('potion'), x, y)
+                self.place_def('potion', x, y)
         for i in range(n_gear):               # 장비(07-30): 물약 뒤 = 같은 additive 규율.
             if pool:                          #   순환 배치(RNG 무소비) — 기본 3개면 단검·가죽 갑옷·
                 x, y = pool.pop()             #   장검이 깔려 한 층 안에서 '더 좋은 것' 비교가 생긴다
-                slot, name = GEAR_CYCLE[i % len(GEAR_CYCLE)]
-                self._add_feature(slot, name, x, y)
+                self.place_def(GEAR_CYCLE[i % len(GEAR_CYCLE)], x, y)
 
     def _place_plus(self):
         """D92(2026-09-20 파트너 "던전에 추가 오브젝트나 몬스터 혹은 이벤트를 넣는 것만 하면 될 것 같아" · 메모 §4-3 "요구하는 대응이
@@ -1427,7 +1427,7 @@ class Dungeon:
         rest = [c for c in cells[1:]]
         if rest:
             cx, cy = rest[0]
-            self._add_feature('chest', ENT.object_name('chest'), cx, cy)   # 보물상자 — 게이트 곁
+            self.place_def('chest', cx, cy)                     # 보물상자 — 게이트 곁
         self.boss, self.sealed = boss, True
 
     def boss_front(self):
@@ -1521,7 +1521,7 @@ class Dungeon:
             cands.sort(key=lambda p: self._life_roll('promote', p['x'], p['y']))   # 곁에 설 자리가 있는 것만(막힌 소품은 못 뒤진다)
             for p in cands[:min(self._life_count('n_rummage', self.LIFE_RUMMAGE), len(cands))]:
                 if self.feature_at(p['x'], p['y']) is None:
-                    self._add_feature(p['kind'], ENT.object_name(p['kind']), p['x'], p['y'])
+                    self.place_def(p['kind'], p['x'], p['y'])   # p0.5.6: place_def 한 길 — 정의의 특징 한 줄(story)이 던전에서도 보인다
         else:
             corners = [c for r in self.rooms for c in ((r.x, r.y), (r.x + r.w - 1, r.y),
                                                        (r.x, r.y + r.h - 1), (r.x + r.w - 1, r.y + r.h - 1))]
@@ -1529,7 +1529,7 @@ class Dungeon:
                           key=lambda c: self._life_roll('bare', *c))
             for i, (x, y) in enumerate(free[:min(self._life_count('n_bare', self.LIFE_RUMMAGE_BARE), len(free))]):
                 eid = self.LIFE_RUMMAGE_IDS[self._life_roll('bare_kind', x, y) % len(self.LIFE_RUMMAGE_IDS)]
-                self._add_feature(eid, ENT.object_name(eid), x, y)
+                self.place_def(eid, x, y)
         # ② 읽는 것 — 벽을 등진 빈 바닥(방 안). 본문은 피처마다 다르므로 세계의 상태(use_over)로 얹는다
         walled = sorted({(x, y) for r in self.rooms
                          for y in range(max(1, r.y), min(self.h - 1, r.y + r.h))
@@ -1541,7 +1541,7 @@ class Dungeon:
         seal_left = 1 if getattr(self, 'boss_on', False) else 0   # 보스층에는 봉인을 말하는 석판 하나(BOSS_FLOOR_NOTICE 와 같은 사실)
         facts = self._tablet_facts()
         for x, y in walled[:n_tab]:
-            fid = self._add_feature(self.LIFE_TABLET_ID, ENT.object_name(self.LIFE_TABLET_ID), x, y)
+            fid = self.place_def(self.LIFE_TABLET_ID, x, y)
             if seal_left:
                 text, seal_left = self.LIFE_TABLET_SEAL, 0
             else:
@@ -1558,7 +1558,7 @@ class Dungeon:
                             if self._life_free(x, y, gap=3)},
                            key=lambda c: self._life_roll('campfire_spot', *c))
             if spots:
-                self._add_feature(self.LIFE_CAMPFIRE_ID, ENT.object_name(self.LIFE_CAMPFIRE_ID), *spots[0])
+                self.place_def(self.LIFE_CAMPFIRE_ID, *spots[0])
 
     def _assign_room_types(self):
         """출구 든 방 = exit, 출구에서 가장 먼 방 = entrance, 나머지 standard.
@@ -1838,6 +1838,22 @@ class Dungeon:
         self.features[fid] = Feature(fid, ftype, name, x, y,
                                      room_id=self._room_id_at(x, y),
                                      concealed=concealed, perception_gate=perception_gate)
+        return fid
+
+    def place_def(self, eid, x, y, concealed=False, perception_gate=0, name=None):
+        """오브젝트 정의 한 장(eid)을 (x,y)에 피처로 놓는다 → 피처 번호(p0.5.6 item_desc_design §6.3 — 생성 길을 한 길로).
+        type·이름은 정의에서(name 은 이름 변형 — '숨은 보물'), 정의에 story 가 있으면 place_story 에 건다(D75: 피처 줄 끝의 특징 한 줄 ·
+        곁 2칸의 이야기). 손그림 장면·층 생성·보스 상자·던전 살림이 이것을 부른다(마을 살림은 바닥 검사가 붙은 interactables.place 경유).
+        rng 를 쓰지 않고 피처 번호 순서도 _add_feature 그대로다 — 바뀌는 것은 story 가 있는 정의의 place_story 뿐."""
+        df = ENT.get(eid)
+        if df.get('kind') != 'object' or not df.get('type'):
+            raise ValueError('%r 은(는) 오브젝트 정의가 아니다' % eid)
+        fid = self._add_feature(df['type'], name or df['name'], x, y, concealed=concealed, perception_gate=perception_gate)
+        st = (df.get('comps') or {}).get('story')
+        if st:
+            if getattr(self, 'place_story', None) is None:   # from_ascii(__new__)·옛 피클엔 없는 속성
+                self.place_story = {}
+            self.place_story[fid] = dict(st)
         return fid
 
     def _alloc_fid(self):
@@ -5358,6 +5374,16 @@ class Dungeon:
         return {**base, 'result': 'drink_heal', 'heal': heal, 'hp': bot['hp'],
                 'potions': bot['potions']}
 
+    BLESS_GAIN = 1     # p0.5.6: 축복의 물약 한 병이 올리는 양 — _bless 와 물건 설명의 {gain}(entities.item_desc)이 같은 값을 읽는다
+
+    def bless_stat(self, bot):
+        """축복의 물약이 올리는 능력치 — 공격 판정의 능력치(근접 atk_range 1 = 힘, 원거리 = 민첩. _attack 의 mod 갈림과 같은 근거)."""
+        return 'dex' if int(bot.get('atk_range') or 1) > 1 else 'str'
+
+    def bless_fill(self, bot):
+        """물건 설명(entities.item_desc)의 축복 자리 — {stat}(이 몸이 마시면 오를 능력치 이름)·{gain}. 관측과 _bless 가 같은 함수를 본다."""
+        return {'stat': STAT_KR[self.bless_stat(bot)], 'gain': self.BLESS_GAIN}
+
     def _bless(self, bot, bots=None):
         """축복의 물약(D74, 2026-09-15 파트너 "기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자")을 마신 효과 —
         메뉴형 drink(item=boon)과 조합형 use(self, i4)의 **공용 지점**. 공격 판정에 쓰는 능력치가 1 오른다: 근접(atk_range 1)은
@@ -5367,8 +5393,8 @@ class Dungeon:
         if not bot.get('boons'):
             return None
         bot['boons'] -= 1
-        stat = 'dex' if int(bot.get('atk_range') or 1) > 1 else 'str'
-        bot[stat] += 1
+        stat = self.bless_stat(bot)
+        bot[stat] += self.BLESS_GAIN
         self._witness(bots, bot['x'], bot['y'],   # 전달층(D22): 마시는 장면도 시야를 탄다(회복 물약 선례)
                       {'kind': 'ally_bless', 'char': bot['char'], 'stat': stat},
                       exclude=(bot['char'],))
@@ -5565,6 +5591,7 @@ class Dungeon:
         """건네기(D47 ②, 2026-09-09 파트너 "건네기를 만들려면 아이템 거래를 넣어야 해") — 곁의 동료에게 소지품을 넘긴다.
         물약: potions −1/+1. 무기·방어구: 벗어 건넨다 — 상대 슬롯이 비었으면 그가 걸치고(equipped), 차 있으면 발밑에 피처로
         놓인다(placed — 착용은 상대의 결정, equip 스왑 '헌것은 그 자리에' 문법과 대칭. 발밑이 찼으면 내 발밑, 둘 다 찼으면 no_room).
+        p0.5.6(D6): 놓인 자리를 spot('theirs' 그의 발밑 | 'mine' 건넨 이의 발밑)로 결과·받은 기록 둘 다에 싣는다.
         굴림 없음·한 턴 소모·상대는 안 선다. 엔진은 선물인지 거래의 절반인지 모른다(D5) — 거래 = 제안(말) + 건네기 둘, 협상 상태
         없음(파트너 09-09 "제안은 열리게"). 뼈: 한 쪽 gave / 받은 쪽 received. 목격(ally_give)은 둘을 뺀 시야 안 동료."""
         item = str(item or '')
@@ -5601,7 +5628,8 @@ class Dungeon:
                     return {**base, 'result': 'no_room'}
                 bot[item] = None
                 self._put_gear(item, g, spot[0], spot[1], bot['char'])   # D57: 같은 번호로 발밑에(건넨 이의 착용 이력 포함)
-                extra, got = {'placed': True}, {'placed': True}
+                at = 'theirs' if spot == (recv['x'], recv['y']) else 'mine'   # p0.5.6(D6): 어느 발밑인가 — 결과 문장이 '그의 발밑'만 말하던 거짓 수선
+                extra, got = {'placed': True, 'spot': at}, {'placed': True, 'spot': at}
             else:
                 bot[item] = None
                 recv[item] = dict(g)

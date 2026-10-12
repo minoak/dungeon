@@ -33,7 +33,8 @@ _HEAD = re.compile(r"^## `([^`]+)`")
 
 # 말 칸 판별: comps 아래 경로의 마지막 키. space.role(구역의 종류 = 식별자)·note(개발 메모)·walk(걷는 자리) 등은 말이 아니다.
 _WORD_KEYS = {"role", "persona", "trait", "history", "brief", "deep", "text", "texts", "wares", "goal", "reward", "client",
-              "overheard", "speech", "background"}
+              "overheard", "speech", "background",
+              "desc", "lore"}                       # p0.5.6 아이템 — item.desc(물건 설명) · item.lore(속 — 자리만)
 _NOT_WORDS = ("space.",)                            # 이 접두의 경로는 말이 아니다(구역 종류 id)
 
 # 사람용 설명 — (경로 끝 맞춤, 설명). 앞의 것이 이긴다. life.* 는 describe 가 꼬리를 붙인다. 말 파일 제목 줄의 줄표 뒤에 찍힌다.
@@ -63,6 +64,8 @@ DESC = [
     ("line", "첫 대사 — 말을 걸면 · 관전 말풍선"),
     ("story.trait", "특징 한 줄 — 늘 보인다(멀리서도 · 관측 줄 끝)"),
     ("story.history", "이야기 — 곁 2칸에 섰을 때 '네 상태' 절에 한 줄"),
+    ("item.desc", "물건 설명 — 보이거나 지닐 때 대상 목록에 붙는다({bonus} 등 중괄호는 엔진이 채운다)"),
+    ("item.lore", "속 — 살펴서(search) 드러나는 내력(아직 아무도 읽지 않는 자리)"),
     ("knowledge.brief", "처음 알게 된 한 줄 — 도감에 오를 때"),
     ("knowledge.deep", "깊은 지식 — 알게 된 뒤(몬스터는 조우를 쌓아 해금)"),
     ("use.texts", "살펴볼 때마다 하나씩 나오는 글(목록)"),

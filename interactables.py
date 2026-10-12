@@ -400,7 +400,7 @@ def obj_note(res):
 
 
 def place(d, eid, x, y):
-    """배치 도우미 — 오브젝트 정의 한 장(eid)을 (x,y) 바닥 칸에 피처로 놓는다 → 피처 번호. build_town·층 생성·장면 저작이 부른다.
+    """배치 도우미 — 오브젝트 정의 한 장(eid)을 (x,y) 바닥 칸에 피처로 놓는다 → 피처 번호. build_town·장면 저작이 부른다(층 생성은 바닥 검사 없이 place_def 직접).
     정의에 story 가 있으면 place_story 에 걸어(D75) 피처 줄 끝의 한 줄(about)·곁 2칸의 이야기가 된다. 바닥이 아니거나 이미 다른
     피처가 선 칸이면 시작 전에 죽는다(_interact 는 칸의 첫 피처를 집는다 — 한 칸에 하나). rng 를 쓰지 않는다."""
     df = ENT.get(eid)
@@ -408,10 +408,4 @@ def place(d, eid, x, y):
         raise ValueError('%r 은(는) 오브젝트 정의가 아니다' % eid)
     if not (0 <= y < d.h and 0 <= x < d.w) or d.grid[y][x] != '.' or d.feature_at(x, y) is not None:
         raise ValueError('오브젝트 %r 자리 (%d,%d)가 빈 바닥이 아니다' % (eid, x, y))
-    fid = d._add_feature(df['type'], df['name'], x, y)
-    st = (df.get('comps') or {}).get('story')
-    if st:
-        if getattr(d, 'place_story', None) is None:
-            d.place_story = {}
-        d.place_story[fid] = dict(st)
-    return fid
+    return d.place_def(eid, x, y)                  # p0.5.6: 정의 → 피처 + 이야기는 Dungeon.place_def 한 길(이 함수는 바닥 검사를 얹은 겉)

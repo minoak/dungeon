@@ -8,5 +8,9 @@
     "item"
   ],
   "sprite": "wl-props#5",
-  "comps": {}
+  "comps": {
+    "item": {
+      "desc": "@prompts"
+    }
+  }
 }

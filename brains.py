@@ -414,7 +414,8 @@ def action_metadata():
 def prompt_files(social=False, npc=False):
     """p0.5.1(10-11): 이 판에서 LLM 에 실제로 들어가는 지침 파일(리포 기준 상대 경로) — run_meta.prompts 지문(buildinfo)의 대상.
     행동 지침은 판의 행동 방식에 따라 하나(조합형 = prompts/, 메뉴·자유 = 비교용 백업), 나머지는 켠 것만. 엔티티의 말(prompts/world/,
-    D100)은 관측·NPC 지침에 실려 가므로 폴더째 하나의 지문. 수첩·멈춤 장 같은 코드 안 문장은 git 칸이 맡는다."""
+    D100)은 관측·NPC 지침에 실려 가므로 폴더째 하나의 지문. 행동 말 파일(prompts/actions/, p0.5.5·p0.5.6)은 조합형 관측에만 실려 가므로
+    조합형 판에서만 폴더째 하나의 지문. 수첩·멈춤 장 같은 코드 안 문장은 git 칸이 맡는다."""
     legacy = LEGACY_PROMPT_DIR.replace(os.sep, "/")
     out = ["prompts/adventurer_prompt.md" if COMPOSE else
            legacy + ("/adventurer_prompt_menu.md" if MENU else "/adventurer_prompt.md")]
@@ -425,6 +426,8 @@ def prompt_files(social=False, npc=False):
     if npc:
         out.append(NPC_PROMPT_FILE.replace(os.sep, "/"))
     out.append("prompts/world/")
+    if COMPOSE:                                  # p0.5.6(리뷰 권장): 행동 말 파일(prompts/actions/ — 아이템 다루는 규칙·'추가 행동' 블록)도 조합형 관측에 실려 간다.
+        out.append("prompts/actions/")           #   메뉴·자유 판의 관측엔 안 실리므로 조합형만(폴더째 하나의 지문)
     return out
 
 
@@ -1006,7 +1009,9 @@ def _last_prose(last, names=None):
         if r == "given":
             tail = ((" (남은 물약 %d병)" % last.get("potions", 0)) if last.get("item") == "potion"
                     else (" (남은 축복의 물약 %d병)" % last.get("boons", 0)) if last.get("item") == "boon"   # D74
-                    else (" — 그의 발밑에 놓였다(자리가 차 있었다)" if last.get("placed") else " — 그가 바로 걸쳤다"))
+                    else " — 그가 바로 걸쳤다" if not last.get("placed")
+                    else " — 네 발밑에 놓였다(그의 자리도 발밑도 차 있었다)" if last.get("spot") == "mine"   # p0.5.6(D6) 놓인 자리(spot)
+                    else " — 그의 발밑에 놓였다(자리가 차 있었다)")
             return "%s에게 %s을(를) 건넸다%s" % (_who(last.get("to")), last.get("what", "?"), tail)
         return "건네려 했지만 — " + {"too_far": "곁에 없었다(붙어야 건넨다)", "nothing": "줄 것이 없었다",
                                      "no_target": "상대가 그 자리에 없었다", "no_room": "바닥에 놓을 자리가 없었다"}.get(r, str(r))
@@ -1017,7 +1022,9 @@ def _last_prose(last, names=None):
     if t == "received":                   # D47 ② 받은 쪽(hurt 문법 — 남이 내게 한 일)
         tail = ((" (소지 물약 %d병)" % last.get("potions", 0)) if last.get("item") == "potion"
                 else (" (소지 축복의 물약 %d병)" % last.get("boons", 0)) if last.get("item") == "boon"   # D74
-                else (" — 발밑에 놓였다(걸칠지는 네 몫)" if last.get("placed") else " — 바로 걸쳤다"))
+                else " — 바로 걸쳤다" if not last.get("placed")
+                else " — 건넨 이의 발밑에 놓였다(네 발밑이 차 있었다 · 걸칠지는 네 몫)" if last.get("spot") == "mine"   # p0.5.6(D6)
+                else " — 발밑에 놓였다(걸칠지는 네 몫)")
         return "%s에게서 %s을(를) 받았다%s" % (_who(last.get("from")), last.get("what", "?"), tail)
     if t == "bonded":
         return "%s가 너에게 몸짓을 했다 — %s" % (_who(last.get("from")), last.get("form", "몸짓"))
@@ -2095,12 +2102,16 @@ def _wire(obs, names=None, compose=False):
             placed = set(re.findall(r"\b((?:f|d|m)\d+|exit)\b", place_txt))     #   방위·거리를 되풀이하지 않는다(문·피처·몹·계단·동료)
             placed |= {"b" + c for c in re.findall(r"\(봇(\d)\)", place_txt)}
             out += ["", "## 대상 — 지금 참조할 수 있는 ID (자리는 장소 절에)"]
+            told = set()                         # p0.5.6 아이템 설명(물건 설명 + 다루는 규칙): 같은 글은 한 관측에 한 번(같은 물건 둘·같은 type 둘)
             for target in obs.get('targets', []):
-                out.append('- [%s] %s (%s)%s%s%s' % (
+                out.append('- [%s] %s (%s)%s%s' % (
                     target['id'], target.get('name', target['id']), ', '.join(target['tags']),
                     (' — ' + at(target)) if ('dist' in target and target['id'] not in placed) else '',
-                    (' · %d개' % target['count']) if 'count' in target else '',
-                    (' · %s' % target['effect']) if target.get('effect') else ''))   # D74 축복의 물약: 마시면 무엇이 오르나
+                    (' · %d개' % target['count']) if 'count' in target else ''))
+                said = [t for t in (target.get('desc'), target.get('rule')) if t and t not in told]
+                if said:                         #   줄머리 '  · ' = 몬스터 습성 줄과 같은 꼴(안전 차단 접기 줄머리 '  · 최근 친목·건네기: '와 다르다)
+                    told.update(said)
+                    out.append('  · 설명: ' + ' '.join(said))
         out += ["", "## 행동과 의사소통", "COMMON: " + " / ".join(G.CA.COMMON if obs.get('action_schema') else _compose_types())]
         out += G.CA.extra_lines(obs)            # p0.5.5(§7.2) 추가 행동 — 노출된 등록부 동사가 있을 때만(머리 한 줄 + 동사마다 한 줄). 지침 파일이 아니라 관측에 붙는다
         out += ["의사소통: 잡담 / 제안"]

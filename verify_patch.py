@@ -8,7 +8,7 @@
   ④ 저장소 다섯(옛 파일 읽기 → 판 번호 붙여 저장 → 백업): presets · party(러너 load_party·론처 write_party) · campaign · bestiary · account ·
      v0.5.0 코드가 읽는 조건(프리셋/캠페인 version 1, 파티의 '_' 아닌 키 = 캐릭터 칸)이 그대로 · 계정 공개 dict 에 판 번호 없음 · 더 새 판 파일은 백업 뒤 덮음
   ⑤ 판 기록 메타(러너 dummy 판): run_meta 에 game_version · git(git describe 와 같다, 못 물으면 없음) · prompts{경로: 디스크 바이트의 LF 정규화
-     SHA-256 앞 12자} — 판의 행동 방식에 맞는 지침 파일 · 더미 판은 model 없음(두뇌별 모델 이름은 따로) · 두 번 돌려도 같은 메타(started 제외) ·
+     SHA-256 앞 12자} — 판의 행동 방식에 맞는 지침 파일(조합형 판은 행동 말 폴더 prompts/actions/ 도 — p0.5.6) · 더미 판은 model 없음(두뇌별 모델 이름은 따로) · 두 번 돌려도 같은 메타(started 제외) ·
      **LLM 에 간 글 어디에도 버전·git·지문이 없다**
   ⑥ 지문 규칙(임시 루트): CRLF·LF 같은 지문 · 내용·폴더 안 파일 이름이 바뀌면 지문이 바뀐다 · 없는 파일은 빠진다
   ⑦ 옛 판 기록 읽기: 필드 없는 옛 스트림(runs/ 저장소 판)과 새 스트림을 같은 소비자(campaign.project · run_summary.replay · bestiary 발급기)가 읽는다
@@ -256,8 +256,8 @@ pp = meta.get("prompts") or {}
 check("⑤ run_meta: game_version = VERSION", meta.get("kind") == "run_meta" and meta.get("game_version") == buildinfo.GAME_VERSION, meta.get("game_version"))
 check("⑤ run_meta: git = git describe --tags --dirty(못 물으면 칸 없음)",
       meta.get("git") == git_now if git_now else "git" not in meta, (meta.get("git"), git_now))
-check("⑤ run_meta.prompts: 이 판의 행동 지침(%s 판 → %s) · 맥락 · 엔티티의 말 폴더 · 꺼진 사교·NPC·GM 은 없음" % (mode, act),
-      set(pp) == {act, "prompts/context_prompt.md", "prompts/world/"}, sorted(pp))
+check("⑤ run_meta.prompts: 이 판의 행동 지침(%s 판 → %s) · 맥락 · 엔티티의 말 폴더 · (조합형 판만) 행동 말 폴더 · 꺼진 사교·NPC·GM 은 없음" % (mode, act),
+      set(pp) == {act, "prompts/context_prompt.md", "prompts/world/"} | ({"prompts/actions/"} if mode == "compose" else set()), sorted(pp))
 check("⑤ 지문 = 디스크 바이트(작업 사본 그대로)의 LF 정규화 SHA-256 앞 12자",
       all(pp.get(r) == disk_print(r) for r in (act, "prompts/context_prompt.md")) and re.fullmatch(r"[0-9a-f]{12}", pp.get("prompts/world/", "")),
       {r: (pp.get(r), disk_print(r)) for r in (act, "prompts/context_prompt.md")})
@@ -275,10 +275,11 @@ check("⑤ model_name: HTTP 두뇌는 haiku 슬롯의 모델 id · claude_cli �
       and names["openai_api"] == model_id("openai_api", "haiku") and names["claude_cli"] == "haiku" and names["dummy"] is None, names)
 saved_flags = (brains.COMPOSE, brains.MENU)
 try:
-    by_mode = {}
+    by_mode, lists = {}, {}
     for m, (c, mn) in {"compose": (True, False), "menu": (False, True), "free": (False, False)}.items():
         brains.COMPOSE, brains.MENU = c, mn
-        by_mode[m] = brains.prompt_files(social=True, npc=True)[0]
+        lists[m] = brains.prompt_files(social=True, npc=True)
+        by_mode[m] = lists[m][0]
     full = brains.prompt_files(social=True, npc=True)
 finally:
     brains.COMPOSE, brains.MENU = saved_flags
@@ -286,6 +287,9 @@ check("⑤ prompt_files: 행동 방식마다 제 지침 파일 · 사교·NPC �
       by_mode == {"compose": "prompts/adventurer_prompt.md", "menu": "prompts/legacy/2026-09-10/adventurer_prompt_menu.md",
                   "free": "prompts/legacy/2026-09-10/adventurer_prompt.md"}
       and "prompts/npc_prompt.md" in full and ("prompts/social_prompt.md" in full) == bool(brains.SOCIAL_PROMPT), (by_mode, full))
+check("⑤ prompt_files(p0.5.6): 행동 말 폴더 prompts/actions/(아이템 다루는 규칙·추가 행동 블록 — 조합형 관측에 실린다)는 조합형 판에만 · 지문이 잡힌다",
+      {m: "prompts/actions/" in v for m, v in lists.items()} == {"compose": True, "menu": False, "free": False}
+      and re.fullmatch(r"[0-9a-f]{12}", buildinfo.prompt_prints(["prompts/actions/"]).get("prompts/actions/", "")) is not None, lists)
 n_sent = len(SENT)
 recs2 = run_once()
 m1 = {k: v for k, v in meta.items() if k != "started"}

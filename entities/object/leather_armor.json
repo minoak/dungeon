@@ -12,6 +12,9 @@
     "equipment": {
       "slot": "armor",
       "bonus": 1
+    },
+    "item": {
+      "desc": "@prompts"
     }
   }
 }
