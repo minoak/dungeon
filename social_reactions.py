@@ -13,6 +13,7 @@
 import copy
 
 import info_guard as IG
+import identity as ID       # p0.5.9 사람 열쇠 판정(설계 X6)
 
 PENDING_MAX = 32
 OFFER_DROP = ('recipients', 'source_action_id', 'parent_action_id', 'private')   # 받는 사람에게 보내지 않는 칸
@@ -179,12 +180,12 @@ def physical(d, bot, action, result, bots):
     if (typ, outcome) in (('give', 'given'), ('bond', 'done')):
         recipient = result.get('to')
         details = {k: result[k] for k in ('item', 'what', 'form', 'placed') if k in result}
-    elif typ == 'use' and outcome == 'healed' and str(action.get('target', '')).startswith('b'):
-        recipient = action['target'][1:]
+    elif typ == 'use' and outcome == 'healed' and ID.is_bot_key(action.get('target')):   # p0.5.9: 사람 열쇠 판정은 identity 한 곳(설계 X6)
+        recipient = ID.char_of(action['target'])
         details = {'heal': result.get('heal', 0), 'item': action.get('item', 'i1')}
-    elif result.get('skill_id') and result.get('heal', 0) > 0 and str(action.get('target', '')).startswith('b'):
+    elif result.get('skill_id') and result.get('heal', 0) > 0 and ID.is_bot_key(action.get('target')):
         typ = 'skill'
-        recipient = action['target'][1:]
+        recipient = ID.char_of(action['target'])
         details = {k: result[k] for k in ('heal', 'skill_id', 'skill_name')}
     if recipient and any(b['char'] == recipient and b['alive'] and not b['won'] for b in bots):
         rid = ledger.record(typ, bot['char'], [recipient], d.turn,

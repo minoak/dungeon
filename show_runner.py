@@ -81,6 +81,7 @@ import run_summary                 # D58 판 결산 — 스트림 소비자(Tap 
 import bestiary
 import sheetkit                 # D31(09-05) 배경 정제(자유 입력 격리) — 러너도 같은 자를 쓴다
 import judge                    # p0.5.3 정신·숙련 칸 이름(PROF_KEYS) — 손 시트 검증·층 이월
+import identity as ID             # p0.5.9 신원 ID-1 — NPC 두뇌 입력의 호칭(NPC 는 모험가 이름을 안다)
 
 STATE = os.environ.get("DUNGEON_STATE_DIR") or os.path.join(HERE, "state")
 os.makedirs(STATE, exist_ok=True)
@@ -1268,24 +1269,28 @@ def floor_rumor(d):
     return {"depth": d.depth, "monsters": kinds, "traps": len(d.traps), "features": feats}
 
 
-def npc_facts(d, npc_name, bots, fallen, quests, expedition=0):
+def npc_facts(d, npc_name, bots, fallen, quests, expedition=0, names=None):
     """D69 NPC 두뇌의 '아는 것' — 전부 세계의 사실(정의·장부·배치)이고 캐릭터 시트는 없다. NPC 역할별로 다른 사실을 준다:
     접수원=게시판 의뢰·맡은 의뢰·진행·보고 결과 / 주점 주인=지하 1층 실측 소문 / 성직자=신의 요청·묘. 공통=파티 명단·귀환 여부.
     expedition(D94, 09-20) = 지금 몇 번째 원정인가(원정 고리 판에서만 1 이상 — 끈 판은 0 이라 옛 문장 그대로). 2 이상이면 '아직 안 내려갔다'가
-    거짓이라 앞선 원정을 말한다. fallen 은 부르는 쪽이 이 원정 몫만 넘긴다(고리 판)."""
+    거짓이라 앞선 원정을 말한다. fallen 은 부르는 쪽이 이 원정 몫만 넘긴다(고리 판).
+    p0.5.9 신원 ID-1(설계 §1.6, DECISIONS 69): NPC 는 길드에 등록된 모험가 이름을 처음부터 안다 — 인물 기록 판에서도 실명. 쓰러진 사람도
+    번호('2')가 아니라 이름(names {char: 실명} — 러너의 명단, 없으면 이 세계의 몸에서 찾고, 그래도 없으면 '모험가')."""
     nd = (getattr(d, "npc_defs", None) or {}).get(npc_name) or {}
     alive = [b for b in bots if b["alive"]]
-    facts = ["파티: " + ", ".join("%s(%s, HP %d/%d)" % (b.get("name") or ("모험가 %s" % b["char"]), b["job"], b["hp"], b["maxhp"]) for b in alive)]
+    real = {**{str(b["char"]): (b.get("name") or b.get("job")) for b in bots if (b.get("name") or b.get("job"))},
+            **{str(k): v for k, v in (names or {}).items() if v}}   # 이름 없는 시트는 직업(엔진의 다른 자리 — 인사·묘·by — 와 같은 대체값)
+    nm_ = lambda b: ID.call_npc(ID.bot_key(b["char"]), real)
+    facts = ["파티: " + ", ".join("%s(%s, HP %d/%d)" % (nm_(b), b["job"], b["hp"], b["maxhp"]) for b in alive)]
     ps_ = getattr(d, "parties", None)
-    if ps_ is not None:                    # D84 조각 5: 파티 결성 판 — 옛 첫 줄('파티: 전원')은 거짓이다. 맺어진 파티의 크기와 입구의 규칙을 사실로(이름은 인물 기록 판이면 싣지 않는다)
+    if ps_ is not None:                    # D84 조각 5: 파티 결성 판 — 옛 첫 줄('파티: 전원')은 거짓이다. 맺어진 파티의 크기와 입구의 규칙을 사실로
         sizes = sorted((len(G.party_members(ps_, c)) for c in {min(G.party_members(ps_, b["char"])) for b in alive if G.party_members(ps_, b["char"])}), reverse=True)
-        who_ = ("마을의 모험가 %d명(통성명한 적이 없어 이름은 모른다)" % len(alive) if STRANGERS_ON
-                else "마을의 모험가: " + ", ".join("%s(%s)" % (b.get("name") or ("모험가 %s" % b["char"]), b["job"]) for b in alive))
+        who_ = "마을의 모험가: " + ", ".join("%s(%s)" % (nm_(b), b["job"]) for b in alive)   # p0.5.9: 인물 기록 판도 같은 줄(NPC 는 이름을 안다)
         facts[0] = who_ + " · 맺어진 파티: " + (", ".join("%d명" % n for n in sizes) if sizes else "아직 없다")
         if nd.get("report"):
             facts.append("던전 입구의 규정: %d명이 맺은 파티만 지나갈 수 있다 · 파티는 모험가 길드나 주점에서, 같은 곳에 있는 사람끼리 맺는다 — 파티가 모자란 사람에게는 이 규정을 알려 준다" % G.PARTY_ENTRY_SIZE)
     if fallen:
-        facts.append("이번 원정에서 쓰러진 사람: " + ", ".join(str(c) for c in fallen))
+        facts.append("이번 원정에서 쓰러진 사람: " + ", ".join(ID.call_npc(ID.bot_key(c), real) for c in fallen))   # p0.5.9(설계 X19): 번호 → 이름
     ex_ = int(expedition or 0)               # D94(09-20) 원정 고리 판의 원정 번호 — 끈 판은 0(아래 분기가 옛 문장 그대로)
     fell_ = getattr(d, "expedition_fell", None)   # D99(10-04) 부활 판: 메인이 쓰러져 끝난 원정 — 게이트로 돌아온 게 아니다(⚠️문구 임시)
     facts.append(("지금은 원정에서 돌아온 뒤다(%s이(가) 던전에서 쓰러져 원정이 끝났다 — %s은(는) 신전에서 깨어났고 일행도 함께 마을로 돌아왔다)" % (fell_, fell_)
@@ -1360,7 +1365,7 @@ def npc_say_targets(d, bots, decisions, inbox_in, spoke=()):
     return out
 
 
-def npc_say_replies(d, bots, decisions, inbox_in, facts_of, spoke=()):
+def npc_say_replies(d, bots, decisions, inbox_in, facts_of, spoke=(), names=None):
     """D93 되받기의 두뇌 몫 — 고른 말마다 brains.npc_reply 1콜(결과 어휘 'npc_say' — 판정 없음, 문장만). 상한 장부(bot['npc_replies'][NPC 이름])는
     **부른 횟수**로 센다(실패한 콜도 센다 = 콜 상한). 실패(None)면 그 NPC 는 말이 없다 — 고정 대사로 메우지 않는다(폴백이 말을 지어내지 않는다).
     facts_of(NPC 이름) → 그 NPC 가 아는 사실(npc_facts). 반환 [{npc, char, line, via}] — 배달은 D69 NPC 의 답과 같은 길(다음 틱·같은 구역·잡담)."""
@@ -1370,7 +1375,7 @@ def npc_say_replies(d, bots, decisions, inbox_in, facts_of, spoke=()):
         cnt = b.setdefault("npc_replies", {})
         cnt[name] = cnt.get(name, 0) + 1
         line = brains.npc_reply(b, {"result": "npc_say", "npc": name, **({"prev": t["prev"]} if t["prev"] else {})}, t["said"],
-                                facts_of(name), npc=(getattr(d, "npc_defs", None) or {}).get(name) or {})
+                                facts_of(name), npc=(getattr(d, "npc_defs", None) or {}).get(name) or {}, names=names)   # p0.5.9: 말 속 봇N → 이름
         if line:
             b.setdefault("npc_hailed", set()).add(name)   # 말을 나눈 사이다 — 그 뒤에 곁을 지나도 '먼저 거는 인사'(D71, 방문당 한 번)를 새로 받지 않는다
             out.append({"npc": name, "char": b["char"], "line": line, "via": t["via"]})
@@ -1616,7 +1621,7 @@ def main():
             if LEDGER_ON:
                 b['ledger'] = G.new_ledger()   # 공간 장부(D17) 켬 — 이 층에서 본 것의 원장
             if STRANGERS_ON:                   # D85 인물 기록 — 씨앗 = 시트에 작가가 쓴 관계 문장(이 캐릭터가 이미 아는 사람). 없으면 아무도 모르는 채로
-                b['people'] = {"b%s" % oc: {"name": sheets[oc].get("name") or "봇%s" % oc, "text": str(txt), "turn": 0, "src": "sheet"}
+                b['people'] = {"b%s" % oc: {"name": sheets[oc].get("name") or sheets[oc].get("job") or "모험가", "text": str(txt), "turn": 0, "src": "sheet"}   # p0.5.9: 이름 없는 시트도 '봇N' 라벨 대신
                                for oc, txt in sorted((sheets[c].get("relationships") or {}).items()) if oc in sheets and oc != c}
             bots.append(b)
         saved = {}                             # 마을 판(D29): 층 보존 — depth → {'d': 던전, 'mem': 봇별
@@ -1932,7 +1937,8 @@ def main():
                 if npc_brain and NPC_HAIL_BRAIN_ON:   # 옵션: 인사도 LLM 이(인사당 1콜) — 기본은 정의의 문장(0콜)
                     b_ = next((x for x in bots if x["char"] == ch_), None)
                     line2 = brains.npc_reply(b_, {"result": "npc_hail", "npc": nm_, "line": line_, "key": key_}, None,
-                                             npc_facts(d, nm_, bots, _fallen_now(), quests, _exp_n()), npc=(getattr(d, "npc_defs", None) or {}).get(nm_)) if b_ else None
+                                             npc_facts(d, nm_, bots, _fallen_now(), quests, _exp_n(), names), npc=(getattr(d, "npc_defs", None) or {}).get(nm_),
+                                             names=names) if b_ else None   # p0.5.9: NPC 는 모험가 이름을 안다(러너의 명단)
                     if line2:
                         line_, src_ = line2, "brain"
                 inbox.setdefault(ch_, []).append({"from": "npc:" + nm_, "text": line_, "turn": turn, "to": ch_})
@@ -2020,7 +2026,8 @@ def main():
                 if res.get("result") in ("npc_talk", "npc_gift", "npc_report") and res.get("npc"):   # D69 마을 NPC — 말을 걸었다
                     if npc_brain:                        # NPC 두뇌: 판정(선물·보고)은 끝났고 문장만 LLM 이(1콜, 실패=고정 대사)
                         npc_def = (getattr(d, "npc_defs", None) or {}).get(res["npc"]) or {}
-                        line_ = brains.npc_reply(b, res, dec.get("say"), npc_facts(d, res["npc"], bots, _fallen_now(), quests, _exp_n()), npc=npc_def)
+                        line_ = brains.npc_reply(b, res, dec.get("say"), npc_facts(d, res["npc"], bots, _fallen_now(), quests, _exp_n(), names), npc=npc_def,
+                                                 names=names)   # p0.5.9: NPC 입력은 실명(말 속 봇N 도 이름으로)
                         if line_:
                             res["line_fixed"], res["line"], res["line_src"] = res.get("line"), line_, "brain"
                     if res.get("line"):
@@ -2057,8 +2064,8 @@ def main():
 
         npc_replies = []                     # D93(09-20) 이 틱에 NPC 가 되받은 말 [{npc,char,line,via}] — 지목(to) 또는 그 NPC 의 말에 상대 없이 한 답.
         if npc_reply_on and getattr(d, "town", False):   #   배달은 D69 NPC 의 답과 한 길(npc_says → 다음 틱·같은 구역·잡담). 이 틱에 use 로 이미 말한 NPC 는 건너뛴다
-            npc_replies = npc_say_replies(d, bots, decisions, inbox_in, lambda nm_: npc_facts(d, nm_, bots, _fallen_now(), quests, _exp_n()),
-                                          spoke={n_ for n_, _l, _c in npc_says})
+            npc_replies = npc_say_replies(d, bots, decisions, inbox_in, lambda nm_: npc_facts(d, nm_, bots, _fallen_now(), quests, _exp_n(), names),
+                                          spoke={n_ for n_, _l, _c in npc_says}, names=names)
             npc_says += [(r_["npc"], r_["line"], r_["char"]) for r_ in npc_replies]
 
         if reaction_book is not None:
@@ -2242,7 +2249,7 @@ def main():
         n["hp"] = n["maxhp"]
         n["status"], n["bleed_steps"], n["critical"] = {}, 0, False
         n["last"] = {"type": "revived", "depth": dep}
-        n["memories"].append({"kind": "died", "char": c, **{k: db[k] for k in ("by", "by_kind") if k in db},
+        n["memories"].append({"kind": "died", "char": c, **{k: db[k] for k in ("by", "by_kind", "by_id") if k in db},   # p0.5.9 by_id = 사람이 쓰러뜨렸을 때의 열쇠(호칭은 관측이 붙인다)
                               "depth": dep, "turn": t_down})
         return n
 
@@ -2259,7 +2266,7 @@ def main():
         """D99 스트림 revive 한 줄(additive — 관전자 데이터라 사인을 가리지 않는다) + 이벤트 로그 한 줄."""
         out.emit("revive", turn=turn, where="temple",
                  party=[{"char": n["char"], "depth": n["last"]["depth"],
-                         **{k: n["memories"][-1][k] for k in ("by", "by_kind") if k in n["memories"][-1]}} for n in woke])
+                         **{k: n["memories"][-1][k] for k in ("by", "by_kind", "by_id") if k in n["memories"][-1]}} for n in woke])
         event("=== %s — 신전 앞에서 다시 깨어났다 (지닌 것과 기억은 그대로) ===" % "·".join(names[n["char"]] for n in woke))   # ⚠️문구 임시
 
     def _shift_world(w, turn):

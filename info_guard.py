@@ -17,12 +17,18 @@ public(result, viewer) — 결과 하나를 "그 사람이 실제로 볼 수 있
   ③ social_event_id — 원정 전체 일련번호(§6.3-4). 받은 사람의 번호는 social_reactions 가 따로 매긴다
   ④ 사람 대상 판정의 굴림·문턱(PERSON_ROLL_KEYS) — 상대 민첩·갑옷으로 만든 AC, 상대의 내성 굴림, 자기 주사위 눈(합계와 성패로 DC 를 좁힌다).
      몹 대상 판정(명중 굴림의 AC 등)은 지금 그대로 둔다 — 범위는 '사람 대상'(class_design §8.2 A).
-  viewer(보는 사람)는 0.5 에선 아직 쓰지 않는다 — 관측자별 가시성(perceives, 4a)·호칭이 여기로 들어온다.
+  ⑤ (p0.5.9 신원 ID-1) viewer 가 인물 기록 판의 몸(viewer['people'] 이 있다)이면 사람을 가리키는 **실명 문자열 칸** — 사람 대상의
+     `target`(공격 결과의 상대 이름) · 사람이 친 `by`(by_kind 'bot') · 교대의 `with` · 길막힘 동료의 `allies[].name` · 묘 `grave.name`.
+     내부 열쇠(target_id · by_id · with_char · allies[].char)는 그대로 남는다 — 호칭은 그릴 때 보는 사람이 붙인다(identity.call).
+     **저장용 정제**일 뿐 ID 를 바꾸지 않는다(설계 §2.3-3). 옛 판(인물 기록이 꺼진 몸)은 사본 꼴이 옛 그대로다.
+  viewer(보는 사람)의 가시성(perceives, 4a)은 아직 쓰지 않는다.
 LLM 0콜 · 판정 rng 무접촉 · 엔진 무의존(dungeon_gm 을 import 하지 않는다 — 엔진이 이 모듈을 쓴다).
 """
 import copy
 import hashlib
 import json
+
+import identity
 
 AUDIT = "audit"
 DROP_KEYS = ("social_event_id",)
@@ -109,13 +115,28 @@ def _clean(v, hidden):
 
 
 def is_person_ref(ref):
-    """'b<번호>' — 사람(모험가) 대상 ID."""
-    s = str(ref or "")
-    return s[:1] == "b" and s[1:].isdigit()
+    """'b<번호>' — 사람(모험가) 대상 ID. 판정은 identity 한 곳(설계 X6)."""
+    return identity.is_bot_key(ref)
+
+
+def _drop_person_names(out):
+    """머리글 ⑤ — 사람을 가리키는 실명 문자열 칸만 걷는다(열쇠 칸은 그대로). out 은 이미 깊은 사본."""
+    if out.get("by_kind") == "bot":
+        out.pop("by", None)
+    if identity.is_person_key(out.get("target_id")) and not identity.is_person_key(out.get("target")):
+        out.pop("target", None)
+    if "with_char" in out:
+        out.pop("with", None)
+    if isinstance(out.get("allies"), list):
+        out["allies"] = [{k: v for k, v in a.items() if k != "name"} if isinstance(a, dict) and "char" in a else a
+                         for a in out["allies"]]
+    if isinstance(out.get("grave"), dict):
+        out["grave"].pop("name", None)
+    return out
 
 
 def public(result, viewer=None):
-    """결과 → viewer 가 볼 수 있는 사본(머리글 ①~④). dict 가 아니면 그대로."""
+    """결과 → viewer 가 볼 수 있는 사본(머리글 ①~⑤). dict 가 아니면 그대로."""
     if not isinstance(result, dict):
         return result
     out = _clean(result, _collect(result, set()))
@@ -128,6 +149,8 @@ def public(result, viewer=None):
             if isinstance(e, dict):
                 for k in EFFECT_ROLL_KEYS:
                     e.pop(k, None)
+    if identity.knows(viewer):
+        _drop_person_names(out)
     return out
 
 

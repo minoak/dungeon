@@ -12,17 +12,19 @@
   ③ 말한 사람·목격·직전 결과의 호칭도 '낯선 사람'
   ④ 기록 쓰기(person_note): 지금 보이거나 방금 내게 말한 사람만 · 자기 자신·안 보이는 사람·빈 이름은 버린다 · 길이 상한 ·
      think_all 이 몸의 기록에 겹쳐 쓴다(turn·depth·src self)
-  ⑤ 조건 (a) 보일 때: 그 사람 줄에 '네 기록' · 그때부터 호칭은 내가 적은 이름(말한 사람 표기·말 상대 `to` 해석도)
+  ⑤ 조건 (a) 보일 때: 그 사람 줄 바로 아래 '네 기록' 한 줄(p0.5.9 — 사람 줄은 아는 사람도 겉모습 꼴 그대로) · 그때부터 호칭은 내가 적은 이름
+     (말한 사람 표기·말 상대 `to` 해석도)
   ⑥ 조건 (c) 들은 말에 이름이 나올 때: 안 보이는 사람의 기록이 '## 떠오른 기억'에 · 보이는 사람은 제 줄에 이미 있으니 안 뜬다 ·
      한 글자 이름은 열쇠가 못 된다 · 직업 같은 내용 글자는 열쇠가 아니다(이름만)
-  ⑦ 파티 결성 = 소개: 맺는 순간 서로의 이름·직업이 기록된다(src party) — 내가 이미 적어 둔 기록은 안 덮는다
+  ⑦ 파티 결성은 소개가 아니다(p0.5.9 신원 ID-1 — DECISIONS 2026-10-12 62·67): 맺어도 기록이 생기지 않는다 · 관계 뼈 party 는 남는다 ·
+     내가 적어 둔 기록은 그대로
   ⑧ 러너: 스위치는 파티 결성 판에서만 · 씨앗 = 시트에 작가가 쓴 관계 문장(그 사람이 보일 때 뜬다, 시트에는 상시로 안 싣는다) ·
      층을 옮겨도 기록은 같은 객체 · run_meta.strangers
   ⑨ 겉모습 어휘(색 이름) · 배선(문서)
-  ⑩ 조각 ② — NPC = 미리 준비된 로어북, 규칙은 평등하다(파트너 "각 npc들은 차라리 그럼 미리 준비된 로어북으로 활성화 시키면 되지 않아?
-     규칙 자체는 평등하게 잡고 말이야"): 준비된 항목 = NPC 정의(이름 → 역할 — 특징) · (a) 보일 때는 그 줄이 이미 말한다(D69·D75) ·
-     (c) 들은 말에 NPC 이름이 나오면 안 보여도 떠오른다 · 캐릭터는 NPC 에도 기록을 남길 수 있고(보이는 NPC · 방금 내게 말한 NPC)
-     보일 때 그 줄에 · 이름을 들을 때 준비된 칸과 함께 뜬다 · 꺼진 몸은 아무것도 안 뜬다
+  ⑩ 조각 ② — NPC 도 같은 규칙. p0.5.9(DECISIONS 2026-10-12 76): 미리 준비된 NPC 로어북은 거뒀다(모험가에게 없는 항목이라 구분 단서) —
+     떠오르는 것은 내 기록뿐 · (a) 보이는 NPC 는 그 줄이 이미 말한다(D69·D75) · 캐릭터는 NPC 에도 기록을 남길 수 있고(보이는 NPC ·
+     방금 내게 말한 NPC) 보일 때 그 줄 아래 · 이름을 들을 때 내 기록이 뜬다 · NPC 는 모험가 이름을 처음부터 안다(DECISIONS 69 —
+     인사·NPC 두뇌 입력이 실명) · 꺼진 몸은 아무것도 안 뜬다
 (기존 verify 71종은 별도 실행.)
 """
 import contextlib
@@ -180,8 +182,11 @@ check("④ think_all 이 몸의 기록에 쓴다(turn·depth·src self) — 남�
 
 print("── ⑤ 조건 (a) — 보일 때 뜬다")
 p5, _, o5 = full_prompt(d, bots, b1, msg)
-check("⑤ 그 사람 줄에 '카야(봇2) [b2] … 네 기록: 「…」' · 겉모습 꼬리는 사라진다 · 말한 사람도 '카야(봇2)'",
-      "- 카야(봇2) [b2]" in p5 and "네 기록: 「%s」" % note["text"] in p5 and "낯선 사람(봇2)" not in p5 and '- 카야(봇2): "나는 카야' in p5)
+lines5 = p5.splitlines()
+line5 = next((i for i, ln in enumerate(lines5) if ln.startswith("- 카야(봇2) [b2]")), None)
+check("⑤ 그 사람 줄 '카야(봇2) [b2] … 겉모습: …' 바로 아래 '  · 네 기록: 카야 — 「…」' · 말한 사람도 '카야(봇2)'",
+      line5 is not None and "겉모습:" in lines5[line5] and lines5[line5 + 1] == "  · 네 기록: 카야 — 「%s」" % note["text"]
+      and "낯선 사람(봇2)" not in p5 and '- 카야(봇2): "나는 카야' in p5)
 check("⑤ 말 상대(to)는 내 기록으로 푼다: '카야' → 2 · 적어 둔 적 없는 실명 '피른' → None · 번호는 그대로",
       brains._parse_to("카야", "1", bots, o5) == "2" and brains._parse_to("피른", "1", bots, o5) is None and brains._parse_to("b2", "1", bots, o5) == "2")
 check("⑤ 남의 눈에는 여전히 낯선 사람(기록은 각자의 것)", "낯선 사람(봇1)" in full_prompt(d, bots, b2)[0] and REAL["1"] not in full_prompt(d, bots, b2)[0].split("# 모험가 지침")[1])
@@ -210,11 +215,12 @@ put(c1, g[m]); put(c2, g[m + 2]); put(c3, g[m + 3])
 c1["people"]["b2"] = {"name": "눈 좋은 애", "text": "함정을 잘 본다", "turn": 1, "src": "self"}
 d7._party_form(c1, "b2", bots7)
 r7 = d7._party_form(c2, "b1", bots7)
-check("⑦ 맺는 순간 서로의 이름·직업이 기록된다(src party) — 내가 이미 적어 둔 기록은 안 덮는다 · 파티 밖 3 은 그대로",
-      r7["result"] == "party_formed" and c2["people"].get("b1") == {"name": REAL["1"], "text": JOBS["1"], "turn": d7.turn, "depth": d7.depth, "src": "party"}
-      and c1["people"]["b2"]["name"] == "눈 좋은 애" and c3["people"] == {}, (c1["people"], c2["people"]))
+check("⑦ 맺어도 기록이 생기지 않는다(자동 소개 없음) · 관계 뼈 party 는 남는다 · 내가 적어 둔 기록은 그대로 · 파티 밖 3 은 그대로",
+      r7["result"] == "party_formed" and c2["people"] == {} and c1["people"] == {"b2": {"name": "눈 좋은 애", "text": "함정을 잘 본다", "turn": 1, "src": "self"}}
+      and c3["people"] == {} and (c2.get("relations") or {}).get("1", {}).get("bones", {}).get("party", {}).get("n") == (1 if d7.relations else None), (c1["people"], c2["people"]))
 p7 = full_prompt(d7, bots7, c2)[0]
-check("⑦ 맺은 뒤 명단·사람 줄이 그 이름으로 · 파티 밖 3 은 여전히 낯선 사람", "- 두란(봇1), 전사" in p7 and "낯선 사람(봇3)" in p7 and REAL["3"] not in p7)
+check("⑦ 맺은 뒤에도 명단의 파티원은 '낯선 사람(봇1), 전사'(직업은 겉으로 보인다 · 이름은 밝히거나 소개받아야 안다) · 실명 없음",
+      "- 낯선 사람(봇1), 전사" in p7 and REAL["1"] not in p7.split("# 모험가 지침")[1] and REAL["3"] not in p7)
 
 print("── ⑧ 러너")
 def probe(env):
@@ -262,10 +268,9 @@ check("⑧ 러너 판의 관측에 people(씨앗) · 시트에는 관계 문장�
 deps8 = sorted({dep for dep, _ in mine8})
 check("⑧ 층을 옮겨도 기록은 같은 객체(이월)", len(deps8) >= 2 and all(b.get("people") is seed for _, b in mine8), deps8)
 
-print("── ⑩ NPC = 미리 준비된 로어북 · 규칙은 평등하다")
-book = brains._npc_book()
-check("⑩ 준비된 항목 = NPC 정의에서(이름 → '역할 — 특징') — 길드 접수원·주점 주인·성직자·떠돌이 모험자…",
-      book.get("길드 접수원", "").startswith("원정 물품 · 의뢰 접수와 귀환 보고 — ") and "주점 주인" in book and "성직자" in book and len(book) >= 5, sorted(book))
+print("── ⑩ NPC 도 같은 규칙 · 미리 준비된 로어북은 거뒀다(p0.5.9)")
+check("⑩ 미리 준비된 NPC 로어북이 없다(모험가에게 없는 항목 = 구분 단서, DECISIONS 2026-10-12 76)",
+      not hasattr(brains, "_npc_book") and not hasattr(brains, "_npc_entry"))
 d10, bots10 = town()
 a1, a2, a3 = bots10
 put(a1, t[len(t) // 2]); put(a2, t[len(t) // 2 + 2]); put(a3, g[m])
@@ -290,8 +295,8 @@ def floor10():
 
 fl10, fb10 = floor10()
 p10 = full_prompt(fl10, fb10, fb10[0], say10)[0]
-check("⑩ (c) 던전에서 남이 '길드 접수원'을 말하면 — 안 보여도 준비된 항목이 떠오른다(캐릭터의 기록과 같은 절)",
-      "## 떠오른 기억" in p10 and "- 길드 접수원: 원정 물품 · 의뢰 접수와 귀환 보고" in p10)
+check("⑩ (c) 던전에서 남이 '길드 접수원'을 말해도 — 내 기록이 없으면 아무것도 안 뜬다(세계가 써 둔 항목 없음)",
+      "## 떠오른 기억" not in p10 and "원정 물품 · 의뢰 접수와 귀환 보고" not in p10)
 near = next((f for f in d10.features.values() if f.type == "npc" and f.name == "주점 주인"), None)
 put(a1, next((x, y) for x, y in t if max(abs(x - near.x), abs(y - near.y)) <= 2 and (x, y) != (near.x, near.y)))
 o10b = d10.view(a1, bots10)
@@ -303,11 +308,14 @@ check("⑩ (a) 보이는 NPC 는 제 줄이 이미 말한다 — 이름을 들�
       dec10.get("person_note"))
 a1["people"]["npc:주점 주인"] = {"name": "주점 주인", "text": "소문을 물으면 숫자까지 알려 준다. 말이 짧다", "turn": 5, "src": "self"}
 p10c = full_prompt(d10, bots10, a1)[0]
-check("⑩ (a) 다시 보면 그 NPC 줄에 '네 기록: 「…」'", "네 기록: 「소문을 물으면 숫자까지 알려 준다. 말이 짧다」" in p10c)
+_l10c = p10c.splitlines()
+_i10c = next((i for i, ln in enumerate(_l10c) if ln.startswith("- 주점 주인 %s" % fid)), None)
+check("⑩ (a) 다시 보면 그 NPC 줄 바로 아래 '  · 네 기록: 주점 주인 — 「…」'",
+      _i10c is not None and _l10c[_i10c + 1] == "  · 네 기록: 주점 주인 — 「소문을 물으면 숫자까지 알려 준다. 말이 짧다」")
 fb10[0]["people"]["npc:주점 주인"] = dict(a1["people"]["npc:주점 주인"])
 p10d = full_prompt(fl10, fb10, fb10[0], [{"from": "2", "text": "주점 주인이 널 찾던데?", "turn": 9, "to": "1", "to_me": True}])[0]
-check("⑩ (c) 던전에서 이름을 들으면 준비된 칸 + 내 기록이 한 줄로 떠오른다",
-      "- 주점 주인: 소문 · 쉬어 가는 자리" in p10d and "네 기록 「소문을 물으면 숫자까지 알려 준다. 말이 짧다」" in p10d)
+check("⑩ (c) 던전에서 이름을 들으면 내 기록이 떠오른다(세계가 써 둔 칸은 없다)",
+      "- 주점 주인: 「소문을 물으면 숫자까지 알려 준다. 말이 짧다」" in p10d and "소문 · 쉬어 가는 자리" not in p10d)
 _, dec10e, _ = full_prompt(d10, bots10, a1, [{"from": "npc:길드 접수원", "text": "두란 님, 어서 오세요.", "turn": 6, "to": "1", "to_me": True}],
                            {"type": "search", "target": "self", "person_note": {"target": "길드 접수원", "name": "접수원 누님", "text": "물약을 챙겨 준다"}})
 check("⑩ 방금 내게 말한 NPC 에 대해서도 적을 수 있다 — 내가 붙인 이름으로", dec10e.get("person_note") == {"to": "npc:길드 접수원", "name": "접수원 누님", "text": "물약을 챙겨 준다"})
@@ -315,8 +323,8 @@ rc10 = next(f for f in d10.features.values() if f.type == "npc" and f.name == "�
 a3["npc_hailed"] = set()
 put(a3, next((x, y) for x, y in g if max(abs(x - rc10.x), abs(y - rc10.y)) == 2))
 hails10 = [h for h in d10.npc_greetings(bots10) if h[1] == "3"]
-check("⑩ NPC 도 통성명 전엔 이름을 모른다 — 인사가 실명 대신 '모험가'를 부른다(처음 본다면서 이름을 아는 모순 수선)",
-      hails10 and all(REAL["3"] not in h[2] and "모험가" in h[2] for h in hails10), [h[2][:40] for h in hails10])
+check("⑩ NPC 는 모험가 이름을 처음부터 안다(길드 등록, DECISIONS 69 — p0.5.9) — 인물 기록 판의 인사도 실명으로 부른다",
+      hails10 and all(REAL["3"] in h[2] for h in hails10), [h[2][:40] for h in hails10])
 seen10 = {}
 _cc = brains._call_claude
 brains._call_claude = lambda prompt, model="haiku": (seen10.__setitem__("p", prompt), '{"line": "어서 와요."}')[1]
@@ -326,8 +334,8 @@ try:
 finally:
     brains._call_claude = _cc
     os.environ["DUNGEON_BRAIN_BACKEND"] = "dummy"
-check("⑩ NPC 두뇌의 장면에도 실명·직업이 없다 — '처음 보는 모험가(겉모습)'", REAL["3"] not in seen10.get("p", REAL["3"]) and JOBS["3"] not in seen10.get("p", JOBS["3"])
-      and "처음 보는 모험가" in seen10.get("p", ""))
+check("⑩ NPC 두뇌의 장면은 실명(직업) — '피른(궁수)이(가) 네게 말을 걸었다'(NPC 는 이름을 안다 · '처음 보는 모험가' 없음)",
+      ("%s(%s)이(가) 네게 말을 걸었다" % (REAL["3"], JOBS["3"])) in seen10.get("p", "") and "처음 보는 모험가" not in seen10.get("p", ""))
 p10f = full_prompt(d0, bots0, bots0[0], say10)[0]
 check("⑩ 꺼진 몸(옛 판)은 이름을 들어도 아무것도 안 뜬다", "## 떠오른 기억" not in p10f)
 
@@ -368,6 +376,6 @@ check("⑨ HARNESS D85(활성화 규칙 표·조건 a·c) · STREAM_FORMAT(stran
       and all(s_ in fmt for s_ in ("strangers", "person_note", "obs.people", "looks")))
 
 print("=" * 44)
-print("ALL PASS — verify_people (D85 인물 기록: 낯선 사람 · 보는 사람 기준 호칭 · 기록 쓰기 · 보일 때/이름을 들을 때 떠오른다 · 파티 결성 = 소개)"
+print("ALL PASS — verify_people (D85 인물 기록: 낯선 사람 · 보는 사람 기준 호칭 · 기록 쓰기 · 보일 때/이름을 들을 때 떠오른다 · p0.5.9 파티 결성 ≠ 소개 · NPC 는 이름을 안다)"
       if not C.failed else "FAILED %d" % C.failed)
 sys.exit(1 if C.failed else 0)

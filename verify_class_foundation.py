@@ -225,8 +225,8 @@ check("⑤ 러너 판(마법사 + 정신 적은 손 시트): run_meta.party · l
       and [p["job"] for p in meta5["party"]] == ["마법사", "전사"], [sorted(p) for p in meta5["party"]])
 with open(snapshot.paths(show_runner.STATE)[0], "rb") as f:
     snap5 = pickle.load(f)                            # 방금 이 프로세스의 러너가 쓴 파일
-check("⑤ 새 스냅샷: 판형 2 · 내용 판 2(p0.5.4 반응 원장 번호표) · 몸에 정신·숙련(마법사 3/2/0 · 손 시트 정신 2) · 요약도 판형 2",
-      snap5["version"] == snapshot.VERSION == 2 and snap5["state_version"] == snapshot.STATE_VERSION == 2
+check("⑤ 새 스냅샷: 판형 2 · 내용 판 = 지금 판(%d — 2 이상: p0.5.4 반응 원장 번호표부터) · 몸에 정신·숙련(마법사 3/2/0 · 손 시트 정신 2) · 요약도 판형 2" % snapshot.STATE_VERSION,
+      snap5["version"] == snapshot.VERSION == 2 and snap5["state_version"] == snapshot.STATE_VERSION >= 2   # p0.5.9: 판이 오를 때마다 다시 깨지지 않게(고정값 → 지금 판)
       and [tuple(b.get(k) for k in PK) for b in snap5["bots"]] == [(3, 2, 0), (2, 0, 0)]
       and (snapshot.read_meta(show_runner.STATE) or {}).get("version") == 2,
       [(b.get("mind"), b.get("search_prof")) for b in snap5["bots"]])

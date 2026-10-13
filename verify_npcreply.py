@@ -113,7 +113,7 @@ class Brain:
     def __init__(self, line="그래요, 잘 들었어요."):
         self.calls, self.line = [], line
 
-    def __call__(self, bot, res, said, facts, npc=None, roster=None):
+    def __call__(self, bot, res, said, facts, npc=None, roster=None, names=None):   # names = p0.5.9 러너의 명단(NPC 입력의 실명 — 말 속 봇N → 이름)
         self.calls.append({"char": bot["char"], "res": dict(res), "said": said, "facts": list(facts or []), "npc": dict(npc or {})})
         return self.line
 

@@ -554,13 +554,13 @@ def damage_actor(d, bot, recipient, damage, bots, critical=False):
     if recipient['hp'] <= 0:
         recipient['alive'] = False
         res['killed'] = True
-        grave = d._on_down(recipient, bots, by=bot.get('name') or bot['job'], by_kind='bot')
+        grave = d._on_down(recipient, bots, by=bot.get('name') or bot['job'], by_kind='bot', by_id='b' + bot['char'])
         if grave:
             res['grave'] = grave
     else:
         d._witness(bots, recipient['x'], recipient['y'],
                    {'kind': 'ally_hurt', 'char': recipient['char'],
-                    'by': bot.get('name') or bot['job'], 'by_kind': 'bot', 'dmg': damage},
+                    'by': bot.get('name') or bot['job'], 'by_kind': 'bot', 'by_id': 'b' + bot['char'], 'dmg': damage},   # p0.5.9 ID-1: 열쇠(by_id) — 실명 칸은 본 사람 몫 사본에서 걷힌다(IG.public ⑤)
                    exclude=(bot['char'], recipient['char']))
     return res
 

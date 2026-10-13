@@ -30,6 +30,7 @@ import entities as ENT           # 엔티티 저장소(D50, 09-11) — 몬스터
 import interactables as IA       # 쓰임 부품(D89, 09-20) — 정의의 use{kind} 가 오브젝트·건물 상호작용을 낸다(엔진 무의존 모듈 — 순환 import 없음)
 import judge                     # p0.5.3 판정 함수 묶음 — 엔진이 쓰는 것은 숙련 접근자(prof): 스폰이 몸에 정신·숙련을 붙인다(엔진 무의존 모듈)
 import info_guard as IG          # p0.5.4 정보 보호 — 봇이 보는 결과(last·궤적·목격·받은 일)는 공개 투영 사본, 모르는 결과의 폴백은 {type,target,status}만
+import identity as ID            # p0.5.9 신원 ID-1 — 사람의 호칭(기록은 열쇠로, 호칭은 그릴 때 보는 사람이) · 사람 열쇠 판정(엔진 무의존 모듈)
 import town_layout as TL         # 마을 layout(town-layout-v1, 맵 트랙 저작 원본) → 격자 컴파일(엔진 무의존 모듈)
 import hashlib                  # D90(09-20) 들린 말 고르기 — 판정 rng 를 건드리지 않는 결정론 해시
 import math
@@ -262,7 +263,7 @@ def event_tags(rec, names=None):
         return [('misc', '기타', str(rec))]
     t, r = rec.get('type'), rec.get('result')
     tgt = str(rec.get('target') or '')
-    nm = lambda c: (names or {}).get(c, '동료')
+    nm = lambda c: ID.pick(names, c, '동료')   # p0.5.9: 호칭 사전(보는 사람 기준) — 인물 기록 판의 모르는 사람은 '낯선 사람'(names['?']), 옛 판은 옛 기본값
     out = []
     if rec.get('skill_id'):
         return [('skill', '스킬', SK.summary(rec))]
@@ -418,7 +419,7 @@ def event_tags(rec, names=None):
     if t == 'party_member_left':
         return [('party', '파티원 탈퇴', nm(rec.get('from')) + (' — 파티가 없어졌다' if rec.get('freed') else ''))]
     if t in ('goto', 'explore', 'follow'):
-        who = nm(tgt[1:]) if (tgt[:1] == 'b' and tgt[1:].isdigit()) else place_word(tgt, 'decide')   # 사람 대상 goto(D48 개정)=이름
+        who = nm(ID.char_of(tgt)) if ID.is_bot_key(tgt) else place_word(tgt, 'decide')   # 사람 대상 goto(D48 개정)=이름 · p0.5.9 사람 열쇠 판정은 identity 한 곳
         if r == 'pathed':
             return [('start', '이동 시작', (who + ' 쪽') if tgt and tgt != 'auto' else '새 길')]
         if r == 'lost':                                    # p0.5.4: 조합형 실행이 대상 ID 를 지금 못 찾음(CA.execute) — 옛 판은 JSON 폴백.
@@ -428,7 +429,7 @@ def event_tags(rec, names=None):
         if r == 'beside':                                  # D48 개정 2: 곁에 붙어 선다(CHASE_IDLE 틱)
             return [('start', '곁에 섬', who + ' — 붙어 있는다')]
         if r == 'following':
-            return [('start', '동행 시작', nm(tgt[1:]) if tgt.startswith('b') else tgt)]
+            return [('start', '동행 시작', nm(ID.char_of(tgt)) if ID.is_bot_key(tgt) else tgt)]
         if r == 'arrived':
             return [('arrive', '도착', who + ' — 이미 곁')]
         if r == 'no_path':
@@ -483,9 +484,9 @@ def event_tags(rec, names=None):
                   ', '.join(m.get('kind', '?') for m in (rec.get('monsters') or [])) or '길'
             return [('blocked', '길 막힘', who)] + extras
         if r == 'lost':
-            return [('lost', '놓침', nm(tgt[1:]) if tgt.startswith('b') else tgt)] + extras
+            return [('lost', '놓침', nm(ID.char_of(tgt)) if ID.is_bot_key(tgt) else tgt)] + extras
         if r == 'idle':
-            return [('arrive', '동행 끝', nm(tgt[1:]) if tgt.startswith('b') else tgt)] + extras
+            return [('arrive', '동행 끝', nm(ID.char_of(tgt)) if ID.is_bot_key(tgt) else tgt)] + extras
         if r == 'reunion':
             return [('reunion', '낯익은 곳', rec.get('name', '와 본 곳'))] + extras
         if r == 'wander':
@@ -580,9 +581,8 @@ def _looks_line(b):
 
 def people_names(bot):
     """보는 사람 기준 호칭 사전(D85) — 내가 이름을 적어 둔 사람만 {char: 이름}. 없는 사람은 부르는 쪽이 '낯선 사람'이라 쓴다.
-    인물 기록 bot['people'] = {'b<char>': {name, text, turn, depth?, src}} — None 이면 옛 판(호칭 = 실명)."""
-    return {k[1:]: e['name'] for k, e in (bot.get('people') or {}).items()
-            if k[:1] == 'b' and isinstance(e, dict) and e.get('name')}
+    인물 기록 bot['people'] = {'b<char>': {name, text, turn, depth?, src}} — None 이면 옛 판(호칭 = 실명). 규칙은 identity 한 곳(p0.5.9)."""
+    return ID.people_names(bot)
 
 
 def party_leave(parties, char):
@@ -2314,7 +2314,7 @@ class Dungeon:
         roles_ = getattr(self, 'feature_roles', None) or {}   # D69 건물·NPC 역할 한 줄(마을 — 어디서 뭘 얻는지의 사실)
         story_ = getattr(self, 'place_story', None) or {}    # D75(09-15) 장소·사람 소개 — trait 한 줄(멀리서도, 있을 때만)
         feats = [_knowledge('feature:' + f.type,
-                            {'id': 'f%d' % f.id, 'type': f.type, 'name': f.name,
+                            {'id': 'f%d' % f.id, 'type': f.type, 'name': self._feature_label(f, bot),   # p0.5.9 ID-1: 묘는 보는 사람 몫 이름(옛 판은 f.name)
                              'visited': (f.x, f.y) in self.visited, **bear(f.x, f.y),
                              **({'role': roles_[f.id]} if roles_.get(f.id) else {}),   # D69(09-14) 역할(있을 때만)
                              **({'about': story_[f.id]['trait']} if (story_.get(f.id) or {}).get('trait') else {}),   # D75 특징 한 줄(있을 때만)
@@ -2368,7 +2368,7 @@ class Dungeon:
                    **({'waiting': True} if (self.wait_verb            # 대기중(D25 개정 09-12) — 서 있는 몸도 보인다
                        and b.get('order') == 'wait') else {}),        #   (파트너 "대기중이라는 걸 추가해볼까? 하나씩")
                    **({'doing': dd} if (self.ally_doing                # 고른 행동(D27 개정 09-12) — 몸짓 깃발은 그대로,
-                       and (dd := self._ally_doing(b))) else {}),      #   뜻(무엇을 하러 가는지)을 더한다. 좌표 비노출
+                       and (dd := self._ally_doing(b, bot))) else {}),  #   뜻(무엇을 하러 가는지)을 더한다. 좌표 비노출 · p0.5.9 묘 이름은 보는 사람 몫
                    **({'looks': lk} if (bot.get('people') is not None    # D85 겉모습(머리색·윗옷색·무기·갑옷) — 인물 기록 판에만.
                        and (lk := _looks_line(b))) else {})}           #   이름·직업은 겉으로 안 보인다(낯선 사람을 알아볼 재료는 이것뿐)
                   for b in bots
@@ -2410,7 +2410,8 @@ class Dungeon:
                                                        # 시야에 들면 구조화 obs 에서 증발하는
                                                        # 비대칭 방지(리뷰 픽스): 중복이 아니다
                                                        # (D19 scan 판은 sights.traps 가 생겨 예외 불요)
-                ent = {'type': e['type'], 'name': e['name'],
+                gf_ = (self.features.get(int(e['id'][1:])) if (e['type'] == 'grave' and str(e.get('id', ''))[1:].isdigit()) else None)
+                ent = {'type': e['type'], 'name': self._feature_label(gf_, bot) if gf_ is not None else e['name'],   # p0.5.9: 묘 이름은 지금 아는 대로
                        'zone': e['zone'], 'turn': e['turn'],
                        # 09-06 파트너 관찰 "기억 속 사물로 길을 고르는데 가끔 한참 먼 곳을 핑" → 방위+직선 거리
                        # (좌표 아님 — 문의 D19 문법과 같은 자. 걸음 수(경로)는 안 본 칸을 지나므로 안 준다)
@@ -2772,11 +2773,38 @@ class Dungeon:
         # A-3(D18)+D22 전달층: 목격 — 내 눈으로 본 동료의 사건(피격·전사·명중·처치·함정·회복).
         # 1회성: 이번 결정에 한 번 전달하고 비운다(휘발=다음 결정 1회 — D22).
         # 자기 사건은 last 가 담당(중복 없음). 종 표기는 내 도감 기준(모르는 종=낯선 짐승 — D9 정합).
+        knows_ = ID.knows(bot)                 # p0.5.9 신원 ID-1 — 인물 기록 판: 저장된 기록엔 사람 열쇠만 있고 호칭은 여기서(나가는 관문) 붙인다
+
+        def _pn(key):                          # 사람 열쇠('b2'|'2') → 이 보는 사람의 호칭. 잇지 못한 사람(열쇠 없음)은 '누군가'
+            c = ID.char_of(key) if not str(key or '').isdigit() else str(key)
+            if c is None:
+                return ID.SOMEONE
+            if c == bot['char']:               # 나 자신(내가 쓰러뜨린 죽음을 본 기억 등) — 내 이름은 안다(옛 문장 그대로)
+                return bot.get('name') or bot['job']
+            return names.get(c, _unknown)
+
+        def _persons(r):                       # 인물 기록 판의 결과 사본 — 사람 실명 칸(target·by·with·allies.name)을 보는 사람의 호칭으로
+            if not knows_ or not isinstance(r, dict):
+                return r
+            o = dict(r)
+            if o.get('by_kind') == 'bot':      # 사람에게 맞음·쓰러짐 — 옛 기록의 실명(by)은 절대 그대로 쓰지 않는다(설계 X24)
+                o['by'] = _pn(o.get('by_id'))
+            if ID.is_bot_key(o.get('target_id')) and not ID.is_person_key(o.get('target')):
+                o['target'] = _pn(o['target_id'])
+            if 'with_char' in o or o.get('result') == 'swapped':
+                o['with'] = _pn(o.get('with_char'))
+            if isinstance(o.get('allies'), list):
+                o['allies'] = [{**a, 'name': _pn(a.get('char'))} if isinstance(a, dict) and 'char' in a else a for a in o['allies']]
+            return o
+
         def _mask(w):                          # 도감 게이트 — 몹 이름만 가린다(함정·샘은 by_kind 로 면제)
             out = {**w, **({'name': names.get(w['char'], _unknown)} if 'char' in w else {}),
                    **({'to_name': '%s(봇%s)' % (names.get(w['to'], _unknown), w['to'])} if 'to' in w else {})}
             #   ↑ D47 ②(09-09) 건네기·친목 목격의 상대(to) — 사람 사건이라 이름으로(솔로 판은 '낯선 사람')
             #   ↑ 몹 주어 사실(mon_use — D30 확장 2차)은 char 가 없다: 이름 풀이는 사람 사건에만
+            out = _persons(out)                # p0.5.9: 목격·기억의 사람이 친 by(by_kind 'bot') — 열쇠(by_id)로 호칭
+            if knows_ and out.get('kind') == 'grave_found':   # 묘 발견 — 묘 이름도 보는 사람 몫(모르면 '누군가의 묘')
+                out['grave'] = ID.grave_label(bot, out.get('char'), out.get('grave'))
             if known is not None:
                 if 'by' in out and out.get('by_kind', 'monster') == 'monster' \
                         and 'monster:' + out['by'] not in known:
@@ -2794,6 +2822,8 @@ class Dungeon:
             bot['trail'], bot['trail_gap'] = [], 0
         if gap:
             trail = [{'type': 'gap', 'n': gap}] + trail   # 상한에 잘린 앞부분 — 생략 표식 한 칸
+        if knows_:
+            trail = [_persons(e) for e in trail]      # p0.5.9: 내 궤적의 사람도 보는 사람 호칭으로(저장본은 열쇠만)
         dry_out = bot.get('dry', 0) if bot.get('dry_hit') else 0
         if dry_out:
             bot['dry_hit'] = False    # 1회성 배달(witnessed 문법 — 이번 결정에 한 번, 비운다)
@@ -2871,7 +2901,7 @@ class Dungeon:
                 **({'book_invite': binv} if binv else {}),   # D55 인식 초대 — 대기 중일 때만(결정당 하나)
                 **({'people': {k: dict(v) for k, v in bot['people'].items()}} if bot.get('people') is not None else {}),   # D85 인물 기록(내가 쓴 것 — 스위치 판에만): 호칭·떠오르기의 재료
                 **({'partyform': pf_} if (pf_ := self._party_obs(bot, bots)) is not None else {}),   # D84 조각 3 파티의 사실(장부가 걸린 판에만): 내 파티원·여기서 맺을 수 있나·열린 청
-                'last': bot.get('last'),      # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의
+                'last': _persons(bot.get('last')),   # 직전 행동/피격의 결과(D1 개정) — "봇은 자기 행동의 (p0.5.9: 사람은 보는 사람 호칭 — 옛 판은 그대로)
                                               #   결과를 관측할 수 있어야 한다". 자기 경험=시야-온리 무위반
                 'order': ('explore' if str(bot.get('order') or '')[:1] == '@'
                           else bot.get('order')),        # 진행중 핑(자동보행). '@x,y' 생좌표는 봇에 노출X
@@ -3637,9 +3667,7 @@ class Dungeon:
 
     def _npc_hail_line(self, nd, bot):
         """상황별 인사 고르기 + 자리 채움 — (key, 문장). 문장은 정의(⚠️임시)·숫자는 세계가 센 것."""
-        name = bot.get('name') or ('모험가 %s' % bot.get('char', '?'))
-        if bot.get('people') is not None:
-            name = '모험가'                                # D85: 규칙은 평등하다 — NPC 도 통성명하지 않은 사람의 이름을 모른다("피른? 처음 보는 얼굴이네" 같은 모순 수선)
+        name = bot.get('name') or bot.get('job') or '모험가'   # p0.5.9 신원 ID-1(DECISIONS 69): NPC 는 길드에 등록된 모험가 이름을 처음부터 안다 — 인물 기록 판도 실명으로 부른다
         q = getattr(self, 'quests', None)
         ps = getattr(self, 'parties', None)
         key = 'hail'
@@ -3697,7 +3725,7 @@ class Dungeon:
                     return r.get('name')
         return None
 
-    def _ally_doing(self, b):
+    def _ally_doing(self, b, viewer=None):
         """보이는 동료가 지금 고른 행동(D27 개정 2026-09-12, 파트너 "동료의 현재 어떤 행동을 선택했는지에 대한
         상태를 보여주면 될 것 같아"). 엔진이 세운 order 를 종류로 옮긴다 — 좌표('@x,y')는 '탐색'으로만(D17-4 좌표
         비노출), 사람은 char, 사물·몹은 이름+id. order 가 없으면 None(막 결정 전·서 있음). 몸짓 깃발(moving/resting/
@@ -3724,7 +3752,7 @@ class Dungeon:
             return {'act': 'goto', 'target': s, 'name': '문'}
         if s[:1] == 'f' and s[1:].isdigit():
             f = self.features.get(int(s[1:]))
-            return {'act': 'goto', 'target': s, 'name': (f.name if f else '어딘가')}
+            return {'act': 'goto', 'target': s, 'name': (self._feature_label(f, viewer) if f else '어딘가')}
         if s[:1] == 'm' and s[1:].isdigit():
             m = next((m for m in self.monsters if m.id == int(s[1:])), None)
             return {'act': 'goto', 'target': s, 'name': (m.kind if m else '적')}   # Monster 는 kind 가 이름
@@ -3798,7 +3826,7 @@ class Dungeon:
             ex, ey = path[-1]
             ally['path'] = self.path_to(ally['x'], ally['y'], ex, ey, bots)
         self._note_last(ally, {'char': ally['char'], 'type': 'walk', 'result': 'swapped',
-                               'with': mover.get('name') or mover['job']})
+                               'with': mover.get('name') or mover['job'], 'with_char': mover['char']})   # p0.5.9 ID-1: 열쇠 — 실명 칸은 사본에서 걷힌다(인물 기록 판)
 
     def _ally_jam(self, bot, tx, ty, path, bots):
         """사회적 대우회 감지(D18) — 교대(07-17 개정) 후 역할 축소: 경로 *통과*는 동료가 못 막지만
@@ -4285,7 +4313,7 @@ class Dungeon:
             elif k[:1] == 'f':
                 f = self.features.get(int(k[1:]))
                 if f:
-                    stuff.append({'kind': f.type, 'name': f.name, 'id': k})
+                    stuff.append({'kind': f.type, 'name': self._feature_label(f, bot), 'id': k})   # p0.5.9: 묘는 보는 사람 몫 이름
             elif k[:1] == 'd':
                 stuff.append({'kind': 'door', 'name': '문', 'id': k})
             else:
@@ -4924,7 +4952,7 @@ class Dungeon:
             if not f.concealed and (f.x, f.y) in seen:
                 k = 'exit' if f.type == 'exit' else 'f%d' % f.id
                 if k not in led['statics']:
-                    led['statics'][k] = {'id': k, 'type': f.type, 'name': f.name,
+                    led['statics'][k] = {'id': k, 'type': f.type, 'name': self._feature_label(f, bot),   # p0.5.9: 묘는 보는 사람 몫 이름
                                          'x': f.x, 'y': f.y,
                                          'zone': self._zone_label(f.x, f.y), 'turn': t}
         for tr in self.traps:                         # 드러난(미발동) 함정 — id 없음: 정보 항목
@@ -5760,14 +5788,8 @@ class Dungeon:
             for oc in union:                             #   (합쳐진 파티에서는 말을 안 섞은 두 사람도 파티원이 된다)
                 if oc != c and oc not in before[c] and c in by_char:
                     self._bone(by_char[c], oc, 'party')
-        for c in members:                                # D85: 파티를 맺는 순간이 소개다 — 인물 기록이 걸린 몸은 서로의 이름·직업을 적는다
-            book = by_char[c].get('people') if c in by_char else None   #   (이미 내가 적어 둔 사람은 건드리지 않는다 — 내 기록이 우선)
-            if book is None:
-                continue
-            for oc in members:
-                if oc != c and oc in by_char and ('b%s' % oc) not in book:
-                    book['b%s' % oc] = {'name': by_char[oc].get('name') or by_char[oc]['job'], 'text': by_char[oc]['job'],
-                                        'turn': self.turn, 'depth': self.depth, 'src': 'party'}
+        #   p0.5.9 신원 ID-1(DECISIONS 2026-10-12 62·67): 파티 결성 자동 소개는 없다 — 이름은 본인이 밝히거나 소개받거나 살펴서 안다.
+        #   들은 이름을 기록(person_note)할지는 에이전트가 정한다(엔진은 판정하지 않는다). 관계 뼈 'party'(위)는 그대로 남는다.
         for c in members:
             if c != me and c in by_char and by_char[c]['alive']:
                 self._receive(by_char[c], {'char': c, 'type': 'party_joined', 'from': me, 'members': members}, bots)
@@ -5852,8 +5874,15 @@ class Dungeon:
             return                             # 목격했거나 이미 발견했다 — 한 죽음은 한 줄
         zid = getattr(self, 'zone_at', {}).get((f.x, f.y)) if self.scan else None
         zone = self._zone_name(bot, zid) if zid is not None else self._zone_label(f.x, f.y)
-        mem.append({'kind': 'grave_found', 'char': who, 'grave': f.name,
+        mem.append({'kind': 'grave_found', 'char': who,
+                    **({} if ID.knows(bot) else {'grave': f.name}),   # p0.5.9 ID-1: 인물 기록 판은 실명 묘 이름을 적지 않는다(그릴 때 char 로 — view._mask)
                     'zone': zone, 'turn': self.turn})
+
+    def _feature_label(self, f, viewer):
+        """보는 사람(viewer) 몫의 피처 이름 — 묘만 다르다(p0.5.9 ID-1): 인물 기록 판에서는 '<내가 아는 이름>의 묘', 모르면 '누군가의 묘'.
+        피처 이름 자체(f.name = '카야의 묘')는 관전 원본이라 그대로 둔다. 나머지 피처는 f.name."""
+        g = (getattr(self, 'grave_of', None) or {}).get(f.id) if f.type == 'grave' else None
+        return ID.grave_label(viewer, g['char'], f.name) if g else f.name
 
     def _apply_status(self, bot, tag, by, bots=(), by_kind='hazard', force=False):
         """상태 태그(D34) 부착 — 몹·함정·오브젝트의 특수. 스위치 꺼짐=무동작(기존 판 비트 동일).
@@ -5874,7 +5903,7 @@ class Dungeon:
                       exclude=(bot['char'],))
         return tag
 
-    def _on_down(self, bot, bots, by, by_kind='monster', witness=True):
+    def _on_down(self, bot, bots, by, by_kind='monster', witness=True, by_id=None):
         """D22 — 쓰러짐의 공통 처리(굴림 없음). 모든 사망 경로(몹·함정·상자·샘)가 부른다.
         · 묘(graves): 쓰러진 칸에 '~의 묘' 피처 — 광학(sights)·조회·goto 앵커. 표지판이지 시체가
           아니다(D4 불가침). 생성 정보를 반환 — 사망 이벤트에 'grave' 키로 실린다(스트림 additive).
@@ -5883,7 +5912,12 @@ class Dungeon:
         · 기억(events): 목격자마다 지속 기억 fallen {누가, 무엇에게, 어디서(그 봇의 사람말 이름),
           언제} — view 가 매 결정 재제시(휘발 0). 좌표 금지 — 구역 이름만(D19 사람의 공간 언어)."""
         x, y = bot['x'], bot['y']
-        bot['down_by'] = {'by': by, **({'by_kind': by_kind} if by_kind != 'monster' else {}),   # D99(10-04) 쓰러진 사연 —
+        bk = {'by_kind': by_kind} if by_kind != 'monster' else {}
+        bk.update({'by_id': by_id} if by_id else {})    # p0.5.9 ID-1: 사람이 쓰러뜨렸으면 그 열쇠('b<char>') — 호칭은 그릴 때(view._mask)
+
+        def _by(holder):                                 # 인물 기록 판의 몸에는 사람 실명(by_kind 'bot' 의 by)을 새로 적지 않는다
+            return {} if (by_kind == 'bot' and ID.knows(holder)) else {'by': by}
+        bot['down_by'] = {**_by(bot), **bk,              # D99(10-04) 쓰러진 사연 —
                           'turn': self.turn, 'depth': self.depth}   # 러너의 부활(신전에서 깨어남)이 '어디서 무엇에 쓰러졌나'를 기억으로 옮긴다.
         #   몸에만 적고 관측·스트림(bot_snapshot 은 고른 칸만)에는 안 실린다 — 부활을 끈 판은 아무도 읽지 않는다
         g = None
@@ -5891,10 +5925,8 @@ class Dungeon:
             gname = '%s의 묘' % (bot.get('name') or bot['job'])
             fid = self._add_feature('grave', gname, x, y)
             g = {'id': 'f%d' % fid, 'name': gname, 'x': x, 'y': y}
-            self.grave_of[fid] = {'char': bot['char'], 'name': gname}   # 묘 발견(비목격자)의 재료
+            self.grave_of[fid] = {'char': bot['char'], 'name': gname}   # 묘 발견(비목격자)의 재료 · 피처 이름 = 관전 원본(보는 사람 몫은 _feature_label)
         if self.events:
-            fact = {'kind': 'ally_down', 'char': bot['char'], 'by': by,
-                    **({'by_kind': by_kind} if by_kind != 'monster' else {})}
             zid = getattr(self, 'zone_at', {}).get((x, y)) if self.scan else None
             for o in bots or ():
                 if o is bot or not o['alive'] or o['won']:
@@ -5902,12 +5934,11 @@ class Dungeon:
                 if (x, y) not in self.visible_cells(o['x'], o['y']):
                     continue                          # 못 본 죽음은 모른다 — 시야-온리(전지 주입 금지)
                 if witness:
-                    o.setdefault('witnessed', []).append(dict(fact))
+                    o.setdefault('witnessed', []).append({'kind': 'ally_down', 'char': bot['char'], **_by(o), **bk})
                 self._bone(o, bot['char'], 'at_death')   # 죽을 때 곁에 있었음(D36, 강한 뼈) — 목격자 장부
                 zone = self._zone_name(o, zid) if zid is not None else self._zone_label(x, y)
                 o.setdefault('memories', []).append(
-                    {'kind': 'fallen', 'char': bot['char'], 'by': by,
-                     **({'by_kind': by_kind} if by_kind != 'monster' else {}),
+                    {'kind': 'fallen', 'char': bot['char'], **_by(o), **bk,
                      'zone': zone, 'turn': self.turn})
         return g
 

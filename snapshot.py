@@ -18,6 +18,8 @@
       0→1(p0.5.3): 몸에 정신·숙련 칸(mind·search_prof·steal_prof)이 생겼다 — 옛 몸에 직업 기본값을 채운다(스폰과 같은 규칙, judge.prof).
       1→2(p0.5.4): 반응 원장(social_reactions.ReactionBook)에 수신자별 번호표(alias)가 생겼다 — 옛 원장은 원장 순서로 번호표를 다시 매긴다
                    (ReactionBook.rebuild_alias — 지나간·대기 사건 모두 받은 순서대로, 이어간 뒤의 새 사건은 그 뒤 번호).
+      2→3(p0.5.9 신원 ID-1): 기억·목격·쓰러진 사연의 '사람이 친 by'(실명 문자열)에 사람 열쇠(by_id)를 잇는다 — 호칭은 그릴 때 보는 사람이 붙인다
+                   (_m2_refs: 그 판 시트의 이름과 정확히 한 명이 맞을 때만 잇고, 못 잇거나 동명이인이면 by_unknown — 렌더는 '누군가').
 LLM 0콜 · 순수 파일(이관 함수만 몸 dict·반응 원장을 고친다 — 그때 judge 를 늦게 import).
 """
 import io
@@ -29,7 +31,7 @@ import time
 
 VERSION = 2                  # 판형(위 머리글) — 옛 코드(version 1 만 읽음)가 새 스냅샷을 거절하게 하는 문
 READS = (1, 2)               # 이 코드가 읽는 판형. 1 = p0.5.2 까지(내용 판 0)
-STATE_VERSION = 2            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
+STATE_VERSION = 3            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
 PKL = "snapshot.pkl"
 META = "snapshot.json"
 
@@ -77,7 +79,35 @@ def _m1_alias(snap):
     return snap
 
 
-MIGRATIONS = {0: _m0_prof, 1: _m1_alias}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
+def _m2_refs(snap):
+    """2→3(p0.5.9 신원 ID-1, 설계 §8.1): 옛 기억(fallen·died)·목격(ally_down·ally_hurt …)·쓰러진 사연(down_by) 중 **by_kind 'bot'**(사람이 쳤다)인
+    항목의 실명 by → 그 판 시트의 이름 표로 사람을 찾는다. 정확히 한 명과 맞으면 by_id='b<char>', 맞는 사람이 없거나 둘 이상(동명이인)이면
+    by_unknown True(인물 기록 판의 렌더는 '누군가' — 실명이 새지 않는다, 설계 X24). 원문 by 는 지우지 않는다(관전·분석용 — 렌더는 사람 by 를
+    그대로 쓰지 않는다). 몹(by_kind 없음)·함정·출혈(trap·hazard·status)은 그대로. 인물 기록의 src 'party'(옛 파티 결성 자동 소개) 항목은 남긴다 —
+    그 판에서 이미 일어난 일이다. 이미 by_id·by_unknown 이 있으면 손대지 않는다(제자리·한 번)."""
+    names = {}
+    for c, sh in (snap.get("sheets") or {}).items():
+        nm = (sh or {}).get("name") or (sh or {}).get("job") if isinstance(sh, dict) else None
+        if nm:
+            names.setdefault(nm, []).append(str(c))
+
+    def fix(e):
+        if not isinstance(e, dict) or e.get("by_kind") != "bot" or "by_id" in e or e.get("by_unknown"):
+            return
+        hit = names.get(e.get("by")) or []
+        if len(hit) == 1:
+            e["by_id"] = "b" + hit[0]
+        else:
+            e["by_unknown"] = True
+
+    for b in _bodies(snap):
+        for e in (b.get("memories") or []) + (b.get("witnessed") or []):
+            fix(e)
+        fix(b.get("down_by"))
+    return snap
+
+
+MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
 
 
 def state_version_of(doc):

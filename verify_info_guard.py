@@ -221,8 +221,8 @@ snap_old = {"version": 2, "state_version": 1, "reaction_book": pickle.loads(pick
 up = snapshot.upgrade(snap_old)
 ob = up["reaction_book"]
 offered2 = ob.offer("2")
-check("⑤ 이관 1→2: 옛 원장에 번호표(원장 순서) → 대기 사건은 받은 순서대로 social_1·social_2 · 반응이 제 사건으로",
-      up["state_version"] == 2 and [(e["id"], e["text"]) for e in offered2] == [("social_1", "첫째"), ("social_2", "둘째")]
+check("⑤ 이관 1→2(→ 지금 판 %d): 옛 원장에 번호표(원장 순서) → 대기 사건은 받은 순서대로 social_1·social_2 · 반응이 제 사건으로" % snapshot.STATE_VERSION,
+      up["state_version"] == snapshot.STATE_VERSION and [(e["id"], e["text"]) for e in offered2] == [("social_1", "첫째"), ("social_2", "둘째")]
       and ob.consume("2", {"reaction": "like", "reaction_to": "social_2", "src": "haiku"}, 2)["source"]["text"] == "둘째"
       and ob.offer("3")[0]["id"] == "social_1")
 check("⑤ 이관 등록부 완결(0..%d) · 이관은 한 번(다시 올려도 번호표 그대로)" % (snapshot.STATE_VERSION - 1),
@@ -246,8 +246,8 @@ check("⑤ 이관 → 새 사건 → offer: 번호 = 받은 순서(지난 건네
 S52 =os.path.join(TMP, "s52", "state")
 shutil.copytree(FIX, S52)
 s52, _m52 = snapshot.load(os.path.join(S52, "snapshot.pkl"))
-check("⑤ v0.5.2 고정 자료: 새 로더가 내용 판 0 → 2 · 원장에 번호표",
-      s52["state_version"] == 2 and isinstance(getattr(s52["reaction_book"], "alias", None), dict))
+check("⑤ v0.5.2 고정 자료: 새 로더가 내용 판 0 → 지금 판(%d) · 원장에 번호표" % snapshot.STATE_VERSION,
+      s52["state_version"] == snapshot.STATE_VERSION and isinstance(getattr(s52["reaction_book"], "alias", None), dict))
 S53 = os.path.join(TMP, "s53", "state")
 shutil.copytree(FIX, S53)
 with open(os.path.join(S53, "snapshot.pkl"), "rb") as f:
@@ -260,8 +260,8 @@ meta53 = json.load(io.open(os.path.join(S53, "snapshot.json"), encoding="utf-8")
 with io.open(os.path.join(S53, "snapshot.json"), "w", encoding="utf-8") as f:
     json.dump(dict(meta53, version=2, state_version=1), f, ensure_ascii=False, indent=1)
 s53, _m53 = snapshot.load(os.path.join(S53, "snapshot.pkl"))
-check("⑤ 0.5.3 꼴 스냅샷(판형 2·내용 판 1·번호표 없음): 새 로더가 내용 판 2 · 번호표 · 몸의 정신·숙련 그대로",
-      not hasattr(raw53["reaction_book"], "alias") and s53["state_version"] == 2
+check("⑤ 0.5.3 꼴 스냅샷(판형 2·내용 판 1·번호표 없음): 새 로더가 내용 판 %d(지금 판) · 번호표 · 몸의 정신·숙련 그대로" % snapshot.STATE_VERSION,
+      not hasattr(raw53["reaction_book"], "alias") and s53["state_version"] == snapshot.STATE_VERSION
       and isinstance(getattr(s53["reaction_book"], "alias", None), dict) and all("mind" in b for b in snapshot._bodies(s53)))
 env53 = {k: v for k, v in os.environ.items() if not k.startswith("DUNGEON_")}
 env53.update(json.load(io.open(os.path.join(FIX, "env.json"), encoding="utf-8")))
