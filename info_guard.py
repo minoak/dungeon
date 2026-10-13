@@ -14,7 +14,8 @@ audit(§6.2 A): 결과 dict 의 `audit` 칸에 **상대에게서 나온 것 전�
 
 public(result, viewer) — 결과 하나를 "그 사람이 실제로 볼 수 있는 것"만 남긴 사본으로(§6.2 B). 원본은 건드리지 않는다.
   걷어 내는 것: ① 어느 깊이든 `audit` 칸 ② audit 표식 값(어디로 복사됐든)과 audit 안 객체를 가리키는 다른 칸
-  ③ social_event_id — 원정 전체 일련번호(§6.3-4). 받은 사람의 번호는 social_reactions 가 따로 매긴다
+  ③ social_event_id — 원정 전체 일련번호(§6.3-4). 받은 사람의 번호는 social_reactions 가 따로 매긴다 ·
+     said — p0.5.10 NPC 에게 말을 건 결과에 실린 그 결정의 말(러너가 NPC 두뇌에 넘기는 칸 — last·trail 에 남기지 않는다)
   ④ 사람 대상 판정의 굴림·문턱(PERSON_ROLL_KEYS) — 상대 민첩·갑옷으로 만든 AC, 상대의 내성 굴림, 자기 주사위 눈(합계와 성패로 DC 를 좁힌다).
      몹 대상 판정(명중 굴림의 AC 등)은 지금 그대로 둔다 — 범위는 '사람 대상'(class_design §8.2 A).
   ⑤ (p0.5.9 신원 ID-1) viewer 가 인물 기록 판의 몸(viewer['people'] 이 있다)이면 사람을 가리키는 **실명 문자열 칸** — 사람 대상의
@@ -31,7 +32,7 @@ import json
 import identity
 
 AUDIT = "audit"
-DROP_KEYS = ("social_event_id",)
+DROP_KEYS = ("social_event_id", "said")   # said = p0.5.10 러너 전용 칸(NPC 에게 건 말 — 말한 사람의 말은 결정 틱에 이미 배달됐고 대화 장부에 있다)
 PERSON_ROLL_KEYS = ("roll", "mod", "total", "ac", "combat_roll", "skill_roll", "skill_dc")   # CA.attack_actor · SK.execute 의 사람 대상 굴림
 EFFECT_ROLL_KEYS = ("save",)                                                                # SK.execute effects[] 의 대상 내성 굴림
 

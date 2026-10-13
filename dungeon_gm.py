@@ -365,8 +365,8 @@ def event_tags(rec, names=None):
             return [('misc', '그대로', '%s — 지금 것과 %s' % (rec.get('item', '?'), '같다' if rec.get('why') == 'same' else '못하다'))]
         elif r == 'npc_gift':
             return [('talk', '대화', '%s: %s 받음' % (rec.get('npc', '?'), rec.get('item', '?')))]
-        elif r == 'npc_talk':
-            return [('talk', '대화', '%s "%s"' % (rec.get('npc', '?'), (rec.get('line') or '')[:30]))]
+        elif r == 'npc_talk':                                  # p0.5.10(설계 X10): 대사는 들은 말로만 온다 — 꼬리표엔 누구와 말했는지만
+            return [('talk', '대화', str(rec.get('npc', '?')))]
         elif r == 'npc_report':                                # D69 귀환 보고 — 원정의 끝
             return [('talk', '보고', '%s: 완수 %d·미완 %d' % (rec.get('npc', '?'), len(rec.get('done') or []), len(rec.get('undone') or [])))]
         elif r == 'quest_accepted':                            # D69 의뢰 맡음
@@ -610,7 +610,24 @@ PARTY_ENTRY_SIZE = 3             # D84 조각 5(09-19 밤 파트너 "던전에 �
 #   세는 것은 장부의 파티원 수(쓰러진 사람 포함 — 한 명을 잃고 돌아온 파티가 다시 못 들어가 막다른 길이 되지 않게. ⚠️임시 가정)
 PARTY_LEAVE_ANYWHERE = True      # 탈퇴는 어디서나(⚠️임시 가정 — 파트너 답 대기: 떠나는 건 혼자 하는 결정이라 장소·동의가 없다 / False = 길드 구역에서만)
 NPC_REPLY_MAX = 3                # D93(09-20) NPC 되받기 — 같은 캐릭터-NPC 쌍이 한 번의 마을 방문(봇 dict 수명) 동안 되받는 말의 상한(⚠️임시 가정 — 두뇌 콜 상한이기도 하다).
-#   캐릭터가 다시 말해야만 다시 답한다(NPC 가 먼저 잇지 않는다 = 연쇄 핑퐁 없음). 세는 곳은 러너(bot['npc_replies']) — 엔진은 숫자만 든다(프롬프트의 사실 문장과 한 값).
+#   캐릭터가 다시 말해야만 다시 답한다(NPC 가 먼저 잇지 않는다 = 연쇄 핑퐁 없음). 세는 곳은 러너(bot['npc_talk']) — 엔진은 숫자만 든다.
+#   p0.5.10 신원 ID-2(DECISIONS 10-12 'NPC 대화 피로'): 되받기만이 아니라 **대화 세 길(use 말 걸기·자동 접근 도착·되받기)이 한 장부**를 센다.
+#   MAX-1 번째 대답 = 닫는 말(한 번) · 그 뒤 말을 걸면 고정 거절(0콜) · 다음 마을 방문(새 봇 dict)에 풀린다. use 의 판정(선물·보고)은 막지 않는다.
+NPC_TALK_RESULTS = ('npc_talk', 'npc_gift', 'npc_report')   # p0.5.10: 마을 NPC 에게 말을 건 결과(대화 장부가 세는 use 결과)
+NPC_LINE_CLOSE = "이야기는 이쯤 하지. 나도 할 일이 있어서."   # p0.5.10 닫는 말 — 두뇌가 꺼졌거나 실패한 마지막 대답(정의 line_close 가 없을 때). ⚠️문구 임시(민옥 교정 대기)
+NPC_LINE_BUSY = "지금은 바쁘네."                              # p0.5.10 고정 거절 — 상한 뒤 말을 걸면(0콜, 정의 line_busy 가 없을 때). ⚠️문구 임시(민옥 교정 대기)
+TALK_FIELDS = ('say', 'to')      # p0.5.10(설계 §3.2 보존): 자동 접근 대기(approach)가 결정 때의 말과 그 상대를 도착까지 들고 간다
+NPC_OFFER_REPORT = '원정 보고'    # p0.5.10 Dungeon.npc_offer 의 보고 항목 이름(NPC 두뇌 장면 '와서 말을 걸면: 원정 보고를 받는다')
+
+
+def _said_to_npc(action, res):
+    """p0.5.10 신원 ID-2(설계 §3.2 운반): 마을 NPC 에게 말을 건 결과에 그 결정의 말(said)을 싣는다 — 즉시 실행(act)과 자동 접근 도착이
+    같은 _execute_action 을 지나므로 한 곳에서. 말의 상대가 다른 사람(동료 char · 다른 NPC)이면 이 NPC 에게 한 말이 아니라 싣지 않는다.
+    said 는 러너 전용 칸(NPC 두뇌 입력) — 저장 사본(last·trail)에서는 IG.DROP_KEYS 가, 스트림에서는 러너가 걷는다. 결과를 제자리에서 고쳐 돌려준다."""
+    if (isinstance(res, dict) and res.get('result') in NPC_TALK_RESULTS and res.get('npc') and (action or {}).get('say')
+            and (action.get('to') in (None, '', 'all') or action.get('to') == 'npc:%s' % res['npc'])):
+        res['said'] = action['say']
+    return res
 
 
 def quest_def(qid):
@@ -3020,7 +3037,7 @@ class Dungeon:
                   if CA.route(self, action.get('type')) == 'skill'   # 등록부를 먼저 본다(p0.5.5) · PARTY = D84 조각 3(스킬 아님)
                   else CA.execute(self, bot, action, bots))
         SR.physical(self, bot, action, result, bots)
-        return result
+        return _said_to_npc(action, result)
 
     def _execute_legacy_action(self, bot, action, bots):
         typ, tgt = action.get('type', 'goto'), action.get('target')
@@ -3028,7 +3045,7 @@ class Dungeon:
             res = self._attack(bot, tgt, bots)
         elif typ == 'interact':
             f_pre = self._feature_by_target(tgt)      # D39: 상호작용 전에 피처를 잡는다(상자는 열리며 사라진다)
-            res = self._interact(bot, tgt, bots)
+            res = _said_to_npc(action, self._interact(bot, tgt, bots))   # p0.5.10: 메뉴형 말 걸기도 같은 칸
             self._obj_tag(bot, f_pre, res)             # D39 오브젝트 태그(횟수·마지막 사실) — 판정 무접촉
         elif typ == 'search':
             res = self._search(bot, bots)
@@ -3122,6 +3139,8 @@ class Dungeon:
             bot['order'], bot['path'], bot['plan'] = None, [], []
             return {**base, 'result': 'no_path'}
         pending = {k: action[k] for k in CA.fields() + ('action_id',) if k in action}
+        if action.get('say'):                     # p0.5.10(설계 §3.2 보존): 결정 때의 말(과 그 상대)을 도착까지 — 말이 있을 때만(빈 say 칸이 대기 dict·스냅샷을 흔들지 않게).
+            pending.update({k: action[k] for k in TALK_FIELDS if action.get(k)})   # CA.fields() 에는 넣지 않는다(결과 머리·_active_action 이 그 목록을 써 모든 결과에 say 가 실린다)
         bot['approach'] = pending
         bot['order'], bot['path'] = action['target'], path
         return {**base, 'result': 'approaching', 'len': len(path),
@@ -5046,6 +5065,27 @@ class Dungeon:
                 return [o for o in near if o['char'] not in group]
             group |= {o['char'] for o in add}
 
+    def npc_offer(self, bot, name):
+        """p0.5.10 신원 ID-2 — 이 사람(bot)이 지금 이 NPC(name) 앞에서 말을 걸면 오가는 것 [(종류, 이름)] — 0콜·무변경.
+        종류 ∈ report(원정 보고를 받는다 — 그때는 이것 하나) · potions · boon · weapon. 빈 목록 = 줄 물건 없음(대화만).
+        _interact 의 판정이 이 함수를 불러 그대로 건넨다(단일 원천). 러너는 NPC 가 멀리서 말을 받을 때(되받기) 이것을 장면에 실어
+        '와서 말을 걸면 그 자리에서 무엇이 오가나'를 사실로 알려 준다 — 세계가 받쳐 주지 못하는 약속('골라 줄 테니 기다려라')의 재료를 없앤다."""
+        q_ = getattr(self, 'quests', None)
+        if (q_ and q_.get('returned') is not None and q_.get('reported') is None
+                and ((getattr(self, 'npc_defs', None) or {}).get(name) or {}).get('report')):
+            return [('report', NPC_OFFER_REPORT)]
+        gift = (getattr(self, 'npc_gifts', None) or {}).get(name) or {}
+        if not gift or name in (bot.get('npc_met') or ()) or name in (bot.get('shop_served') or ()):
+            return []                                    # 같은 방문 두 번째부터는 선물이 없다(D32 개정 — 선물 여부와 무관)
+        out = []
+        if gift.get('potions'):
+            out.append(('potions', '물약'))
+        if gift.get('boon') and not (self.offer_on and bot.get('blessed')):   # D95: 공물 판의 축복은 판당 한 번
+            out.append(('boon', '축복의 물약'))
+        if gift.get('weapon') and not bot.get('weapon'):  # 빈손일 때만(D28)
+            out.append(('weapon', str(gift['weapon'])))
+        return out
+
     def _interact(self, bot, target_id, bots=None):
         """인접/현재 칸의 피처와 상호작용.
         출구(계단) = **파티 조율 하강**(Stage 4): 살아있는 파티 전원이 계단 반경 EXIT_GATHER 안에
@@ -5127,9 +5167,8 @@ class Dungeon:
             self._witness_use(bots, tx, ty, group, f.name, 'f%d' % f.id)      # D30 — 하강과 대칭
             return {**base, 'result': 'ascend', 'party': sorted(o['char'] for o in group)}
         if f and f.type == 'npc':                # NPC(D29) 말 걸기 + D32(09-05) 상점 v0: 정해진 대사 + 선물
-            q_ = getattr(self, 'quests', None)   # D69(09-14): 원정에서 돌아온 뒤 보고 역할 NPC(접수원)에게 말을 걸면 = 보고(원정의 끝)
-            if (q_ and q_.get('returned') is not None and q_.get('reported') is None
-                    and ((getattr(self, 'npc_defs', None) or {}).get(f.name) or {}).get('report')):
+            offer = self.npc_offer(bot, f.name)  # p0.5.10: 이 말 걸기에서 오갈 것(보고·선물)의 단일 원천 — 되받기 장면의 미리보기와 같은 함수
+            if offer[:1] == [('report', NPC_OFFER_REPORT)]:   # D69(09-14): 원정에서 돌아온 뒤 보고 역할 NPC(접수원)에게 말을 걸면 = 보고(원정의 끝)
                 bot.setdefault('npc_met', set()).add(f.name)
                 return self._report_quests(bot, f, bots)
             gift = (getattr(self, 'npc_gifts', None) or {}).get(f.name) or {}
@@ -5143,22 +5182,20 @@ class Dungeon:
             #   층·원정을 넘어 따라가고, 그 뒤로 능력치는 바치는 만큼만 오른다. 끈 판은 이 줄이 늘 False = 옛 동작 그대로.
             blessed_done = bool(self.offer_on and bot.get('blessed'))
             boon_once = False                                # D95(09-20 · 리뷰 발견): 이 선물이 '한 번뿐인 축복'인가 — 공물 판에서만 참(아래 결과에 additive)
-            if not again and gift and f.name not in served:  #   실측: 이미 받고도 8틱마다 상인 둘을 번갈아 60틱(seed 726984)
+            if offer:                                        # 첫 만남·선물 정의·아직 안 받음(npc_offer — 실측: 이미 받고도 8틱마다 상인 둘을 번갈아 60틱, seed 726984)
                 got = []                                     # 마을 v1(09-11): 길드 접수원은 물약+단검을 함께 준다(기본 물품, 메모 §4-4)
-                if gift.get('potions'):
-                    bot['potions'] = bot.get('potions', 0) + int(gift['potions'])
-                    got.append('물약')
-                if gift.get('boon') and not blessed_done:         # D74(09-15 파트너 "기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자"): 성직자=축복의 물약
-                    bot['boons'] = bot.get('boons', 0) + int(gift['boon'])
-                    if self.offer_on:                            # D95(09-20): 공물 판에서만 '받은 적 있다'를 몸에 적는다(끈 판은 키 자체가 없다 = 옛 판 그대로)
-                        bot['blessed'] = boon_once = True        #   러너가 층 전이·원정 귀환의 새 몸에 이 표식을 실어 나른다(show_runner 이월)
-                    got.append('축복의 물약')
-                if gift.get('weapon') and not bot.get('weapon'):     # 빈손일 때만 — 스왑·비교는 던전 몫(D28)
-                    nm = str(gift['weapon'])
-                    bot['weapon'] = {'id': self._alloc_fid(), 'name': nm, 'bonus': GEAR_KINDS.get(nm, 1),
-                                     'worn': [bot['char']]}   # D57: 손에서 태어나도 개체 — 내려놓으면 같은 번호
-                    got.append(nm)
-                given = '·'.join(got) if got else None
+                for kind, label in offer:
+                    if kind == 'potions':
+                        bot['potions'] = bot.get('potions', 0) + int(gift['potions'])
+                    elif kind == 'boon':                     # D74(09-15 파트너 "기도효과는 스테이터스 증가+1의 물약을 하나 주는걸로 하자"): 성직자=축복의 물약
+                        bot['boons'] = bot.get('boons', 0) + int(gift['boon'])
+                        if self.offer_on:                    # D95(09-20): 공물 판에서만 '받은 적 있다'를 몸에 적는다(끈 판은 키 자체가 없다 = 옛 판 그대로)
+                            bot['blessed'] = boon_once = True   # 러너가 층 전이·원정 귀환의 새 몸에 이 표식을 실어 나른다(show_runner 이월)
+                    elif kind == 'weapon':                   # 빈손일 때만 — 스왑·비교는 던전 몫(D28)
+                        bot['weapon'] = {'id': self._alloc_fid(), 'name': label, 'bonus': GEAR_KINDS.get(label, 1),
+                                         'worn': [bot['char']]}   # D57: 손에서 태어나도 개체 — 내려놓으면 같은 번호
+                    got.append(label)
+                given = '·'.join(got)
             if given:
                 served.add(f.name)
                 self._witness(bots, tx, ty,      # 마을=전체 시야 — 챙기는 걸 본 사람은 안다(ally_loot 문법 그대로)

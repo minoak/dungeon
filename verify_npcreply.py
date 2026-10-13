@@ -12,6 +12,8 @@
      아닌 것: 모두에게·동료에게 한 말 / 상대 없는 제안(= 회의) / 남에게 건넨 NPC 의 말 / 말 없는 결정 / 작정 집행 / 건너뛴 결정
   ⑤ 상한: 같은 캐릭터-NPC 쌍은 방문당 3번(실패한 콜도 센다) · NPC 마다·캐릭터마다 따로 · 한 틱에 NPC 당 1콜(앞 번호 · use 로 이미 말한 NPC 는 건너뜀) ·
      연쇄 핑퐁 없음(캐릭터가 다시 말해야만 다시 답한다) · 실패(None)는 말이 없다(고정 대사로 메우지 않는다)
+     p0.5.10 신원 ID-2: 장부는 대화 장부 bot['npc_talk']['npc:<이름>'](use·자동 접근 도착과 한 장부 — 세 길 전부는 verify_npc_talk) ·
+     3번째 = 닫는 말(talk 'close') · 그 뒤 지목하면 고정 거절(talk 'busy', 0콜) · 관측의 '…번까지다' 안내는 없다
   ⑥ 들리는 거리 = Dungeon.hears: 다른 구역으로 간 사람의 말은 되받지 않는다 · 말의 결과(D72 궤적)에 그 NPC 가 들었는지가 실린다 · 문장
   ⑦ 배달: 같은 구역(또는 곁) 사람의 편지함에만 · from 'npc:<이름>' · to = 말을 건 사람 · 정지·뼈 없음
   ⑧ NPC 두뇌 프롬프트: 한 말·앞 줄·'말만 오갔다' 판정 · '줄 물건은 없다'(use 의 판정)는 없다 · 시트 없음
@@ -157,9 +159,9 @@ check("② npc_ears = 지금 내 말이 들리는 마을 사람 전부(접수원
       set(ears) == want and RECEPTION in ears and KEEPER not in ears and ears[RECEPTION] == "f%d" % rec.id
       and d._town_zone(keep.x, keep.y) != zone_a, (sorted(ears), sorted(want)))
 w = brains._wire(o, NAMES, compose=True)
-check("② 프롬프트: 사실 한 줄(들리는 사람·id·`to`·상한 3) · '그 밖의 정보' 누수 없음",
+check("② 프롬프트: 사실 한 줄(들리는 사람·id·`to`) · 상한 안내는 없다(p0.5.10 — 세계가 닫는 말로 알려 준다) · '그 밖의 정보' 누수 없음",
       ("지금 네 말이 들리는 마을 사람: " in w and "%s(f%d)" % (RECEPTION, rec.id) in w and "`to` 에 그 ID 를 적어 말하면" in w
-       and "3번까지" in w and "## 그 밖의 정보" not in w))
+       and "번까지" not in w and "## 그 밖의 정보" not in w))
 check("② 끈 판 프롬프트에는 그 줄이 없다", "지금 네 말이 들리는 마을 사람" not in brains._wire(o0, NAMES, compose=True))
 dm, botsm = town()
 dm.composed_actions = dm.auto_approach = False       # 메뉴형 관측(리모컨) — 같은 줄이 같은 자리에
@@ -181,11 +183,14 @@ check("② 던전 층은 스위치가 있어도 관측에 없다(마을만)", "n
 print("── ③ 발생 조건 (a) 지목")
 dec_a = {"1": {"type": "wait", "say": "의뢰가 어떤 게 있나요?", "to": "npc:" + RECEPTION, "src": "haiku"}}
 out, calls = replies(d, bots, dec_a, {})
-check("③ 지목한 말 → 그 NPC 가 한 번 되받는다(경로 to) · 두뇌 1콜: result 'npc_say'·한 말·세계의 사실·NPC 정의(역할)",
+check("③ 지목한 말 → 그 NPC 가 한 번 되받는다(경로 to) · 두뇌 1콜: result 'npc_say'·한 말·세계의 사실·NPC 정의(역할) · "
+      "p0.5.10 offer = 와서 말을 걸면 오갈 것(Dungeon.npc_offer)",
       out == [{"npc": RECEPTION, "char": "1", "line": "그래요, 잘 들었어요.", "via": "to"}] and len(calls) == 1
-      and calls[0]["res"] == {"result": "npc_say", "npc": RECEPTION} and calls[0]["said"] == "의뢰가 어떤 게 있나요?"
+      and calls[0]["res"] == {"result": "npc_say", "npc": RECEPTION, "offer": [lbl for _k, lbl in d.npc_offer(a, RECEPTION)]}
+      and calls[0]["said"] == "의뢰가 어떤 게 있나요?"
       and calls[0]["facts"] == ["사실 — " + RECEPTION] and calls[0]["npc"].get("role"), (out, calls))
-check("③ 되받기 장부: bot['npc_replies'][NPC 이름] = 1", a.get("npc_replies") == {RECEPTION: 1})
+check("③ 대화 장부(p0.5.10): bot['npc_talk']['npc:<이름>'] = 1 · 옛 칸 npc_replies 없음",
+      a.get("npc_talk") == {"npc:" + RECEPTION: 1} and "npc_replies" not in a)
 check("③ 말을 나눈 NPC 는 그 뒤에 '먼저 거는 인사'(D71)를 새로 건네지 않는다 · 아직 말을 안 나눈 NPC 의 인사는 그대로",
       RECEPTION not in {h[0] for h in d.npc_greetings([a])} and KEEPER in {h[0] for h in d.npc_greetings([b2])})
 
@@ -213,7 +218,7 @@ for label, dec, inbox in (
         ("말 없는 결정", {"type": "wait", "say": "", "src": "haiku"}, {"1": [hail]}),
         ("작정 집행", {"type": "wait", "say": "안녕하세요!", "src": "plan"}, {"1": [hail]}),
         ("건너뛴 결정", {"type": "wait", "say": "안녕하세요!", "src": "haiku", "skipped": True}, {"1": [hail]})):
-    a4.pop("npc_replies", None)
+    a4.pop("npc_talk", None)
     o_, c_ = replies(d4, bots4, {"1": dec}, inbox)
     if o_ or c_:
         neg.append(label)
@@ -229,16 +234,18 @@ p1 = beside(d5, rec5)
 put(a5, p1)
 put(b5, beside(d5, rec5, taken={p1}))
 say_to = lambda who: {"type": "wait", "say": "하나 더 물을게요", "to": "npc:" + who, "src": "haiku"}
-n_calls, n_out = 0, 0
+n_calls, outs = 0, []
 for _ in range(5):
     o_, c_ = replies(d5, bots5, {"1": say_to(RECEPTION)}, {})
-    n_calls, n_out = n_calls + len(c_), n_out + len(o_)
-check("⑤ 같은 쌍은 방문당 3번까지 — 다섯 번 말해도 3콜·3번", (n_calls, n_out, a5["npc_replies"]) == (3, 3, {RECEPTION: 3}), (n_calls, n_out, a5.get("npc_replies")))
+    n_calls, outs = n_calls + len(c_), outs + o_
+check("⑤ 같은 쌍은 방문당 3번까지 — 다섯 번 말해도 3콜 · 3번째는 닫는 말(talk close) · 그 뒤 둘은 고정 거절(talk busy, 0콜)",
+      (n_calls, [o.get("talk") for o in outs], a5["npc_talk"]) == (3, [None, None, "close", "busy", "busy"], {"npc:" + RECEPTION: 3})
+      and outs[3]["line"] == outs[4]["line"] == G.NPC_LINE_BUSY, (n_calls, outs, a5.get("npc_talk")))
 o_, c_ = replies(d5, bots5, {"2": say_to(RECEPTION)}, {})
-check("⑤ 캐릭터마다 따로 센다(봇2 는 같은 NPC 에게 아직 0번)", len(o_) == 1 and b5["npc_replies"] == {RECEPTION: 1})
+check("⑤ 캐릭터마다 따로 센다(봇2 는 같은 NPC 에게 아직 0번)", len(o_) == 1 and b5["npc_talk"] == {"npc:" + RECEPTION: 1})
 put(a5, beside(d5, keep5))
 o_, c_ = replies(d5, bots5, {"1": say_to(KEEPER)}, {})
-check("⑤ NPC 마다 따로 센다(봇1 은 주점 주인에게 아직 0번)", len(o_) == 1 and a5["npc_replies"] == {RECEPTION: 3, KEEPER: 1})
+check("⑤ NPC 마다 따로 센다(봇1 은 주점 주인에게 아직 0번)", len(o_) == 1 and a5["npc_talk"] == {"npc:" + RECEPTION: 3, "npc:" + KEEPER: 1})
 d5b, bots5b = town()
 a6, b6, c6 = bots5b
 rec6 = npc(d5b, RECEPTION)
@@ -248,13 +255,13 @@ put(b6, beside(d5b, rec6, taken={q1}))
 both = {"1": say_to(RECEPTION), "2": say_to(RECEPTION)}
 o_, c_ = replies(d5b, bots5b, both, {})
 check("⑤ 한 틱에 NPC 당 1콜 — 둘이 같은 NPC 에게 말하면 앞 번호만(뒷사람은 장부도 안 는다)",
-      [(r["char"]) for r in o_] == ["1"] and len(c_) == 1 and "npc_replies" not in b6, (o_, b6.get("npc_replies")))
+      [(r["char"]) for r in o_] == ["1"] and len(c_) == 1 and "npc_talk" not in b6, (o_, b6.get("npc_talk")))
 o_, c_ = replies(d5b, bots5b, {"2": say_to(RECEPTION)}, {}, spoke={RECEPTION})
 check("⑤ 이 틱에 use 로 이미 말한 NPC(spoke)는 건너뛴다 — 0콜", not o_ and not c_)
 o_, c_ = replies(d5b, bots5b, {"2": {"type": "wait", "say": "", "src": "haiku"}}, {"2": [{"from": "npc:" + RECEPTION, "text": "되받은 말", "turn": 2, "to": "2"}]})
 check("⑤ 연쇄 핑퐁 없음 — NPC 의 말을 받아도 캐릭터가 말하지 않으면 NPC 는 잇지 않는다", not o_ and not c_)
 o_, c_ = replies(d5b, bots5b, {"2": say_to(RECEPTION)}, {}, line=None)
-check("⑤ 두뇌 실패(None) = 말이 없다(고정 대사로 메우지 않는다) · 그 콜도 센다", o_ == [] and len(c_) == 1 and b6["npc_replies"] == {RECEPTION: 1})
+check("⑤ 두뇌 실패(None) = 말이 없다(고정 대사로 메우지 않는다) · 그 콜도 센다", o_ == [] and len(c_) == 1 and b6["npc_talk"] == {"npc:" + RECEPTION: 1})
 
 print("── ⑥ 들리는 거리 = Dungeon.hears · 말의 결과(D72)")
 d6, bots6 = town()
@@ -263,7 +270,7 @@ rec7, keep7 = npc(d6, RECEPTION), npc(d6, KEEPER)
 put(a7, beside(d6, keep7))                           # 주점 주인 곁 = 접수원과 다른 구역
 o_, c_ = replies(d6, bots6, {"1": say_to(RECEPTION)}, {})
 check("⑥ 다른 구역으로 간 사람의 말은 그 NPC 가 못 듣는다 → 0콜(장부도 안 는다)",
-      not d6.hears(a7, rec7.x, rec7.y) and not o_ and not c_ and "npc_replies" not in a7)
+      not d6.hears(a7, rec7.x, rec7.y) and not o_ and not c_ and "npc_talk" not in a7)
 d6.trail_on = True
 put(b7, (a7["x"] + 1, a7["y"]) if d6.grid[a7["y"]][a7["x"] + 1] == G.FLOOR else (a7["x"] - 1, a7["y"]))
 R.deliver_and_hail(d6, bots6, {"1": "소문 좀 들려줘요"}, {"1": "npc:" + KEEPER})
@@ -391,16 +398,19 @@ by_turn = {r["turn"]: r for r in ticks}
 late = []
 for t_, x in reps:
     nxt, cur = by_turn.get(t_ + 1), by_turn[t_]
-    here = [m for m in (cur.get("inbox") or {}).get(x["char"], []) if m.get("text") == x["line"]]
-    there = [m for m in ((nxt or {}).get("inbox") or {}).get(x["char"], []) if m.get("text") == x["line"]]
+    here = [m for m in (cur.get("inbox") or {}).get(x["char"], []) if m.get("text") == x["line"] and m.get("turn") == t_]   # p0.5.10: 고정 거절은 매번 같은
+    there = [m for m in ((nxt or {}).get("inbox") or {}).get(x["char"], []) if m.get("text") == x["line"] and m.get("turn") == t_]   #   문장이라 말한 틱(turn)으로 가른다
     if nxt is not None and (here or not there or there[0]["from"] != "npc:" + x["npc"] or there[0]["to"] != x["char"]):
         late.append((t_, x))
 check("⑩ 되받은 말은 그 틱이 아니라 **다음 틱**의 편지함에 from 'npc:<이름>' · to = 말한 사람", reps and not late, late[:3])
-pairs = {}
+pairs, busy = {}, [x for _, x in reps if x.get("talk") == "busy"]
 for _, x in reps:
-    pairs[(x["char"], x["npc"])] = pairs.get((x["char"], x["npc"]), 0) + 1
-check("⑩ 9틱 내내 말해도 쌍마다 3번에서 멎는다(상한에 닿은 쌍이 있다) · 두뇌 콜 수 = 되받은 말 수(실패 없음)",
-      pairs and max(pairs.values()) == G.NPC_REPLY_MAX and len(npc_prompts) == len(reps), (pairs, len(npc_prompts)))
+    if x.get("talk") != "busy":
+        pairs[(x["char"], x["npc"])] = pairs.get((x["char"], x["npc"]), 0) + 1
+check("⑩ 9틱 내내 말해도 쌍마다 3번에서 멎는다(상한에 닿은 쌍이 있다) · 두뇌 콜 수 = 거절 아닌 되받은 말 수(실패 없음) · "
+      "p0.5.10: 그 뒤 지목은 고정 거절(talk busy · 0콜 · 봇1 만 — 봇2 의 '답' 읽기는 상한 뒤 말이 없다)",
+      pairs and max(pairs.values()) == G.NPC_REPLY_MAX and len(npc_prompts) == sum(pairs.values())
+      and busy and {x["char"] for x in busy} == {"1"} and all(x["line"] == G.NPC_LINE_BUSY for x in busy), (pairs, len(npc_prompts), busy[:2]))
 tos = {str((r["decisions"].get("1") or {}).get("to")) for r in ticks if (r["decisions"].get("1") or {}).get("say")}
 check("⑩ 스트림의 decisions.to = 'npc:<이름>'(봇 번호와 같은 자리)", tos and all(t_.startswith("npc:") for t_ in tos), tos)
 check("⑩ NPC 요청에 캐릭터가 한 말이 실린다", npc_prompts and all(("여기 일은 요즘 어때요?" in p_) or ("아, 안녕하세요." in p_) for p_ in npc_prompts))

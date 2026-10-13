@@ -363,10 +363,10 @@ mem7 = up7["bots"][0]["memories"]
 check("⑦ 한 명과 맞는 by → by_id(b2) · 동명이인(피른 둘)·없는 이름 → by_unknown · 원문 by 는 남긴다",
       mem7[0].get("by_id") == "b2" and mem7[0]["by"] == "카야" and mem7[1].get("by_unknown") is True and "by_id" not in mem7[1]
       and mem7[2].get("by_unknown") is True, mem7[:3])
-check("⑦ 몹·함정의 by 는 그대로(by_id·by_unknown 없음) · 목격·down_by 도 잇는다 · party 항목 유지 · 판 3",
+check("⑦ 몹·함정의 by 는 그대로(by_id·by_unknown 없음) · 목격·down_by 도 잇는다 · party 항목 유지 · 지금 판(p0.5.10부터 판 번호를 박지 않는다)",
       mem7[3] == raw7["bots"][0]["memories"][3] and mem7[4] == raw7["bots"][0]["memories"][4]
       and up7["bots"][0]["witnessed"][0].get("by_id") == "b2" and up7["bots"][0]["down_by"].get("by_id") == "b2"
-      and up7["bots"][0]["people"]["b2"]["src"] == "party" and up7["state_version"] == 3)
+      and up7["bots"][0]["people"]["b2"]["src"] == "party" and up7["state_version"] == snapshot.STATE_VERSION >= 3)
 check("⑦ 이관은 제자리·한 번(다시 올려도 같다)", snapshot.upgrade(copy.deepcopy(up7)) == up7)
 d7, b7 = floor(scan=False)
 b7[0]["memories"] = copy.deepcopy(mem7[:3])
@@ -385,9 +385,9 @@ with io.open(os.path.join(S7, "snapshot.json"), "w", encoding="utf-8") as f:
 s7, _m7 = snapshot.load(os.path.join(S7, "snapshot.pkl"))
 snapshot.write(S7, {k: v for k, v in s7.items() if k not in ("version", "state_version")}, {"run_id": "r7"})
 s7b, _m7b = snapshot.load(os.path.join(S7, "snapshot.pkl"))
-check("⑦ 이어하기 왕복: 판 2 파일 → 로더가 판 3 으로 → 다시 써서 되읽어도 같다 · 요약도 판 3",
-      s7["state_version"] == s7b["state_version"] == 3 and s7b["bots"] == s7["bots"]
-      and (snapshot.read_meta(S7) or {}).get("state_version") == 3)
+check("⑦ 이어하기 왕복: 판 2 파일 → 로더가 지금 판으로 → 다시 써서 되읽어도 같다 · 요약도 지금 판",
+      s7["state_version"] == s7b["state_version"] == snapshot.STATE_VERSION and s7b["bots"] == s7["bots"]
+      and (snapshot.read_meta(S7) or {}).get("state_version") == snapshot.STATE_VERSION)
 
 # ── ⑧ 인물 기록이 꺼진 판 ──────────────────────────────────────────────
 print("── ⑧ 인물 기록이 꺼진 판은 옛 꼴")

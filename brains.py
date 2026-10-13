@@ -342,7 +342,8 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None, names=None):
     (누가 무슨 말을 걸었고 엔진이 뭘 판정했나). **캐릭터 시트는 넣지 않는다**(차단 재료 차단 · NPC 는 시트를 모른다).
     판정은 엔진이 이미 했다(선물·보고) — 여기서는 문장만. 엔진·러너는 내용을 안 읽는다(수첩·도감평과 같은 살).
     D93(09-20) 되받기: res.result 'npc_say' = 캐릭터가 이 NPC 에게 **말로** 건넸다(use 가 아니다 — 판정 없음). said=그 말, res.prev=그 앞에
-    이 NPC 가 그 캐릭터에게 한 말(있을 때만 — 대화의 앞 줄). 언제 부를지·상한은 러너(show_runner.npc_say_replies)가 정한다.
+    이 NPC 가 그 캐릭터에게 한 말(있을 때만 — 대화의 앞 줄). 언제 부를지·상한은 러너(show_runner.npc_turn — p0.5.10 대화 세 길의 한 장부)가 정한다.
+    p0.5.10 신원 ID-2: res.offer(되받기) = 와서 말을 걸면 그 자리에서 오갈 것(Dungeon.npc_offer) · res.talk 'close' = 이번이 마지막 대답(닫는 말).
     p0.5.9 신원 ID-1(설계 §1.6, DECISIONS 69): NPC 는 길드에 등록된 모험가 이름을 처음부터 안다 — 화자는 인물 기록 판에서도 실명(직업).
     names = {char: 실명}(러너의 명단) — 들은 말 속 '봇N'·'bN' 손잡이를 그 이름으로 바꿔 넣는 재료(없으면 말한 사람만 안다)."""
     npc = npc or {}
@@ -363,7 +364,12 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None, names=None):
     elif r == "npc_say":                              # D93(09-20) 되받기 — 상대가 (다가와 말을 걸지 않고) 들리는 자리에서 말로 건넸다. 물건·보고의 판정은 없다 ⚠️문구 임시
         if res.get("prev"):
             scene.insert(0, '- 조금 전 네가 이 사람에게 한 말: "%s"' % ID.npc_heard(str(res["prev"]), real)[:NPC_LINE_LEN])   # p0.5.9b: 앞서 따라 말한 손잡이(봇N·bN)도 이름으로 — NPC 입력 전부
-        scene.append("- 세계의 판정: 말만 오갔다 — 물건을 건네거나 원정 보고를 받는 일은 상대가 네 앞에 와서 말을 걸 때 따로 처리된다(지금은 아니다)")
+        o_ = res.get("offer")                         # p0.5.10 신원 ID-2: 와서 말을 걸면 그 자리에서 오갈 것(러너 = Dungeon.npc_offer — _interact 판정과 한 원천).
+        come = (("원정 보고를 받는다" if o_ == [G.NPC_OFFER_REPORT] else "%s을(를) 건넨다" % "·".join(o_)) if o_  #   옛 문장 '(지금은 아니다)'는 '나중에 줄 테니
+                else "줄 물건은 없다(대화만)")                                                                #   기다려라'의 재료였다(10-13 실판 장비 상인) ⚠️문구 임시
+        scene.append("- 세계의 판정: 말만 오갔다 — 지금 건넨 물건은 없다. %s"
+                     % (("이 사람이 네 앞에 와서 말을 걸면 그 자리에서: " + come) if o_ is not None
+                        else "물건을 건네거나 원정 보고를 받는 일은 상대가 네 앞에 와서 말을 걸 때 그 자리에서 판정된다"))
     elif r == "npc_gift":
         scene.append("- 세계의 판정: 너는 %s에게 %s을(를) 건넸다(%s — %s)"
                      % (who, res.get("item", "?"), "기도의 답, 마시면 공격 능력치가 1 오른다" if res.get("item") == "축복의 물약" else "정해진 원정 물품",
@@ -380,6 +386,8 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None, names=None):
         scene.append("- 세계의 판정: 줄 물건은 없다(대화만)")
     if res.get("line"):
         scene.append('- (두뇌가 없을 때의 정해진 %s: "%s" — 같은 뜻이면 네 말로 바꿔도 된다)' % ("인사" if r == "npc_hail" else "대사", res["line"]))
+    if res.get("talk") == "close":                    # p0.5.10 신원 ID-2 마지막 대답(대화 장부 MAX-1 번째, 러너 npc_turn) — 닫는 말은 한 번 ⚠️문구 임시
+        scene.append("- 이 사람과는 이번에 이야기를 충분히 나눴다 — 이번이 마지막 대답이다. 네 성격대로 귀찮다는 기색을 보이며 대화를 끝낸다")
     prompt = (_npc_prompt_raw().replace("{name}", name).replace("{role}", npc.get("role") or "마을 사람")
               .replace("{persona}", npc.get("persona") or "평범한 마을 사람").replace("{maxlen}", str(NPC_LINE_LEN))
               .replace("{facts}", "\n".join("- " + str(x) for x in (facts or [])) or "- (특별히 아는 것 없음)")
@@ -1226,14 +1234,16 @@ def _last_prose(last, names=None):
             if len(group) == 1:              # 마을 복귀(D29) — 대칭 문법·같은 정직성
                 return "혼자 계단을 올라 마을로 돌아갔다"
             return "다 모여서 — 함께 마을로 올라갔다(%s)" % "·".join(group)
+        # p0.5.10 신원 ID-2(설계 §3.2·X10): NPC 의 말은 언제나 '들은 말'로 온다(다음 틱 편지함 — 말 건 사람과 엿들은 사람에게 같은 문장).
+        #   직전 결과에는 세계의 판정(받은 것·보고)까지만 — 고정 대사와 두뇌 대사가 한 장면에 엇갈려 보이던 길(옛 '말을 걸었다 — "…"')을 닫는다.
         if r == "npc_gift":                 # D32 상점 v0 — 받은 것은 사실로(무기는 바로 걸친다, 물약은 소지 +1)
             item = last.get("item", "?")
             got = ("물약을 받았다(소지 물약 +1)" if item == "물약"
                    else "축복의 물약을 받았다(소지 +1 — 마시면 공격 능력치가 1 오른다)" if item == "축복의 물약"   # D74(09-15) 기도의 답
                    else "%s을(를) 받아 걸쳤다" % item)
-            return '%s에게 말을 걸었다 — %s. "%s"' % (last.get("npc", "?"), got, last.get("line", "…"))
+            return '%s에게 말을 걸었다 — %s' % (last.get("npc", "?"), got)
         if r == "npc_talk":
-            return '%s에게 말을 걸었다 — "%s"' % (last.get("npc", "?"), last.get("line", "…"))
+            return '%s에게 말을 걸었다' % last.get("npc", "?")
         if r == "npc_report":               # D69 귀환 보고 — 원정이 끝났다(세계의 사실)
             t_ = last.get("titles") or {}
             bits = []
@@ -1241,7 +1251,7 @@ def _last_prose(last, names=None):
                 bits.append("완수: " + "·".join(t_.get(x, x) for x in last["done"]))
             if last.get("undone"):
                 bits.append("미완: " + "·".join(t_.get(x, x) for x in last["undone"]))
-            return '%s에게 원정을 보고했다%s — "%s"' % (last.get("npc", "?"), (" (%s)" % " / ".join(bits)) if bits else "", last.get("line", "…"))
+            return '%s에게 원정을 보고했다%s' % (last.get("npc", "?"), (" (%s)" % " / ".join(bits)) if bits else "")
         if r == "quest_accepted":           # D69 의뢰 맡음 — 파티의 의뢰가 됐다
             return '게시판의 의뢰 「%s」를 맡았다 — %s%s' % (last.get("title", "?"), last.get("goal", "?"),
                                                       (" (보상: %s)" % last["reward"]) if last.get("reward") else "")
@@ -1660,9 +1670,9 @@ def _wire(obs, names=None, compose=False):
     ears = obs.get("npc_ears")                   # D93(09-20) NPC 되받기 판의 마을 — 지금 내 말이 들리는 마을 사람과 세계가 하는 일(사실만, 말을 걸라는 말은 없다) ⚠️문구 임시
     if ears:
         L.append("- 지금 네 말이 들리는 마을 사람: %s — 응답 JSON 의 `to` 에 그 ID 를 적어 말하면 그 사람에게 건 말이 되고, 그 사람이 말로 답한다. "
-                 "마을 사람이 네게 건넨 말을 들은 뒤 `to` 없이 한 잡담도 그 사람에게 한 답으로 들린다. 같은 때 여럿이 한 사람에게 말하면 그 사람은 한 명에게만 답한다. "
-                 "한 사람이 되받는 말은 네가 이번에 마을에 머무는 동안 %d번까지다"
-                 % (" · ".join("%s(%s)" % (e.get("name", "?"), e.get("id", "?")) for e in ears), G.NPC_REPLY_MAX))
+                 "마을 사람이 네게 건넨 말을 들은 뒤 `to` 없이 한 잡담도 그 사람에게 한 답으로 들린다. 같은 때 여럿이 한 사람에게 말하면 그 사람은 한 명에게만 답한다"
+                 % " · ".join("%s(%s)" % (e.get("name", "?"), e.get("id", "?")) for e in ears))
+                 # p0.5.10 신원 ID-2(설계 §3.2): 옛 꼬리 '되받는 말은 … N번까지다'는 뺐다 — 상한은 세계가 닫는 말·거절로 알려 준다(미리 규칙을 적지 않는다)
     z = obs.get("zone")
     scan = isinstance((z or {}).get("doors"), list)   # D19 구조 조회가 실려 있으면 트리 직렬화
     if z and not scan:

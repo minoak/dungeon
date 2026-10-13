@@ -20,6 +20,8 @@
                    (ReactionBook.rebuild_alias — 지나간·대기 사건 모두 받은 순서대로, 이어간 뒤의 새 사건은 그 뒤 번호).
       2→3(p0.5.9 신원 ID-1): 기억·목격·쓰러진 사연의 '사람이 친 by'(실명 문자열)에 사람 열쇠(by_id)를 잇는다 — 호칭은 그릴 때 보는 사람이 붙인다
                    (_m2_refs: 그 판 시트의 이름과 정확히 한 명이 맞을 때만 잇고, 못 잇거나 동명이인이면 by_unknown — 렌더는 '누군가').
+      3→4(p0.5.10 신원 ID-2): NPC 되받기 장부 npc_replies{이름: n} → 대화 장부 npc_talk{'npc:<이름>': n}(대화 세 길이 한 장부를 센다).
+                   자동 접근 대기(approach)에 결정 때의 말(say·to)이 실릴 수 있다 — 옛 대기에는 없을 뿐이라 변환은 없다(도착 때 '말없이 다가왔다').
 LLM 0콜 · 순수 파일(이관 함수만 몸 dict·반응 원장을 고친다 — 그때 judge 를 늦게 import).
 """
 import io
@@ -31,7 +33,7 @@ import time
 
 VERSION = 2                  # 판형(위 머리글) — 옛 코드(version 1 만 읽음)가 새 스냅샷을 거절하게 하는 문
 READS = (1, 2)               # 이 코드가 읽는 판형. 1 = p0.5.2 까지(내용 판 0)
-STATE_VERSION = 3            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
+STATE_VERSION = 4            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
 PKL = "snapshot.pkl"
 META = "snapshot.json"
 
@@ -107,7 +109,20 @@ def _m2_refs(snap):
     return snap
 
 
-MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
+def _m3_talk(snap):
+    """3→4(p0.5.10 신원 ID-2, 설계 §8.1): 몸마다 옛 되받기 장부 npc_replies{NPC 이름: n} → 대화 장부 npc_talk{'npc:<이름>': n}.
+    옛 장부는 되받기만 셌으므로 그 수를 대화 차례로 그대로 옮긴다(이미 npc_talk 에 같은 열쇠가 있으면 큰 쪽). 옛 칸은 지운다(제자리·한 번)."""
+    for b in _bodies(snap):
+        old = b.pop("npc_replies", None)
+        if isinstance(old, dict) and old:
+            book = b.setdefault("npc_talk", {})
+            for nm, n in old.items():
+                k = "npc:%s" % nm
+                book[k] = max(int(book.get(k, 0) or 0), int(n or 0))
+    return snap
+
+
+MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
 
 
 def state_version_of(doc):

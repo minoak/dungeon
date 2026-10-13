@@ -28,7 +28,8 @@ def canon(o):
 
 # 이관 전(커밋 d38669f) lore.json 7건·town.json NPC 3인의 정본 해시 — 본문·대사·선물·배치가 한 글자라도 바뀌면 여기서 선다.
 LORE_SHA = '63b1d9c0a9f0a81258bc0c211ccecc583d1d649e73e7bf8a942cc12dc8461dac'   # 2026-09-13 D65: 보스 정의(goblin_chief) 추가로 갱신 — 그 전 f332d3e7…(d38669f 이관 정본)
-NPC_SHA = 'b6c1e5f26edb42b1e7ad09a6f0db05b8f62d30df43dd846cf67d649f9e8fd1b7'
+NPC_SHA = 'ddb2868f39d045328d47d612a91d2353fab4f71819f9f79692b4d84d6247c337'   # 2026-10-13 p0.5.10(p0510b): 나중을 약속하는 고정 대사 4칸 교체로 갱신 —
+#   장비 상인·아이템 상인 재방문 · 여관주인 첫·재방문(옛 문장 4칸만 되돌리면 그 전 b6c1e5f2…와 같다 — 다른 값·배치·선물은 그대로)
 
 # ① 로드
 defs = ENT.load()
