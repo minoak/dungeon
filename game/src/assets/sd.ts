@@ -1,6 +1,7 @@
 // SD 캐릭터(viewer/assets/sprites/sd/atlas.json v3) → Phaser 스프라이트시트·애니메이션.
 // 기본 셀 96px, 일러스트는 프리셋별 cell/footY/filter. 행 = directions 순서(front,right,back,left), 열 0 정지·1~4 걷기,
-// frame_ms 160, 발 바닥 y=91 → origin (0.5, 91/96). 헤어별 PNG 는 전체 캐릭터 프레임(가발 레이어 아님).
+// frame_ms 160(기본 박자 — 실제 걸음 빠르기는 walkTimeScale 이 이동 시간에 맞춘다), 발 바닥 y=91 → origin (0.5, 91/96).
+// 헤어별 PNG 는 전체 캐릭터 프레임(가발 레이어 아님).
 // 선택값 = look.sprite + look.hairstyle. look.sprite 가 없는 옛 판 = 직업별 기본 SD 로 폴백(계획 §8 제안).
 import Phaser from 'phaser';
 import type { Dir, Look, PartyMember } from '../stream/types';
@@ -9,6 +10,12 @@ import { ROOT } from '../paths';
 export const SD_DIR = ROOT + 'viewer/assets/sprites/sd/';   // 론처 '/viewer/…' · 정적 './viewer/…'(static-bundle.mjs 복사본)
 export const SD_ATLAS_URL = SD_DIR + 'atlas.json';
 export const FOOT_Y = 91;                        // 셀 안 발 바닥 y
+/** 걷기 열 수(열 1~4). 기준: 한 칸 이동 = 걷기 한 주기 — 프레임 길이 = 한 칸 이동 시간 ÷ 이 수.
+ *  예전엔 주기가 frame_ms×4 = 640ms 로 고정이라 1× 한 칸 560ms 보다 길어 발이 미끄러져 보였다(2026-10-12 c07 진단).
+ *  걷기 상수 둘의 원천은 여기 — viewer/index.html 은 빌드 길이 달라 같은 값을 옮겨 두고, verify_walk_timing 이 같은지 본다. */
+export const WALK_FRAMES = 4;
+/** 한 칸(= 걷기 한 주기)의 최소 시간. 빠른 재생에서도 프레임이 40ms 보다 짧아지지 않는다(DungeonScene stepMs 하한). */
+export const WALK_CYCLE_MIN_MS = 160;
 
 export interface SdHairstyle { name: string; sheet: string }
 export interface SdPreset { name: string; sheet: string; job: string; hairstyles?: Record<string, SdHairstyle>;
@@ -72,11 +79,15 @@ export function resolveMember(m: PartyMember | undefined, job: string | undefine
 /** 프레임 번호 — phase < 0 정지, 0..3 걷기. */
 export function frameIndex(atlas: SdAtlas, dir: Dir, phase: number): number {
   const row = Math.max(0, atlas.directions.indexOf(dir));
-  const col = phase < 0 ? 0 : 1 + (((Math.floor(phase) % 4) + 4) % 4);
+  const col = phase < 0 ? 0 : 1 + (((Math.floor(phase) % WALK_FRAMES) + WALK_FRAMES) % WALK_FRAMES);
   return row * atlas.columns + col;
 }
 
 export const walkAnimKey = (key: string, dir: Dir): string => `${key}|walk|${dir}`;
+
+/** 한 칸 이동(moveMs)에 걷기 한 주기가 꼭 맞는 애니 배속. 예: 1× 이동 560ms → 640/560 ≈ 1.14(프레임 140ms),
+ *  빠른 재생 160ms → 4(프레임 40ms), 라이브 상한 1000ms → 0.64(프레임 250ms). */
+export const walkTimeScale = (atlas: SdAtlas, moveMs: number): number => atlas.frame_ms * WALK_FRAMES / moveMs;
 
 /** 시트마다 4방향 걷기 애니 등록(create 에서 한 번). */
 export function registerAnims(anims: Phaser.Animations.AnimationManager, atlas: SdAtlas): void {
@@ -90,7 +101,7 @@ export function registerAnims(anims: Phaser.Animations.AnimationManager, atlas: 
         const row = atlas.directions.indexOf(dir);
         anims.create({
           key: ak,
-          frames: anims.generateFrameNumbers(key, { frames: [1, 2, 3, 4].map(c => row * atlas.columns + c) }),
+          frames: anims.generateFrameNumbers(key, { frames: Array.from({ length: WALK_FRAMES }, (_, i) => row * atlas.columns + 1 + i) }),
           frameRate: 1000 / atlas.frame_ms,
           repeat: -1,
         });

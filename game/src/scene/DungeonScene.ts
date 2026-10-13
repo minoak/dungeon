@@ -13,7 +13,7 @@ import { townTerrainData, TOWN_PROP_CELL, TOWN_PROP_FOOT, TOWN_NPC_CELL, TOWN_NP
 import type { FrameChange } from '../play/Playback';
 import { TILE, tileIndex, type Tileset, type TilesCfg } from '../assets/tiles';
 import { FOOT_Y, frameIndex, portraitCanvas, queueSdSheets, registerAnims, resolveMember, sheetKey,
-         walkAnimKey, sdMetrics, configureSdTextures, type SdAtlas } from '../assets/sd';
+         walkAnimKey, walkTimeScale, WALK_CYCLE_MIN_MS, sdMetrics, configureSdTextures, type SdAtlas } from '../assets/sd';
 import { cellKey } from '../world/Sight';
 import { ROOT } from '../paths';
 import { queueWorld, registerWorldAnims, terrainFrame, TERRAIN_CELL, WORLD_CELL, WORLD_FOOT,
@@ -29,7 +29,7 @@ export const ZOOMS = [0.25, 0.5, 1, 1.5, 2] as const;
 const STEP_SHARE = 0.8;
 const STEP_MAX_MS = 1000;
 const NPC_STEP_MAX_MS = 1100;
-export const stepMs = (paceMs: number, max = STEP_MAX_MS): number => Math.max(160, Math.min(paceMs * STEP_SHARE, max));
+export const stepMs = (paceMs: number, max = STEP_MAX_MS): number => Math.max(WALK_CYCLE_MIN_MS, Math.min(paceMs * STEP_SHARE, max));
 
 export interface Actor {
   char: Char;
@@ -531,6 +531,7 @@ export class DungeonScene extends Phaser.Scene {
       const ak = walkAnimKey(a.key, dir);
       if (!s.anims.isPlaying || s.anims.currentAnim?.key !== ak) s.play(ak);
       const dur = stepMs(this.app.playback.paceMs);
+      s.anims.timeScale = walkTimeScale(this.atlas, dur);   // 한 칸 = 걷기 한 주기(이동 시간은 그대로, 애니가 맞춘다)
       this.tweens.add({ targets: s, x: target.x, y: target.y, duration: dur, ease: 'Linear',
         // 트윈이 끝났는데 아직 같은 프레임이면(다음 걸음이 안 왔으면) 정지 프레임으로. 이어 걸으면 다음 프레임이 애니를 잇는다.
         onComplete: () => { if (this.frame === cur) { s.anims.stop(); s.setFrame(frameIndex(this.atlas, dir, -1)); } } });
