@@ -442,7 +442,13 @@
       "name": "마법사 일자 앞머리 장발",
       "looks": "일자 앞머리의 긴 은빛 머리",
       "source": "pilot-long",
-      "long": true
+      "long": true,
+      "chinY": [
+        44,
+        44,
+        48,
+        44
+      ]
     }
   },
   "headPlacement": {
