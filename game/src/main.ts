@@ -17,6 +17,7 @@ import { installHandoff } from './fx/Handoff';
 import { installCombat } from './fx/Combat';
 import { installLive } from './stream/live';
 import { installCodex } from './ui/Codex';
+import { installInspect } from './inspect/Panel';
 import { STATIC, fetchRunIndex } from './paths';
 
 declare global { interface Window { __wl?: App } }
@@ -57,6 +58,7 @@ async function boot(): Promise<void> {
   installLive(app);                                                                                     // B5 라이브 배지(론처 /api/status)
   installCombat(app);
   installCodex(app);                                                                                    // D63 도감·수첩 창(별개 창)
+  installInspect(app);                                                                                  // p0.5.12 관전 클릭 창(무대 왼쪽 아래 — 액자 모드엔 없다)
   if (STATIC) {                                  // 정적 배포(paths.STATIC) — 론처가 없으니 시작 화면 링크는 리포로
     for (const a of document.querySelectorAll<HTMLAnchorElement>('a[href="/launcher/"]')) {
       a.href = 'https://github.com/minoak/dungeon'; a.target = '_blank'; a.rel = 'noopener';

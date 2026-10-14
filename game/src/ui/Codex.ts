@@ -3,13 +3,17 @@
 //   도감 탭: 몬스터 종별 카드(그림·이름). 세계 지식(등재 한 줄·심층 본문 = run_meta.bestiary_defs)은 파티 중 누군가 그 층에 닿았을 때만.
 //            캐릭터별 줄 = 상태(모름·등재·심층, 조우 n/해금 수) + 도감평(이 판 decisions.book_line / 지난 판 run_meta.bestiary_progress.note).
 //   수첩 탭: 캐릭터별, 층을 떠날 때 쓴 장(descend/ascend.pages).
+//   기록 탭(p0.5.12 민옥 결정 4): 고른 캐릭터가 lore_note 로 쓴 기록 전부(사람·장소·의뢰·종류·장비·층의 것)를 재생 위치까지 접은 목록 —
+//            지도에서 누를 수 없는 의뢰·지금 층에 없는 대상·다른 세계의 대상 기록을 볼 길. 관전 클릭 창과 같은 접기(inspect/model).
 // 조우 수의 재구성 = bestiary.py 와 같은 규칙: tick.bots[].aware_of 에 몹 id 가 *새로* 오른 순간(층이 바뀌면 새 id 공간) + 판 시작 진행도 시드.
+// 도감평 = 그 종의 도감 note 를 접은 것(p0.5.12 — book_line 과 인물 기록 판의 lore_note 가 같은 칸, 지난 판 note 는 '지난 판').
 // 입력: app.bus('run'·'grow') · app.playback('frame') · app.focus('change'). 엔진·러너 판정 무접촉(run_meta.bestiary_defs 는 러너 additive).
-// 훅(스모크): #codexBtn · #codex[data-open] · .cx-tab[data-tab=bestiary|notebook] · .cx-card[data-key] · .cx-row[data-char] · .cx-char[data-char] · .cx-page[data-char]
+// 훅(스모크): #codexBtn · #codex[data-open] · .cx-tab[data-tab=bestiary|notebook|records] · .cx-card[data-key] · .cx-row[data-char] · .cx-char[data-char] · .cx-page[data-char] · .cx-rec[data-key]
 import type { App } from '../app';
 import type { BestiaryDef, Char, Run } from '../stream/types';
 import type { FrameChange } from '../play/Playback';
 import { $, el, esc, typing } from './dom';
+import { ledgerRows, loreIndex, startOf, valueAt, writesAt } from '../inspect/model';
 import goblinUrl from '../assets/world/goblin.png';
 import spiderUrl from '../assets/world/spider.png';
 
@@ -17,16 +21,15 @@ const MONSTER_IMG: Record<string, string> = { '고블린': goblinUrl, '그림자
 const CELL = 96;                                   // world.ts WORLD_CELL — 시트 한 칸(288×384 = 3×4 칸)
 const DEFAULT_UNLOCK = 5;                          // 정의(unlock)가 없는 옛 판의 심층 문턱 — bestiary.py 기본과 같다
 
-type Tab = 'bestiary' | 'notebook';
+type Tab = 'bestiary' | 'notebook' | 'records';
 interface Encounter { idx: number; char: Char; key: string }
-interface BookLine { idx: number; turn: number; char: Char; key: string; text: string }
 interface Page { idx: number; turn: number; char: Char; depth: number; kind: 'descend' | 'ascend'; text: string }
-interface Index { enc: Encounter[]; book: BookLine[]; pages: Page[]; kinds: Set<string> }
+interface Index { enc: Encounter[]; pages: Page[]; kinds: Set<string> }
 interface Tier { known: boolean; deep: boolean; n: number; need: number }
 
 /** 판 전체를 한 번 훑어 '알게 된 순간'·'쓴 순간'을 프레임 번호와 함께 색인한다(재생 위치 ≤ idx 로 거른다). */
 function buildIndex(run: Run): Index {
-  const enc: Encounter[] = [], book: BookLine[] = [], pages: Page[] = [], kinds = new Set<string>();
+  const enc: Encounter[] = [], pages: Page[] = [], kinds = new Set<string>();
   let prev: Record<Char, Set<number>> = {}, levelIdx = -1;
   for (const f of run.frames) {
     if (f.levelIdx !== levelIdx) { levelIdx = f.levelIdx; prev = {}; }   // 새 층 = 새 몹 id 공간(bestiary.py consume 'level')
@@ -44,17 +47,13 @@ function buildIndex(run: Run): Index {
       }
       prev[b.char] = cur;
     }
-    for (const [c, d] of Object.entries(f.decisions || {})) {
-      const bl = d.book_line;
-      if (bl && bl.text) book.push({ idx: f.idx, turn: f.turn, char: c, key: bl.key, text: bl.text });
-    }
     const pg = f.descend?.pages;
     if (pg) {
       const depth = f.level.depth;               // 떠나는 층(descend 는 다음 프레임이 level 이라 이 틱의 층이 곧 떠난 층)
       for (const [c, text] of Object.entries(pg)) pages.push({ idx: f.idx, turn: f.turn, char: c, depth, kind: f.descend!.kind, text });
     }
   }
-  return { enc, book, pages, kinds };
+  return { enc, pages, kinds };
 }
 
 /** 그 캐릭터가 재생 위치(idx)까지 그 종을 어디까지 아는가 — 시작 진행도(원장) + 이 판의 조우 증분. */
@@ -93,13 +92,14 @@ export function installCodex(app: App): void {
   const btn = document.getElementById('codexBtn') as HTMLButtonElement | null;
   let tab: Tab = 'bestiary';
   let ix: Index | null = null;
-  let picked: Char | null = null;                  // 수첩 탭에서 고른 캐릭터(없으면 초점을 따른다)
+  let picked: Char | null = null;                  // 수첩·기록 탭에서 고른 캐릭터(없으면 초점을 따른다)
   let lastIdx = -1;
 
   root.innerHTML =
     `<div class="cx-head"><h2>도감·수첩</h2><div class="cx-tabs" role="tablist">` +
     `<button type="button" class="cx-tab on" data-tab="bestiary" role="tab" aria-selected="true">도감</button>` +
-    `<button type="button" class="cx-tab" data-tab="notebook" role="tab" aria-selected="false">수첩</button></div>` +
+    `<button type="button" class="cx-tab" data-tab="notebook" role="tab" aria-selected="false">수첩</button>` +
+    `<button type="button" class="cx-tab" data-tab="records" role="tab" aria-selected="false">기록</button></div>` +
     `<button type="button" class="cx-close" aria-label="닫기" title="닫기 (Esc)">×</button></div>` +
     `<div class="cx-body"></div>`;
   const body = root.querySelector('.cx-body') as HTMLElement;
@@ -132,7 +132,8 @@ export function installCodex(app: App): void {
   app.bus.on('run', () => { ix = null; picked = null; lastIdx = -1; if (isOpen()) render(); });
   app.bus.on('grow', () => { ix = null; lastIdx = -1; if (isOpen()) render(); });   // 라이브: 프레임이 붙으면 색인을 다시(작다)
   app.playback.on('frame', (_ch: FrameChange) => { if (isOpen()) render(); });
-  app.focus.on('change', () => { if (isOpen() && tab === 'notebook' && !picked) { lastIdx = -1; render(); } });
+  app.focus.on('change', () => { if (isOpen() && tab !== 'bestiary' && !picked) { lastIdx = -1; render(); } });
+  app.bus.on('live', () => { lastIdx = -1; if (isOpen()) render(); });   // 판 끝 줄(end)의 남은 원장 변화 — 프레임은 안 붙는다
 
   function render(): void {
     const run = app.run;
@@ -141,11 +142,12 @@ export function installCodex(app: App): void {
     if (idx === lastIdx) return;                   // 같은 프레임이면 다시 그리지 않는다(재생 중 매 틱 호출)
     lastIdx = idx;
     if (!ix) ix = buildIndex(run);
-    body.innerHTML = tab === 'bestiary' ? bestiaryHtml(run, ix, idx) : notebookHtml(run, ix, idx);
+    body.innerHTML = tab === 'bestiary' ? bestiaryHtml(run, ix, idx) : tab === 'notebook' ? notebookHtml(run, ix, idx) : recordsHtml(run, idx);
     if (tab === 'bestiary') body.querySelectorAll<HTMLCanvasElement>('canvas.cx-img').forEach(cv => drawMonster(cv, cv.dataset.kind || ''));
   }
 
   function bestiaryHtml(run: Run, ix: Index, idx: number): string {
+    const lx = loreIndex(run);
     const defs = run.meta?.bestiary_defs || {};
     const chars = run.party.map(p => p.char);
     const keys = new Set<string>();
@@ -177,11 +179,10 @@ export function installCodex(app: App): void {
         const name = run.names[c] || c;
         const tier = !t.known ? '모름' : t.deep ? `심층 (조우 ${t.n})` : `등재 (조우 ${t.n}/${t.need})`;
         out += `<div class="cx-row" data-char="${esc(c)}"><b style="color:${esc(run.colors[c] || '#fff')}">${esc(name)}</b><span class="cx-tier">${tier}</span>`;
-        const mine = ix.book.filter(b => b.char === c && b.key === key && b.idx <= idx);
-        const last = mine[mine.length - 1];
-        if (last) out += `<span class="cx-line">「${esc(last.text)}」<span class="t">(t${last.turn}${mine.length > 1 ? ` · 고쳐 씀 ${mine.length}번째` : ''})</span></span>`;
-        const prev = run.meta?.bestiary_progress?.[name]?.[key]?.note;
-        if (prev && prev.text && (!last || last.text !== prev.text)) out += `<span class="cx-line">「${esc(prev.text)}」<span class="cx-prev">지난 판</span></span>`;
+        const now = valueAt(lx, c, key, idx), n = writesAt(lx, c, key, idx);   // 도감 note 접기(book_line · lore_note 의 monster: — 같은 칸)
+        if (now?.text && now.src !== 'book') out += `<span class="cx-line">「${esc(now.text)}」<span class="t">(t${now.turn ?? 0}${n > 1 ? ` · 고쳐 씀 ${n}번째` : ''})</span></span>`;
+        const prev = startOf(lx, c, key);
+        if (prev?.text && (!now || now.src === 'book' || now.text !== prev.text)) out += `<span class="cx-line">「${esc(prev.text)}」<span class="cx-prev">지난 판</span></span>`;
         out += '</div>';
       }
       out += '</section>';
@@ -189,11 +190,40 @@ export function installCodex(app: App): void {
     return out;
   }
 
-  function notebookHtml(run: Run, ix: Index, idx: number): string {
+  /** 수첩·기록 탭의 캐릭터 고르기 — 고른 사람(없으면 초점) · 칩 줄. */
+  function charPick(run: Run): { sel: Char | undefined; html: string } {
     const chars = run.party.map(p => p.char);
     const sel = picked && chars.includes(picked) ? picked : (app.focus.char && chars.includes(app.focus.char) ? app.focus.char : chars[0]);
-    let out = '<div class="cx-chars">' + chars.map(c =>
-      `<button type="button" class="cx-char${c === sel ? ' on' : ''}" data-char="${esc(c)}" aria-pressed="${c === sel ? 'true' : 'false'}" style="color:${esc(run.colors[c] || '#fff')}">${esc(run.names[c] || c)}</button>`).join('') + '</div>';
+    return { sel, html: '<div class="cx-chars">' + chars.map(c =>
+      `<button type="button" class="cx-char${c === sel ? ' on' : ''}" data-char="${esc(c)}" aria-pressed="${c === sel ? 'true' : 'false'}" style="color:${esc(run.colors[c] || '#fff')}">${esc(run.names[c] || c)}</button>`).join('') + '</div>' };
+  }
+
+  /** p0.5.12 기록 탭 — 고른 캐릭터의 로어북 전부(재생 위치까지 접은 것). 다른 층의 층 기록은 표시를 붙인다. */
+  function recordsHtml(run: Run, idx: number): string {
+    const { sel, html } = charPick(run);
+    let out = html;
+    if (!sel) return out + '<p class="cx-empty">파티가 없다</p>';
+    const lx = loreIndex(run);
+    if (!lx.people) return out + '<p class="cx-note">이 판은 기록 기능이 없던 판이다 — 인물 기록 판에서 캐릭터가 직접 쓴 기록이 여기 모인다</p>';
+    const cur = run.frames[idx];
+    const rows = ledgerRows(lx, sel, idx, cur?.level.scope);
+    const who = esc(run.names[sel] || sel);
+    out += `<p class="cx-note">t${cur ? cur.turn : 0} 까지 ${who}이(가) 쓴 기록 — 고치지 않고 그대로(관전자는 모두의 기록을 본다)</p>`;
+    if (!rows.length) return out + `<p class="cx-empty">${who}이(가) 아직 쓴 기록이 없다</p>`;
+    let group = '';
+    for (const r of rows) {
+      if (r.group !== group) { group = r.group; out += `<h3 class="cx-grp">${esc(group)}</h3>`; }
+      const when = r.past ? '<span class="cx-prev">지난 판</span>' : `<span class="t">(t${r.turn})</span>`;
+      out += `<div class="cx-row cx-rec" data-key="${esc(r.key)}"><b>${esc(r.title)}</b>` +
+        (r.name ? `<span class="cx-tier">적은 이름: ${esc(r.name)}</span>` : '') + (r.elsewhere ? '<span class="cx-prev">다른 층</span>' : '') +
+        `<span class="cx-line">${r.text ? `「${esc(r.text)}」` : '(이름만 적어 두었다)'}${when}</span></div>`;
+    }
+    return out;
+  }
+
+  function notebookHtml(run: Run, ix: Index, idx: number): string {
+    const { sel, html } = charPick(run);
+    let out = html;
     if (!sel) return out + '<p class="cx-empty">파티가 없다</p>';
     const pages = ix.pages.filter(p => p.char === sel && p.idx <= idx);
     if (run.meta && run.meta.notebook === false) out += '<p class="cx-note">이 판은 수첩을 끈 판이다</p>';

@@ -13,6 +13,7 @@
   띄우기 보임(제자리 줄 아래) · 말한 사람 · 이름 들림(글자 일치만) · 소지품 — 한 관측 6줄(가까운 것부터, 결정론). 잘린 것은 스트림에만.
   상한   글 80자 · 사람 이름 20자 · 한 몸 100개(넘치면 층 기록부터, 그다음 가장 오래전에 고쳐 쓴 것부터 바랜다).
   관전   run_meta.lore(시작 원장) · tick.lore_ops(set·fade·sweep·merge) · decisions.lore_note·lore_drop·lore_shown·lore_cut · level.scope · 피처 space·uid.
+         p0.5.12 관전 클릭 보기의 접기 기준 = fold_stream(게임 화면 game/src/inspect/model.ts 와 같은 규칙 — verify_viewer_click 이 맞대 본다).
 
 정보 보호: 띄우는 재료는 보는 사람 자신의 관측(obs.people · obs.lore)뿐이다 — 남의 장부를 읽는 길이 없다. 종류 열쇠는 **내가 본 이름**이라
 같은 몹을 남은 '고블린'으로, 나는 '낯선 짐승'으로 보아도 서로의 지식이 새지 않는다.
@@ -343,6 +344,68 @@ def dump(bot):
     """관전용 원장 전부(run_meta.lore · resume.lore) — 사람 + 로어북 장부, 안쪽 열쇠 그대로. 도감 note 는 run_meta.bestiary_progress 가 맡는다."""
     both = {**(bot.get("people") or {}), **(bot.get("lore") or {})}
     return {k: _entry_copy(e) for k, e in sorted(both.items()) if isinstance(e, dict)}
+
+
+def ledger_key(p):
+    """run_meta.party 항목 → 도감 원장 열쇠(id → 이름 → '봇N' — 발급기의 오프라인 유도·러너와 같은 규칙)."""
+    return p.get("id") or p.get("name") or "봇%s" % p.get("char")
+
+
+def fold_stream(rows):
+    """관전 접기의 파이썬 기준(p0.5.12 관전 클릭 보기 — verify_viewer_click 이 엔진 장부와 TS 모형 game/src/inspect/model.ts 에 맞대 본다).
+    rows = 본 스트림 줄(dict) 차례 → 프레임(level·tick 줄 — 관전 StreamParser 와 같은 단위)마다 {kind, turn, lore: {char: {열쇠: 항목}}, known: {char: set}}.
+    장부 = 사람·로어북(run_meta.lore 에서 시작, resume.lore 가 통째로 갈아 끼운다 — 도감 note 는 그대로) + 도감 note(monster: — 시작 진행도의 note ·
+    decisions.book_line · lore_ops set). 한 프레임 안의 순서: 앞의 resume → book_line → lore_ops(fade·sweep·merge = 지움) — end·stopped 줄의 lore_ops 는 마지막 프레임에.
+    엔진(발급기 _settle)이 접지 않는 결정 — 미실행(skipped)·작정 — 의 도감 note 는 lore_ops 에 실려도 접지 않는다. 종 앎 = run_meta.bestiary + known_ops."""
+    lore, known, frames, resume = {}, {}, [], None
+
+    def ops(m):
+        for c, os_ in (m or {}).items():
+            book = lore.setdefault(c, {})
+            for o in os_:
+                if o.get("op") == "set":
+                    book[o["key"]] = dict(o.get("entry") or {})
+                else:
+                    book.pop(o.get("key"), None)
+
+    def snap(kind, turn):
+        frames.append({"kind": kind, "turn": turn, "lore": {c: {k: dict(e) for k, e in b.items()} for c, b in lore.items()},
+                       "known": {c: set(s) for c, s in known.items()}})
+    for r in rows:
+        k = r.get("kind")
+        if k == "run_meta":
+            for p in r.get("party") or []:
+                c, lk = p["char"], ledger_key(p)
+                lore[c] = {key: dict(e) for key, e in ((r.get("lore") or {}).get(c) or {}).items()}
+                for key, e in ((r.get("bestiary_progress") or {}).get(lk) or {}).items():
+                    if key.startswith("monster:") and (e.get("note") or {}).get("text"):
+                        lore[c][key] = {"text": e["note"]["text"], "turn": 0, "src": "book"}
+                known[c] = set((r.get("bestiary") or {}).get(lk) or [])
+        elif k == "resume":
+            resume = r
+        elif k in ("level", "tick"):
+            if resume is not None:
+                for c, b in (resume.get("lore") or {}).items():
+                    keep = {key: e for key, e in lore.get(c, {}).items() if key.startswith("monster:")}
+                    lore[c] = {**{key: dict(e) for key, e in b.items()}, **keep}
+                resume = None
+            if k == "tick":
+                decs = r.get("decisions") or {}
+                for c, dd in sorted(decs.items()):
+                    bl = dd.get("book_line")
+                    if isinstance(bl, dict) and str(bl.get("text") or "").strip() and not dd.get("skipped") and dd.get("src") != "plan":
+                        lore.setdefault(c, {})[bl["key"]] = {"text": str(bl["text"]).strip()[:TEXT_LEN], "turn": r["turn"], "src": "self"}
+                for c, os_ in (r.get("lore_ops") or {}).items():
+                    dd = decs.get(c) or {}
+                    skip = (dd.get("skipped") or dd.get("src") == "plan") and (dd.get("lore_note") or {}).get("key")
+                    ops({c: [o for o in os_ if not (o.get("op") == "set" and str(o.get("key")).startswith("monster:") and o.get("key") == skip)]})
+                for c, ks in (r.get("known_ops") or {}).items():
+                    known.setdefault(c, set()).update(ks)
+            snap(k, r.get("turn"))
+        elif k in ("end", "stopped") and r.get("lore_ops") and frames:
+            ops(r["lore_ops"])
+            frames[-1]["lore"] = {c: {key: dict(e) for key, e in b.items()} for c, b in lore.items()}
+    return frames
 
 
 def used_ids(dungeons, bodies):

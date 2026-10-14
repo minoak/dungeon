@@ -6,8 +6,8 @@
 //  + 시야(관전 근사 LOS)·캐릭터별 본 칸 누적을 프레임에 파생한다.
 // 라이브용 증분: feed(전체 텍스트)를 다시 불러도 앞부분이 그대로면 붙은 라인만 파싱한다(level 객체 안정).
 import type {
-  Bot, Char, DescendLine, Dir, EndLine, ExpeditionLine, ReviveLine, Feature, Frame, LevelLine, LevelState, Monster, PartyMember,
-  RunMeta, Run, StreamLine, TickLine, Trap,
+  Bot, Char, DescendLine, Dir, EndLine, ExpeditionLine, ReviveLine, Feature, Frame, LevelLine, LevelState, LoreOps, Monster, PartyMember,
+  ResumeLine, RunMeta, Run, StreamLine, TickLine, Trap,
 } from './types';
 import { allCells, cellKey, lineOfSight, EMPTY_SET } from '../world/Sight';
 
@@ -29,10 +29,11 @@ export class StreamParser {
   private scratch: LevelScratch | null = null;
   private face: Record<Char, Dir> = {};
   private prev: Record<Char, [number, number]> = {};
+  private resumeLine: ResumeLine | null = null;  // p0.5.12 이어가기 줄 — 다음 프레임에 붙인다(그 자리에서 원장을 갈아 끼운다)
 
   reset(): void {
     this.run = emptyRun(); this.consumed = 0; this.consumedText = '';
-    this.cur = null; this.scratch = null; this.face = {}; this.prev = {};
+    this.cur = null; this.scratch = null; this.face = {}; this.prev = {}; this.resumeLine = null;
   }
 
   /** 전체 텍스트를 넣는다. 앞부분이 바뀌었으면(다른 판) 처음부터 다시. */
@@ -74,9 +75,17 @@ export class StreamParser {
         if (last) last.revive = o as unknown as ReviveLine;
         break;
       }
-      case 'end': this.run.end = o as EndLine; break;
+      case 'end': this.run.end = o as EndLine; this.tail((o as EndLine).lore_ops as LoreOps | undefined); break;
+      case 'stopped': this.tail((o as EndLine).lore_ops as LoreOps | undefined); break;   // p0.5.12 멈춤 — 프레임이 아니다, 남은 원장 변화만 직전 틱에(EndLine 은 꼴만 빌린다)
+      case 'resume': this.resumeLine = o as ResumeLine; break;                // p0.5.12 이어가기 — 다음 프레임에 붙인다
       default: break;                            // 모르는 kind: 조용히 무시(additive)
     }
+  }
+
+  /** p0.5.11 다음 틱이 없는 자리(end·stopped)의 남은 원장 변화 — 전이처럼 직전 틱에 붙인다(관전 접기가 그 프레임 끝에 적용). */
+  private tail(ops: LoreOps | undefined): void {
+    const last = this.run.frames[this.run.frames.length - 1];
+    if (last && ops && Object.keys(ops).length) (last.lore_tail ??= []).push(ops);
   }
 
   private meta(m: RunMeta): void {
@@ -153,8 +162,11 @@ export class StreamParser {
       hails: t.hails, answers: t.answers, replies: t.replies, oracle: t.oracle, npc_hails: t.npc_hails,   // D71 NPC 가 먼저 건 인사   // D61 개정(09-13) 이 틱에 새로 들린 신의 요청
       npc_replies: t.npc_replies, overheard: t.overheard,   // D93 NPC 가 되받은 말 · D90 들린 말(09-20 — 켠 판에만 실린다)
       social_events: t.social_events, reactions: t.reactions, reaction_stats: t.reaction_stats,
+      lore_ops: t.lore_ops, known_ops: t.known_ops,         // p0.5.11 원장 변화 · p0.5.12 종 앎(인물 기록 판에만 — 관전 클릭 창이 접는다)
+      ...(this.resumeLine ? { resume: this.resumeLine } : {}),
       facing, moved, vis, seen, visited: ls.visitedList.length,
     };
+    this.resumeLine = null;
     r.frames.push(f);
   }
 }

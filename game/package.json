@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "preview:static": "vite preview --mode static",
     "smoke": "node verify/smoke.mjs",
+    "inspect": "node verify/inspect.mjs",
     "check:props": "node verify/props.mjs",
     "check:renderer": "node verify/renderer.mjs",
     "smoke:static": "node -e \"process.env.WL_STATIC = '1'; import('./verify/smoke.mjs')\"",

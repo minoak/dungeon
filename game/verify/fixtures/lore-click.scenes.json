@@ -1,0 +1,892 @@
+{
+ "v": 1,
+ "made_by": "game/verify/lore_click_fixture.py",
+ "party": [
+  "1",
+  "2",
+  "3"
+ ],
+ "names": {
+  "1": "두란",
+  "2": "카야",
+  "3": "피른"
+ },
+ "frames": 172,
+ "levels": [
+  {
+   "frame": 0,
+   "turn": 0,
+   "depth": 0,
+   "scope": 1,
+   "town": true,
+   "art": true,
+   "architecture": false
+  },
+  {
+   "frame": 77,
+   "turn": 76,
+   "depth": 1,
+   "scope": 2,
+   "town": false,
+   "art": false,
+   "architecture": false
+  }
+ ],
+ "notes": [
+  {
+   "turn": 1,
+   "frame": 1,
+   "char": "1",
+   "at": "f1",
+   "target": "f1",
+   "key": "npc:성직자",
+   "of": "one",
+   "name": null,
+   "text": "1의 기록 f1 t1"
+  },
+  {
+   "turn": 1,
+   "frame": 1,
+   "char": "2",
+   "at": "f4",
+   "target": "f4",
+   "key": "place:temple_1",
+   "of": "one",
+   "name": null,
+   "text": "2의 기록 f4 t1"
+  },
+  {
+   "turn": 1,
+   "frame": 1,
+   "char": "3",
+   "at": "zone",
+   "target": "region:신전 지구",
+   "key": "zone:신전 지구",
+   "of": "one",
+   "name": null,
+   "text": "3의 기록 zone t1"
+  },
+  {
+   "turn": 64,
+   "frame": 64,
+   "char": "1",
+   "at": "zone",
+   "target": "region:던전 입구 지구",
+   "key": "zone:던전 입구 지구",
+   "of": "one",
+   "name": null,
+   "text": "1의 기록 zone t64"
+  },
+  {
+   "turn": 71,
+   "frame": 71,
+   "char": "1",
+   "at": "exit",
+   "target": "exit",
+   "key": "obj:1:exit",
+   "of": "one",
+   "name": null,
+   "text": "1의 기록 exit t71"
+  },
+  {
+   "turn": 76,
+   "frame": 76,
+   "char": "2",
+   "at": "f1",
+   "target": "f1",
+   "key": "npc:성직자",
+   "of": "one",
+   "name": null,
+   "text": "2의 기록 f1 t76"
+  },
+  {
+   "turn": 77,
+   "frame": 78,
+   "char": "1",
+   "at": "t3",
+   "target": "t3",
+   "key": "obj:2:t3",
+   "of": "one",
+   "name": null,
+   "text": "1의 기록 t3 t77"
+  },
+  {
+   "turn": 77,
+   "frame": 78,
+   "char": "3",
+   "at": "t3",
+   "target": "t3",
+   "key": "obj:2:t3",
+   "of": "one",
+   "name": null,
+   "text": "3의 기록 t3 t77"
+  },
+  {
+   "turn": 82,
+   "frame": 83,
+   "char": "2",
+   "at": "t3",
+   "target": "t3",
+   "key": "obj:2:t3",
+   "of": "one",
+   "name": null,
+   "text": "2의 기록 t3 t82"
+  },
+  {
+   "turn": 83,
+   "frame": 84,
+   "char": "3",
+   "at": "t3",
+   "target": "t3",
+   "key": "kind:가시 함정",
+   "of": "kind",
+   "name": null,
+   "text": "3의 종류 기록 가시 함정 t83"
+  },
+  {
+   "turn": 85,
+   "frame": 86,
+   "char": "1",
+   "at": "t3",
+   "target": "t3",
+   "key": "kind:가시 함정",
+   "of": "kind",
+   "name": null,
+   "text": "1의 종류 기록 가시 함정 t85"
+  },
+  {
+   "turn": 88,
+   "frame": 89,
+   "char": "3",
+   "at": "f8",
+   "target": "f8",
+   "key": "gear:1",
+   "of": "one",
+   "name": null,
+   "text": "3의 기록 f8 t88"
+  },
+  {
+   "turn": 92,
+   "frame": 93,
+   "char": "1",
+   "at": "f10",
+   "target": "f10",
+   "key": "gear:2",
+   "of": "one",
+   "name": null,
+   "text": "1의 기록 f10 t92"
+  },
+  {
+   "turn": 93,
+   "frame": 94,
+   "char": "3",
+   "at": "f8",
+   "target": "f8",
+   "key": "kind:단검",
+   "of": "kind",
+   "name": null,
+   "text": "3의 종류 기록 단검 t93"
+  },
+  {
+   "turn": 94,
+   "frame": 95,
+   "char": "2",
+   "at": "t1",
+   "target": "t1",
+   "key": "kind:경보 함정",
+   "of": "kind",
+   "name": null,
+   "text": "2의 종류 기록 경보 함정 t94"
+  },
+  {
+   "turn": 96,
+   "frame": 97,
+   "char": "1",
+   "at": "f10",
+   "target": "f10",
+   "key": "kind:장검",
+   "of": "kind",
+   "name": null,
+   "text": "1의 종류 기록 장검 t96"
+  },
+  {
+   "turn": 98,
+   "frame": 99,
+   "char": "3",
+   "at": "d3",
+   "target": "d3",
+   "key": "obj:2:d3",
+   "of": "one",
+   "name": null,
+   "text": "3의 기록 d3 t98"
+  },
+  {
+   "turn": 103,
+   "frame": 104,
+   "char": "2",
+   "at": "d5",
+   "target": "d5",
+   "key": "obj:2:d5",
+   "of": "one",
+   "name": null,
+   "text": "2의 기록 d5 t103"
+  },
+  {
+   "turn": 105,
+   "frame": 106,
+   "char": "1",
+   "at": "d1",
+   "target": "d1",
+   "key": "obj:2:d1",
+   "of": "one",
+   "name": null,
+   "text": "1의 기록 d1 t105"
+  },
+  {
+   "turn": 106,
+   "frame": 107,
+   "char": "3",
+   "at": "d4",
+   "target": "d4",
+   "key": "kind:문",
+   "of": "kind",
+   "name": null,
+   "text": "3의 종류 기록 문 t106"
+  },
+  {
+   "turn": 111,
+   "frame": 112,
+   "char": "1",
+   "at": "d1",
+   "target": "d1",
+   "key": "kind:문",
+   "of": "kind",
+   "name": null,
+   "text": "1의 종류 기록 문 t111"
+  },
+  {
+   "turn": 114,
+   "frame": 115,
+   "char": "3",
+   "at": "b1",
+   "target": "b1",
+   "key": "b1",
+   "of": "one",
+   "name": "별명1",
+   "text": "3가 본 b1 t114"
+  },
+  {
+   "turn": 115,
+   "frame": 116,
+   "char": "2",
+   "at": "d5",
+   "target": "d5",
+   "key": "kind:문",
+   "of": "kind",
+   "name": null,
+   "text": "2의 종류 기록 문 t115"
+  },
+  {
+   "turn": 118,
+   "frame": 119,
+   "char": "1",
+   "at": "c0",
+   "target": "zone:c0",
+   "key": "obj:2:c0",
+   "of": "one",
+   "name": null,
+   "text": "1의 기록 c0 t118"
+  },
+  {
+   "turn": 124,
+   "frame": 125,
+   "char": "3",
+   "at": "d1",
+   "target": "d1",
+   "key": "obj:2:d1",
+   "of": "one",
+   "name": null,
+   "text": "3의 기록 d1 t124"
+  },
+  {
+   "turn": 127,
+   "frame": 128,
+   "char": "2",
+   "at": "f3",
+   "target": "f3",
+   "key": "obj:2:f3",
+   "of": "one",
+   "name": null,
+   "text": "2의 기록 f3 t127"
+  },
+  {
+   "turn": 129,
+   "frame": 130,
+   "char": "1",
+   "at": "b3",
+   "target": "b3",
+   "key": "b3",
+   "of": "one",
+   "name": "별명3",
+   "text": "1가 본 b3 t129"
+  },
+  {
+   "turn": 132,
+   "frame": 133,
+   "char": "3",
+   "at": "c0",
+   "target": "zone:c0",
+   "key": "obj:2:c0",
+   "of": "one",
+   "name": null,
+   "text": "3의 기록 c0 t132"
+  },
+  {
+   "turn": 137,
+   "frame": 138,
+   "char": "1",
+   "at": "m0",
+   "target": "m0",
+   "key": "monster:고블린",
+   "of": "kind",
+   "name": null,
+   "text": "도감으로 합류할 기록"
+  },
+  {
+   "turn": 137,
+   "frame": 138,
+   "char": "2",
+   "at": "f3",
+   "target": "f3",
+   "key": "kind:보물",
+   "of": "kind",
+   "name": null,
+   "text": "2의 종류 기록 보물 t137"
+  },
+  {
+   "turn": 143,
+   "frame": 144,
+   "char": "1",
+   "at": "m0",
+   "target": "m0",
+   "key": "obj:2:m0",
+   "of": "one",
+   "name": null,
+   "text": "1의 기록 m0 t143"
+  },
+  {
+   "turn": 144,
+   "frame": 145,
+   "char": "3",
+   "at": "m0",
+   "target": "m0",
+   "key": "obj:2:m0",
+   "of": "one",
+   "name": null,
+   "text": "3의 기록 m0 t144"
+  },
+  {
+   "turn": 146,
+   "frame": 147,
+   "char": "2",
+   "at": "r4",
+   "target": "zone:r4",
+   "key": "obj:2:r4",
+   "of": "one",
+   "name": null,
+   "text": "2의 기록 r4 t146"
+  },
+  {
+   "turn": 147,
+   "frame": 148,
+   "char": "3",
+   "at": "m0",
+   "target": "m0",
+   "key": "monster:고블린",
+   "of": "kind",
+   "name": null,
+   "text": "3의 종류 기록 고블린 t147"
+  },
+  {
+   "turn": 149,
+   "frame": 150,
+   "char": "3",
+   "at": "d0",
+   "target": "d0",
+   "key": "obj:2:d0",
+   "of": "one",
+   "name": null,
+   "text": "3의 기록 d0 t149"
+  },
+  {
+   "turn": 151,
+   "frame": 152,
+   "char": "3",
+   "at": "b1",
+   "target": "b1",
+   "key": "b1",
+   "of": "one",
+   "name": "별명1",
+   "text": "3가 본 b1 t151"
+  },
+  {
+   "turn": 156,
+   "frame": 157,
+   "char": "2",
+   "at": "d9",
+   "target": "d9",
+   "key": "kind:문",
+   "of": "kind",
+   "name": null,
+   "text": "2의 종류 기록 문 t156"
+  },
+  {
+   "turn": 160,
+   "frame": 161,
+   "char": "3",
+   "at": "d0",
+   "target": "d0",
+   "key": "kind:문",
+   "of": "kind",
+   "name": null,
+   "text": "3의 종류 기록 문 t160"
+  },
+  {
+   "turn": 164,
+   "frame": 165,
+   "char": "2",
+   "at": "exit",
+   "target": "exit",
+   "key": "obj:2:exit",
+   "of": "one",
+   "name": null,
+   "text": "2의 기록 exit t164"
+  },
+  {
+   "turn": 165,
+   "frame": 166,
+   "char": "1",
+   "at": "f11",
+   "target": "f11",
+   "key": "obj:2:f11",
+   "of": "one",
+   "name": null,
+   "text": "1의 기록 f11 t165"
+  },
+  {
+   "turn": 168,
+   "frame": 169,
+   "char": "3",
+   "at": "exit",
+   "target": "exit",
+   "key": "obj:2:exit",
+   "of": "one",
+   "name": null,
+   "text": "3의 기록 exit t168"
+  },
+  {
+   "turn": 169,
+   "frame": 170,
+   "char": "2",
+   "at": "m1",
+   "target": "m1",
+   "key": "obj:2:m1",
+   "of": "one",
+   "name": null,
+   "text": "2의 기록 m1 t169"
+  }
+ ],
+ "rewind_none": [
+  {
+   "frame": 1,
+   "before": 0,
+   "viewer": "1",
+   "target": "f1",
+   "key": "npc:성직자",
+   "text": "1의 기록 f1 t1"
+  },
+  {
+   "frame": 1,
+   "before": 0,
+   "viewer": "3",
+   "target": "region:신전 지구",
+   "key": "zone:신전 지구",
+   "text": "3의 기록 zone t1"
+  },
+  {
+   "frame": 64,
+   "before": 63,
+   "viewer": "1",
+   "target": "region:던전 입구 지구",
+   "key": "zone:던전 입구 지구",
+   "text": "1의 기록 zone t64"
+  },
+  {
+   "frame": 76,
+   "before": 75,
+   "viewer": "2",
+   "target": "f1",
+   "key": "npc:성직자",
+   "text": "2의 기록 f1 t76"
+  },
+  {
+   "frame": 119,
+   "before": 118,
+   "viewer": "1",
+   "target": "zone:c0",
+   "key": "obj:2:c0",
+   "text": "1의 기록 c0 t118"
+  },
+  {
+   "frame": 133,
+   "before": 132,
+   "viewer": "3",
+   "target": "zone:c0",
+   "key": "obj:2:c0",
+   "text": "3의 기록 c0 t132"
+  },
+  {
+   "frame": 147,
+   "before": 146,
+   "viewer": "2",
+   "target": "zone:r4",
+   "key": "obj:2:r4",
+   "text": "2의 기록 r4 t146"
+  }
+ ],
+ "rewind_edit": [
+  {
+   "frame": 115,
+   "before": 114,
+   "viewer": "3",
+   "target": "b1",
+   "key": "b1",
+   "prev": {
+    "name": "두란",
+    "text": "두란의 직진은 늘 아슬아슬하지만, 그가 앞을 막아주는 동안 내 화살이 날아갈 자리가 생긴다."
+   },
+   "now": {
+    "name": "별명1",
+    "text": "3가 본 b1 t114"
+   }
+  },
+  {
+   "frame": 130,
+   "before": 129,
+   "viewer": "1",
+   "target": "b3",
+   "key": "b3",
+   "prev": {
+    "name": "피른",
+    "text": "피른의 수다는 귀찮다. 그래도 저 애 눈이 나보다 멀리 본다는 건 인정한다 — 절대 입 밖에 안 낼 뿐."
+   },
+   "now": {
+    "name": "별명3",
+    "text": "1가 본 b3 t129"
+   }
+  },
+  {
+   "frame": 152,
+   "before": 151,
+   "viewer": "3",
+   "target": "b1",
+   "key": "b1",
+   "prev": {
+    "name": "별명1",
+    "text": "3가 본 b1 t114"
+   },
+   "now": {
+    "name": "별명1",
+    "text": "3가 본 b1 t151"
+   }
+  }
+ ],
+ "calls": [
+  {
+   "frame": 115,
+   "turn": 114,
+   "target": "b1",
+   "writer": "3",
+   "real": "두란",
+   "by": {
+    "1": {
+     "call": "너",
+     "recs": "self"
+    },
+    "2": {
+     "call": "두란",
+     "recs": {
+      "b1": "두란의 무모함에 늘 한숨이 나지만, 등을 맡길 수 있는 유일한 벽이라는 걸 안다."
+     }
+    },
+    "3": {
+     "call": "별명1",
+     "recs": {
+      "b1": "3가 본 b1 t114"
+     }
+    }
+   }
+  },
+  {
+   "frame": 130,
+   "turn": 129,
+   "target": "b3",
+   "writer": "1",
+   "real": "피른",
+   "by": {
+    "1": {
+     "call": "별명3",
+     "recs": {
+      "b3": "1가 본 b3 t129"
+     }
+    },
+    "2": {
+     "call": "피른",
+     "recs": {
+      "b3": "피른이 묻는 '왜?'가 성가시면서도, 그 질문 덕에 두 번 생각하게 된다. 나쁘지 않은 버릇이다."
+     }
+    },
+    "3": {
+     "call": "너",
+     "recs": "self"
+    }
+   }
+  },
+  {
+   "frame": 152,
+   "turn": 151,
+   "target": "b1",
+   "writer": "3",
+   "real": "두란",
+   "by": {
+    "1": {
+     "call": "너",
+     "recs": "self"
+    },
+    "2": {
+     "call": "두란",
+     "recs": {
+      "b1": "두란의 무모함에 늘 한숨이 나지만, 등을 맡길 수 있는 유일한 벽이라는 걸 안다."
+     }
+    },
+    "3": {
+     "call": "별명1",
+     "recs": {
+      "b1": "3가 본 b1 t151"
+     }
+    }
+   }
+  }
+ ],
+ "mob_split": null,
+ "sweep": {
+  "frame": 4,
+  "after": 5,
+  "turn": 4,
+  "key": "obj:999:m1",
+  "gone_from": [
+   "1",
+   "2",
+   "3"
+  ],
+  "kept": {
+   "1": [
+    "b2",
+    "b3",
+    "npc:성직자"
+   ],
+   "2": [
+    "b1",
+    "b3",
+    "place:temple_1"
+   ],
+   "3": [
+    "b1",
+    "b2",
+    "zone:신전 지구"
+   ]
+  }
+ },
+ "ledgers": [
+  {
+   "frame": 4,
+   "turn": 4,
+   "by": {
+    "1": [
+     "b2",
+     "b3",
+     "npc:성직자",
+     "obj:999:m1"
+    ],
+    "2": [
+     "b1",
+     "b3",
+     "obj:999:m1",
+     "place:temple_1"
+    ],
+    "3": [
+     "b1",
+     "b2",
+     "obj:999:m1",
+     "zone:신전 지구"
+    ]
+   }
+  },
+  {
+   "frame": 5,
+   "turn": 5,
+   "by": {
+    "1": [
+     "b2",
+     "b3",
+     "npc:성직자"
+    ],
+    "2": [
+     "b1",
+     "b3",
+     "place:temple_1"
+    ],
+    "3": [
+     "b1",
+     "b2",
+     "zone:신전 지구"
+    ]
+   }
+  },
+  {
+   "frame": 115,
+   "turn": 114,
+   "by": {
+    "1": [
+     "b2",
+     "b3",
+     "gear:2",
+     "kind:가시 함정",
+     "kind:문",
+     "kind:장검",
+     "npc:성직자",
+     "obj:2:d1",
+     "obj:2:t3",
+     "zone:던전 입구 지구"
+    ],
+    "2": [
+     "b1",
+     "b3",
+     "kind:경보 함정",
+     "npc:성직자",
+     "obj:2:d5",
+     "obj:2:t3",
+     "place:temple_1"
+    ],
+    "3": [
+     "b1",
+     "b2",
+     "gear:1",
+     "kind:가시 함정",
+     "kind:단검",
+     "kind:문",
+     "obj:2:d3",
+     "obj:2:t3",
+     "zone:신전 지구"
+    ]
+   }
+  },
+  {
+   "frame": 171,
+   "turn": 170,
+   "by": {
+    "1": [
+     "b2",
+     "b3",
+     "gear:2",
+     "kind:가시 함정",
+     "kind:문",
+     "kind:장검",
+     "monster:고블린",
+     "npc:성직자",
+     "obj:2:f11",
+     "obj:2:m0",
+     "zone:던전 입구 지구"
+    ],
+    "2": [
+     "b1",
+     "b3",
+     "kind:경보 함정",
+     "kind:문",
+     "kind:보물",
+     "npc:성직자",
+     "obj:2:exit",
+     "obj:2:m1",
+     "obj:2:r4",
+     "place:temple_1"
+    ],
+    "3": [
+     "b1",
+     "b2",
+     "gear:1",
+     "kind:가시 함정",
+     "kind:단검",
+     "kind:문",
+     "monster:고블린",
+     "obj:2:d0",
+     "obj:2:exit",
+     "obj:2:m0",
+     "zone:신전 지구"
+    ]
+   }
+  }
+ ],
+ "overlap": [
+  {
+   "frame": 88,
+   "turn": 87,
+   "focus": "3",
+   "x": 27,
+   "y": 6,
+   "want": [
+    "b3",
+    "f11",
+    "zone:r2"
+   ],
+   "sig": "f",
+   "groups": 3
+  },
+  {
+   "frame": 157,
+   "turn": 156,
+   "focus": "3",
+   "x": 10,
+   "y": 4,
+   "want": [
+    "b3",
+    "m0",
+    "zone:r1"
+   ],
+   "sig": "m",
+   "groups": 3
+  },
+  {
+   "frame": 85,
+   "turn": 84,
+   "focus": "1",
+   "x": 26,
+   "y": 7,
+   "want": [
+    "b1",
+    "d4"
+   ],
+   "sig": "d",
+   "groups": 2
+  }
+ ],
+ "live": {
+  "cut": 147,
+  "grow": 148,
+  "focus": "1",
+  "turn_cut": 141,
+  "turn_grow": 142,
+  "hp_cut": "14/14",
+  "hp_grow": "12/14",
+  "after_stop": true
+ }
+}

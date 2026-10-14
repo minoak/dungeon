@@ -146,6 +146,25 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 - 저장 판 4 → 5: 몸에 `lore{}` · 사람 기록 이름·글 자르기 · 던전마다 `scope` · 마을엔 건물 피처 → 공간 id(layout 문턱 칸으로 다시 잇는다) ·
   스냅샷 최상위 `lore_ids{scope, uid}`(이어가는 러너는 실제로 쓰인 가장 큰 번호 + 1 과 견줘 큰 쪽).
 
+## 관전 클릭 보기 — 2026-10-14 p0.5.12 additive (인물 기록 판에만 — `run_meta.strangers`)
+
+게임 화면(game/src)의 클릭 창 재료(설계 `.orch/drafts/viewer_click_design.md` v1). 관전 클라이언트는 시작 원장 + 아래 칸을 접어 아무 프레임의 '그 사람이 그때 아는 것'을 만든다
+(TS `game/src/inspect/model.ts` · 파이썬 기준 `lorebook.fold_stream` — 같은 규칙, `verify_viewer_click` 이 맞대 본다). 끈 판(인물 기록 꺼짐)에는 이 절의 칸이 하나도 없다. 관측·프롬프트에는 안 나간다.
+
+- `tick.known_ops {char: [종 열쇠…]}`(는 틱에만): 몸의 지식 집합(`bot['known']` — 관측이 '낯선 짐승'과 종 이름을 가르는 그 집합, `monster:`·`trap:`·`feature:` 열쇠)에 지난 본 스트림 틱 뒤로
+  새로 든 것. 판의 모든 사람 몫(좇지 않는 세계의 획득도 — 그 획득은 본 스트림 틱 내용으로는 소급되지 않는다). 새 판은 `run_meta.bestiary` 가 시작 집합이고,
+  이어간 판의 첫 본 스트림 틱은 그 순간의 집합 전부를 다시 싣는다(앞 조각 끝의 획득이 잘린 꼬리에 있을 수 있다 — 합집합이라 접기는 그대로).
+- `run_meta.item_info {"<type>:<이름>": {desc, rule}}`: 아이템 정의 전부의 물건 설명(`entities.item_desc` — 축복의 `{stat}` 은 지닌 사람이 없을 때의 중립 채움 '공격에 쓰는 능력치')과
+  다루는 규칙(`item_rule`). 피처·몸은 type 과 이름만 들므로 고르기는 `entities.item_def` 와 같다(그 이름 → 그 type 의 정의가 하나면 그것). 판 시작에 한 번 — 정의가 뒤에 바뀌어도 그 판이 알던 설명.
+- `run_meta.party[].looks`: 겉모습 한 줄의 그림 부분(`sheetkit.looks_line` 에서 무기·갑옷을 뺀 것). 관전은 틱의 `bots[].weapon/armor` 이름을 ' · ' 로 이어 관측의 겉모습 줄과 같은 글을 만든다.
+- 묘 피처 `of: char`(`level.features[]`·`tick.features[]` — 묘에만): 묘의 주인. 보는 사람의 묘 이름('<호칭>의 묘' · 모르면 '누군가의 묘' · 내 묘는 내 이름)을 엔진과 같은 규칙으로 부르는 재료.
+- `level.zones {ids, rows, town?}` · `level.doors [[x, y, "d<n>"]]`: 칸 → 그 칸에 선 몸의 관측 장소 번호. `rows[y] = [x, 길이, ids 의 자리, …]`(같은 값이 이어지는 구간, 벽 칸은 없음) —
+  값 = `obs.zone.id`(스캐너 판 = 구역 `r`·`c`, 문 칸은 없음 · 스캐너 없는 판 = 생성기 방 `r<id>` — 마을은 `r0` 하나). 마을은 `town` 에 같은 꼴로 `obs.town_zone`(구역 이름).
+  `doors` = 격자에 실재하는 문 칸(`+`)과 그 번호(스캐너 판만 — 트임은 칸이 없어 없다). 층 기록 열쇠 `obj:<scope>:<번호>`·`zone:<구역 이름>` 을 화면의 칸에 잇는다.
+- 접기 규칙(관전): 프레임 = `level`·`tick` 줄. 한 프레임 안의 순서 = 앞의 `resume`(그 순간의 모든 몸 원장으로 갈아 끼운다 — 도감 note 는 발급기 몫이라 그대로) → `decisions[].book_line` →
+  `lore_ops`(`set` = 항목 통째, `fade`·`sweep`·`merge` = 지움) → 뒤의 `end`·`stopped` 줄 `lore_ops`(그 틱 끝의 남은 변화). 미실행(`skipped`)·작정 결정의 도감 note(`monster:` set)는 발급기가 접지 않으므로
+  관전도 접지 않는다. 몬스터 종류 칸은 그 종의 도감 note(`monster:<종>`)가 있으면 그것, 없으면 `kind:<종>`(합류 전) — 모르는 종은 `kind:낯선 짐승`. 시작 진행도의 note 는 '지난 판'.
+
 ## 마을의 시야 = 지금 선 구역 — 2026-09-19 D86 additive (러너 스위치 `DUNGEON_TOWN_SIGHT=zone`, 기본 all · layout 마을만)
 
 끈 판(기본)은 옛 그대로다(마을 전체가 보이고 핑 한 번에 어디든 — 스트림은 옛 판과 바이트까지 같다).

@@ -405,15 +405,23 @@ try {
 
   /* ═══════════════ 관전 UI — 표시 필터가 기록을 지우지 않고, 배치 변경이 카메라를 깨지 않는다 ═══════════════ */
   await seekTurn(179);
-  await check('UI 이야기/모든 기록 전환 · 원문 보존', async () => {
-    const before = await page.locator('#log').textContent();
-    assert.equal(await page.locator('#log').getAttribute('data-view'), 'story');
-    assert.equal(await page.locator('#log .rsn').last().isVisible(), false);
+  // 기록 탭은 10-04(252ef67)부터 대화·사건·전체(처음 값 talk). 속내(.rsn)는 대화·전체에 보이고 사건에서 숨는다.
+  // '이 사람만'(data-who=focus)이 다른 사람 줄을 숨기니 초점 캐릭터의 줄(.rsn.focus)로 본다.
+  await check('UI 기록 탭(대화·사건·전체) 전환 · 원문 보존', async () => {
+    const log = page.locator('#log'), rsn = page.locator('#log .rsn.focus').last();
+    const before = await log.textContent();
+    assert.equal(await log.getAttribute('data-view'), 'talk', '처음 탭');
+    assert(await page.locator('#log .rsn.focus').count() >= 1, '초점 캐릭터의 속내 줄(.rsn.focus)이 없다');
+    assert.equal(await rsn.isVisible(), true, '대화 탭에 속내가 안 보인다');
+    await page.locator('[data-log-view="event"]').click();
+    assert.equal(await log.getAttribute('data-view'), 'event');
+    assert.equal(await rsn.isVisible(), false, '사건 탭에 속내가 보인다');
     await page.locator('[data-log-view="all"]').click();
-    assert.equal(await page.locator('#log .rsn').last().isVisible(), true);
-    assert.equal(await page.locator('#log').textContent(), before);
-    await page.locator('[data-log-view="story"]').click();
-    assert.equal(await page.locator('#log').textContent(), before);
+    assert.equal(await rsn.isVisible(), true, '전체 탭에 속내가 안 보인다');
+    assert.equal(await log.textContent(), before, '전체 탭에서 원문이 달라졌다');
+    await page.locator('[data-log-view="talk"]').click();
+    assert.equal(await log.getAttribute('data-view'), 'talk');
+    assert.equal(await log.textContent(), before, '대화 탭으로 돌아온 뒤 원문이 달라졌다');
   });
   await check('UI 캐릭터 설정·관계 횟수 펼침 · 키보드 초점 선택', async () => {
     assert.equal(await page.locator('.fc-profile').getAttribute('open'), null);

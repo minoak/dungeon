@@ -1,8 +1,10 @@
 // 무대 — 타일맵·피처·함정·몹 + SD 캐릭터, 초점 캐릭터를 부드럽게 따라가는 카메라, 틱 사이 이동 트윈·걷기 애니.
 // 정보 등급: 스트림은 관전자 진실이지만 화면은 캐릭터 편에 선다(계획 §3) — 숨은 함정·매복 몹은 드러나기 전엔
 // 안 그리고, 몹·피처는 초점 캐릭터의 시야 안이거나(피처는) 본 적 있는 자리만. 마을은 전부. 초점이 없으면 전부(관전자).
-// Phase B 카드가 쓰는 공개 API: feetOf/headOf/project/actorOf/turnToward/tileFrame/seenSet/visibleSet/DEPTH/TILE.
+// Phase B 카드가 쓰는 공개 API: feetOf/headOf/project/actorOf/turnToward/tileFrame/seenSet/visibleSet/DEPTH/TILE ·
+// p0.5.12 관전 클릭 보기: pickAt(누른 월드 좌표의 후보 — 지금 그려진 것만, 겹침 순서대로) · setPicked(고른 대상의 점선 고리).
 import Phaser from 'phaser';
+import { cellRun, doorAt, GROUP, orderPicks, targetId, type Pick, type Target } from '../inspect/model';
 import { paintTownPaving } from './townPaving';
 import { paintAuthoredTown } from './townAuthored';
 import { dungeonArtFor, queueDungeonPrototype, paintDungeonPrototype, dungeonPrototypeVisual, dungeonLifeVisual, syncDungeonPrototype, tickDungeonPrototype, type DungeonArt } from './dungeonPrototype';
@@ -62,6 +64,8 @@ export class DungeonScene extends Phaser.Scene {
   private exitObj: Phaser.GameObjects.Sprite | null = null;  // 계단 시야와 D65 워프게이트 봉인 상태
   private footprints!: Phaser.GameObjects.Graphics;
   private ring!: Phaser.GameObjects.Graphics;
+  private pickRing!: Phaser.GameObjects.Graphics;   // p0.5.12 클릭 창이 고른 대상의 점선 고리(초점 고리와 다른 모양)
+  private picked: Target | null = null;
   frame: Frame | null = null;
   levelIdx = -1;
   private visitedDrawn = 0;
@@ -118,6 +122,7 @@ export class DungeonScene extends Phaser.Scene {
     }
     this.footprints = this.add.graphics().setDepth(DEPTH.footprint);
     this.ring = this.add.graphics().setDepth(DEPTH.focusRing);
+    this.pickRing = this.add.graphics().setDepth(DEPTH.focusRing);
     const cam = this.cameras.main;
     cam.setBackgroundColor('#0a0b0e');
     cam.setRoundPixels(true);
@@ -127,7 +132,7 @@ export class DungeonScene extends Phaser.Scene {
     this.app.focus.on('change', ({ char }) => this.follow(char, true));
     // 판 교체(B4 적발): 새 판의 levelIdx 가 옛 판과 같으면(0→0) 층 재구축이 안 돼 옛 타일맵·본 칸 캐시가 남는다 — 강제로 비운다
     this.app.bus.on('run', () => {
-      this.levelIdx = -1; this.seenCache = null;
+      this.levelIdx = -1; this.seenCache = null; this.picked = null;
       // A different run can reuse character IDs with different art/resolution.
       // Release the previous run's actors, animations and camera target together.
       this.cameras.main.stopFollow(); this.followChar = null;
@@ -257,6 +262,82 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
   pickZoom(): number { return this.scale.width >= 1100 ? 1.5 : 1; }
+
+  /** p0.5.12 관전 클릭 보기 — 누른 월드 좌표(카메라 줌·이동이 반영된 pointer.worldX/Y)의 후보를 정한 순서로(model.orderPicks).
+   *  세 길로 모은다: 그림 맞음(보이는 그림의 테두리 — SD 캐릭터는 머리를 눌러도 잡힌다) · 칸 맞음(누른 칸 위의 대상 — 발밑의 함정·물건) ·
+   *  장소(그 칸의 관측 장소 번호·마을 구역 — level.zones). **지금 그려진 것만** — 숨은 함정·매복 몹·숨은 피처는 그려지지 않으니 후보도 안 된다.
+   *  그림이 없는 것(문턱·문·계단·장소)은 초점 캐릭터가 아는 칸일 때만(안개 아래를 눌러 드러나지 않게 — 마을은 전부). 벽·바깥은 빈 목록. */
+  pickAt(wx: number, wy: number): Pick[] {
+    const f = this.frame, run = this.app.run;
+    if (!f || !run) return [];
+    const L = f.level, cx = Math.floor(wx / TILE), cy = Math.floor(wy / TILE);
+    const town = !!run.levels[f.levelIdx]?.town;
+    const focus = this.app.focus.char;
+    const vis = town ? null : this.visibleSet(focus), seen = town ? null : this.seenSet(focus);
+    const known = (x: number, y: number) => !seen || !!vis?.has(cellKey(x, y)) || seen.has(cellKey(x, y));
+    const out = new Map<string, Pick>();
+    const add = (p: Pick) => { const k = targetId(p.target); if (!out.has(k)) out.set(k, p); };
+    const hit = (s: Phaser.GameObjects.Sprite | undefined | null) => !!s && s.visible && s.alpha > 0 && s.getBounds().contains(wx, wy);
+    const on = (x: number, y: number) => x === cx && y === cy;
+    // depth = 그 그림의 실제 그리기 깊이(겹침 순서의 '앞에 그려진 것') — 그림이 없는 후보(문턱·소품 칸·문·장소)는 그 층의 자리 깊이
+    for (const b of f.bots) {
+      const a = this.actors.get(b.char);
+      if (a && a.sprite.visible && (hit(a.sprite) || on(b.x, b.y))) add({ target: { t: 'bot', char: b.char }, group: GROUP.person, depth: a.sprite.depth, y: b.y, n: Number(b.char) || 0, dead: !b.alive });
+    }
+    for (const m of f.monsters) {
+      const s = this.mobs.get(m.id);
+      if (s && s.visible && (hit(s) || on(m.x, m.y))) add({ target: { t: 'mob', id: m.id }, group: GROUP.monster, depth: s.depth, y: m.y, n: m.id, dead: !m.alive });
+    }
+    for (const ft of f.features) {
+      if (ft.type === 'exit' || ft.concealed) continue;
+      const s = this.feats.get(ft.type + '#' + ft.id);
+      const sprite = !!s && s.visible;
+      const drawn = sprite ? (hit(s) || on(ft.x, ft.y))
+        : on(ft.x, ft.y) && known(ft.x, ft.y) && (ft.type === 'building' || this.propCells.has(ft.x + ',' + ft.y));   // 그리지 않는 문턱 · 소품 레이어가 그린 통
+      if (drawn) add({ target: { t: 'feat', id: ft.id }, group: ft.type === 'npc' ? GROUP.person : GROUP.thing,
+                       depth: sprite ? s!.depth : DEPTH.feature, y: ft.y, n: ft.id });
+    }
+    f.traps.forEach((tr, idx) => {
+      const s = this.traps.get(tr.x + ',' + tr.y);
+      if (s && s.visible && on(tr.x, tr.y)) add({ target: { t: 'trap', idx }, group: GROUP.trap, depth: s.depth, y: tr.y, n: idx });
+    });
+    const [ex, ey] = L.exit;
+    if (this.exitObj?.visible && known(ex, ey) && (hit(this.exitObj) || on(ex, ey))) add({ target: { t: 'exit' }, group: GROUP.passage, depth: this.exitObj.depth, y: ey, n: 0 });
+    const inGrid = cx >= 0 && cy >= 0 && cx < L.w && cy < L.h;
+    if (inGrid && L.grid[cy][cx] !== '#' && known(cx, cy)) {
+      const door = L.grid[cy][cx] === '+' ? doorAt(L, cx, cy) : null;
+      if (door) add({ target: { t: 'door', id: door }, group: GROUP.passage, depth: DEPTH.feature, y: cy, n: Number(door.slice(1)) || 0 });
+      const z = cellRun(L.zones, cx, cy);
+      if (z) add({ target: { t: 'zone', id: z }, group: GROUP.place, depth: DEPTH.ground, y: cy, n: 0 });
+      const rg = cellRun(L.zones?.town, cx, cy);
+      if (rg) add({ target: { t: 'region', name: rg }, group: GROUP.place, depth: DEPTH.ground, y: cy, n: 1 });
+    }
+    return orderPicks([...out.values()]);
+  }
+
+  /** p0.5.12 클릭 창이 고른 대상 — update() 가 그 자리에 점선 고리를 그린다(장소는 고리 없음). null = 지운다. */
+  setPicked(t: Target | null): void { this.picked = t; }
+
+  /** 고른 대상의 지금 발 자리(월드 px) — 그려져 있지 않으면 null. */
+  private pickedFoot(): { x: number; y: number; w: number } | null {
+    const t = this.picked, f = this.frame;
+    if (!t || !f) return null;
+    const spr = (s: Phaser.GameObjects.Sprite | undefined | null, w = TILE * 0.8) => (s && s.visible ? { x: s.x, y: s.y, w } : null);
+    switch (t.t) {
+      case 'bot': { const a = this.actors.get(t.char); return a ? spr(a.sprite, TILE * 0.8 * a.sprite.displayWidth / this.atlas.cell) : null; }
+      case 'mob': return spr(this.mobs.get(t.id));
+      case 'feat': {
+        const ft = f.features.find(x => x.id === t.id);
+        if (!ft) return null;
+        const bare = ft.type === 'building' || this.propCells.has(ft.x + ',' + ft.y);   // 그림 없이 누르는 문턱 · 소품 레이어가 그린 통 — 칸에 고리
+        return spr(this.feats.get(ft.type + '#' + ft.id)) ?? (bare ? { ...this.worldOf(ft.x, ft.y), w: TILE * 0.8 } : null);
+      }
+      case 'trap': { const tr = f.traps[t.idx]; return tr && this.traps.get(tr.x + ',' + tr.y)?.visible ? { ...this.worldOf(tr.x, tr.y), w: TILE * 0.8 } : null; }
+      case 'exit': return this.exitObj?.visible ? { ...this.worldOf(f.level.exit[0], f.level.exit[1]), w: TILE * 0.9 } : null;
+      case 'door': { const d = f.level.doors?.find(x => x[2] === t.id); return d ? { ...this.worldOf(d[0], d[1]), w: TILE * 0.9 } : null; }
+      default: return null;
+    }
+  }
 
   /* ───────────── 층 ───────────── */
 
@@ -651,6 +732,17 @@ export class DungeonScene extends Phaser.Scene {
       const col = Phaser.Display.Color.HexStringToColor(this.app.run?.colors[a.char] || '#ffd166').color;
       this.ring.lineStyle(2, col, 0.9);
       this.ring.strokeEllipse(a.sprite.x, a.sprite.y - 2, TILE * 0.8 * a.sprite.displayWidth / this.atlas.cell, TILE * 0.36 * a.sprite.displayHeight / this.atlas.cell);
+    }
+    this.pickRing.clear();                       // p0.5.12 클릭 창이 고른 대상 — 시점 사람 색의 점선 고리(초점 고리는 실선)
+    const p = this.pickedFoot();
+    if (p) {
+      const col = Phaser.Display.Color.HexStringToColor((fc && this.app.run?.colors[fc]) || '#ffd166').color;
+      const rx = p.w / 2 + 3, ry = rx * 0.45, cy = p.y - 2, n = 16;
+      this.pickRing.lineStyle(2, col, 0.95);
+      for (let k = 0; k < n; k += 2) {           // 점선 = 타원 둘레의 한 칸 건너 한 칸
+        const a0 = (k / n) * Math.PI * 2, a1 = ((k + 1) / n) * Math.PI * 2;
+        this.pickRing.lineBetween(p.x + Math.cos(a0) * rx, cy + Math.sin(a0) * ry, p.x + Math.cos(a1) * rx, cy + Math.sin(a1) * ry);
+      }
     }
   }
 }

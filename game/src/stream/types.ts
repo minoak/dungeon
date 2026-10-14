@@ -15,8 +15,18 @@ export interface Look {
 export interface PartyMember {
   char: Char; name?: string; job?: string; sex?: string; maxhp?: number;
   persona?: string; goal?: string; look?: Look;
+  id?: string;                                   // D78 저장 캐릭터 id — 도감 원장 열쇠(id → 이름 → '봇N')
+  looks?: string;                                // p0.5.12 겉모습 한 줄의 그림 부분(인물 기록 판에만 — 무기·갑옷은 틱의 bots 에서 잇는다)
   [k: string]: unknown;
 }
+
+/** p0.5.11 개인 로어북 원장 한 칸(run_meta.lore · resume.lore · lore_ops set 의 entry). src 'book' = 관전이 붙인 지난 판 도감 note(스트림 어휘 아님). */
+export interface LoreEntry { name?: string; text?: string; turn?: number; depth?: number; src?: string; label?: string }
+/** tick.lore_ops 한 칸 — set(항목 전체) · fade·sweep·merge(지움, merge 는 into = monster:<이름>). */
+export interface LoreOp { op: 'set' | 'fade' | 'sweep' | 'merge' | string; key: string; entry?: LoreEntry; into?: string }
+export type LoreOps = Record<Char, LoreOp[]>;
+/** p0.5.11 받은 쓰기(decisions.lore_note) — key 는 러너가 채운 안쪽 열쇠, at = 쓸 때의 화면 번호. */
+export interface LoreNote { key?: string; of?: 'one' | 'kind'; at?: string | null; label?: string; name?: string; text?: string; target_said?: string }
 
 /** 도감 원장 한 칸(run_meta.bestiary_progress — D53·D55): 조우 수·심층 여부·캐릭터가 남긴 인식 한 줄(지난 판). */
 export interface BestiaryNote { text: string; n?: number; turn?: number; depth?: number }
@@ -34,10 +44,13 @@ export interface RunMeta {
   bestiary?: Record<string, string[]>;                                 // 판 시작 때 이름별 아는 종키
   bestiary_progress?: Record<string, Record<string, BestiaryEntry>>;   // 판 시작 때 이름별 진행도(note 본문까지)
   bestiary_defs?: Record<string, BestiaryDef>;                         // D63 지식 본문 정의(옛 판은 없음)
+  strangers?: boolean;                                                 // D85 인물 기록 판(호칭이 캐릭터마다 다르다)
+  lore?: Record<Char, Record<string, LoreEntry>>;                      // p0.5.11 개인 로어북 시작 원장(인물 기록 판에만)
+  item_info?: Record<string, { desc?: string; rule?: string }>;        // p0.5.12 물건 설명 사전 {"<type>:<이름>": {desc, rule}}(인물 기록 판에만)
   [k: string]: unknown;
 }
 
-export interface Gear { name: string; bonus?: number; [k: string]: unknown }
+export interface Gear { name: string; bonus?: number; uid?: number; [k: string]: unknown }   // uid = p0.5.11 기록된 장비의 고유 번호(gear:<uid>)
 
 export interface Bot {
   char: Char; job?: string; sex?: string;
@@ -64,6 +77,9 @@ export interface Feature {
   id: number; type: string;                      // exit/treasure/chest/fountain/potion/weapon/armor/grave/npc/stairs_up …
   name: string; x: number; y: number; room_id?: number | null;
   concealed?: boolean; perception_gate?: number;
+  uid?: number;                                  // p0.5.11 기록된 장비의 고유 번호
+  space?: string;                                // p0.5.11 마을 건물 문턱 → 공간 id(level 줄에만)
+  of?: Char;                                     // p0.5.12 묘의 주인(인물 기록 판에만)
   [k: string]: unknown;
 }
 
@@ -124,7 +140,13 @@ export interface LevelLine {
   quests?: { id: string; title?: string; n?: number; need?: number; done?: boolean }[];   // D69(09-14) 이 층에 들어서며 채워진 의뢰(층 도달형)
   architecture?: LevelArchitecture;              // D88(09-20) 새 생성 프로필의 층만 — 있으면 입체 렌더러
   props?: LevelProp[];                           // D89(09-20) 엔진 소유 바닥 소품 — 있으면 클라이언트 추첨 대신 이 목록
+  scope?: number;                                // p0.5.11 층 인스턴스 일련(obj:<일련>:… 기록의 층 — 인물 기록 판에만)
+  zones?: CellRuns & { town?: CellRuns };        // p0.5.12 칸 → 관측의 장소 번호(obs.zone.id · 마을은 town = obs.town_zone) — 인물 기록 판에만
+  doors?: [number, number, string][];            // p0.5.12 격자 문 칸 → 'd<n>'(스캐너 판 · 인물 기록 판에만)
 }
+
+/** p0.5.12 칸 값의 행별 구간 — rows[y] = [x, 길이, ids 의 자리, …]. */
+export interface CellRuns { ids: string[]; rows: number[][] }
 
 export interface Then { type: string; target?: string }
 
@@ -137,6 +159,7 @@ export interface Decision {
   floor_line?: string;
   brain_degraded?: { what: string; key?: string; sticky?: boolean };   // D62(09-13) 안전 차단 → 몸짓 서술 접고 한 판단(접었음을 남긴다)
   book_line?: { key: string; text: string };                           // D55 도감평 — 해금 순간·N번 조우 뒤 캐릭터가 남긴 인식 한 줄
+  lore_note?: LoreNote;                                                // p0.5.11 받은 기록 쓰기(인물 기록 판)
   [k: string]: unknown;
 }
 
@@ -186,10 +209,15 @@ export interface TickLine {
   npc_hails?: NpcHail[];                         // D71(09-14) 이 틱에 NPC 가 먼저 건 인사(마을)
   npc_replies?: NpcReply[];                      // D93(09-20) 이 틱에 NPC 가 되받은 말(마을 — NPC 되받기 판에만)
   overheard?: Overheard[];                       // D90(09-20) 이 틱의 관측에 실린 '들린 말'(마을 생활 판에만)
+  lore_ops?: LoreOps;                            // p0.5.11 원장 변화(본 스트림 하나가 모든 몸의 것을 싣는다)
+  known_ops?: Record<Char, string[]>;            // p0.5.12 몸의 종 앎에 새로 든 종 열쇠(인물 기록 판에만)
   events: StreamEvent[];
   bots: Bot[]; monsters: Monster[]; features: Feature[]; traps: Trap[];
   [k: string]: unknown;
 }
+
+/** D79 이어가기 시작 줄 — 프레임이 아니다. p0.5.11 lore = 그 순간의 모든 몸 원장(관전 접기가 그 자리에서 갈아 끼운다). */
+export interface ResumeLine { kind: 'resume'; turn: number; lore?: Record<Char, Record<string, LoreEntry>>; [k: string]: unknown }
 
 /** D71 NPC 가 먼저 건 인사 — 같은 구역·6칸 안, 캐릭터당 NPC 당 한 번. line_src 'brain' = LLM 이 쓴 문장. */
 export interface NpcHail { npc: string; char: Char; line: string; key?: string; line_src?: string }
@@ -267,6 +295,10 @@ export interface Frame {
   descend?: DescendLine;                         // 이 틱 뒤에 층 전이(다음 프레임이 level)
   expedition?: ExpeditionLine;                   // D94(09-20) 이 틱에 원정이 결산됐다(고리 판에만) — 전이와 같은 방식으로 직전 틱에 붙인다
   revive?: ReviveLine;                           // D99(10-04) 이 틱에 누군가 신전 앞에서 깨어났다(부활 판에만) — 같은 방식
+  lore_ops?: LoreOps;                            // p0.5.11 이 틱의 원장 변화
+  known_ops?: Record<Char, string[]>;            // p0.5.12 이 틱에 몸의 종 앎에 새로 든 종
+  resume?: ResumeLine;                           // p0.5.12 이 프레임 앞에 이어가기 줄이 있었다(접기가 원장을 갈아 끼운다)
+  lore_tail?: LoreOps[];                         // p0.5.12 이 프레임 뒤의 end·stopped 줄이 실은 남은 원장 변화(다음 틱이 없는 자리)
   facing: Record<Char, Dir>;                     // 직전 프레임과의 좌표 차(안 움직이면 유지, 처음은 front)
   moved: Record<Char, boolean>;                  // 이 프레임에서 걸었나(트윈·걷기 애니의 방아쇠)
   vis: Record<Char, Set<string>>;                // 이 프레임에서 그 봇이 보는 칸 "x,y"(죽음·하강=빈 집합, 마을=전부)

@@ -6342,12 +6342,55 @@ class Dungeon:
                 'rooms': [{'id': r.id, 'x': r.x, 'y': r.y, 'w': r.w, 'h': r.h,
                            'type': r.type, 'neighbours': list(r.neighbours)}
                           for r in self.rooms],       # feature.room_id 의 해소처(방 하이라이트용)
-                'features': [{**f.as_dict(), **({'space': bids[f.id]} if f.id in bids else {})} for f in self.features.values()],
+                'features': [{**f.as_dict(), **({'space': bids[f.id]} if f.id in bids else {}), **self.grave_tag(f)} for f in self.features.values()],
                 'traps': [t.as_dict() for t in self.traps],
                 'monsters': [m.as_dict() for m in self.monsters],
                 **({'gate': {'sealed': bool(self.sealed), 'boss': (self.boss.id if self.boss else None)}}
                    if getattr(self, 'boss_on', False) else {}),   # D65 additive — 보스층: 출구=워프게이트(층 시작 때 봉인 상태·보스 id)
-                **({'visual': self.visual} if getattr(self, 'visual', None) else {})}   # 마을 v1(09-11) 시각 레이어 — 던전 층엔 없다
+                **({'visual': self.visual} if getattr(self, 'visual', None) else {}),   # 마을 v1(09-11) 시각 레이어 — 던전 층엔 없다
+                **(self.lore_cells() if getattr(self, 'scope', None) is not None else {})}   # p0.5.12 additive(인물 기록 판에만) — 칸 → 구역·문 번호
+
+    def grave_tag(self, f):
+        """p0.5.12 관전 클릭 보기 — 묘 피처의 주인 {'of': char}(인물 기록 판에만 · 그 밖은 {}). 관전이 '<보는 사람의 호칭>의 묘'를
+        엔진 _feature_label 과 같은 규칙으로 부르는 재료다(엔진은 grave_of 에만 들고 있다). 스트림 피처 줄(level·tick)이 같은 함수를 붙인다."""
+        g = (getattr(self, 'grave_of', None) or {}).get(f.id) if f.type == 'grave' else None
+        return {'of': g['char']} if (g and getattr(self, 'scope', None) is not None) else {}
+
+    def lore_cells(self):
+        """p0.5.12 관전 클릭 보기 — 칸 → 관측의 장소 번호(인물 기록 판의 level 줄에만). 관전 화면이 칸을 누르면 그 자리의 기록 열쇠를 찾는 재료로,
+        관측이 쓰는 번호를 엔진이 그대로 내보낸다(클라이언트가 스캐너를 다시 짜지 않는다 — 같은 규칙을 두 벌 두면 언젠가 어긋난다).
+          zones = {ids, rows[, town]}: rows[y] = [x, 길이, ids 의 자리, …](같은 값이 이어지는 구간) — 그 칸에 선 몸의 obs.zone.id
+                  (스캐너 판 = 구역 r·c, 문 칸은 없음 · 스캐너 없는 판 = 생성기 방 r<id>). 마을은 town = 같은 꼴의 obs.town_zone(구역 이름).
+          doors = [[x, y, 'd<n>']]: 격자에 실재하는 문 칸(스캐너 판만 — 트임은 칸이 없어 뺀다). 벽 칸은 어디에도 없다."""
+        def rle(at):
+            ids, pos, rows = [], {}, []
+            for y in range(self.h):
+                vals = [None if self.grid[y][x] == WALL else at(x, y) for x in range(self.w)]
+                row, x = [], 0
+                while x < self.w:
+                    x0, v = x, vals[x]
+                    while x < self.w and vals[x] == v:
+                        x += 1
+                    if v is not None:
+                        if v not in pos:
+                            pos[v] = len(ids)
+                            ids.append(v)
+                        row += [x0, x - x0, pos[v]]
+                rows.append(row)
+            return {'ids': ids, 'rows': rows} if ids else None
+
+        def zone(x, y):
+            if self.scan:
+                return self.zone_at.get((x, y))
+            rid = self._room_id_at(x, y)
+            return 'r%d' % rid if rid is not None else None
+        z = rle(zone) or {'ids': [], 'rows': []}
+        town = rle(self._town_zone) if self.town else None
+        if town:
+            z['town'] = town
+        doors = sorted(([dr.cell[0], dr.cell[1], did] for did, dr in (self.doors or {}).items() if dr.cell),
+                       key=lambda e: (int(e[2][1:]), e[1], e[0])) if self.scan else []
+        return {'zones': z, 'doors': doors}
 
 
 def new_ledger():

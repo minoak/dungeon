@@ -24,6 +24,8 @@ public(result, viewer) — 결과 하나를 "그 사람이 실제로 볼 수 있
      **저장용 정제**일 뿐 ID 를 바꾸지 않는다(설계 §2.3-3). 옛 판(인물 기록이 꺼진 몸)은 사본 꼴이 옛 그대로다.
   ⑥ (p0.5.11 개인 로어북) 관전 전용 칸 SPECTATOR_KEYS — 결정의 lore_note·lore_drop·lore_shown·lore_cut · 원장 변화 lore_ops · 발급 상태 lore_ids ·
      장비 고유 번호 uid · 층 일련 scope · 공간 id space. 어느 깊이든 걷는다(지금 결과에는 실리지 않는다 — 옮겨 적혀도 새지 않게).
+     p0.5.12 관전 클릭 보기 칸도 — 이름이 고유한 known_ops·item_info 는 이름으로, 공개 칸과 이름이 겹치는 것은 자리로(묘 피처의 of ·
+     층 줄 꼴의 zones{ids, rows}·doors[[x, y, id]]). 관측의 lore[].of · zone.doors · known.zones · 겉모습 looks 는 공개 칸이라 그대로 둔다.
   viewer(보는 사람)의 가시성(perceives, 4a)은 아직 쓰지 않는다.
 LLM 0콜 · 판정 rng 무접촉 · 엔진 무의존(dungeon_gm 을 import 하지 않는다 — 엔진이 이 모듈을 쓴다).
 """
@@ -35,7 +37,8 @@ import identity
 
 AUDIT = "audit"
 DROP_KEYS = ("social_event_id", "said")   # said = p0.5.10 러너 전용 칸(NPC 에게 건 말 — 말한 사람의 말은 결정 틱에 이미 배달됐고 대화 장부에 있다)
-SPECTATOR_KEYS = ("lore_note", "lore_drop", "lore_shown", "lore_cut", "lore_ops", "lore_ids", "uid", "scope", "space")   # ⑥ p0.5.11 관전 전용 칸 — 어느 깊이든 걷는다
+SPECTATOR_KEYS = ("lore_note", "lore_drop", "lore_shown", "lore_cut", "lore_ops", "lore_ids", "uid", "scope", "space",   # ⑥ p0.5.11 관전 전용 칸 — 어느 깊이든 걷는다
+                  "known_ops", "item_info")   # p0.5.12 관전 클릭 보기의 이름이 고유한 칸(종 앎 변화 · 물건 설명 사전)
 PERSON_ROLL_KEYS = ("roll", "mod", "total", "ac", "combat_roll", "skill_roll", "skill_dc")   # CA.attack_actor · SK.execute 의 사람 대상 굴림
 EFFECT_ROLL_KEYS = ("save",)                                                                # SK.execute effects[] 의 대상 내성 굴림
 
@@ -159,11 +162,19 @@ def public(result, viewer=None):
 
 
 def _drop_spectator(v):
-    """머리글 ⑥ — 개인 로어북의 관전 전용 칸(결정의 lore_* · 원장 변화 · 발급 상태 · 장비 고유 번호 · 층 일련 · 공간 id)을 어느 깊이에서든 뺀다(제자리).
+    """머리글 ⑥ — 개인 로어북·관전 클릭 보기의 관전 전용 칸(결정의 lore_* · 원장 변화 · 발급 상태 · 장비 고유 번호 · 층 일련 · 공간 id ·
+    종 앎 변화 · 물건 설명 사전 · 묘 주인 · 층 줄 칸 구간)을 어느 깊이에서든 뺀다(제자리).
     지금 결과 dict 에는 이 칸이 실리지 않는다 — 누가 옮겨 적어도 모델 입력으로 새지 않게 막아 두는 자리(p0511b, Codex p0511r 권장)."""
     if isinstance(v, dict):
         for k in SPECTATOR_KEYS:
             v.pop(k, None)
+        # p0.5.12 이름이 공개 칸과 겹치는 관전 칸은 자리(모양)로 — 관측의 lore[].of·zone.doors(dict 목록)·known.zones·sights.bots[].looks 는 공개라 그대로
+        if v.get("type") == "grave":
+            v.pop("of", None)                             # 묘 피처의 주인(char) — 인물 기록 판의 '누군가의 묘'를 풀어 버린다
+        if isinstance(v.get("zones"), dict) and "rows" in v["zones"] and "ids" in v["zones"]:
+            v.pop("zones")                                # 층 줄의 칸 → 장소 번호 구간
+        if isinstance(v.get("doors"), list) and v["doors"] and all(isinstance(d, list) for d in v["doors"]):
+            v.pop("doors")                                # 층 줄의 문 칸 [[x, y, 'd<n>']]
         for x in v.values():
             _drop_spectator(x)
     elif isinstance(v, (list, tuple)):

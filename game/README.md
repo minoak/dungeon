@@ -18,6 +18,7 @@ npm run smoke                    # 빌드 산출물을 vite preview 로 띄우�
 WL_GAME_URL=http://127.0.0.1:8000/game/ npm run smoke   # 론처 상대로
 npm run build:static             # 정적 배포 묶음 → dist-static/ (아래 "정적 배포")
 npm run smoke:static             # dist-static/ 을 vite preview --mode static 으로 띄워 같은 스모크(론처·리포 서빙 없음)
+npm run inspect                  # 관전 클릭 창 화면 검사(verify/inspect.mjs — 픽스처 verify/fixtures/lore-click.jsonl, 다시 만들기: python verify/lore_click_fixture.py)
 ```
 
 개발·프리뷰 서버는 `vite.config.ts` 의 `wlStatic` 플러그인이 리포 루트의 `/viewer /runs /state /art` 를 대신 서빙한다(론처 불필요).
@@ -103,7 +104,10 @@ src/ui/Controls.ts       판 선택·재생 버튼·속도·슬라이더·틱 �
 src/ui/FocusCard.ts      초점 카드(B1): HP·상태·소지·속내·최근 말·관계 뼈(BONES)·관계 한 줄 — 결정 색인 이진 탐색
 src/ui/Log.ts            로그(B2): 프레임 그룹 .grp[data-turn], 창 90, 증분 append, 초점 줄 .focus
 src/ui/dom.ts            $, esc, el, typing
+src/inspect/model.ts     관전 클릭 보기 순수 모형(p0.5.12): 로어북 접기 색인 · 부르는 이름 · 대상 → 열쇠 · 겹침 순서 · 창 내용 — import type 만(게이트가 node 로 직접 읽는다)
+src/inspect/Panel.ts     관전 클릭 창(p0.5.12): 무대 왼쪽 아래 고정 창 + 점선 고리 · 칩 · [모두 비교] · Esc/×
 verify/smoke.mjs         Playwright(msedge 채널) 스모크 — M1 + M2 장면 재현(초점=수나 t176~t184·안개·말풍선·로그·건네기·B5 status) · 실패는 모아서 마지막에 한꺼번에
+verify/inspect.mjs       관전 클릭 창 화면 검사(p0512c — 설계 §6.2 목록): 진짜 마우스로 무대를 눌러 창·칩 순서·초점 전환·비교·되감기·'기록' 탭·라이브·옛 판 · 기대값 lore-click.scenes.json
 ```
 
 ## 계약(바뀌지 않는 것 — Phase B 카드의 입력)
@@ -140,6 +144,8 @@ verify/smoke.mjs         Playwright(msedge 채널) 스모크 — M1 + M2 장면 
 | `tileFrame(key)` | Kenney 시트 프레임 번호 — `'item:potion' 'item:weapon' 'item:armor' 'feat:chest' 'mob:고블린' …` |
 | `visualOf(key)` | 새 에셋 우선, 없는 종류는 Kenney 폴백. `{texture, frame, scale, originY}` — 바닥 오브젝트·건네기 연출에서 공유 |
 | `visibleSet(char)` / `seenSet(char)` | 현재 프레임 시야 / 이 층 누적 본 칸(캐시). 초점 없으면 null(=전부) |
+| `pickAt(wx, wy)` | p0.5.12 누른 월드 좌표의 후보 `Pick[]`(지금 그려진 것만 · 그림 테두리·누른 칸·장소 · `inspect/model.orderPicks` 순서) |
+| `setPicked(target \| null)` | p0.5.12 클릭 창이 고른 대상 — update() 가 점선 고리를 그린다(장소는 고리 없음) |
 | `setZoom(z)` · `zoom` · `ZOOMS` | 1 / 1.5 / 2 |
 | `DEPTH` | `ground 0 · footprint 5 · feature 10 · trap 12 · corpse 15 · focusRing 19 · stand 20(+y·0.01) · fx 50 · fog 60 · label 70` |
 | `TILE` (`assets/tiles.ts`) | 48px |
@@ -224,6 +230,14 @@ npm run smoke:launcher                             # = WL_GAME_URL=http://127.0.
 헤더 `도감·수첩` 버튼(`#codexBtn`)으로 여닫는 별개 창(`#codex[data-open]`, Esc 로 닫힘, `src/ui/Codex.ts`). 재생 위치까지 캐릭터가 알게 된 것·쓴 것만 보여 준다(관전 원칙 — 라이브면 자라난다).
 - 도감 탭: 몬스터 종별 카드(`.cx-card[data-key]`, 시트 frame 0 그림). 세계 지식은 `run_meta.bestiary_defs`(러너 additive — 옛 판은 없음)에서, 파티 중 누군가 등재하면 한 줄·심층이면 본문. 캐릭터 줄(`.cx-row[data-char]`) = 모름·등재·심층(조우 n/해금 수 — `tick.bots[].aware_of` 증분을 bestiary.py 와 같은 규칙으로 재구성 + `run_meta.bestiary_progress` 시드) + 도감평(이 판 `decisions.book_line` / 지난 판 `bestiary_progress.note` 는 "지난 판" 표식).
 - 수첩 탭: 캐릭터 칩(`.cx-char[data-char]`) → 층을 떠날 때 쓴 장(`.cx-page[data-char]`, `descend/ascend.pages`).
+- 기록 탭(p0.5.12): 캐릭터 칩 → 그 사람이 `lore_note` 로 쓴 기록 전부를 재생 위치까지 접은 목록(`.cx-rec[data-key]` — 사람·장소·의뢰·종류·장비·층의 것, 다른 층 표시). 도감평도 같은 접기(book_line · lore_note 의 monster:).
+
+## 관전 클릭 창 (2026-10-14, p0.5.12 — 설계 `.orch/drafts/viewer_click_design.md` v1)
+
+무대를 누르면 `scene.pickAt` 의 후보가 `#inspect[data-open="1"]`(무대 왼쪽 아래) 머리에 칩(`.ins-chip[data-id]`)으로 늘어서고 첫째가 열린다. 머리 = 시점 사람(초점)이 부르는 이름(`.ins-call`) +
+`관전자: 실명`(`.ins-real`) · 위 칸 `.ins-facts`(시스템 정보) · 아래 칸 `.ins-rec[data-key]`(그 사람의 기록 — 없으면 `.ins-none` '모름') · `.ins-cmp` = [모두 비교](`.ins-row[data-char]` 파티 순서) ·
+모험가를 고르면 `.ins-pov`(이 사람 시점으로). 재료 = 스트림(`run_meta.lore`·`tick.lore_ops`·`known_ops`·`item_info`·`party[].looks`·`level.zones/doors`·묘 `of` — STREAM_FORMAT '관전 클릭 보기').
+재생을 멈추지 않고, 층이 바뀌면 층의 대상은 닫는다. 액자 모드엔 없다. 엔진 규칙과의 대조는 리포 루트 `python verify_viewer_click.py`(node 로 `model.ts` 를 직접 부른다).
 - 스모크 1건: 창 열기·카드·캐릭터 줄·수첩 장(t1 에 0장 → 끝에 ≥1장, 옛 판은 0장)·Esc. 정적 배포에서도 같은 데이터(스트림만 읽는다).
 - 텍스트로 뽑기(0콜): 리포 루트 `python tools/run_notes.py runs/stream-….jsonl [--md]` — 캐릭터별 수첩 장·도감평·원장(bestiary.json) note.
 

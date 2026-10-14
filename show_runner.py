@@ -1564,6 +1564,18 @@ def stop_pages(d, bots, names, turn, req):
     return {c: p for c, p in out.items() if p}
 
 
+def item_info():
+    """p0.5.12 관전 클릭 보기 — 물건 설명 사전 {"<type>:<이름>": {desc, rule}}(run_meta.item_info · 인물 기록 판에만). 아이템 정의 전부(entities 의 item 부품)를
+    정의 id 순으로 — 같은 type·이름이 둘이면 앞의 것(entities.item_def 와 같은 고르기). 축복의 {stat} 은 지닌 사람이 없는 자리의 중립 채움(관측은 마시는
+    사람의 능력치로 채운다 — 창은 시스템 사실만 말한다). 판 시작에 한 번 — 정의가 뒤에 바뀌어도 그 판이 알던 설명(bestiary_defs 선례). 판정·관측 무접촉."""
+    out = {}
+    for df in sorted(G.ENT.by_kind("object"), key=lambda v: v["id"]):
+        if (df.get("comps") or {}).get("item") and df.get("type") in G.ENT.ITEM_TYPES:
+            out.setdefault("%s:%s" % (df["type"], df["name"]),
+                           {"desc": G.ENT.item_desc(df, gain=G.Dungeon.BLESS_GAIN), "rule": G.ENT.item_rule(df["type"])})
+    return out
+
+
 def main():
     global DUNGEON_SEED, MAX_TURNS               # D79 이어가기: 스냅샷의 시드·틱 상한으로 되묶는다(새 층 생성·루프 끝이 읽는다)
     run_control.reset(STATE)
@@ -1760,6 +1772,7 @@ def main():
                 **({"town_sight": "zone"} if (TOWN_SIGHT == "zone" and TOWN_ON) else {}),   # D86(09-19 additive, 켠 판에만) 마을의 시야 = 지금 선 구역 — 시야·정지 물리 메타(town_hear 급)
                 **({"strangers": True} if STRANGERS_ON else {}),   # D85(09-19 additive, 켠 판에만) 인물 기록 판 — 프롬프트의 호칭이 캐릭터마다 다르다(내가 적은 이름|낯선 사람) · p0.5.11 decisions.lore_note
                 **({"lore": {b["char"]: LB.dump(b) for b in bots}} if STRANGERS_ON else {}),   # p0.5.11(additive, 켠 판에만) 개인 로어북 시작 원장 {char: {안쪽 열쇠: 항목}} — 관전이 tick.lore_ops 를 접어 지금 원장을 만든다
+                **({"item_info": item_info()} if STRANGERS_ON else {}),   # p0.5.12(additive, 켠 판에만) 물건 설명 사전 — 관전 클릭 창의 '무엇인가' 칸(그 판이 알던 설명)
                 **({"loop": True} if LOOP_ON else {}),   # D94(09-20 additive, 켠 판에만) 원정 고리 판 — 길드 보고가 판을 닫지 않는다: 원정마다 expedition 줄(결산) 하나가 실리고 다음 원정은 새 시드의 1층부터. 판을 닫는 것은 틱 상한·전멸뿐
                 **({"revive": True} if REVIVE_ON else {}),   # D99(10-04 additive, 켠 판에만) 부활 판 — 쓰러진 사람은 일행이 마을에 들어설 때 신전 곁에서 깨어난다(revive 줄) · 메인이 쓰러지면 ascend 에 fell · 전멸 없음(판을 닫는 것은 틱 상한)
                 **({"town_life": True} if (TOWN_LIFE_ON and TOWN_ON) else {}),   # D90(09-20 additive, 켠 판에만) 마을 생활 판 — 구역의 들린 말(tick.overheard · 관측 notices kind 'overheard') 등 마을의 생활 부품. 0콜
@@ -1855,7 +1868,8 @@ def main():
                         **{k: b[k] for k in ("speech", "goal", "background")   # D31(09-05) additive —
                            if b.get(k)},                                       #   커스텀 시트 원문(있을 때만)
                         **({"traits": list(b["traits"])} if b.get("traits") else {}),   # 키워드 원본
-                        **({"look": b["look"]} if b.get("look") else {})}   # D37(09-06) 외형 — 뷰어 전용
+                        **({"look": b["look"]} if b.get("look") else {}),   # D37(09-06) 외형 — 뷰어 전용
+                        **({"looks": lk_} if (STRANGERS_ON and (lk_ := sheetkit.looks_line({"look": b.get("look")}))) else {})}   # p0.5.12(additive, 켠 판에만) 겉모습 한 줄의 그림 부분 — 무기·갑옷은 틱의 bots 에서 잇는다(looks_line 과 같은 ' · ')
                        for b in bots])
         lvl = {"turn": 0, **d.level_snapshot(),
                **({'reaction_stats': reaction_book.snapshot()} if reaction_book is not None else {}),
@@ -1919,6 +1933,19 @@ def main():
         left = {c_: list(v_) for c_, v_ in sorted(lore_buf.items()) if v_}
         lore_buf.clear()
         return {"lore_ops": left} if left else {}
+
+    known_sent = ({} if snap is not None else {c: set(iss.known(ledger_keys[c])) for c in chars}) if STRANGERS_ON else None
+    #   p0.5.12 관전에 이미 실은 종 앎 {char: set} — 새 판은 run_meta.bestiary 와 같은 시작 집합. 이어가기는 빈 채로 두어 첫 본 스트림 틱이
+    #   지금 집합 전부를 싣는다(앞 조각의 마지막 틱 뒤에 얻은 것은 잘린 꼬리라 스트림에 없다 — 합집합이라 다시 실어도 같다 · 피클 무접촉)
+
+    def _known_new():                        # p0.5.12 tick.known_ops — 몸의 지식 집합(bot['known'] = 발급기 set, 관측이 쓰는 그것)에 지난 본 스트림 틱 뒤로 새로 든 종 열쇠.
+        out_ = {}                            #   모든 사람(판의 명단 — 다른 세계·대기 중인 몸 포함): 좇지 않는 세계의 획득은 본 스트림 틱 내용으로는 소급되지 않는다
+        for c_ in chars:
+            new_ = sorted(iss.known(ledger_keys[c_]) - known_sent.setdefault(c_, set()))
+            if new_:
+                out_[c_] = new_
+                known_sent[c_].update(new_)
+        return {"known_ops": out_} if out_ else {}
 
     def _snap_core():                        # D79 스냅샷 몸 — 루프 머리의 지역 상태 전부(같은 객체 그래프로 한 번에 피클: known·quests·reaction_book 공유 보존)
         return {"run_id": run_id, "seed": DUNGEON_SEED, "started": run_started, "max_turns": MAX_TURNS, "world": _world_fingerprint(),
@@ -2203,6 +2230,7 @@ def main():
         # 스냅샷은 델타 아닌 전체 — 임의 틱 시킹용. visited 만 제외(파생: 스폰+틱별 봇 좌표 누적).
         tick_rec = {"turn": turn, "inbox": inbox_in, "decisions": decisions,
                     **(_lore_left() if show else {}),   # p0.5.11 원장이 바뀐 틱에만(additive) — 본 스트림 하나가 모든 몸의 원장 변화를 싣는다(관전이 접는다)
+                    **(_known_new() if (show and STRANGERS_ON) else {}),   # p0.5.12 종 앎이 는 틱에만(additive, 켠 판에만) — 관전 클릭 창의 '낯선 짐승 ↔ 고블린'
                     **({'skill_events': G.SK.stream_records(turn_events)} if SKILLS_ON else {}),
                     **(reaction_book.drain() if reaction_book is not None else {}),
                     **({"hails": hails} if hails else {}),   # 말 걸림 정지 성사(D24) — additive 계측
@@ -2215,7 +2243,7 @@ def main():
                     "events": turn_events,
                     "bots": [G.bot_snapshot(b) for b in bots],
                     "monsters": [m.as_dict() for m in d.monsters],
-                    "features": [f.as_dict() for f in d.features.values()],
+                    "features": [{**f.as_dict(), **d.grave_tag(f)} for f in d.features.values()],   # p0.5.12 묘 of(인물 기록 판에만 — 그 밖은 옛 그대로)
                     "traps": [t.as_dict() for t in d.traps]}
         if show:
             sw.emit("tick", **tick_rec)
