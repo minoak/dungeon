@@ -71,11 +71,12 @@ def jedit(path, fn):
 
 
 defs = ENT.reload()
-ITEM_IDS = ("potion", "boon", "treasure", "dagger", "longsword", "leather_armor", "chain_mail")
+ITEM_IDS = ("potion", "boon", "treasure", "dagger", "longsword", "leather_armor", "chain_mail",
+            "gold")   # p0.5.13 골드(경제 1a) — 몸의 정수, 소지 칸 i7
 
 print("── ① 로드 거절 · 정본")
 items = {d["id"]: d for d in defs.values() if (d.get("comps") or {}).get("item")}
-check("① 정본: 아이템 정의 7장(축복의 물약 새 정의 포함) · type 이 ITEM_TYPES 를 다 덮는다 · 전부 설명이 있고 태그 item · 보물 태그 (object, item)",
+check("① 정본: 아이템 정의 8장(축복의 물약 새 정의 · p0.5.13 골드 포함) · type 이 ITEM_TYPES 를 다 덮는다 · 전부 설명이 있고 태그 item · 보물 태그 (object, item)",
       set(items) == set(ITEM_IDS) and {d["type"] for d in items.values()} == set(ENT.ITEM_TYPES)
       and all(d["comps"]["item"]["desc"].strip() and "item" in d["tags"] for d in items.values())
       and ENT.feature_tags("treasure") == ["object", "item"] and defs["boon"]["type"] == "boon" and not defs["boon"].get("sprite"))
@@ -100,7 +101,7 @@ rewrite(os.path.join(wobj, "chain_mail.md"), lambda t: t.replace("쇠고리를",
 jedit(os.path.join(obj, "leather_armor.json"), lambda d: d["comps"]["item"].update(note="x"))              # g item 부품의 모르는 칸
 rewrite(os.path.join(wobj, "longsword.md"), lambda t: t.split("## `item.desc`")[0] + "## `item.desc` — 빈 설명\n\n")   # h 빈 설명
 rewrite(os.path.join(aroot, "item_rules.md"), lambda t: t.replace("## `boon`", "## `chest`").replace("그 자리에 놓인다.", "그 자리에 {bonus} 놓인다.", 1))   # i·j·k
-jedit(os.path.join(root, "npc", "gear_merchant.json"), lambda d: d["comps"]["npc"]["gift"].update(weapon="명검"))   # l 모르는 선물 무기
+jedit(os.path.join(root, "npc", "guild_receptionist.json"), lambda d: d["comps"]["npc"]["gift"].update(weapon="명검"))   # l 모르는 선물 무기(p0.5.13: 장비 상인의 선물은 판매로 — 접수원의 원정 물품으로 본다)
 try:
     ENT.read(root, words_root=wroot, rules_root=aroot)
     msg = ""
@@ -133,8 +134,9 @@ check("② GEAR_CYCLE 4 · 손그림 글리프 4($ ! ) [) · 생성 층(물약 2
 check("② 숨은 보물 → 보물 정의(type 의 정의가 하나뿐) · 뒤지기 USE_LOOT(물약·보물) · 마을 인물 선물(물약·무기 이름·축복) 전부 풀린다",
       ENT.item_def("treasure", "숨은 보물") is ENT.get("treasure") and loot == {"potion", "treasure"} <= set(ENT.USE_LOOT)
       and all(ENT.item_def(t) for t in loot) and gifts and gift_ok)
-check("② 소지 칸 i1~i4 = 물약·무기·갑옷·축복 → 정의 · 정의가 여럿인 type 의 모르는 이름은 None(거짓 설명보다 빈칸) · 아이템 아닌 type 은 None",
-      CA.ITEM_SLOTS == {"i1": "potion", "i2": "weapon", "i3": "armor", "i4": "boon"}
+check("② 소지 칸 i1~i4 = 물약·무기·갑옷·축복 · p0.5.13 i7·i8 = 골드·보물 → 정의 · 정의가 여럿인 type 의 모르는 이름은 None(거짓 설명보다 빈칸) · 아이템 아닌 type 은 None",
+      CA.ITEM_SLOTS == {"i1": "potion", "i2": "weapon", "i3": "armor", "i4": "boon", "i7": "gold", "i8": "treasure"}
+      and ENT.item_def("gold", "골드") is ENT.get("gold")
       and ENT.item_def("potion", "회복 물약") is ENT.get("potion") and ENT.item_def("boon", "축복의 물약") is ENT.get("boon")
       and ENT.item_def("weapon", "장검") is ENT.get("longsword") and ENT.item_def("armor", "사슬 갑옷") is ENT.get("chain_mail")
       and ENT.item_def("weapon", "이름 모를 칼") is None and ENT.item_def("armor") is None and ENT.item_def("chest") is None)
@@ -196,7 +198,7 @@ check("③ 수치 = 코드: 장검 설명에 +GEAR_KINDS['장검'] · 단검 +1 
       and "{" not in sec and "}" not in sec, desc)
 check("③ 상자·사람·계단·나 줄엔 설명이 없다 · 관측 dict: 아이템 줄만 desc·rule(줄마다 — 자기 두뇌용) · 축복 물약 옛 effect 칸 없음",
       not any(k in under for k in (tid["상자"], "b2", "exit", "self", "b1"))
-      and all(("desc" in t) == (t["id"] in [tid[n] for n in ("회복 물약", "단검", "가죽 갑옷", "보물", "장검")] or t["id"] in ("i1", "i2", "i3", "i4"))
+      and all(("desc" in t) == (t["id"] in [tid[n] for n in ("회복 물약", "단검", "가죽 갑옷", "보물", "장검")] or t["id"] in ("i1", "i2", "i3", "i4", "i7", "i8"))   # i7 = p0.5.13 골드(시작 지갑)
               for t in o3["targets"])
       and all(t.get("rule") == rule[CA.ITEM_SLOTS[t["id"]]] for t in o3["items"])
       and next(t for t in o3["items"] if t["id"] == "i2")["desc"] == desc["dagger"]
@@ -360,8 +362,8 @@ with io.open(os.path.join(HERE, "_run_gates.sh"), encoding="utf-8") as f:
     gates = f.read()
 out = subprocess.run([sys.executable, os.path.join(HERE, "tools", "check_words.py")], capture_output=True, text=True, encoding="utf-8",
                      env=dict(os.environ, PYTHONUTF8="1"))
-check("⑨ 게이트 목록에 verify_items · check_words 가 0 으로 끝나고 아이템 정의 7장·규칙 칸 5개를 찍는다",
-      "verify_items" in gates and out.returncode == 0 and "아이템 정의 7장(설명 7개)" in out.stdout and "칸 5개" in out.stdout, out.stdout + out.stderr)
+check("⑨ 게이트 목록에 verify_items · check_words 가 0 으로 끝나고 아이템 정의 8장·규칙 칸 6개를 찍는다(p0.5.13 골드)",
+      "verify_items" in gates and out.returncode == 0 and "아이템 정의 8장(설명 8개)" in out.stdout and "칸 6개" in out.stdout, out.stdout + out.stderr)
 
 shutil.rmtree(TMP, ignore_errors=True)
 if fails:

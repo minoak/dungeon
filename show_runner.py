@@ -685,9 +685,10 @@ def act_summary(res):
             return '%s — "%s"' % (res.get("npc", "?"), res.get("line", "…"))
         if r == "npc_report":                      # D69 귀환 보고
             tt = res.get("titles") or {}
-            return '%s에게 원정 보고 — 완수 %s / 미완 %s — "%s"' % (
+            return '%s에게 원정 보고 — 완수 %s / 미완 %s%s — "%s"' % (
                 res.get("npc", "?"), "·".join(tt.get(x, x) for x in (res.get("done") or [])) or "없음",
-                "·".join(tt.get(x, x) for x in (res.get("undone") or [])) or "없음", res.get("line", "…"))
+                "·".join(tt.get(x, x) for x in (res.get("undone") or [])) or "없음",
+                (" — 보상 %d골드" % res["reward"]) if res.get("reward") else "", res.get("line", "…"))   # p0.5.13 보상(있을 때만)
         if r == "quest_accepted":                  # D69 의뢰 맡음
             return "\U0001f4dc 의뢰 맡음: %s — %s%s" % (res.get("title", "?"), res.get("goal", "?"),
                                                      (" (보상: %s)" % res["reward"]) if res.get("reward") else "")
@@ -719,7 +720,8 @@ def act_summary(res):
                                           "" if not res.get("placed") else " (건넨 이의 발밑에 놓임)" if res.get("spot") == "mine"   # p0.5.6(D6) 놓인 자리
                                           else " (그의 발밑에 놓임)")
         return "건네기 — " + {"too_far": "곁에 없다", "nothing": "줄 것이 없다", "no_target": "대상 없음",
-                              "no_room": "놓을 자리 없음"}.get(res.get("result"), str(res.get("result")))
+                              "no_room": "놓을 자리 없음", "not_enough": "지닌 것보다 많다(지닌 %s)" % res.get("have", 0)   # p0.5.13 골드·보물
+                              }.get(res.get("result"), str(res.get("result")))
     if t == "bond":                                            # 친목(D47 ②)
         if res.get("result") == "done":
             return "봇%s에게 친목 — %s" % (res.get("to", "?"), res.get("form", "몸짓"))
@@ -1275,6 +1277,27 @@ def floor_rumor(d):
     return {"depth": d.depth, "monsters": kinds, "traps": len(d.traps), "features": feats}
 
 
+def shop_facts(d, eid):
+    """p0.5.13(경제 1a) NPC 가 맡은 가게(정의 npc.shop — 건물 정의 id)의 값 한 줄 — 그 건물의 쓰임이 이 세계에서 실제로 서 있을 때만(마을 생활을 끈 판·
+    옛 마을은 None — 가게가 없는 세계에서 값을 말하지 않게). 가게(shop) = 파는 값·사들이는 값, 숙소(lodge) = 묵는 값. ⚠️문구 임시"""
+    if not eid:
+        return None
+    for fid, bid in sorted((getattr(d, "building_defs", None) or {}).items()):
+        f = d.features.get(fid)
+        use = G.IA.use_of(d, f) if (f is not None and bid == eid) else None
+        if not use:
+            continue
+        if use.get("kind") == "shop":
+            sells = " · ".join("%s %d골드" % (g["name"], g["price"]) for g in G.IA.goods(d) if g["fid"] == fid)
+            buys = " · ".join("%s %d골드" % (n, p) for n, p in G.IA.buy_list(use))
+            return ("네 가게(%s)의 값 — 판다: %s / 사들인다: %s. 값은 진열대에 붙은 그대로이고 깎아 주지 않는다. "
+                    "사고파는 일은 가게 문턱에서 손님이 직접 한다(네가 물건을 건네거나 돈을 받지 않는다)" % (f.name, sells or "없음", buys or "없음"))
+        if use.get("kind") == "lodge":
+            return ("네 숙소(%s)의 묵는 값: %d골드. 깎아 주지 않는다. 손님은 문턱에서 직접 묵고 값을 낸다(네가 돈을 받거나 방을 내주지 않는다)"
+                    % (f.name, int(use.get("price") or 0)))
+    return None
+
+
 def npc_facts(d, npc_name, bots, fallen, quests, expedition=0, names=None):
     """D69 NPC 두뇌의 '아는 것' — 전부 세계의 사실(정의·장부·배치)이고 캐릭터 시트는 없다. NPC 역할별로 다른 사실을 준다:
     접수원=게시판 의뢰·맡은 의뢰·진행·보고 결과 / 주점 주인=지하 1층 실측 소문 / 성직자=신의 요청·묘. 공통=파티 명단·귀환 여부.
@@ -1322,6 +1345,9 @@ def npc_facts(d, npc_name, bots, fallen, quests, expedition=0, names=None):
             mine = [G.quest_def(q) or {} for q in quests["accepted"] if (G.quest_def(q) or {}).get("client") == npc_name]
             if mine:
                 facts.append("네가 낸 의뢰를 이 파티가 맡았다: " + ", ".join(q.get("title", "?") for q in mine))
+    shop_ = shop_facts(d, nd.get("shop"))       # p0.5.13(경제 1a) 맡은 가게의 값 — 그 가게가 이 세계에서 실제로 문을 연 판에만(값을 지어내지 않게 · 깎아 주는 길은 없다)
+    if shop_:
+        facts.append(shop_)
     if nd.get("role") and "신" in nd["role"]:
         orc = getattr(d, "oracle", None) or {}
         facts.append(("신의 요청이 걸려 있다: 「%s」" % orc["text"]) if orc.get("text") else "지금 걸려 있는 신의 요청은 없다")
@@ -2310,6 +2336,7 @@ def main():
         floors = 이월할 층 결산 목록(떠나는 층을 얼린 것) · lm = 가 본 층의 봇별 기억(seen_keys·searched·aware_of·ledger).
         D99(10-04): 신전에서 깨어나는 몸(_wake)도 같은 목록을 쓴다 — 한 곳에서만 고친다. 줄 순서는 옛 인라인 그대로(옛 판 비트 보존)."""
         n["hp"], n["bag"] = b["hp"], b["bag"]     # HP·보물 이월     외부 시트 봇('3'+)이 2층서 죽는다
+        n["gold"] = b.get("gold", 0)              # p0.5.13 골드도 이월 — 판 안에서는 층·원정·부활을 넘어 그 몸의 지갑이다(판을 넘지는 않는다)
         n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
         n["boons"] = b.get("boons", 0)            # 축복의 물약도 이월(D74, 09-15)
         n["str"], n["dex"] = b["str"], b["dex"]   # 축복으로 오른 능력치는 이 판 안에서 영구(D74) — 시트 초기값을 덮는다

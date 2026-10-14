@@ -380,7 +380,8 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None, names=None):
         t_ = res.get("titles") or {}
         done = "·".join(t_.get(x, x) for x in (res.get("done") or [])) or "없음"
         undone = "·".join(t_.get(x, x) for x in (res.get("undone") or [])) or "없음"
-        scene.append("- 세계의 판정: 원정 보고를 받았다 — 완수한 의뢰: %s / 미완: %s. 이 보고로 원정이 끝난다" % (done, undone))
+        scene.append("- 세계의 판정: 원정 보고를 받았다 — 완수한 의뢰: %s / 미완: %s. 이 보고로 원정이 끝난다%s"
+                     % (done, undone, (" · 완수한 의뢰의 보상으로 %d골드를 이 사람에게 건넸다" % res["reward"]) if res.get("reward") else ""))   # p0.5.13 ⚠️문구 임시
     elif res.get("again"):
         scene.append("- 세계의 판정: 오늘 이미 만난 사람이다 — 새로 줄 물건은 없다")
     else:
@@ -1020,10 +1021,16 @@ def _last_prose(last, names=None):
         if r == "given":
             tail = ((" (남은 물약 %d병)" % last.get("potions", 0)) if last.get("item") == "potion"
                     else (" (남은 축복의 물약 %d병)" % last.get("boons", 0)) if last.get("item") == "boon"   # D74
+                    else (" (남은 골드 %d)" % last.get("gold", 0)) if last.get("item") == "gold"   # p0.5.13
+                    else (" (남은 보물 %d개)" % last.get("bag", 0)) if last.get("item") == "treasure"
                     else " — 그가 바로 걸쳤다" if not last.get("placed")
                     else " — 네 발밑에 놓였다(그의 자리도 발밑도 차 있었다)" if last.get("spot") == "mine"   # p0.5.6(D6) 놓인 자리(spot)
                     else " — 그의 발밑에 놓였다(자리가 차 있었다)")
             return "%s에게 %s을(를) 건넸다%s" % (_who(last.get("to")), last.get("what", "?"), tail)
+        if r == "not_enough":             # p0.5.13 골드·보물을 지닌 것보다 많이(둘 다 그대로) ⚠️문구 임시
+            if last.get("item") == "gold":
+                return "건네려 했지만 — 지닌 골드가 %d다(%d골드를 건네려 했다)" % (last.get("have", 0), last.get("amount", 0))
+            return "건네려 했지만 — 지닌 보물이 %d개다(%d개를 건네려 했다)" % (last.get("have", 0), last.get("amount", 0))
         return "건네려 했지만 — " + {"too_far": "곁에 없었다(붙어야 건넨다)", "nothing": "줄 것이 없었다",
                                      "no_target": "상대가 그 자리에 없었다", "no_room": "바닥에 놓을 자리가 없었다"}.get(r, str(r))
     if t == "bond":                       # D47 ② 친목 — 자기 행동의 결과(반응은 상대의 다음 결정에서)
@@ -1033,6 +1040,8 @@ def _last_prose(last, names=None):
     if t == "received":                   # D47 ② 받은 쪽(hurt 문법 — 남이 내게 한 일)
         tail = ((" (소지 물약 %d병)" % last.get("potions", 0)) if last.get("item") == "potion"
                 else (" (소지 축복의 물약 %d병)" % last.get("boons", 0)) if last.get("item") == "boon"   # D74
+                else (" (지금 골드 %d)" % last.get("gold", 0)) if last.get("item") == "gold"   # p0.5.13
+                else (" (모은 보물 %d개)" % last.get("bag", 0)) if last.get("item") == "treasure"
                 else " — 바로 걸쳤다" if not last.get("placed")
                 else " — 건넨 이의 발밑에 놓였다(네 발밑이 차 있었다 · 걸칠지는 네 몫)" if last.get("spot") == "mine"   # p0.5.6(D6)
                 else " — 발밑에 놓였다(걸칠지는 네 몫)")
@@ -1252,7 +1261,8 @@ def _last_prose(last, names=None):
                 bits.append("완수: " + "·".join(t_.get(x, x) for x in last["done"]))
             if last.get("undone"):
                 bits.append("미완: " + "·".join(t_.get(x, x) for x in last["undone"]))
-            return '%s에게 원정을 보고했다%s' % (last.get("npc", "?"), (" (%s)" % " / ".join(bits)) if bits else "")
+            return '%s에게 원정을 보고했다%s%s' % (last.get("npc", "?"), (" (%s)" % " / ".join(bits)) if bits else "",
+                                                (" — 보상 %d골드를 받았다(지금 골드 %d)" % (last["reward"], last.get("gold", 0))) if last.get("reward") else "")   # p0.5.13 ⚠️문구 임시
         if r == "quest_accepted":           # D69 의뢰 맡음 — 파티의 의뢰가 됐다
             return '게시판의 의뢰 「%s」를 맡았다 — %s%s' % (last.get("title", "?"), last.get("goal", "?"),
                                                       (" (보상: %s)" % last["reward"]) if last.get("reward") else "")
@@ -1526,6 +1536,7 @@ def _trail_prose(trail, names=None):
 #   unwired_keys() 로 잡는다(조용한 누락 금지는 그대로 — 지키는 자리가 프롬프트에서 검증으로 옮겼다).
 _WIRE_KEYS = frozenset((
     "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "potions",
+    "gold",    # p0.5.13 골드(경제 1a): '네 상태' 첫 줄
     "depth", "turn",
     "zone", "known", "witnessed", "memories", "dry", "last", "trail", "floor", "floors", "history", "dialogue",
     "order", "ascii_view", "legend",
@@ -1626,8 +1637,10 @@ def _wire(obs, names=None, compose=False):
     M = []          # (09-08 D44) 기억 절 모음 — 관측(L)과 따로 모아 조립 때 갈래 순서를 정한다
     # (09-08 D44) 직업·성별·힘·민첩은 '나는 누구'라 시트만 말한다 — 여기는 지금의 몸(관측)만. 파트너 "시트는 나는 누구인가를,
     #   관측은 뭘 보고 있는지를". HP 는 x/y 그대로(비율=위급 감각의 재료 — 최대치가 시트에 있어도 읽는 값은 관측이다).
-    L.append("- HP %d/%d, 모은 보물 %d개%s%s — 지금 %d층"
-             % (obs.get("hp", 0), obs.get("maxhp", 0), obs.get("inventory", 0),
+    L.append("- HP %d/%d, %s모은 보물 %d개%s%s — 지금 %d층"
+             % (obs.get("hp", 0), obs.get("maxhp", 0),
+                ("골드 %d, " % obs["gold"]) if "gold" in obs else "",   # p0.5.13 골드 — 관측에 칸이 있으면 0 도 그린다(빈 지갑도 사실). 옛 관측(칸 없음)은 옛 줄 그대로
+                obs.get("inventory", 0),
                 (", 회복 물약 %d병" % obs["potions"]) if obs.get("potions") else "",
                 (", 축복의 물약 %d병" % obs["boons"]) if obs.get("boons") else "",   # D74(09-15) 있을 때만
                 obs.get("depth", 1)))
@@ -1672,6 +1685,14 @@ def _wire(obs, names=None, compose=False):
                          " 답하려면 응답 JSON 의 `oracle_reply` 필드, 선택, 120자)" % (where, n.get("text", "")))
         elif n.get("kind") == "overheard":           # D90(09-20) 들린 말 — 구역에 들어선 첫 관측에 한 번. 들린 사실만(누가 누구에게 한 말인지까지) ⚠️문구 임시
             L.append("- %s에 들어서며 들린 말(마을 사람들끼리 나누는 말이다 — 네게 한 말이 아니다): 「%s」" % (n.get("zone", "이곳"), n.get("text", "")))
+        elif n.get("kind") == "shop":                # p0.5.13 가게 — 문턱 근처에서만. 파는 것(상품 ID)·사들이는 값·사고파는 법(기능 설명 — 가게 곁에서만 붙는다). 살지·팔지는 캐릭터 몫 ⚠️문구 임시
+            L.append(("- %s %s — 사기: 상품 ID 를 use · 팔기: `target` 은 이 가게(%s), `item` 은 소지품 ID 로 use(값은 가게가 정한다):"
+                      % (n.get("name", "가게"), n.get("id", "?"), n.get("id", "?"))) if compose
+                     else "- %s %s — 파는 것과 사들이는 값(값은 가게가 정한다):" % (n.get("name", "가게"), n.get("id", "?")))   # 메뉴형은 사기가 메뉴 줄이다(팔기는 조합형만)
+            for g in n.get("goods") or []:
+                L.append("  · [%s] %s — %d골드" % (g.get("tid", "?"), g.get("name", "?"), int(g.get("price") or 0)))
+            if n.get("buys"):
+                L.append("  · 사들이는 값: " + " · ".join("%s %d골드" % (b.get("name", "?"), int(b.get("price") or 0)) for b in n["buys"]))
     qs = obs.get("quests")                       # D69 맡은 의뢰(파티 장부) — 어느 층에서나, 진행은 세계가 센 숫자
     if qs:
         L.append("- 맡은 의뢰: " + " · ".join("%s(%s)" % (q.get("title", "?"), "완수" if q.get("done")
@@ -2154,10 +2175,11 @@ def _wire(obs, names=None, compose=False):
             out += ["", "## 대상 — 지금 참조할 수 있는 ID (자리는 장소 절에)"]
             told = set()                         # p0.5.6 아이템 설명(물건 설명 + 다루는 규칙): 같은 글은 한 관측에 한 번(같은 물건 둘·같은 type 둘)
             for target in obs.get('targets', []):
-                out.append('- [%s] %s (%s)%s%s' % (
+                out.append('- [%s] %s (%s)%s%s%s' % (
                     target['id'], target.get('name', target['id']), ', '.join(target['tags']),
                     (' — ' + at(target)) if ('dist' in target and target['id'] not in placed) else '',
-                    (' · %d개' % target['count']) if 'count' in target else ''))
+                    ((' · %d골드' if target.get('slot') == 'gold' else ' · %d개') % target['count']) if 'count' in target else '',   # p0.5.13 골드는 액수
+                    (' · 값 %d골드%s' % (target['price'], (' (%s)' % target['shop']) if target.get('shop') else '')) if 'price' in target else ''))   # p0.5.13 상품
                 said = [t for t in (target.get('desc'), target.get('rule')) if t and t not in told]
                 if said:                         #   줄머리 '  · ' = 몬스터 습성 줄과 같은 꼴(안전 차단 접기 줄머리 '  · 최근 친목·건네기: '와 다르다)
                     told.update(said)

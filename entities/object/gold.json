@@ -1,0 +1,16 @@
+{
+  "id": "gold",
+  "name": "골드",
+  "kind": "object",
+  "type": "gold",
+  "tags": [
+    "object",
+    "item"
+  ],
+  "comps": {
+    "item": {
+      "desc": "@prompts"
+    }
+  },
+  "note": "p0.5.13(경제 1a) 골드 — 몸의 정수(bot['gold'], 소지 칸 i7). 받기·팔기·의뢰 보상으로 들어오고 사기·묵기·건네기로 나간다. 바닥에 놓이는 피처는 아직 없다(스프라이트 없음 — 몹 주머니·묘의 골드는 MP 3·13단계). 설명은 SilenceBreaker 임시 문장."
+}

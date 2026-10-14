@@ -20,7 +20,12 @@ COMMON = ('goto', 'explore', 'search', 'attack', 'use', 'give', 'bond', 'wait', 
 DISTANCE_ACTIONS = ('search', 'attack', 'use', 'give', 'bond')
 PARTY = ('party_form', 'party_leave')   # D84 조각 3(2026-09-19): 파티 장부가 걸린 판(obs.partyform)에서만 읽는 동사 — COMMON 밖(옛 판의 행동 계약은 그대로).
 #   party_form + target(b<번호>) = 파티 결성(길드 구역에서 청하고 맞받는다 — 거리 무관) · party_leave(대상 없음) = 파티 탈퇴
-ITEM_SLOTS = {'i1': 'potion', 'i2': 'weapon', 'i3': 'armor', 'i4': 'boon'}   # i4=축복의 물약(D74, 09-15) — 병 단위, 있을 때만 관측에
+ITEM_SLOTS = {'i1': 'potion', 'i2': 'weapon', 'i3': 'armor', 'i4': 'boon',   # i4=축복의 물약(D74, 09-15) — 병 단위, 있을 때만 관측에
+              'i7': 'gold', 'i8': 'treasure'}   # p0.5.13(경제 1a) 골드(액수)·보물(개수) — 있을 때만 관측에. i5·i6 은 master_plan §4.3(돌·두건), i9 는 1b(휴대식) 자리
+ITEM_NAMES = {'potion': '회복 물약', 'boon': '축복의 물약', 'gold': '골드', 'treasure': '보물'}   # 세는 소지의 이름(장비는 든 것의 이름)
+ITEM_TAGS = {'potion': ['item', 'consumable', 'healing'], 'boon': ['item', 'consumable', 'blessing'],
+             'gold': ['item', 'currency'], 'treasure': ['item', 'valuable']}
+AMOUNT_MAX = 9999          # p0.5.13 amount(골드 액수·보물 개수) 칸의 상한 — 꼴만 본다(지닌 것보다 많은지는 실행이 판정한다)
 
 # ── 행동 등록부(p0.5.5, master_plan §7.1) — COMMON 옆의 '추가 행동' ─────────────────────────────────────────────
 # 공용 행동(steal·hide·help …)은 단계가 들어갈 때마다 여기에 한 동사씩 는다(그 단계 커밋에). 지금은 비어 있다.
@@ -39,7 +44,7 @@ ITEM_SLOTS = {'i1': 'potion', 'i2': 'weapon', 'i3': 'armor', 'i4': 'boon'}   # i
 # }  문장(관측 '추가 행동' 블록의 한 줄) = prompts/actions/common_extra.md 의 `동사` 칸(D100 말 파일 — tools/check_words.py 가 등록부와 대조).
 COMMON_EXT = {}
 EXPOSE_KEYS = ('actor', 'targets', 'items', 'sights', 'status')   # 노출 조건이 읽는 관측 칸 — 전부 행동자 프롬프트에 그려지는 칸(verify_common_registry ①)
-BASE_FIELDS = ('type', 'target', 'item', 'form')
+BASE_FIELDS = ('type', 'target', 'item', 'form', 'amount')   # amount = p0.5.13 골드 액수·보물 개수(give·팔기 — 있을 때만 행동 dict 에 실린다)
 FIELD_LEN = 40
 EXTRA_WORDS = 'common_extra'          # prompts/actions/<이것>.md — '추가 행동' 블록의 문장
 _EXTRA_LINES = None
@@ -102,7 +107,9 @@ def _extra_words():
 
 
 def item_value(bot, slot):
-    return bot.get('potions', 0) if slot == 'potion' else bot.get('boons', 0) if slot == 'boon' else bot.get(slot)
+    if slot in IA.COUNTED:                         # 몸의 정수로 세는 소지(물약·축복·골드·보물 — p0.5.13 골드·보물이 더해졌다)
+        return bot.get(IA.COUNTED[slot], 0)
+    return bot.get(slot)
 
 
 def item_text(d, bot, ftype, name):
@@ -150,6 +157,13 @@ def observe(d, bot, bots, obs):
             targets.append({'id': tid, 'kind': 'quest', 'name': '의뢰 「%s」' % q.get('title', '?'),
                             'tags': ['object', 'quest'] + (['accepted'] if q.get('accepted') else []),
                             **{k: q[k] for k in ('goal', 'reward', 'client') if q.get(k)}})
+    for n in obs.get('notices') or []:               # p0.5.13 가게의 상품 — 문턱 SHOP_RANGE 칸 안에 섰을 때만 대상이 된다(use = 사기). 설명은 물건 설명·다루는 규칙 그대로
+        if n.get('kind') != 'shop':
+            continue
+        for g in n.get('goods') or []:
+            refs[g['tid']] = {'kind': 'good', 'gid': g['tid'], 'shop': n.get('id')}
+            targets.append({'id': g['tid'], 'kind': 'good', 'name': g['name'], 'tags': ['item', 'good'], 'price': g['price'],
+                            'shop': n.get('name'), **item_text(d, bot, g.get('type'), g['name'])})
     seen = d.visible_cells(bot['x'], bot['y'])
     for rid, door in sorted(d.doors.items()):
         visible = door.cell in seen if door.cell else any(p in seen for p in door.sides.values())
@@ -170,10 +184,9 @@ def observe(d, bot, bots, obs):
             continue
         refs[rid] = {'kind': 'item', 'slot': slot, 'value': copy.deepcopy(value)}
         entry = {'id': rid, 'kind': 'item', 'slot': slot,
-                 'name': '회복 물약' if slot == 'potion' else '축복의 물약' if slot == 'boon' else value['name'],
-                 'tags': (['item', 'consumable', 'healing'] if slot == 'potion'
-                          else ['item', 'consumable', 'blessing'] if slot == 'boon' else ['item', 'equipment'])}
-        if slot in ('potion', 'boon'):
+                 'name': ITEM_NAMES.get(slot) or value['name'],
+                 'tags': list(ITEM_TAGS.get(slot) or ['item', 'equipment'])}
+        if slot in IA.COUNTED:
             entry['count'] = value
         else:
             entry['bonus'] = value.get('bonus', 0)
@@ -298,6 +311,15 @@ def parse(obj, obs):
         if item not in {e['id'] for e in obs.get('items', [])}:
             return None, 'invalid_item'
         out['item'] = item
+        raw = obj.get('amount')                    # p0.5.13 골드 액수·보물 개수 — 그 둘에만 실린다(물약·축복·장비는 한 번에 하나라 버린다). 지닌 것보다 많은지는 실행이 본다
+        if ITEM_SLOTS.get(item) in IA.AMOUNT_SLOTS and raw is not None and str(raw).strip() != '':
+            try:
+                n = int(raw) if (isinstance(raw, float) and raw.is_integer()) else int(str(raw).strip())
+            except ValueError:
+                return None, 'invalid_amount'
+            if isinstance(raw, bool) or not 1 <= n <= AMOUNT_MAX:
+                return None, 'invalid_amount'
+            out['amount'] = n
     elif typ == 'give':
         return None, 'missing_item'
     if typ == 'bond':
@@ -360,6 +382,12 @@ def entity(d, bot, target, bots, refs=None):
         if not f or max(abs(f.x - bot['x']), abs(f.y - bot['y'])) > rng:
             return None
         return kind, (f.x, f.y), ref
+    if kind == 'good':                                   # p0.5.13 가게의 상품 — 그 가게 문턱의 SHOP_RANGE 안에 서 있을 때만 실물(게시판 의뢰와 같은 꼴)
+        g = IA.good(d, ref.get('gid'))
+        f = d.features.get(g['fid']) if g else None
+        if IA.shop_at(d, f) is None or max(abs(f.x - bot['x']), abs(f.y - bot['y'])) > IA.SHOP_RANGE or (f.x, f.y) not in seen:
+            return None                                  #   p0513b(Codex 리뷰 P2): 가까워도 그 가게가 안 보이면 실물이 아니다(벽 너머·다른 구역)
+        return kind, (f.x, f.y), ref
     if kind == 'door':
         door = d.doors.get(target)
         if not door:
@@ -372,7 +400,7 @@ def entity(d, bot, target, bots, refs=None):
         return (kind, (obj.x, obj.y), obj) if not obj.hidden and not obj.sprung and (obj.x, obj.y) in seen else None
     if kind == 'item':
         value = item_value(bot, ref['slot'])
-        if not value or (ref['slot'] not in ('potion', 'boon') and value != ref['value']):   # 병 단위 슬롯은 수만 본다
+        if not value or (ref['slot'] not in IA.COUNTED and value != ref['value']):   # 병 단위 슬롯은 수만 본다 · p0513b(리뷰 권장): 골드·보물도 수량형 — 액수가 바뀌어도 같은 소지품
             return None
         return kind, (bot['x'], bot['y']), ref
     if kind == 'way' and ref['depth'] == d.depth and ((ref['epoch'] == bot.get('_way_epoch') and tuple(ref['origin']) == (bot['x'], bot['y']))
@@ -389,7 +417,7 @@ def in_range(d, bot, action, target, at=None):
     tx, ty = target[1]
     if target[0] == 'item' or (target[0] == 'bot' and target[2] is bot):
         return True
-    if target[0] == 'quest':                              # D69 게시판의 글 — 대상이 된 시점에 이미 range 안(entity 가 재확인)
+    if target[0] in ('quest', 'good'):                    # D69 게시판의 글 · p0.5.13 가게의 상품 — 대상이 된 시점에 이미 range 안(entity 가 재확인)
         return True
     distance = abs(x - tx) + abs(y - ty)
     if action['type'] == 'attack':
@@ -456,7 +484,7 @@ def execute(d, bot, action, bots):
         if not item or item[0] != 'item':
             return _base(bot, action, 'nothing', reason_code='item_not_owned')
         if kind == 'bot' and obj is not bot:
-            return d._give(bot, rid, item[2]['slot'], bots)
+            return d._give(bot, rid, item[2]['slot'], bots, amount=action.get('amount'))   # p0.5.13 골드 액수·보물 개수(없으면 1)
         return _base(bot, action, 'no_effect', reason_code='no_inventory_transfer')
     if typ == 'bond':
         if kind == 'bot' and obj is not bot:
@@ -468,6 +496,13 @@ def execute(d, bot, action, bots):
         if item_id:
             if not item or item[0] != 'item':
                 return _base(bot, action, 'nothing', reason_code='item_not_owned')
+            if kind == 'feature' and IA.shop_at(d, obj) is not None:   # p0.5.13 팔기 — 가게에 소지품을 쓴다 = 판다(값은 가게가 정한다 · 사들이지 않으면 no_deal)
+                res = IA.sell(d, bot, obj, item[2]['slot'], action.get('amount'), bots, rid, item_id)
+                d._obj_tag(bot, obj, res)
+                return {**res, 'type': 'use', 'effect_type': 'interact'}
+            if kind == 'good' and item[2]['slot'] == 'gold':           # p0.5.13 골드를 상품에 쓴다 = 산다(값은 가게가 정한다 — 적은 액수는 보지 않는다)
+                res = d._interact(bot, rid, bots)
+                return {**res, 'type': 'use', 'effect_type': 'interact'}
             if item[2]['slot'] == 'boon':                        # D74(09-15) 축복의 물약 — 자기에게만(남에게 넘기려면 give)
                 if not ((kind == 'item' and obj['slot'] == 'boon') or (kind == 'bot' and obj is bot)):
                     return _base(bot, action, 'no_effect', reason_code='no_item_effect')
@@ -502,7 +537,7 @@ def execute(d, bot, action, bots):
             if res.get('result') == 'nothing':
                 return _base(bot, action, 'no_effect', reason_code='no_intrinsic_use')
             return {**res, 'type': 'use', 'effect_type': 'interact'}
-        if kind == 'quest':                               # D69 의뢰 맡기 — 게시판 글의 '기능'은 맡는 것이다
+        if kind in ('quest', 'good'):                     # D69 의뢰 맡기 — 게시판 글의 '기능'은 맡는 것이다 · p0.5.13 상품의 기능은 사는 것이다
             res = d._interact(bot, rid, bots)
             return {**res, 'type': 'use', 'effect_type': 'interact'}
         return _base(bot, action, 'no_effect', reason_code='no_intrinsic_use')
@@ -572,7 +607,8 @@ def decorate(bot, action, result):
     if pending:
         status = None
     elif r in ('lost', 'no_target', 'too_far', 'no_path', 'blocked', 'nothing', 'no_potion', 'no_boon', 'no_room', 'wait_allies', 'disabled', 'skill_failed', 'skill_missed',
-               'offer_short'):                             # offer_short = D95 바칠 보물이 모자람(청했으나 못 한 일 — no_potion 과 같은 급)
+               'offer_short',                              # offer_short = D95 바칠 보물이 모자람(청했으나 못 한 일 — no_potion 과 같은 급)
+               'too_poor', 'no_deal', 'not_enough'):       # p0.5.13 골드가 모자람 · 가게가 사들이지 않음 · 지닌 것보다 많이 팔거나 건네려 함
         status = 'failed'
     elif r in ('no_effect', 'already_beside', 'used_up') or (action['type'] == 'search' and not result.get('found')):
         status = 'no_effect'                                   # used_up = D89 once 로 다 쓴 오브젝트를 다시 씀(실패가 아니라 변화 없음)

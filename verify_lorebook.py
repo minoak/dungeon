@@ -543,8 +543,8 @@ snap13 = {"version": 2, "state_version": 4, "run_id": "x", "d": dA, "bots": bA, 
           "worlds": [{"d": dA, "bots": bA}], "waiting": {}, "sheets": SHEETS}
 up = snapshot.upgrade(pickle.loads(pickle.dumps(snap13)))
 uA, uB, uT = up["d"], up["saved"][1]["d"], up["saved"][0]["d"]
-check("⑬ 내용 판 4 → 5: 몸에 lore{} · 사람 기록 이름 20·글 80 · 던전마다 scope(보존 층 깊이 순 → 세계 → 지금 층) · lore_ids",
-      up["state_version"] == snapshot.STATE_VERSION == 5 and all(b_.get("lore") == {} for b_ in up["bots"])
+check("⑬ 내용 판 4 → 5(p0.5.13 부터 지금 판까지 이어서 오른다): 몸에 lore{} · 사람 기록 이름 20·글 80 · 던전마다 scope(보존 층 깊이 순 → 세계 → 지금 층) · lore_ids",
+      up["state_version"] == snapshot.STATE_VERSION >= 5 and all(b_.get("lore") == {} for b_ in up["bots"])
       and len(up["bots"][0]["people"]["b2"]["name"]) == 20 and len(up["bots"][0]["people"]["b2"]["text"]) == 80
       and (uT.scope, uB.scope, uA.scope) == (1, 2, 3) and up["lore_ids"] == {"scope": 4, "uid": 1},
       ((getattr(uT, "scope", None), getattr(uB, "scope", None), getattr(uA, "scope", None)), up.get("lore_ids")))

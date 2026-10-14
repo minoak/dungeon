@@ -13,7 +13,9 @@
     다시 쓰면 'used_up' 사실이 돌아온다. 스트림의 피처 as_dict 는 그대로다(verify_stream 필드 전수 일치).
   · 판정 rng(d.rng·d20)를 건드리지 않는다 — 뒤지기의 추첨은 세계 시드·층·피처 자리의 해시다(통에 무엇이 들었나는 세계가 지어질 때
     이미 정해진 사실이다). 그래서 use 부품이 없는 세계는 옛 판과 바이트가 같다(verify_skill_off).
-  · 돈·가격·매매는 없다(D69 에서 제출 뒤로 보류) — browse 는 구경만이다.
+  · p0.5.13(경제 1a, .orch/drafts/economy_design.md): 돈은 골드(몸의 정수 bot['gold'])다. 가게 = kind 'shop' 하나 — 상품은 문턱 SHOP_RANGE 칸 안에서
+    ID(g<n>)가 붙은 관측 대상이고 `use g<n>` = 사기(buy), `use <가게 f…> item=<소지 ID>` = 팔기(sell — 엔진이 값을 정한다: buys 에 적힌 값 또는
+    파는 값의 절반). 묵기는 정의의 price 를 낸다. browse 는 여전히 구경만이다. 흥정·재고·NPC 지갑은 없다(1a 범위 밖).
   · 문장은 사실만(조언·결론·행동 지시 없음) — 엔진이 실제로 한 일만 말한다. ⚠️아래 문장·라벨·태그 낱말은 전부 임시(검토표 등재 대상).
   · 다 쓴 것은 다 쓴 것으로 보인다(09-20 리뷰 수선) — once 로 다 쓴 피처는 관측의 use 칸에 spent 가 실리고, 메뉴 라벨·조합형
     '대상의 현재 사실' 줄이 효과 꼬리('마시면 HP +3') 대신 '이미 쓰였다'는 사실만 말한다(남이 다 쓴 뒤의 다른 캐릭터에게도 — 세계의 상태).
@@ -23,8 +25,10 @@
 
 결과 dict 는 기존 interact 결과와 같은 꼴: {char, type:'interact', target, result, what, use_kind, …사실}.
   kind → result:  read→read{text[,page,pages]} · sit→sat{heal,hp} · drink→drank{heal,hp} · browse→browsed{wares} ·
-                  practice→practiced · rummage→rummaged{got[,potions|bag,quest]} · lodge→lodged{heal,hp,cleared} ·
-                  warm→warmed{heal,hp} · offer→offered{cost,bag,stat,value[,hp]} | offer_short{cost,bag} · once 로 다 쓴 뒤→used_up
+                  practice→practiced · rummage→rummaged{got[,potions|bag,quest]} · lodge→lodged{heal,hp,cleared[,paid,gold]} | too_poor{price,gold} ·
+                  warm→warmed{heal,hp} · offer→offered{cost,bag,stat,value[,hp]} | offer_short{cost,bag} · once 로 다 쓴 뒤→used_up ·
+                  shop→browsed{wares,buys}(물건 없이 쓰면 진열과 값) · buy(g<n>)→bought{what,price,gold,…}|too_poor|no_room ·
+                  sell(item)→sold{what,n,price,got,gold,…}|no_deal|not_enough
   (뒤져서 나온 것의 칸 이름이 `found` 가 아니라 `got` 인 까닭: `found` 는 수색 결과의 [{kind,name…}] 목록 계약이라
    tags.py·bestiary.py 가 모든 이벤트의 found 를 목록으로 돈다 — 문자열을 실으면 그 집계기들이 죽는다.)
 """
@@ -44,6 +48,7 @@ KINDS = {
     'lodge':    {'label': '묵기',     'tag': 'lodging',   'tried': '묵어 봄',     'seen': '묵었다'},
     'warm':     {'label': '불 쬐기',  'tag': 'warmth',    'tried': '불 쬐어 봄',  'seen': '불을 쬐었다'},
     'offer':    {'label': '바치기',   'tag': 'offering',  'tried': '바쳐 봄',     'seen': None},      # 목격 한 마디는 바쳤나·못 바쳤나에 따라(아래 _OFFER_SEEN)
+    'shop':     {'label': '사고팔기', 'tag': 'shop',      'tried': '들러 봄',     'seen': '진열된 것을 둘러보았다'},   # p0.5.13 가게 — 사고판 목격은 물건 이름으로(buy·sell)
 }
 assert set(KINDS) == set(ENT.USE_KINDS), '쓰임 kind 어휘는 entities.USE_KINDS 와 같아야 한다(검증기 ↔ 처리기)'
 # D90(09-20) read 의 동사 변형(use.verb) — 처리·결과 이름은 read 그대로이고 말만 바뀐다(글이 아니라 눈에 보이는 것을 돌려주는 화단 같은 것).
@@ -58,7 +63,12 @@ def _info(use):
     return VERBS.get(use.get('verb')) if (use.get('kind') == 'read' and use.get('verb')) else KINDS.get(use.get('kind'))
 
 RESULTS = ('read', 'sat', 'drank', 'browsed', 'practiced', 'rummaged', 'lodged', 'warmed', 'used_up',
-           'offered', 'offer_short')       # D95(09-20) 공물 — 바쳤다 / 바칠 보물이 모자랐다
+           'offered', 'offer_short',       # D95(09-20) 공물 — 바쳤다 / 바칠 보물이 모자랐다
+           'bought', 'sold', 'too_poor', 'no_deal', 'not_enough', 'no_room')   # p0.5.13 가게·묵기 값 — 샀다 / 팔았다 / 골드가 모자랐다 /
+#   이 가게는 그것을 사들이지 않는다 / 판다는 개수만큼 지니지 않았다 / 산 장비와 바꿔 들 때 들던 것을 내려놓을 발밑이 없다
+SHOP_RANGE = 2       # p0.5.13 상품(g<n>)이 관측 대상이 되고 살 수 있는 거리 — 가게 피처(문턱)에서 체비셰프 칸 수(게시판 의뢰의 range 2 와 같은 자)
+COUNTED = {'treasure': 'bag', 'potion': 'potions', 'boon': 'boons', 'gold': 'gold'}   # 몸의 정수로 세는 소지 type → 몸 칸
+AMOUNT_SLOTS = ('gold', 'treasure')   # p0.5.13 개수(amount)를 받는 소지 — 골드(액수)·보물(개수). 물약·축복은 지금처럼 한 병씩
 _HEAL_KINDS = {'sit': 'sat', 'drink': 'drank', 'warm': 'warmed'}
 _GOT_KR = {'potion': '물약', 'treasure': '보물'}
 _GOT_SEEN = {'potion': '물약을 꺼냈다', 'treasure': '보물을 꺼냈다', 'nothing': '빈손이었다'}
@@ -71,6 +81,8 @@ OFFER_STATS = ('str', 'dex', 'maxhp')      # 신이 고르는 칸(차례 = 해�
 _STAT_KR = {'str': '힘', 'dex': '민첩', 'maxhp': '최대 HP'}         # dungeon_gm.STAT_KR + 최대 HP(공물에서만 쓰는 말이라 여기 사본)
 _STAT_OBJ = {'str': '힘을', 'dex': '민첩을', 'maxhp': '최대 HP 를'}   # 목적격 — 라틴 글자 뒤는 띄어 쓴다('HP 가 전부 돌아오고' 관례)
 _OFFER_SEEN = {'offered': '신전에 보물을 바쳤다', 'offer_short': '바치려다 그만두었다'}   # ⚠️문구 임시 — 곁의 사람이 보는 한 마디(ally_use 괄호)
+# p0.5.13 가게·묵기 값의 목격 한 마디(ally_use 괄호) — 무엇을 사고팔았나는 보이고, 얼마를 냈는지·남은 지갑은 보이지 않는다. ⚠️문구 임시
+_TRADE_SEEN = {'bought': '%s 샀다', 'sold': '%s 팔았다', 'buy_short': '사려다 그만두었다', 'lodge_short': '묵으려다 그만두었다'}
 
 _IDX = {'src': None, 'n': -1, 'by_type': {}}
 
@@ -137,7 +149,8 @@ def obs_fact(d, f):
     k = use['kind']
     spent = (bool(use.get('once')) or k == 'rummage') and f.id in (getattr(d, 'use_spent', None) or {})   # 다 쓴 것 = 세계의 상태(누가 보든)
     return {'use': {'kind': k, **({'verb': use['verb']} if (k == 'read' and use.get('verb')) else {}),
-                    **({'spent': True} if spent else ({'heal': _heal_of(use)} if k in _HEAL_KINDS else {}))}}   # 다 쓴 것엔 효과 수치를 싣지 않는다(있을 때만)
+                    **({'spent': True} if spent else ({'heal': _heal_of(use)} if k in _HEAL_KINDS else {})),   # 다 쓴 것엔 효과 수치를 싣지 않는다(있을 때만)
+                    **({'price': int(use['price'])} if (k == 'lodge' and use.get('price')) else {})}}   # p0.5.13 묵는 값(있을 때만 — 값 없는 숙소는 옛 칸 그대로)
 
 
 def tags(fact):
@@ -160,7 +173,8 @@ def fact_text(fact):
     if k == 'warm' and heal:
         return '불을 쬐면 HP +%d (상처가 있을 때)' % heal
     if k == 'lodge':
-        return '묵으면 HP 가 전부 돌아오고 몸 상태가 낫는다'
+        price = int((fact or {}).get('price') or 0)  # p0.5.13 묵는 값 — 값이 있는 숙소만 꼬리가 붙는다(⚠️문구 임시)
+        return '묵으면 HP 가 전부 돌아오고 몸 상태가 낫는다' + ((' — 값 %d골드' % price) if price else '')
     if k == 'offer':                             # D95 — 값·오르는 칸은 사실, 무엇이 오를지는 말하지 않는다(신이 고른다)
         return '모은 보물 %d개를 바치면 %s 중 하나가 1 오른다(무엇이 오를지는 신이 정한다)' % (
             OFFER_COST, '·'.join(_STAT_KR[s] for s in OFFER_STATS))
@@ -272,18 +286,183 @@ def handle(d, bot, f, bots=None, target_id=None):
                    'stat': stat, 'value': bot[stat], **({'hp': bot['hp']} if stat == 'maxhp' else {})}
             seen = _OFFER_SEEN['offered']
     elif kind == 'lodge':                                      # D34 '지우기는 휴식뿐' — 묵기는 휴식이다(휴식 완료와 같은 소거)
-        heal = max(0, bot['maxhp'] - bot['hp'])
-        bot['hp'] = bot['maxhp']
-        cleared = sorted(bot.get('status') or {})
-        if cleared:
-            bot['status'], bot['bleed_steps'], bot['slow_beat'] = {}, 0, 0
-        out = {**base, 'result': 'lodged', 'heal': heal, 'hp': bot['hp'], 'cleared': cleared}
+        price, gold = int(use.get('price') or 0), int(bot.get('gold') or 0)   # p0.5.13 묵는 값 — 모자라면 사실만(묵지 못했다), 몸·지갑 그대로
+        if gold < price:
+            out, seen = {**base, 'result': 'too_poor', 'price': price, 'gold': gold}, _TRADE_SEEN['lodge_short']
+        else:
+            heal = max(0, bot['maxhp'] - bot['hp'])
+            bot['hp'] = bot['maxhp']
+            cleared = sorted(bot.get('status') or {})
+            if cleared:
+                bot['status'], bot['bleed_steps'], bot['slow_beat'] = {}, 0, 0
+            if price:
+                bot['gold'] = gold - price
+            out = {**base, 'result': 'lodged', 'heal': heal, 'hp': bot['hp'], 'cleared': cleared,
+                   **({'paid': price, 'gold': bot['gold']} if price else {})}   # 값 없는 숙소는 옛 결과 그대로
+    elif kind == 'shop':                                       # p0.5.13 물건 없이 가게를 쓰면 = 진열과 값을 본다(사기는 상품 ID, 팔기는 item 칸 — buy·sell)
+        out = {**base, 'result': 'browsed', 'wares': ['%s %d골드' % (g['name'], g['price']) for g in goods(d) if g['fid'] == f.id],
+               'buys': ['%s %d골드' % (n, p) for n, p in buy_list(use)]}
     if out is None:
         return None
     if once:
         spent[f.id] = {'char': bot['char'], 'turn': getattr(d, 'turn', 0)}
     d._witness_use(bots, f.x, f.y, [bot], f.name, fid, seen)   # 목격 = 기존 ally_use{what,id,result} 그대로(동사는 '사용' 하나 — 파트너 확정)
     return out
+
+
+# ── p0.5.13(경제 1a) 가게 — 상품 목록·값·사기·팔기. 굴림 없음(판정 rng 무접촉) · 값은 정의의 사실(흥정 없음) ──
+def shops(d):
+    """세계의 가게 [(피처, use)] — 피처 번호 순(결정론). 쓰임이 shop 인 피처(마을 생활 판의 건물 — use_of 가 판의 스위치를 따른다)."""
+    out = []
+    for fid in sorted(getattr(d, 'features', None) or {}):
+        f = d.features[fid]
+        use = use_of(d, f)
+        if (use or {}).get('kind') == 'shop':
+            out.append((f, use))
+    return out
+
+
+def goods(d):
+    """상품 [{gid, fid, item, name, type, price}] — 가게(피처 번호 순) × sells 순서로 g1, g2 …. 마을이 지어지면 바뀌지 않는다(게시판 q<n> 과 같은 꼴).
+    상태를 들지 않는다 — 부를 때마다 세계(피처·정의)에서 다시 센다(옛 피클·스냅샷 이관에 새 칸이 필요 없다)."""
+    out = []
+    for f, use in shops(d):
+        for e in use.get('sells') or []:
+            df = ENT.get(e['item'])
+            out.append({'gid': 'g%d' % (len(out) + 1), 'fid': f.id, 'item': e['item'], 'name': df['name'],
+                        'type': df['type'], 'price': int(e['price'])})
+    return out
+
+
+def good(d, gid):
+    return next((g for g in goods(d) if g['gid'] == gid), None)
+
+
+def count(raw):
+    """행동의 amount → 정수 ≥1(빼면·못 읽으면 1). 조합형 입력은 parse 가 이미 꼴을 봤다 — 메뉴형·BYO 길에서 엉뚱한 값이 와도 죽지 않게."""
+    try:
+        return max(1, int(raw)) if raw not in (None, '', True, False) else 1
+    except (TypeError, ValueError):
+        return 1
+
+
+def item_name(bot, slot):
+    """소지 type → 그 물건의 이름(장비는 든 것의 이름 · 나머지는 아이템 정의의 이름 — 정의가 없으면 type)."""
+    if slot in ('weapon', 'armor'):
+        return (bot.get(slot) or {}).get('name')
+    df = ENT.item_def(slot)
+    return df['name'] if df else slot
+
+
+def buy_price(use, ftype, name):
+    """이 가게가 그 물건을 사들이는 값(골드) — buys 에 적힌 type 이면 그 값 · 이 가게가 파는 물건(type·이름이 같은 정의)이면 파는 값 // SHOP_RESALE.
+    아니면 None(사들이지 않는다). 되사는 값이 0 이 되는 싼 물건도 사들이지 않는다."""
+    buys = use.get('buys') or {}
+    if ftype in buys:
+        return int(buys[ftype])
+    for e in use.get('sells') or []:
+        df = ENT.get(e['item'])
+        if df.get('type') == ftype and df.get('name') == name:
+            return (int(e['price']) // ENT.SHOP_RESALE) or None
+    return None
+
+
+def buy_list(use):
+    """사들이는 값 [(이름, 값)] — buys(정의 순서) 다음 파는 물건의 되사는 값(sells 순서). 0 은 뺀다."""
+    out = []
+    for t, p in (use.get('buys') or {}).items():
+        df = ENT.item_def(t)
+        out.append((df['name'] if df else t, int(p)))
+    for e in use.get('sells') or []:
+        p = int(e['price']) // ENT.SHOP_RESALE
+        if p:
+            out.append((ENT.get(e['item'])['name'], p))
+    return out
+
+
+def notices(d, bot):
+    """관측 notices 의 가게 항목 — 문턱 SHOP_RANGE 칸 안의 가게마다 {kind:'shop', id:'f…', name, goods:[{tid, name, type, price}], buys:[{name, price}]}.
+    상품 줄이 곧 사기의 대상(g<n>)이고, 팔기 설명은 이 항목이 있을 때만 관측에 붙는다(런타임 주입 — 지침 파일은 그대로). 없으면 []."""
+    out, gl, seen = [], None, None
+    for f, use in shops(d):
+        if getattr(f, 'concealed', False) or max(abs(bot['x'] - f.x), abs(bot['y'] - f.y)) > SHOP_RANGE:
+            continue
+        seen = d.visible_cells(bot['x'], bot['y']) if seen is None else seen   # p0513b(Codex 리뷰 P2): 가까워도 안 보이는 가게(벽 너머·다른 구역)의 상품은 없다
+        if (f.x, f.y) not in seen:
+            continue
+        gl = goods(d) if gl is None else gl
+        out.append({'kind': 'shop', 'id': 'f%d' % f.id, 'name': f.name,
+                    'goods': [{'tid': g['gid'], 'name': g['name'], 'type': g['type'], 'price': g['price']} for g in gl if g['fid'] == f.id],
+                    'buys': [{'name': n, 'price': p} for n, p in buy_list(use)]})
+    return out
+
+
+def shop_at(d, f):
+    """피처가 지금 가게인가 → 그 use(아니면 None). 숨은 피처는 아직 없는 것."""
+    if f is None or getattr(f, 'concealed', False):
+        return None
+    use = use_of(d, f)
+    return use if (use or {}).get('kind') == 'shop' else None
+
+
+def buy(d, bot, gid, bots=None):
+    """상품 g<n> 을 산다(use/interact g<n>) — 그 가게 문턱 SHOP_RANGE 칸 안이어야 한다. 값이 지닌 골드보다 크면 too_poor(사실만 — 몸·지갑 그대로).
+    물약은 소지 물약 +1, 무기·갑옷은 바로 든다 — 들던 것은 발밑에 놓인다(바꿔 들기와 같은 문법 · 발밑이 차 있으면 no_room). 원자적: 물건이 못 오면 골드도 안 나간다."""
+    base = {'char': bot['char'], 'type': 'interact', 'target': gid, 'use_kind': 'shop'}
+    g = good(d, gid)
+    f = d.features.get(g['fid']) if g else None
+    if not g or shop_at(d, f) is None or (f.x, f.y) not in d.visible_cells(bot['x'], bot['y']):   # p0513b(리뷰 P2): 안 보이는 가게의 상품은 없는 것
+        return {**base, 'result': 'no_target'}
+    if max(abs(bot['x'] - f.x), abs(bot['y'] - f.y)) > SHOP_RANGE:
+        return {**base, 'result': 'too_far'}
+    base.update(what=g['name'], shop=f.name, shop_id='f%d' % f.id)
+    price, gold = g['price'], int(bot.get('gold') or 0)
+    if gold < price:
+        d._witness_use(bots, f.x, f.y, [bot], f.name, 'f%d' % f.id, _TRADE_SEEN['buy_short'])
+        return {**base, 'result': 'too_poor', 'price': price, 'gold': gold}
+    extra = {}
+    if g['type'] == 'potion':
+        bot['potions'] = int(bot.get('potions') or 0) + 1
+        extra['potions'] = bot['potions']
+    else:                                                      # weapon · armor(ENT.SHOP_ITEM_TYPES — 검증기가 막는다)
+        slot, old = g['type'], bot.get(g['type'])
+        if old and d.feature_at(bot['x'], bot['y']) is not None:
+            return {**base, 'result': 'no_room', 'slot': slot, 'price': price, 'gold': gold}
+        bonus = int(((ENT.get(g['item']).get('comps') or {}).get('equipment') or {}).get('bonus') or 0)
+        if old:
+            did = d._put_gear(slot, old, bot['x'], bot['y'], bot['char'])   # D57: 같은 번호로 발밑에(바꿔 들기 문법)
+            extra.update(dropped=old['name'], dropped_id='f%d' % did)
+        bot[slot] = {'id': d._alloc_fid(), 'name': g['name'], 'bonus': bonus, 'worn': [bot['char']]}   # 손에서 태어난 장비(D57 — NPC 선물과 같은 꼴)
+        extra.update(slot=slot, bonus=bonus)
+    bot['gold'] = gold - price
+    d._witness_use(bots, f.x, f.y, [bot], f.name, 'f%d' % f.id, _TRADE_SEEN['bought'] % (g['name'] + _j(g['name'], '을', '를')))
+    return {**base, 'result': 'bought', 'price': price, 'gold': bot['gold'], **extra}
+
+
+def sell(d, bot, f, slot, amount=None, bots=None, target_id=None, item_id=None):
+    """가게 f 에 소지품(slot)을 판다(use <가게> item=<소지 ID> [amount]) — 값은 이 가게가 정한다(buy_price). 개수는 보물만(amount, 빼면 1).
+    사들이지 않는 물건이면 no_deal, 지닌 것보다 많이 팔려 하면 not_enough(둘 다 몸·지갑 그대로). 거리는 호출측(CA.execute 의 use 거리)이 봤다."""
+    use = shop_at(d, f)
+    fid = 'f%d' % f.id
+    name = item_name(bot, slot) or slot
+    base = {'char': bot['char'], 'type': 'interact', 'target': target_id or fid, 'use_kind': 'shop',
+            'what': name, 'shop': f.name, 'shop_id': fid, **({'item': item_id} if item_id else {})}
+    price = buy_price(use, slot, name) if (use is not None and slot in ENT.SHOP_BUY_TYPES) else None
+    if not price:
+        return {**base, 'result': 'no_deal'}
+    n = count(amount) if slot in AMOUNT_SLOTS else 1
+    have = (1 if bot.get(slot) else 0) if slot in ('weapon', 'armor') else int(bot.get(COUNTED[slot]) or 0)
+    if have < n:
+        return {**base, 'result': 'not_enough', 'have': have, 'amount': n}
+    got, extra = price * n, {}
+    if slot in ('weapon', 'armor'):
+        bot[slot] = None
+    else:
+        bot[COUNTED[slot]] = have - n
+        extra[COUNTED[slot]] = bot[COUNTED[slot]]
+    bot['gold'] = int(bot.get('gold') or 0) + got
+    d._witness_use(bots, f.x, f.y, [bot], f.name, fid, _TRADE_SEEN['sold'] % (name + _j(name, '을', '를')))
+    return {**base, 'result': 'sold', 'n': n, 'price': price, 'got': got, 'gold': bot['gold'], **extra}
 
 
 # ── 표현 — 결과 dict 하나를 세 군데(자기 문장·궤적 꼬리표·관전 요약)가 읽는다. 전부 사실만. ⚠️문구 임시 ──
@@ -314,7 +493,30 @@ def prose(last):
     if r == 'warmed':
         return '%s의 불을 쬐었다%s' % (what, _hp_sfx(last))
     if r == 'browsed':
-        return '%s에 진열된 것을 구경했다: %s' % (what, ', '.join(last.get('wares') or []))
+        s = '%s에 진열된 것을 구경했다: %s' % (what, ', '.join(last.get('wares') or []))
+        if last.get('buys') is not None:            # p0.5.13 가게 — 진열(파는 값) 다음 사들이는 값(가게만 실린다 — 구경 결과는 옛 문장 그대로)
+            s += ' · 사들이는 것: %s' % (', '.join(last['buys']) or '없음')
+        return s
+    shop = last.get('shop') or '가게'                 # p0.5.13 가게 결과의 what = 사고판 물건 이름 · shop = 가게 이름
+    if r == 'bought':
+        tail = ((' · 소지 물약 %d병' % last['potions']) if 'potions' in last
+                else (' · 바로 %s%s' % ('손에 들었다' if last.get('slot') == 'weapon' else '걸쳤다',
+                                     (' — 들던 %s%s 발밑에 놓였다' % (last['dropped'], _j(last['dropped'], '은', '는'))) if last.get('dropped') else '')))
+        return '%s에서 %s%s 샀다 — %d골드를 냈다(남은 골드 %d)%s' % (shop, what, _j(what, '을', '를'), last.get('price', 0), last.get('gold', 0), tail)
+    if r == 'sold':
+        n = int(last.get('n') or 1)
+        thing = ('%s %d개를' % (what, n)) if ('bag' in last or n > 1) else '%s%s' % (what, _j(what, '을', '를'))
+        return '%s에 %s 팔았다 — %d골드를 받았다(지금 골드 %d)' % (shop, thing, last.get('got', 0), last.get('gold', 0))
+    if r == 'too_poor':
+        if last.get('use_kind') == 'lodge':
+            return '%s에 묵으려 했다 — 값이 %d골드인데 지닌 골드가 %d다' % (what, last.get('price', 0), last.get('gold', 0))
+        return '%s에서 %s%s 사려 했다 — 값이 %d골드인데 지닌 골드가 %d다' % (shop, what, _j(what, '을', '를'), last.get('price', 0), last.get('gold', 0))
+    if r == 'no_deal':
+        return '%s에 %s%s 팔려 했다 — 이 가게는 %s%s 사들이지 않는다' % (shop, what, _j(what, '을', '를'), what, _j(what, '을', '를'))
+    if r == 'not_enough':
+        return '%s에 %s %d개를 팔려 했다 — 지닌 것은 %d개다' % (shop, what, last.get('amount', 0), last.get('have', 0))
+    if r == 'no_room':
+        return '%s에서 %s%s 사려 했다 — 들던 것을 내려놓을 발밑 자리가 없다(사지 않았다)' % (shop, what, _j(what, '을', '를'))
     if r == 'practiced':
         return '%s%s 상대로 몸을 풀었다' % (what, _j(what, '을', '를'))
     if r == 'rummaged':
@@ -326,9 +528,10 @@ def prose(last):
         return '%s%s 뒤졌다 — 비어 있다' % (what, _j(what, '을', '를'))
     if r == 'lodged':
         cl = last.get('cleared') or []
+        paid = (' · %d골드를 냈다(남은 골드 %d)' % (last['paid'], last.get('gold', 0))) if last.get('paid') else ''   # p0.5.13 값 있는 숙소만
         if not last.get('heal') and not cl:
-            return '%s에 묵었다 — 나을 상처가 없었다' % what
-        return '%s에 묵었다 — 몸이 다 나았다(HP +%d%s)' % (what, last.get('heal', 0), (', 나은 상태: ' + '·'.join(cl)) if cl else '')
+            return '%s에 묵었다 — 나을 상처가 없었다%s' % (what, paid)
+        return '%s에 묵었다 — 몸이 다 나았다(HP +%d%s)%s' % (what, last.get('heal', 0), (', 나은 상태: ' + '·'.join(cl)) if cl else '', paid)
     if r == 'offered':                              # D95 — 무엇을 냈고 무엇이 올랐나(사실만). 고른 것은 신이다
         st = last.get('stat')
         return '%s에 보물 %d개를 바쳤다 — 신이 %s 1 올렸다(지금 %s %d · 모은 보물 %d개)' % (
@@ -368,7 +571,18 @@ def event_tags(rec):
             return [('loot', '획득', '%s → 보물' % what)]
         return [('use', '사용', '%s — 비어 있음' % what)]
     if r == 'lodged':
-        return [('use', '사용', '%s — 묵음 +%d (HP %d)' % (what, rec.get('heal', 0), rec.get('hp', 0)))]
+        return [('use', '사용', '%s — 묵음 +%d (HP %d)%s' % (what, rec.get('heal', 0), rec.get('hp', 0),
+                                                       (' · %d골드' % rec['paid']) if rec.get('paid') else ''))]   # p0.5.13 값 있는 숙소만
+    shop = rec.get('shop') or '가게'                 # p0.5.13 가게 — 새 키를 만들지 않는다(loot·use·misc 재사용, EVENT_KINDS 무수정)
+    if r == 'bought':
+        return [('loot', '구입', '%s ← %s %d골드 (남은 %d)' % (what, shop, rec.get('price', 0), rec.get('gold', 0)))]
+    if r == 'sold':
+        return [('use', '팔기', '%s %d → %s %d골드 (지금 %d)' % (what, int(rec.get('n') or 1), shop, rec.get('got', 0), rec.get('gold', 0)))]
+    if r == 'too_poor':
+        return [('misc', '헛손질', '%s — %d골드 · 지닌 %d' % (what, rec.get('price', 0), rec.get('gold', 0)))]
+    if r in ('no_deal', 'not_enough', 'no_room'):
+        return [('misc', '헛손질', '%s — %s' % (what, {'no_deal': '%s에서 안 삼' % shop, 'not_enough': '지닌 %d개' % rec.get('have', 0),
+                                                       'no_room': '발밑 자리 없음'}[r]))]
     if r == 'offered':                    # D95 — 새 키를 만들지 않는다(use 재사용, EVENT_KINDS 무수정)
         return [('use', '바침', '%s — 보물 %d개 → %s +1 (지금 %d · 남은 보물 %d)'
                  % (what, rec.get('cost', OFFER_COST), _STAT_KR.get(rec.get('stat'), '?'),
@@ -396,6 +610,10 @@ def obj_note(res):
         return '%s +1' % _STAT_KR.get(res.get('stat'), '?')
     if res.get('result') == 'offer_short':
         return '보물 모자람'
+    if res.get('result') == 'sold':          # p0.5.13 가게 — 지난번에 무엇을 팔았나(나↔그 가게 사이의 사실)
+        return '%s %d개 팖' % (res.get('what', '?'), int(res.get('n') or 1))
+    if res.get('result') in ('too_poor', 'no_deal'):
+        return '골드 모자람' if res['result'] == 'too_poor' else '%s 안 삼' % res.get('what', '?')
     return None
 
 

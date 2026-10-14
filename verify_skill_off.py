@@ -13,7 +13,10 @@ master_plan §7.1). 등록부가 비어 관측의 다른 칸·행동·상태·�
 세 시드 모두 일치한다(아래 main 이 함께 확인). 새 해시는 p0.5.5 작업 트리 코드에서 뽑았다.
 **2026-10-12 p0.5.6 갱신**: 조합형 관측의 아이템 줄(바닥 물약·장비·보물, 소지품)에 물건 설명 desc·다루는 규칙 rule 칸이 더해지고 보물 태그에 item 이
 붙었다(item_desc_design D1·D2·D4). 행동·상태·난수는 그대로다 — 그 두 칸과 태그만 되돌리면(items_v055) p0.5.5 해시와 세 시드 모두 일치한다.
-새 해시는 p0.5.6 작업 트리 코드에서 뽑았다."""
+새 해시는 p0.5.6 작업 트리 코드에서 뽑았다.
+**2026-10-15 p0.5.13 갱신**(경제 1a): 새 몸이 골드 5를 지닌다 — 관측에 gold 칸, 봇 스냅샷에 gold 칸, 조합형 소지품·대상 목록에 i7(골드) 줄이 더해졌다.
+보물을 지닌 몸의 소지품·대상 목록에 i8(보물) 줄, 보물의 다루는 규칙에 amount 한 문장도 더해졌다.
+행동·상태·난수는 그대로다 — 그것만 되돌리면(gold_v0512) p0.5.6 해시와 세 시드 모두 일치한다. 새 해시는 p0.5.13 작업 트리 코드에서 뽑았다."""
 import hashlib
 import json
 import os
@@ -77,13 +80,35 @@ P055_EXPECTED = {   # 2026-10-12 p0.5.5: obs.action_schema compose-v0.4 → comp
     217: 'bad308c563016eceebdfdc6941309468740080ea8cebe75a4ea5b9e11d9fe614',
 }
 
-EXPECTED = {   # 2026-10-12 p0.5.6: 관측 대상의 아이템 줄에 desc·rule(물건 설명·다루는 규칙) · 보물 태그 (object) → (object, item)
+P056_EXPECTED = {   # 2026-10-12 p0.5.6: 관측 대상의 아이템 줄에 desc·rule(물건 설명·다루는 규칙) · 보물 태그 (object) → (object, item)(p0.5.13 회귀 비교용으로 보존)
     7: 'ae60a3bdaff121f9af4a9e60791b3c15fa01ace21d706a6076c787a1daa0499f',
     37: '970fc137ca05d609ba220737ff87dbfb4ae3ab6bb34d0a4312ee4cdb9325b444',
     217: '559207f5ed5428d284428f4d9d4e5120b5233e850f51b5ec86d1fbd8de69832d',
 }
 
+EXPECTED = {   # 2026-10-15 p0.5.13(경제 1a): 몸에 골드(시작 지갑 5) — 관측 gold 칸 · 봇 스냅샷 gold 칸 · 소지품·대상 목록의 i7(골드)·i8(보물) 줄 · 보물 규칙에 amount 한 문장
+    7: 'aaac16d346a93dfa9bfc9ed8ba98f79174519c64a301bf4718d5cbf36a28c559',
+    37: 'dd2dcaea4bf9ebccc006eab9362fedc4d13b3a8e0de6c26fba8836efe9ef699b',
+    217: '383309f1fba78f5581cff307dff71ff445caf72e27d20a1f83ed581c60f12e30',
+}
+
 _TREASURE_NAMES = ('보물', '숨은 보물')
+
+
+TREASURE_RULE_P056 = '주우면 모은 보물이 하나 는다.'   # p0.5.13 전 보물의 다루는 규칙(prompts/actions/item_rules.md `treasure`)
+
+
+def gold_v0512(value):
+    """p0.5.13 경제 1a 만 되돌린 사본 — 관측·봇 스냅샷의 gold 칸 · 소지품·대상 목록의 i7(골드)·i8(보물) 줄을 빼고, 보물의 다루는 규칙을 옛 한 문장으로.
+    그 밖의 바이트(행동·상태·난수)가 p0.5.6 기준선과 같은지 보는 데 쓴다. 이 판(가게 없는 던전)엔 사고팔기·묵기 값·의뢰 보상 결과가 없어 되돌릴 것이 그뿐이다."""
+    import entities as ENT
+    if isinstance(value, dict):
+        return {k: (TREASURE_RULE_P056 if (k == 'rule' and v == ENT.item_rule('treasure')) else gold_v0512(v))
+                for k, v in value.items() if k != 'gold'}
+    if isinstance(value, (list, tuple)):
+        return [gold_v0512(v) for v in value
+                if not (isinstance(v, dict) and (v.get('id'), v.get('slot')) in (('i7', 'gold'), ('i8', 'treasure')))]
+    return value
 
 
 def items_v055(value):
@@ -114,9 +139,12 @@ if __name__ == '__main__':
         records = trace_records(seed)
         actual = digest(records)
         assert actual == EXPECTED[seed], (seed, actual, EXPECTED[seed])
-        p055 = digest(items_v055(records))
+        nogold = gold_v0512(records)
+        p056 = digest(nogold)
+        assert p056 == P056_EXPECTED[seed], (seed, p056, P056_EXPECTED[seed])
+        p055 = digest(items_v055(nogold))
         assert p055 == P055_EXPECTED[seed], (seed, p055, P055_EXPECTED[seed])
-        old = digest(schema_v04(items_v055(records)))
+        old = digest(schema_v04(items_v055(nogold)))
         assert old == T13C_EXPECTED[seed], (seed, old, T13C_EXPECTED[seed])
-        print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치 · 아이템 설명 칸만 되돌리면 p0.5.5 · 관측 계약 문자열까지 되돌리면 t13c 기준선과 일치' % seed)
-    print('ALL PASS — verify_skill_off (3시드 × 80틱, 기준선 = 78fbe84 + D51 + D66 + t13c + p0.5.5 + p0.5.6 2026-10-12)')
+        print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치 · 골드 칸만 되돌리면 p0.5.6 · 아이템 설명 칸까지 되돌리면 p0.5.5 · 관측 계약 문자열까지 되돌리면 t13c 기준선과 일치' % seed)
+    print('ALL PASS — verify_skill_off (3시드 × 80틱, 기준선 = 78fbe84 + D51 + D66 + t13c + p0.5.5 + p0.5.6 + p0.5.13 2026-10-15)')

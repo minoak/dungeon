@@ -25,6 +25,8 @@
       4→5(p0.5.11 개인 로어북): 인물 기록 판의 몸에 로어북 장부 lore{} · 사람 기록의 이름·글을 20·80자로(옛 시트 씨앗은 안 잘랐다) ·
                    던전(층 인스턴스)마다 일련 scope · 마을엔 건물 피처 → 공간 id(building_ids — layout 의 문턱 칸으로 다시 잇는다) ·
                    최상위 lore_ids{scope, uid}(다음 층 일련·장비 번호). 인물 기록이 꺼진 판은 손대지 않는다(옛 피클 그대로).
+      5→6(p0.5.13 경제 1a): 몸마다 골드(시작 지갑) · 의뢰 장부의 보상 받은 의뢰(paid — 옛 판에서 이미 보고한 완수는 다시 주지 않는다) ·
+                   마을의 상인 선물(판매로 바뀌었다)을 걷고 상인·가게·숙소의 말을 지금 정의로 다시 읽는다(_m5_gold).
 LLM 0콜 · 순수 파일(이관 함수만 몸 dict·반응 원장을 고친다 — 그때 judge 를 늦게 import).
 """
 import io
@@ -36,7 +38,7 @@ import time
 
 VERSION = 2                  # 판형(위 머리글) — 옛 코드(version 1 만 읽음)가 새 스냅샷을 거절하게 하는 문
 READS = (1, 2)               # 이 코드가 읽는 판형. 1 = p0.5.2 까지(내용 판 0)
-STATE_VERSION = 5            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
+STATE_VERSION = 6            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
 PKL = "snapshot.pkl"
 META = "snapshot.json"
 
@@ -168,7 +170,67 @@ def _m4_lore(snap):
     return snap
 
 
-MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
+ECONOMY_DEFS = ("gear_merchant", "item_merchant", "innkeeper", "equipment_store", "general_store",
+                "shared_lodging", "ordinary_inn", "garden_inn")   # p0.5.13 이관이 말을 새로 읽는 정의 — 선물이 판매로 바뀌어 거짓이 된 대사·역할·특징 · 가게가 된 건물
+
+
+def _m5_gold(snap):
+    """5→6(p0.5.13 경제 1a): ① 몸마다 골드(시작 지갑 dungeon_gm.START_GOLD — 이미 있으면 그대로) ② 의뢰 장부에 '보상을 이미 받은 의뢰'(paid) —
+    옛 판에서 이미 보고한 완수는 보상이 없던 때의 일이라 다시 주지 않는다(장부가 보고를 찍은 원정의 완수 + 앞선 결산이 적은 완수) — 보고 전의 완수는 다음 보고에 받는다
+    ③ 마을 던전마다: 판매로 바뀐 상인의 선물(npc_gifts)을 걷고, 피클에 얼어 있던 상인·가게·숙소의 말(대사·재방문 대사·역할·성격·특징·이야기·마을 안내)을
+    지금 정의에서 다시 읽는다(ECONOMY_DEFS 만 — 공물 판이 갈아 끼운 신전 문장 같은 다른 자리는 손대지 않는다). 상품·값은 피클에 없다(정의에서 늘 다시 센다)."""
+    import dungeon_gm as G                        # 늦은 import — 이관이 있을 때만
+    for b in _bodies(snap):
+        b.setdefault("gold", G.START_GOLD)
+    q = snap.get("quests")
+    if isinstance(q, dict) and "paid" not in q:
+        reported = q.get("reported") is not None
+        said = set(((snap.get("expedition") or {}).get("said")) or [])
+        old = {qid: {"turn": t, "by": None} for qid, t in (q.get("done") or {}).items() if reported or qid in said}
+        if old:
+            q["paid"] = old
+    for d in dungeons(snap):
+        if getattr(d, "town", False):
+            _refresh_economy_words(d, G)
+    return snap
+
+
+def _refresh_economy_words(d, G):
+    """마을 던전 하나 — ECONOMY_DEFS 의 NPC·건물 피처의 말을 지금 정의(마을 생활 판이면 life 를 얹은 것)로 다시 읽는다. 선물은 정의에 없으면 걷는다."""
+    life = bool(getattr(d, "town_life", False))
+    by_name = {G.ENT.get(e)["name"]: e for e in ECONOMY_DEFS if G.ENT.get(e)["kind"] == "npc"}
+    bdefs = getattr(d, "building_defs", None) or {}
+    for fid, f in d.features.items():
+        eid = by_name.get(f.name) if f.type == "npc" else (bdefs.get(fid) if f.type == "building" else None)
+        if eid not in ECONOMY_DEFS:
+            continue
+        comps = G.ENT.comps_of(eid, life)
+        story = comps.get("story")
+        if story and fid in (getattr(d, "place_story", None) or {}):
+            d.place_story[fid] = dict(story)
+        if f.type == "npc":
+            spec = G.ENT.npc(eid, life=life)
+            d.npc_defs[f.name] = {k: v for k, v in spec.items() if v not in (None, [], "")}
+            d.npc_lines[f.name] = spec.get("line") or "…"
+            if spec.get("line_again"):
+                d.npc_lines_again[f.name] = spec["line_again"]
+            if spec.get("role"):
+                d.feature_roles[fid] = spec["role"]
+            if spec.get("gift"):
+                d.npc_gifts[f.name] = dict(spec["gift"])
+            else:
+                d.npc_gifts.pop(f.name, None)
+        else:
+            role = (comps.get("building") or {}).get("role")
+            if role and fid in (getattr(d, "feature_roles", None) or {}):
+                d.feature_roles[fid] = role
+    for p in getattr(d, "town_guide", None) or []:   # D81 마을 안내의 장소 줄(특징 한 줄) — 같은 이름의 피처 소개를 따라간다
+        fid = next((k for k, f in d.features.items() if f.name == p.get("name") and k in (getattr(d, "place_story", None) or {})), None)
+        if fid is not None and (d.place_story[fid] or {}).get("trait"):
+            p["about"] = d.place_story[fid]["trait"]
+
+
+MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore, 5: _m5_gold}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
 
 
 def state_version_of(doc):

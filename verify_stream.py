@@ -63,6 +63,7 @@ SPATH = os.path.join(show_runner.STATE, "stream.jsonl")
 KINDS = {"run_meta", "level", "tick", "descend", "end"}
 BOT_FIELDS = {"char", "job", "sex", "x", "y", "hp", "maxhp", "bag", "potions",
               "weapon", "armor",     # 장비(07-30 additive) — STREAM_FORMAT 개정과 한 몸
+              "gold",                # p0.5.13 골드(additive, 늘 실린다) — STREAM_FORMAT '골드와 가게' 절과 한 몸
               "alive", "won", "order", "aware_of"}
 MON_FIELDS = {"id", "kind", "x", "y", "hp", "maxhp", "ac", "atk", "dmg",
               "alive", "state", "concealed", "target", "desperate"}

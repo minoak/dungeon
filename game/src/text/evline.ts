@@ -164,7 +164,8 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
     return { cls: line.cls, html: who + line.html };
   }
   if (t === 'give') {                            // 건네기(D47 ②) — 파트너 문장 그대로 "{준 이름} → {받은 이름}: {what}"
-    const M: Record<string, string> = { too_far: '곁에 없다', nothing: '줄 것이 없다', no_target: '대상 없음', no_room: '놓을 자리 없음' };
+    const M: Record<string, string> = { too_far: '곁에 없다', nothing: '줄 것이 없다', no_target: '대상 없음', no_room: '놓을 자리 없음',
+      not_enough: '지닌 것보다 많다' };   // p0.5.13 골드·보물(amount)
     if (e.result === 'given')
       return { cls: 'give', html: `${nameSpan(run, e.char)} → ${nameSpan(run, e.to)}: ${esc(str(e.what, '?'))}${e.placed ? ' (발밑에 놓임)' : ''}` };
     return L('dim', '건네기 — ' + (M[str(e.result)] || esc(str(e.result))));
@@ -203,7 +204,7 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
       const names = (v: unknown): string => arr(v).map(x => esc(str(titles[str(x)], str(x)))).join('·');
       const done = names(e.done), undone = names(e.undone);
       const bits = [done ? `완수: ${done}` : '', undone ? `미완: ${undone}` : ''].filter(Boolean).join(' / ');
-      return L('gold', `📜 ${esc(str(e.npc, 'NPC'))}에게 원정 보고${bits ? ` (${bits})` : ''} — 「${esc(str(e.line))}」`);
+      return L('gold', `📜 ${esc(str(e.npc, 'NPC'))}에게 원정 보고${bits ? ` (${bits})` : ''}${e.reward ? ` · 보상 ${num(e.reward)}골드` : ''} — 「${esc(str(e.line))}」`);   // p0.5.13 보상(있을 때만)
     }
     if (r === 'quest_accepted') return L('gold', `📜 의뢰 맡음 — 「${esc(str(e.title, '?'))}」 ${esc(str(e.goal))}${e.reward ? ` (보상: ${esc(str(e.reward))})` : ''}`);   // D69
     if (r === 'quest_already') return L('dim', `📜 이미 맡은 의뢰 — 「${esc(str(e.title, '?'))}」`);
@@ -231,7 +232,15 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
       return found ? L('gold', `${what}${eul(what)} 뒤졌다 — ${found} 발견${have}` + questSfx(e))   // 보물은 어디서 나왔든 의뢰가 센다(상자 선례)
         : L('dim', `${what}${eul(what)} 뒤졌다 — 아무것도 없다`);
     }
-    if (r === 'lodged') return L(num(e.heal) > 0 ? 'gold' : 'dim', `${what}에서 묵었다${hpSfx}`);
+    if (r === 'lodged') return L(num(e.heal) > 0 ? 'gold' : 'dim', `${what}에서 묵었다${hpSfx}${e.paid ? ` · ${num(e.paid)}골드` : ''}`);   // p0.5.13 값 있는 숙소
+    // ── p0.5.13(경제 1a) 가게·묵기 값 — what = 사고판 물건(묵기는 숙소), shop = 가게 이름. ⚠️문구 임시
+    const shopNm = esc(str(e.shop, '가게'));
+    if (r === 'bought') return L('gold', `${shopNm}에서 ${what}${eul(what)} 샀다 — ${num(e.price)}골드 (남은 ${num(e.gold)})${e.dropped ? ` · 들던 ${esc(str(e.dropped))} 내려놓음` : ''}`);
+    if (r === 'sold') return L('gold', `${shopNm}에 ${what} ${num(e.n, 1)}개를 팔았다 — +${num(e.got)}골드 (지금 ${num(e.gold)})`);
+    if (r === 'too_poor') return L('dim', `${e.use_kind === 'lodge' ? `${what}에 묵으려 했지만` : `${shopNm}에서 ${what}${eul(what)} 사려 했지만`} — 골드 모자람 (값 ${num(e.price)} · 지닌 ${num(e.gold)})`);
+    if (r === 'no_deal') return L('dim', `${shopNm}에 ${what}${eul(what)} 팔려 했지만 — 사들이지 않는다`);
+    if (r === 'not_enough') return L('dim', `${shopNm}에 ${what} ${num(e.amount)}개를 팔려 했지만 — 지닌 것 ${num(e.have)}개`);
+    if (r === 'no_room') return L('dim', `${shopNm}에서 ${what}${eul(what)} 사려 했지만 — 들던 것을 내려놓을 자리가 없다`);
     if (r === 'warmed') return L('dim', `${what} 곁에서 불을 쬐었다${hpSfx}`);
     if (r === 'used_up') return L('dim', `${what} — 이미 다 써서 남은 것이 없다`);
     const tag: Record<string, string> = { too_far: '너무 멀다', nothing: '허탕', no_target: '대상 없음' };

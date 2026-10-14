@@ -28,8 +28,16 @@ def canon(o):
 
 # 이관 전(커밋 d38669f) lore.json 7건·town.json NPC 3인의 정본 해시 — 본문·대사·선물·배치가 한 글자라도 바뀌면 여기서 선다.
 LORE_SHA = '63b1d9c0a9f0a81258bc0c211ccecc583d1d649e73e7bf8a942cc12dc8461dac'   # 2026-09-13 D65: 보스 정의(goblin_chief) 추가로 갱신 — 그 전 f332d3e7…(d38669f 이관 정본)
-NPC_SHA = 'ddb2868f39d045328d47d612a91d2353fab4f71819f9f79692b4d84d6247c337'   # 2026-10-13 p0.5.10(p0510b): 나중을 약속하는 고정 대사 4칸 교체로 갱신 —
+NPC_SHA = '7f0e8a723c4ce2d33ed3cf4e4a5bb62ad16f22ff1492242e6dd7de4adc306d31'   # 2026-10-15 p0.5.13(경제 1a, DECISIONS 10-14 §10-6): 상인 둘의 선물을 판매로 —
+#   선물 칸 둘(장비 상인 단검 · 아이템 상인 물약)을 걷고, 선물을 말하던 대사 4칸(두 상인의 첫·재방문)을 교체. 아래 ④ 가 그 4칸과 선물 둘을 되돌리면
+#   그 전 NPC_SHA_P0510 과 같은지 함께 본다(다른 값·배치는 그대로).
+NPC_SHA_P0510 = 'ddb2868f39d045328d47d612a91d2353fab4f71819f9f79692b4d84d6247c337'   # 2026-10-13 p0.5.10(p0510b): 나중을 약속하는 고정 대사 4칸 교체로 갱신 —
 #   장비 상인·아이템 상인 재방문 · 여관주인 첫·재방문(옛 문장 4칸만 되돌리면 그 전 b6c1e5f2…와 같다 — 다른 값·배치·선물은 그대로)
+P0510_TEXT = {('lines', '장비 상인'): '좋은 검을 찾나? 빈손이면 이 단검을 가져가게 — 던전에선 맨손이 제일 비싸.',
+              ('again', '장비 상인'): '아까 왔잖아. 이미 무장했으니 줄 건 없어 — 오늘 있는 건 이게 다야.',
+              ('lines', '아이템 상인'): '물약 하나 가져가게. 한 사람에 하나씩이야 — 던전에선 그게 목숨값이지.',
+              ('again', '아이템 상인'): '아까 왔잖아. 이번 원정 몫은 이미 줬어 — 물약은 한 원정에 한 병이야.'}
+P0510_GIFTS = {'장비 상인': {'weapon': '단검'}, '아이템 상인': {'potions': 1}}
 
 # ① 로드
 defs = ENT.load()
@@ -101,6 +109,11 @@ d, _ = show_runner.build_town(os.path.join(os.path.dirname(os.path.abspath(__fil
 npc = {'lines': d.npc_lines, 'gifts': d.npc_gifts, 'again': d.npc_lines_again,
        'features': sorted((f.type, f.name, f.x, f.y) for f in d.features.values())}
 check('④ 옛 마을 NPC(대사·재방문 대사·선물·배치) 해시 일치 — town-v0.json 은 배치만, 본문은 정의', canon(npc) == NPC_SHA)
+npc_p0510 = json.loads(json.dumps(npc, ensure_ascii=False))
+for (k_, nm_), txt_ in P0510_TEXT.items():
+    npc_p0510[k_][nm_] = txt_
+npc_p0510['gifts'] = {**P0510_GIFTS, **npc_p0510['gifts']}
+check('④ p0.5.13 의 변경은 상인 둘의 선물·대사 4칸뿐 — 그것만 되돌리면 p0.5.10 해시와 같다', canon(npc_p0510) == NPC_SHA_P0510 and not set(P0510_GIFTS) & set(npc['gifts']))
 d1, _ = show_runner.build_town()
 check('④ 마을 v1(layout 참조) — NPC 3(성직자·길드 접수원·주점 주인) 정의에서 합쳐짐, 접수원 선물 물약+단검',
       sorted(f.name for f in d1.features.values() if f.type == 'npc') == ['길드 접수원', '성직자', '주점 주인']

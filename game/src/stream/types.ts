@@ -57,6 +57,7 @@ export interface Bot {
   x: number; y: number; hp: number; maxhp: number; bag?: number;
   alive: boolean; won: boolean; potions?: number;
   boons?: number;                                // D74(09-15) 축복의 물약 병 수 — 있을 때만
+  gold?: number;                                 // p0.5.13 골드 — 0.5.13 부터 늘 실린다(옛 판엔 없다)
   weapon?: Gear | null; armor?: Gear | null;
   order?: string | null;                         // 'm0' 'b1' 'f2' 'exit' '@x,y' 'follow:b1' 'rest' …
   status?: string[] | null;                      // 상태 태그(둔화·출혈·중독 …)

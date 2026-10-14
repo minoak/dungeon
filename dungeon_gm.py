@@ -369,7 +369,8 @@ def event_tags(rec, names=None):
         elif r == 'npc_talk':                                  # p0.5.10(설계 X10): 대사는 들은 말로만 온다 — 꼬리표엔 누구와 말했는지만
             return [('talk', '대화', str(rec.get('npc', '?')))]
         elif r == 'npc_report':                                # D69 귀환 보고 — 원정의 끝
-            return [('talk', '보고', '%s: 완수 %d·미완 %d' % (rec.get('npc', '?'), len(rec.get('done') or []), len(rec.get('undone') or [])))]
+            return [('talk', '보고', '%s: 완수 %d·미완 %d%s' % (rec.get('npc', '?'), len(rec.get('done') or []), len(rec.get('undone') or []),
+                                                            (' · 보상 %d골드' % rec['reward']) if rec.get('reward') else ''))]   # p0.5.13 보상(있을 때만)
         elif r == 'quest_accepted':                            # D69 의뢰 맡음
             return [('quest', '의뢰 맡음', str(rec.get('title') or rec.get('quest') or '?'))]
         elif r == 'quest_already':
@@ -386,7 +387,8 @@ def event_tags(rec, names=None):
             return [('give', '건넴', '%s → %s%s' % (rec.get('what', '?'), nm(rec.get('to')),
                                                   ('' if not rec.get('placed') else ' (내 발밑에 놓임)' if rec.get('spot') == 'mine'   # p0.5.6(D6)
                                                    else ' (그의 발밑에 놓임)')))]
-        return [('misc', '헛손질', {'too_far': '곁에 없음', 'nothing': '줄 것 없음', 'no_room': '놓을 자리 없음'}.get(r, r))]
+        return [('misc', '헛손질', {'too_far': '곁에 없음', 'nothing': '줄 것 없음', 'no_room': '놓을 자리 없음',
+                                    'not_enough': '지닌 것 %s' % rec.get('have', 0)}.get(r, r))]   # p0.5.13 골드·보물을 지닌 것보다 많이
     if t == 'bond':                                   # D47 ② 친목 — 한 쪽의 자기 사건(형태=자유 문구)
         if r == 'done':
             return [('bond', '친목', '%s → %s' % (rec.get('form', '몸짓'), nm(rec.get('to'))))]
@@ -624,6 +626,8 @@ NPC_LINE_CLOSE = "이야기는 이쯤 하지. 나도 할 일이 있어서."   # 
 NPC_LINE_BUSY = "지금은 바쁘네."                              # p0.5.10 고정 거절 — 상한 뒤 말을 걸면(0콜, 정의 line_busy 가 없을 때). ⚠️문구 임시(민옥 교정 대기)
 TALK_FIELDS = ('say', 'to')      # p0.5.10(설계 §3.2 보존): 자동 접근 대기(approach)가 결정 때의 말과 그 상대를 도착까지 들고 간다
 NPC_OFFER_REPORT = '원정 보고'    # p0.5.10 Dungeon.npc_offer 의 보고 항목 이름(NPC 두뇌 장면 '와서 말을 걸면: 원정 보고를 받는다')
+START_GOLD = 5                   # p0.5.13(경제 1a, DECISIONS 10-14 §10-5) 시작 지갑 — 새 몸(판 시작)이 지니는 골드. 첫 끼니를 먹으면 다음 끼니 값이 모자란 크기.
+#   층 전이·부활은 러너 _carry 가 지닌 골드를 옮긴다(판 안에서만 — 새 판은 다시 이 값, §10-8). 옛 스냅샷의 몸은 이관(snapshot 5→6)이 이 값을 채운다
 
 
 def _said_to_npc(action, res):
@@ -646,7 +650,8 @@ def quest_def(qid):
         return None
     qc = (q.get('comps') or {}).get('quest') or {}
     return {'id': qid, 'title': q.get('name'), 'goal': qc.get('goal'),
-            **({'reward': qc['reward']} if qc.get('reward') else {}),
+            **({'gold': int(qc['gold'])} if qc.get('gold') else {}),   # p0.5.13 보상 골드 — 보고 때 보고한 사람에게(_report_quests). 보상 문장은 이 값에서 짓는다
+            **({'reward': '%d골드' % int(qc['gold'])} if qc.get('gold') else ({'reward': qc['reward']} if qc.get('reward') else {})),
             **({'client': qc['client']} if qc.get('client') else {}),
             **({'req': dict(qc['req'])} if isinstance(qc.get('req'), dict) else {})}
 
@@ -2595,6 +2600,9 @@ class Dungeon:
                 if q_.get('tid') and not q_.get('accepted'):
                     _add('interact', q_['tid'], '의뢰 맡기: %s — %s%s' % (q_.get('title', '?'), q_.get('goal', '?'),
                                                                      (' (보상: %s)' % q_['reward']) if q_.get('reward') else ''))
+        for n_ in IA.notices(self, bot):          # p0.5.13 가게의 상품 — 문턱 근처면 '사기'가 어휘가 된다(메뉴형 — 팔기는 조합형의 item 칸만). 가게 없는 세계는 [] = 옛 메뉴 그대로
+            for g_ in n_.get('goods') or []:
+                _add('interact', g_['tid'], '사기: %s %s — %d골드 (%s)' % (g_['name'], g_['tid'], g_['price'], n_.get('name', '가게')))
         for f in feats:
             if f['adj']:
                 if f['type'] == 'building' and not f.get('use'):   # D60(09-12) 마을 관측: 건물은 문턱까지(goto)만 — 안으로 드는 동사는 없다(실내는 후속)
@@ -2888,6 +2896,7 @@ class Dungeon:
         obs = {'pos': [cx, cy], 'hp': bot['hp'], 'maxhp': bot['maxhp'],
                 'job': bot['job'], 'sex': bot['sex'],
                 'str': bot['str'], 'dex': bot['dex'], 'inventory': bot['bag'],
+                'gold': bot.get('gold', 0),         # p0.5.13 골드 — 자기 몸의 사실(늘 — '모은 보물'과 같은 급, 0 도 사실이다)
                 'potions': bot.get('potions', 0),   # 소지 회복 물약(07-17) — 자기 몸의 사실
                 **({'boons': bot['boons']} if bot.get('boons') else {}),   # D74(09-15) 축복의 물약 — 있을 때만(additive)
                 'gear': {'weapon': _no_uid(bot.get('weapon')), 'armor': _no_uid(bot.get('armor'))},   # p0511b: 장비 고유 번호(안쪽 열쇠)는 관측에 안 나간다(기록 안 된 장비 = 옛 그대로)
@@ -3077,7 +3086,7 @@ class Dungeon:
         elif typ == 'follow':
             res = self._set_follow(bot, tgt, bots)    # 동행(D18 A-5) — 곁 유지 지속 order
         elif typ == 'give':
-            res = self._give(bot, tgt, (action or {}).get('item'), bots)   # 건네기(D47 ②) — 곁의 동료에게 소지품
+            res = self._give(bot, tgt, (action or {}).get('item'), bots, amount=(action or {}).get('amount'))   # 건네기(D47 ②) — 곁의 동료에게 소지품(p0.5.13 골드·보물은 amount)
         elif typ == 'bond':
             res = self._bond(bot, tgt, (action or {}).get('form'), bots)   # 친목(D47 ②) — 곁의 동료에게 몸짓
         elif typ == 'party_form':
@@ -3147,7 +3156,7 @@ class Dungeon:
             return {**base, 'result': 'no_target'}
         if typ == 'give' and not self.composed_actions:
             item = action.get('item')
-            if not bot.get({'potion': 'potions', 'boon': 'boons'}.get(item or '', item or '')):   # D74: boon 도 병 단위
+            if not bot.get(IA.COUNTED.get(item or '', item or '')):   # D74: boon 도 병 단위 · p0.5.13 골드·보물도 몸의 정수(IA.COUNTED)
                 return {**base, 'result': 'nothing'}
         if self._action_in_range(bot, action, target):
             return None
@@ -3421,8 +3430,9 @@ class Dungeon:
                     except Exception:
                         continue
                     qc = (q.get('comps') or {}).get('quest') or {}
+                    rw_ = (quest_def(qid) or {}).get('reward')   # p0.5.13 보상 문장은 quest_def 한 곳에서('N골드' — 정의의 gold)
                     items.append({'id': qid, 'title': q.get('name'), 'goal': qc.get('goal'),
-                                  **({'reward': qc['reward']} if qc.get('reward') else {}),
+                                  **({'reward': rw_} if rw_ else {}),
                                   **({'client': qc['client']} if qc.get('client') else {}),
                                   **({'tid': tids[qid]} if (ledger is not None and qid in tids) else {}),   # D69 맡기의 대상 id
                                   **({'accepted': True} if (ledger and qid in ledger['accepted']) else {}),
@@ -3441,6 +3451,7 @@ class Dungeon:
                     continue
                 if max(abs(bot['x'] - f.x), abs(bot['y'] - f.y)) <= PLACE_STORY_RANGE:
                     out.append({'kind': 'place', 'id': 'f%d' % fid, 'name': f.name, 'text': st['history']})
+        out += IA.notices(self, bot)                                 # p0.5.13 가게 — 문턱 SHOP_RANGE 칸 안이면 상품(g<n>)과 사들이는 값(가게가 없는 세계는 [] = 옛 obs 그대로)
         if orc and orc.get('text') and not any(n.get('kind') == 'oracle' for n in out):
             # D61 개정(2026-09-13 파트너 "플레이 중에 신탁을 내릴 수 있게 하자, 그래야 행동을 어느 정도는 사용자가 조작 가능"):
             # 신의 요청은 어느 층에서나 모든 캐릭터에게 들린다(where 'sky' — 건물 없음). 요청이지 명령이 아니다(§4-0 신은 절대자가 아니다).
@@ -3590,7 +3601,7 @@ class Dungeon:
     def _report_quests(self, bot, f, bots=None):
         """원정에서 돌아와 보고 역할 NPC(접수원)에게 말을 건다 = 보고. 맡은 의뢰를 완수/미완으로 가르고 장부에 reported(틱)을 찍는다 —
         러너는 이 결과를 보고 원정을 닫는다(파트너 09-14 "원정의 끝을 게이트가 아니라 길드 보고로"). 문장은 정의의 보고 대사(임시)
-        — NPC 두뇌가 켜진 판은 러너가 line 을 LLM 문장으로 바꾼다(line_fixed 에 원문). 보상·평판은 후속."""
+        — NPC 두뇌가 켜진 판은 러너가 line 을 LLM 문장으로 바꾼다(line_fixed 에 원문). 보상(골드)은 p0.5.13 — 평판은 후속."""
         q = self.quests
         acc = list(q['accepted'])
         done = [qid for qid in acc if qid in q['done']]
@@ -3605,8 +3616,18 @@ class Dungeon:
         else:
             line = nd.get('line_report_empty') or nd.get('line') or '…'
         line = line.replace('{undone}', '·'.join(titles[x] for x in undone))
+        # p0.5.13(경제 1a) 의뢰 보상 — 완수했고 아직 보상을 받지 않은 의뢰의 골드를 보고한 사람에게(파티 장부라 한 번뿐: paid). 나눌지는 사람들 몫(건네기)
+        due = [qid for qid in done if qid not in (q.get('paid') or {}) and (quest_def(qid) or {}).get('gold')]
+        pay = {}
+        if due:
+            paid = q.setdefault('paid', {})              # 처음 보상이 나갈 때 생긴다(보상이 없던 판의 장부는 옛 꼴 그대로)
+            for qid in due:
+                paid[qid] = {'turn': self.turn, 'by': bot['char']}
+            reward = sum(int(quest_def(qid)['gold']) for qid in due)
+            bot['gold'] = int(bot.get('gold') or 0) + reward
+            pay = {'reward': reward, 'paid': due, 'gold': bot['gold']}
         return {'char': bot['char'], 'type': 'interact', 'target': 'f%d' % f.id, 'result': 'npc_report', 'npc': f.name,
-                'line': line, 'done': done, 'undone': undone, 'titles': titles, 'bag': int(bot.get('bag', 0))}
+                'line': line, 'done': done, 'undone': undone, 'titles': titles, 'bag': int(bot.get('bag', 0)), **pay}
 
     # ── D73(2026-09-14 파트너 "마을에 돌아다니는 일반 캐릭터들이 필요해 … 플레이어블 캐릭터의 반응을 확인해보고 싶어") 마을 행인 ──
     def _in_walk_rect(self, x, y, rect):
@@ -3817,6 +3838,10 @@ class Dungeon:
             qid = (getattr(self, 'quest_ids', None) or {}).get(s)
             fid = ((getattr(self, 'quest_boards', None) or {}).get(qid) or (None, 0))[0]
             f = self.features.get(fid) if fid is not None else None
+            return ('feature', (f.x, f.y)) if f else None
+        if s[:1] == 'g' and s[1:].isdigit():            # p0.5.13 상품 id → 그 상품을 파는 가게(문턱) 칸 — goto·자동 접근의 대상
+            g = IA.good(self, s)
+            f = self.features.get(g['fid']) if g else None
             return ('feature', (f.x, f.y)) if f else None
         if s[:1] == 'm' and s[1:].isdigit():
             m = next((m for m in self.monsters if m.id == int(s[1:]) and m.alive), None)
@@ -5113,6 +5138,8 @@ class Dungeon:
         tid_ = str(target_id or '')
         if tid_[:1] == 'q' and tid_[1:].isdigit():   # D69(09-14) 게시판의 의뢰 — 문턱 근처(range)면 맡는다(닿을 필요 없음: 글이다)
             return self._accept_quest(bot, tid_, bots)
+        if tid_[:1] == 'g' and tid_[1:].isdigit():   # p0.5.13 가게의 상품 — 문턱 SHOP_RANGE 칸 안이면 산다(interactables.buy — 메뉴형·조합형 한 길)
+            return IA.buy(self, bot, tid_, bots)
         res = self._resolve_target(target_id, bots)
         if not res:
             return {**base, 'result': 'no_target'}
@@ -5670,7 +5697,7 @@ class Dungeon:
             recv['wait'] = None
             recv['rest'] = None
 
-    def _give(self, bot, target_id, item, bots=None):
+    def _give(self, bot, target_id, item, bots=None, amount=None):
         """건네기(D47 ②, 2026-09-09 파트너 "건네기를 만들려면 아이템 거래를 넣어야 해") — 곁의 동료에게 소지품을 넘긴다.
         물약: potions −1/+1. 무기·방어구: 벗어 건넨다 — 상대 슬롯이 비었으면 그가 걸치고(equipped), 차 있으면 발밑에 피처로
         놓인다(placed — 착용은 상대의 결정, equip 스왑 '헌것은 그 자리에' 문법과 대칭. 발밑이 찼으면 내 발밑, 둘 다 찼으면 no_room).
@@ -5699,6 +5726,17 @@ class Dungeon:
             recv['boons'] = recv.get('boons', 0) + 1
             what = '축복의 물약'
             extra, got = {'boons': bot['boons']}, {'boons': recv['boons']}
+        elif item in IA.AMOUNT_SLOTS:                       # p0.5.13 골드(액수)·보물(개수) — 원자적으로 옮긴다(빼면 1). 지닌 것보다 많으면 not_enough(둘 다 그대로)
+            key, n = IA.COUNTED[item], IA.count(amount)
+            have = int(bot.get(key) or 0)
+            if not have:
+                return {**base, 'result': 'nothing'}
+            if have < n:
+                return {**base, 'result': 'not_enough', 'have': have, 'amount': n}
+            bot[key] = have - n
+            recv[key] = int(recv.get(key) or 0) + n
+            what = ('골드 %d' % n) if item == 'gold' else ('보물 %d개' % n)
+            extra, got = {'amount': n, key: bot[key]}, {'amount': n, key: recv[key]}   # 건넨 쪽은 제 남은 것, 받은 쪽은 제 것 — 서로의 지갑은 안 보인다
         elif item in ('weapon', 'armor'):
             g = bot.get(item)
             if not g:
@@ -5725,7 +5763,8 @@ class Dungeon:
         self._bone(recv, bot['char'], 'received')
         self.note_act(bot, recv, '건네기', what)
         self._witness(bots, bot['x'], bot['y'],
-                      {'kind': 'ally_give', 'char': bot['char'], 'to': recv['char'], 'what': what},
+                      {'kind': 'ally_give', 'char': bot['char'], 'to': recv['char'],
+                       'what': {'gold': '골드', 'treasure': '보물'}.get(item, what)},   # p0.5.13 곁의 사람은 무엇이 오갔는지만 본다(액수·개수는 둘의 일)
                       exclude=(bot['char'], recv['char']))
         return {**base, 'result': 'given', 'to': recv['char'], 'what': what, **extra}
 
@@ -6467,6 +6506,7 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             **({'town_guide': True} if (getattr(dungeon, 'town', False) and getattr(dungeon, 'town_guide', None)) else {}),   # D81 마을 안내 표식(첫 관측 1회, view 가 지운다) — 러너가 켠 마을에서만 생긴다
             'floor_notice': (getattr(dungeon, 'town_notice', None) if getattr(dungeon, 'town', False)   # D75(09-15) 마을 진입 한마디(마을 정의 story.history, 첫 관측 1회)
                              else (BOSS_FLOOR_NOTICE if getattr(dungeon, 'boss_on', False) else None)),   # D65 개정: 보스층 진입 한마디(첫 관측 1회, view 가 지운다)
+            'gold': START_GOLD,             # p0.5.13 골드(경제 1a) — 시작 지갑. 층 이월=러너 _carry(보물 선례)
             'potions': 0,                   # 소지 회복 물약(07-17) — 첫 소비 아이템. 층 이월은
                                             # 러너 재스폰이 담당(bag 이월 선례)
             'boons': 0,                     # 축복의 물약(D74, 09-15) — 신전 기도의 답. 마시면 공격 능력치 +1. 층 이월=러너 재스폰(str/dex 도 함께)
@@ -6523,6 +6563,7 @@ def bot_snapshot(b):
     return {**SK.snapshot(b), 'char': b['char'], 'job': b['job'], 'sex': b['sex'],
             'x': b['x'], 'y': b['y'], 'hp': b['hp'], 'maxhp': b['maxhp'],
             'bag': b['bag'], 'alive': b['alive'], 'won': b['won'],
+            'gold': b.get('gold', 0),         # p0.5.13 골드(additive — 늘 실린다: 판의 돈 흐름 측정이 시작·끝·최저를 본다)
             'potions': b.get('potions', 0),   # 회복 물약 소지(07-17 additive)
             **({'boons': b['boons']} if b.get('boons') else {}),   # 축복의 물약(D74 09-15 additive, 있을 때만)
             'weapon': b.get('weapon'), 'armor': b.get('armor'),   # 장비(07-30 additive)

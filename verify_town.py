@@ -123,14 +123,22 @@ check("② 곁의 NPC = '말 걸기' 라벨",
 print("── ③ NPC")
 check("③ NPC 몸이 막는다 — walkable 불가(밟고 지나갈 수 없다)",
       not d.walkable(nf.x, nf.y, []))
+# p0.5.13(경제 1a, DECISIONS 10-14 §10-6): 상인 둘의 선물은 판매로 바뀌었다 — 정의에 선물이 없다(말 걸기는 대화만). 아래 D32 선물 기계(첫 방문 한 번·
+#   재방문 대사·목격·방문 단위 리셋)는 접수원·성직자가 그대로 쓰는 판정이라, 옛 마을의 두 상인에 선물을 **주입**해 같은 물리를 계속 검증한다(verify_objtags 선례).
+b_nog = mkbot('8', nf.x, nf.y + 1)
+r_nog = d._interact(b_nog, 'f%d' % nf.id, [b_nog])
+check("③ p0.5.13: 정의상 상인 선물 없음 — 옛 마을의 장비·아이템 상인은 선물 장부에 없다 · 빈손이어도 말 걸기는 대화만(npc_talk)",
+      '장비 상인' not in d.npc_gifts and '아이템 상인' not in d.npc_gifts
+      and r_nog['result'] == 'npc_talk' and b_nog['weapon'] is None)
+d.npc_gifts['장비 상인'], d.npc_gifts['아이템 상인'] = {'weapon': '단검'}, {'potions': 1}   # 선물 기계 검증용 주입(옛 D32 값 그대로)
 r = d._interact(b_adj, 'f%d' % nf.id, [b_adj])
-check("③ 장비 상인(D32 상점 v0): 빈손이면 첫 말 걸기에 단검 — npc_gift·item·정해진 대사·바로 걸침",
+check("③ 선물 기계(D32 — 주입한 선물): 빈손이면 첫 말 걸기에 단검 — npc_gift·item·정해진 대사·바로 걸침",
       r['result'] == 'npc_gift' and r['npc'] == '장비 상인' and r['item'] == '단검'
       and {k: b_adj.get('weapon', {}).get(k) for k in ('name', 'bonus')} == {'name': '단검', 'bonus': 1}   # D57: 선물 장비도 개체(id·worn 추가)
-      and isinstance(b_adj['weapon'].get('id'), int) and b_adj['weapon'].get('worn') == [b_adj['char']] and '단검' in r['line'])
+      and isinstance(b_adj['weapon'].get('id'), int) and b_adj['weapon'].get('worn') == [b_adj['char']] and r['line'] == d.npc_lines['장비 상인'])
 r2 = d._interact(b_adj, 'f%d' % nf.id, [b_adj])
 check("③ 두 번째 말 걸기 = '아까 왔잖아' 고정 대사(line_again)·again 표식 — 무기 중복 지급 없음",
-      r2['result'] == 'npc_talk' and '무장' in r2['line'] and '아까 왔잖아' in r2['line']
+      r2['result'] == 'npc_talk' and r2['line'] == d.npc_lines_again['장비 상인'] and '아까 왔잖아' in r2['line']
       and r2.get('again') is True and b_adj['weapon']['name'] == '단검')
 b_armed = mkbot('9', nf.x, nf.y + 1)
 b_armed['weapon'] = {'name': '장검', 'bonus': 2}
@@ -143,11 +151,11 @@ b_p = mkbot('2', pf.x, pf.y + 1)
 b_w = mkbot('3', pf.x + 3, pf.y + 1)
 d.events = True                                   # 마을=전체 시야 — 받는 장면은 동료가 본다
 r3 = d._interact(b_p, 'f%d' % pf.id, [b_p, b_w])
-check("③ 아이템 상인: 물약 1개 — npc_gift·potions 1·정해진 대사",
-      r3['result'] == 'npc_gift' and r3['item'] == '물약' and b_p.get('potions') == 1 and '물약' in r3['line'])
+check("③ 선물 기계(주입한 선물): 아이템 상인 물약 1개 — npc_gift·potions 1·정해진 대사",
+      r3['result'] == 'npc_gift' and r3['item'] == '물약' and b_p.get('potions') == 1 and r3['line'] == d.npc_lines['아이템 상인'])
 r4 = d._interact(b_p, 'f%d' % pf.id, [b_p, b_w])
 check("③ 같은 방문의 두 번째 말 걸기 = 대사만(line_again), 물약은 그대로 1",
-      r4['result'] == 'npc_talk' and b_p.get('potions') == 1 and '몫' in r4['line'])
+      r4['result'] == 'npc_talk' and b_p.get('potions') == 1 and r4['line'] == d.npc_lines_again['아이템 상인'])
 check("③ 동료가 받는 걸 본다 — ally_loot{what=물약} 1건, 당사자 제외",
       len([w for w in (b_w.get('witnessed') or []) if w.get('kind') == 'ally_loot' and w.get('what') == '물약']) == 1
       and not b_p.get('witnessed'))

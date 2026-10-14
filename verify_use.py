@@ -96,11 +96,12 @@ print("── ① 정의·검증기")
 check("① COMPS: object 에 use·story · building 에 use (npc·monster 에는 없음)",
       {"use", "story"} <= ENT.COMPS["object"] and "use" in ENT.COMPS["building"]
       and "use" not in ENT.COMPS["npc"] and "use" not in ENT.COMPS["monster"])
-check("① 쓰임 kind 어휘 9종(D95 공물은 세계의 스위치 뒤 — verify_offer 가 본다) — 검증기(entities.USE_KINDS) = 처리기(interactables.KINDS) · 결과 이름 11종",
-      set(ENT.USE_KINDS) == set(IA.KINDS) == {"read", "sit", "drink", "browse", "practice", "rummage", "lodge", "warm", "offer"}
+check("① 쓰임 kind 어휘 10종(D95 공물은 세계의 스위치 뒤 — verify_offer 가 본다 · p0.5.13 가게 shop 은 verify_shop 이 본다) — 검증기(entities.USE_KINDS) = 처리기(interactables.KINDS) · 결과 이름 17종",
+      set(ENT.USE_KINDS) == set(IA.KINDS) == {"read", "sit", "drink", "browse", "practice", "rummage", "lodge", "warm", "offer", "shop"}
       and set(ENT.USE_GATED_KINDS) == set(IA._GATE_ATTR) == {"offer"}
       and IA.RESULTS == ("read", "sat", "drank", "browsed", "practiced", "rummaged", "lodged", "warmed", "used_up",
-                         "offered", "offer_short"))
+                         "offered", "offer_short",
+                         "bought", "sold", "too_poor", "no_deal", "not_enough", "no_room"))
 base4 = {e: ENT.get(e) for e in ("stone_tablet", "bench", "well", "barrel")}
 check("① 최소 정의 4장 — 석상 받침 read · 벤치 sit(heal 1) · 우물 drink(heal 1) · 통 rummage(once, 추첨표) · 전부 story.trait · 도감 본문 없음",
       [base4[e]["comps"]["use"]["kind"] for e in ("stone_tablet", "bench", "well", "barrel")] == ["read", "sit", "drink", "rummage"]

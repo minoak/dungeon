@@ -10,7 +10,7 @@
     "quest": {
       "client": "@prompts",
       "goal": "@prompts",
-      "reward": "@prompts",
+      "gold": 8,
       "note": "⚠️임시 초안(2026-09-14 D69) — 문장은 파트너 대기. req = 엔진이 세는 완료 조건(kill/reach/loot).",
       "req": {
         "kind": "loot",

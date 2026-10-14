@@ -23,6 +23,7 @@
 (기존 게이트는 별도 실행.)
 """
 import contextlib
+import functools
 import inspect
 import io
 import json
@@ -86,6 +87,23 @@ SHEETS = R.load_party(os.path.join(HERE, "party.json"))
 NAMES = {c: SHEETS[c]["name"] for c in SHEETS}
 GEAR, RECEPTION, ITEMS, PRIEST, KEEPER = "장비 상인", "길드 접수원", "아이템 상인", "성직자", "주점 주인"
 S1 = "장비 상인님, 던전에 갈 건데 단검 하나 받을 수 있을까요?"   # 10-13 실판 t139 봇1 의 말 그대로
+# p0.5.13(경제 1a, DECISIONS 10-14 §10-6): 상인 둘의 선물(D32 — 장비 상인 단검·아이템 상인 물약)은 판매로 바뀌어 정의에서 걷혔다(지금 정의의 '선물 없음'은
+#   verify_shop ⑨). 이 게이트는 10-13 실판 장면(빈손 모험가에게 장비 상인이 단검을 줬다)을 재연해 대화 한 길·선물 단일 원천·약속 문제의 **기계**를 보므로,
+#   그 판의 선물을 이 게이트가 짓는 모든 마을(R.main 의 마을 포함)에 주입한다 — 판정 기계는 접수원·성직자가 그대로 쓰는 것과 같다.
+D32_GIFTS = {GEAR: {"weapon": "단검"}, ITEMS: {"potions": 1}}
+_build_town_now = R.build_town
+
+
+@functools.wraps(_build_town_now)                    # 러너(town_for_run)가 시그니처를 본다 — wraps 가 원래 인자를 보인다
+def _build_town_1013(*a, **k):
+    d_, st_ = _build_town_now(*a, **k)
+    for nm_, g_ in D32_GIFTS.items():
+        if any(f.type == "npc" and f.name == nm_ for f in d_.features.values()):
+            d_.npc_gifts.setdefault(nm_, dict(g_))
+    return d_, st_
+
+
+R.build_town = _build_town_1013
 
 
 def town(quests=None):
@@ -381,9 +399,9 @@ up = SN.upgrade(json.loads(json.dumps(snap)))
 again = SN.upgrade(json.loads(json.dumps(up)))
 check("⑦ STATE_VERSION ≥ 4(p0.5.11 = 5) · MIGRATIONS 3 · 몸마다 npc_talk{'npc:'+이름} · 이미 있으면 큰 쪽 · 옛 칸 없음 · 빈 장부는 칸을 만들지 않는다 · 두 번 올려도 같다",
       SN.STATE_VERSION >= 4 and 3 in SN.MIGRATIONS and up["state_version"] == SN.STATE_VERSION
-      and up["bots"][0] == {"char": "1", "npc_talk": {"npc:" + GEAR: 2, "npc:" + PRIEST: 3}}
-      and up["worlds"][0]["bots"][0] == {"char": "2", "npc_talk": {"npc:" + RECEPTION: 2}}
-      and up["waiting"]["3"] == {"char": "3"} and again == up, up)
+      and up["bots"][0] == {"char": "1", "npc_talk": {"npc:" + GEAR: 2, "npc:" + PRIEST: 3}, "gold": G.START_GOLD}   # gold = p0.5.13 5→6 이관(시작 지갑)
+      and up["worlds"][0]["bots"][0] == {"char": "2", "npc_talk": {"npc:" + RECEPTION: 2}, "gold": G.START_GOLD}
+      and up["waiting"]["3"] == {"char": "3", "gold": G.START_GOLD} and again == up, up)
 
 print("── ⑧ 러너 풀런(스텁 — 0콜): 10-13 장비 상인 장면")
 NPC_PROMPTS = []
@@ -608,11 +626,11 @@ for e_, life_, k_, v_ in fixed:
         hits.append((e_, life_, k_, v_))
 check("⑪ NPC 15명 고정 대사 전부(끈 판·마을 생활 판 · 대사·재방문·인사·보고) + 공물 판 대사 + 공통 닫는 말·거절에 나중 약속 꼴이 없다(%d칸)" % len(fixed),
       len(fixed) > 60 and not hits, hits)
-NEW_LINES = {("gear_merchant", "line_again"): "아까 왔잖아. 이미 무장했으니 줄 건 없어 — 오늘 있는 건 이게 다야.",
+NEW_LINES = {("gear_merchant", "line_again"): "아까 왔잖아. 물건은 장비점 진열대에 있어 — 오늘 있는 건 그게 다야.",   # p0.5.13 선물 → 판매로 한 번 더 바뀐 칸(약속 꼴 없음 그대로)
              ("innkeeper", "line"): "빈 방은 많은데 아직 손님 받을 준비가 안 됐어.", ("innkeeper", "line_again"): "아까 왔잖아. 아직 준비가 안 됐다니까.",
              ("tavern_keeper", "line_again"): "아까 왔잖아. 아직 준비 중이라니까.", ("street_vendor", "line_again"): "아까 봤죠? 사고파는 건 아직이에요.",
              ("apprentice_adventurer", "line_again"): "저는 아직 심사가 안 끝나서 파티를 못 구해요.",
-             ("item_merchant", "line_again"): "아까 왔잖아. 이번 원정 몫은 이미 줬어 — 물약은 한 원정에 한 병이야.",
+             ("item_merchant", "line_again"): "아까 왔잖아. 물건은 잡화점 진열대에 있어.",   # p0.5.13 선물 → 판매로 한 번 더 바뀐 칸
              ("guild_receptionist", "line_again"): "아까 왔잖아요. 이번 원정 몫은 이미 드렸어요 — 원정 물품은 한 원정에 한 번이에요.",
              ("temple_attendant", "line_again"): "오늘 기도는 이미 드렸어요. 축복은 한 원정에 한 병이에요."}
 check("⑪ 바꾼 9칸이 엔진까지 그 문장(말 파일 → 정의 합치기)", all(G.ENT.npc(e_)[k_] == v_ for (e_, k_), v_ in NEW_LINES.items()),

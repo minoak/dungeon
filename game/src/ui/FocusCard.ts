@@ -1,6 +1,6 @@
 // 초점 카드(Phase B1) — 초점 캐릭터 한 사람의 '지금': 이름·직업·성별(시트) · HP 바 · 상태 태그 · 소지 · 속내 · 최근 말 ·
 // 관계(뼈 횟수 + 본인이 쓴 한 줄). GAME_CLIENT_PLAN §3 "초점 카드".
-// 입력: app.focus('change') · app.playback('frame') · app.bus('run') · frame.bots[].{hp,maxhp,status,potions,weapon,armor,relations}
+// 입력: app.focus('change') · app.playback('frame') · app.bus('run') · frame.bots[].{hp,maxhp,status,gold,bag,potions,weapon,armor,relations}
 //       · decisions[char].{reason,src,say,say_kind,to,relation} · run.party[].{name,job,sex,persona,goal} · run.deathTurn.
 // 산출: app.dom.focusCard 안 DOM — 훅(B6 스모크): .fc[data-char] .fc-hp("10/10") .fc-status .fc-items .fc-reason .fc-say
 //       .fc-bones .fc-line(관계 상대마다 하나씩, 파티 순서).
@@ -313,7 +313,11 @@ export function installFocusCard(app: App): void {
       if (n.hpfill.style.background !== col) n.hpfill.style.background = col;
       put(n.hp, `${hp}/${b.maxhp}`);
       put(n.status, (b.status || []).map(s => `<span class="tag">${esc(s)}</span>`).join(''));
-      put(n.items, `<div><span>물약</span><strong>${b.potions ?? 0}병</strong></div>${b.boons ? `<div><span>축복</span><strong>${b.boons}병</strong></div>` : ''}<div><span>무기</span><strong>${gearText(b.weapon, '맨손')}</strong></div><div><span>방어구</span><strong>${gearText(b.armor, '맨몸')}</strong></div>`);
+      // p0.5.13(p0513b — Codex 리뷰 P1): 세는 칸은 숫자일 때만 그린다(바깥 판 파일의 문자열이 innerHTML 로 새지 않게) — 숫자가 아니면 없는 칸으로 본다
+      const cnt = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+      const gold = cnt(b.gold), bag = cnt(b.bag), potions = cnt(b.potions) ?? 0, boons = cnt(b.boons);
+      put(n.items, `${gold != null ? `<div><span>골드</span><strong>${esc(String(gold))}</strong></div>` : ''}${bag ? `<div><span>보물</span><strong>${esc(String(bag))}개</strong></div>` : ''}`   // p0.5.13 골드(스트림에 칸이 있는 판만) · 모은 보물(있을 때만)
+        + `<div><span>물약</span><strong>${esc(String(potions))}병</strong></div>${boons ? `<div><span>축복</span><strong>${esc(String(boons))}병</strong></div>` : ''}<div><span>무기</span><strong>${gearText(b.weapon, '맨손')}</strong></div><div><span>방어구</span><strong>${gearText(b.armor, '맨몸')}</strong></div>`);
     } else {
       if (n.hpfill.style.width !== '0%') n.hpfill.style.width = '0%';
       put(n.hp, '—'); put(n.status, ''); put(n.items, '<span class="none">—</span>');

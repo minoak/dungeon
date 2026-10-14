@@ -214,7 +214,7 @@ check("① 실제 등록부(동사 %d개)도 같은 비간섭: 노출 목록·�
 print("── ② 노출 밖이어도 알려진 동사는 시도할 수 있다")
 with registered():
     d2, bots2 = world(False)
-    bots2[0]["potions"] = 0
+    bots2[0]["potions"] = bots2[0]["gold"] = 0       # p0.5.13: 골드(i7 — 시작 지갑)도 소지품이다 — 비워야 '소지품 없음'
     o2 = d2.view(bots2[0], bots2)
     p2, _ = prompt_of(d2, bots2, bots2[0])
     act, err = CA.parse({"type": "probe_pose", "request": "stop"}, o2)

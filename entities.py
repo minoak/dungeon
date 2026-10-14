@@ -17,7 +17,8 @@
     D53(09-12): knowledge.brief(처음 알게 된 한 줄)·unlock{event, count}(심층 해금 조건 — 코드가 센다, LLM 0콜)도 같은
     항목에 실린다. 지금 세는 사건은 encounter(개체 하나를 새로 인지한 순간 = aware_of 증분, 몬스터만)뿐 — 나머지 어휘는 자리.
   · 쓰임(D89, 09-20): 오브젝트·건물의 use{kind, …} — 곁에서 쓰면(use/interact) 무슨 일이 나는가를 정의가 말한다. 엔진은 kind 만 보고
-    (interactables.py 의 kind 별 처리), 새 오브젝트·새 건물 기능은 JSON 한 장이다(D69 결정 ② "정의의 부품이 메뉴를 낸다"). 돈·가격은 없다.
+    (interactables.py 의 kind 별 처리), 새 오브젝트·새 건물 기능은 JSON 한 장이다(D69 결정 ② "정의의 부품이 메뉴를 낸다").
+    p0.5.13(경제 1a): 돈(골드)은 가게(kind shop — 사기·팔기)와 묵기 값(lodge price)이 읽는다. 의뢰 보상은 quest.gold, NPC 가 맡은 가게는 npc.shop.
     오브젝트의 story(trait·history)는 NPC·건물과 같은 꼴 — 배치한 쪽이 place_story 에 걸면 피처 줄 끝의 한 줄(about)이 된다.
 자리만 있고 아직 안 읽는 것: ai.start·ai.concealed(스폰 코드가 명시), item.lore(p0.5.6 — 물건의 속, 물건 search 를 설계할 때),
 loot·container·heal·consumable·exit 부품(메모 "부품은 필요할 때 하나씩"). 클라이언트 스프라이트 프레임 번호는
@@ -62,7 +63,7 @@ QUEST_REQ_KINDS = ('kill', 'reach', 'loot')   # D69(09-14) 의뢰 완료 조건�
 
 # D89(2026-09-20) 쓰임 부품 use{kind, …} 의 어휘 — 처리는 interactables.py(kind 마다 하나), 여기는 검증기가 아는 꼴.
 #   kind → 그 kind 가 읽는 칸. 공통 칸: once(true = 한 번 쓰면 끝 — 누가 쓰든 세계의 상태, 피처는 남는다)·note(저작 메모).
-#   돈·가격·매매는 없다(D69 에서 제출 뒤로 보류) — browse 는 구경만, rummage 에서 나오는 건 엔진이 이미 아는 소지뿐.
+#   p0.5.13(경제 1a): 돈(골드)·값은 shop(사기·팔기)과 lodge 의 price 만 읽는다 — browse 는 여전히 구경만, rummage 에서 나오는 건 엔진이 이미 아는 소지뿐.
 USE_KINDS = {'read': ('text', 'texts', 'verb'),   # 적힌 글을 읽는다 — text(한 편) 또는 texts(여러 편: 읽는 사람마다 읽을 때마다 다음 글)
              #   verb(D90, 선택) = 라벨·문장의 동사만 바꾼다(USE_READ_VERBS) — 글이 아니라 '눈에 보이는 것'을 돌려주는 화단 같은 것. 처리·결과 이름은 read 그대로
              'sit': ('heal',),               # 앉아 숨을 돌린다 — heal(기본 1, 상처가 있을 때만 오른다)
@@ -70,13 +71,18 @@ USE_KINDS = {'read': ('text', 'texts', 'verb'),   # 적힌 글을 읽는다 — 
              'browse': ('wares',),           # 진열된 것을 구경한다 — wares(이름 목록)
              'practice': (),                 # 몸을 푼다 — 몸에 남는 효과 없음(한 턴)
              'rummage': ('loot',),           # 뒤진다 — loot[{item, w}] 가중 추첨(세계 시드·자리에서 정해진다 — 판정 rng 무접촉). 늘 한 번
-             'lodge': (),                    # 묵는다 — HP 전부 + 상태 태그 소거(D34 '지우기는 휴식뿐': 묵기는 휴식이다)
+             'lodge': ('price',),            # 묵는다 — HP 전부 + 상태 태그 소거(D34 '지우기는 휴식뿐': 묵기는 휴식이다) · p0.5.13 price(묵는 값, 골드 — 없으면 0)
              'warm': ('heal',),              # 불을 쬔다 — heal(기본 1)
+             'shop': ('sells', 'buys'),      # p0.5.13(경제 1a) 가게 — sells[{item: 오브젝트 정의 id, price}](파는 것) · buys{아이템 type: 값}(파는 것 밖에 사들이는 것).
+             #   이 가게가 파는 물건은 파는 값의 절반(내림)에 되산다(SHOP_RESALE — 사서 되팔아 돈을 불리는 길을 막는다). 상품은 문턱 2칸 안에서 ID(g<n>)가 붙은 관측 대상이다
              'offer': ()}                    # D95(09-20) 바친다 — 모은 보물을 신에게 내고 몸의 한 칸(힘·민첩·최대 HP)이 +1.
 #   무엇이 오를지는 신이 고른다(바치는 이가 지정하지 않는다). 값·후보는 상수 한 곳(interactables.OFFER_COST·OFFER_STATS)이라
 #   정의가 읽는 칸이 없다. 세계의 스위치(Dungeon.offer_on — 러너 DUNGEON_OFFER)를 켠 판에서만 쓰임이 선다(interactables.use_of).
 USE_GATED_KINDS = ('offer',)                   # 세계의 스위치 뒤에 있는 kind — 끈 판에서는 정의에 부품이 있어도 '없는 것'이다(관측·메뉴·태그·실행 한 눈)
 USE_LOOT = ('potion', 'treasure', 'nothing')   # rummage 에서 나오는 것 — 물약 수·보물 수(bag)·빈손
+SHOP_ITEM_TYPES = ('potion', 'weapon', 'armor')   # p0.5.13 가게가 팔 수 있는 아이템 type — 엔진이 산 사람의 몸에 넣는 길이 있는 것만(물약 수 · 무기 칸 · 갑옷 칸).
+#   축복의 물약은 팔지 않는다(신의 몫 — D95), 보물은 사들이기만 한다(값나가는 물건 — 가게에서 나오면 수입원이 된다), 골드는 물건이 아니다
+SHOP_BUY_TYPES = ('treasure', 'potion', 'weapon', 'armor')   # p0.5.13 buys 에 적을 수 있는 type — 팔 수 있는 소지(골드·축복의 물약은 사들이지 않는다)
 USE_READ_VERBS = ('look',)                     # D90(09-20) read 의 동사 변형 — look = '살펴보기'(글이 아닌 것: 화단). 표현은 interactables.VERBS
 USE_RESERVED_TYPES = ('exit', 'stairs_up', 'npc', 'treasure', 'potion', 'weapon', 'armor', 'chest', 'fountain', 'grave', 'building')
 #   엔진이 이미 제 뜻으로 다루는 피처 type — 오브젝트 정의가 이 type 에 use 를 달면 거절한다(_interact 의 타입 분기가 먼저 잡아
@@ -86,7 +92,8 @@ USE_RESERVED_TYPES = ('exit', 'stairs_up', 'npc', 'treasure', 'potion', 'weapon'
 #   엔진이 몸의 소지(물약 수·축복 물약 수·모은 보물·무기 칸·갑옷 칸)에 넣는 type 만 아이템이다 — 새 아이템은 그것을 드는 엔진 코드와 함께
 #   이 목록에 든다. 그 자리에서 쓰고 끝나는 것(상자·샘·통)은 설비이고, 거기서 나와 몸으로 들어오는 것이 아이템이다.
 #   아이템 type 의 오브젝트 정의는 item 부품(물건 설명 desc — 말 파일)이 있어야 하고, 그 밖 type 은 item 부품을 달 수 없다(줍기가 거짓이 된다).
-ITEM_TYPES = ('potion', 'boon', 'treasure', 'weapon', 'armor')
+ITEM_TYPES = ('potion', 'boon', 'treasure', 'weapon', 'armor', 'gold')   # gold = p0.5.13 골드(몸의 정수 — 받기·팔기·의뢰 보상으로 들어온다. 바닥에 놓이는 피처는 아직 없다)
+SHOP_RESALE = 2    # p0.5.13 가게가 제가 파는 물건을 되사는 값 = 파는 값 // 이것(절반, 내림 — 경제 설계 §5.1 '사들이는 값은 파는 값의 절반')
 ITEM_KEYS = ('desc', 'lore')    # desc = 겉(보면 아는 것 — 관측 대상 목록) · lore = 속(search 로만 드러날 것 — 자리만, 아직 아무도 안 읽는다)
 ITEM_FILL = {'bonus': '장비 보정(equipment.bonus) — equipment 부품이 있는 정의만',          # 설명 속 중괄호 자리 → 값의 출처(엔진이 채운다)
              'stat': '지닌 사람이 공격에 쓰는 능력치(근접 힘 · 원거리 민첩) — boon 만',
@@ -181,6 +188,36 @@ def _use_problems(rel, use):
             out.append('%s: use(rummage) 는 늘 한 번이다(once 를 false 로 둘 수 없다)' % rel)
     if kind == 'offer' and use.get('once'):          # D95(09-20 파트너 "상한도 두지 마라 — 보물이 곧 상한이다"): 바치는 횟수를 정의가 막지 않는다
         out.append('%s: use(offer) 에는 once 를 둘 수 없다 — 바칠 보물이 있는 만큼 바친다(상한은 모은 보물이다)' % rel)
+    if kind == 'lodge' and use.get('price') is not None and not (type(use['price']) is int and use['price'] >= 0):
+        out.append('%s: use(lodge).price 는 정수≥0(묵는 값, 골드)' % rel)
+    if kind == 'shop':                               # p0.5.13 가게 — 상품의 정의 id 가 실제 아이템인지는 2차 검사(_problems 끝)가 본다
+        sells, buys = use.get('sells'), use.get('buys')
+        if not (isinstance(sells, list) and sells and all(isinstance(e, dict) and set(e) == {'item', 'price'} and isinstance(e['item'], str)
+                                                          and type(e['price']) is int and e['price'] >= 1 for e in sells)):
+            out.append('%s: use(shop).sells 는 [{item: 오브젝트 정의 id, price: 정수≥1}] 목록(비어 있지 않게)' % rel)
+        elif len({e['item'] for e in sells}) != len(sells):
+            out.append('%s: use(shop).sells 에 같은 물건이 두 번 있다' % rel)
+        if buys is not None and not (isinstance(buys, dict) and all(k in SHOP_BUY_TYPES and type(v) is int and v >= 1 for k, v in buys.items())):
+            out.append('%s: use(shop).buys 는 {%s 중 하나: 정수≥1}' % (rel, '|'.join(SHOP_BUY_TYPES)))
+        if use.get('once'):
+            out.append('%s: use(shop) 에는 once 를 둘 수 없다 — 가게는 닫히지 않는다' % rel)
+    return out
+
+
+def _shop_problems(rel, use, defs_by_id):
+    """p0.5.13 가게 2차 검사 — sells 의 물건이 아이템 정의(item 부품)이고 가게가 팔 수 있는 type(SHOP_ITEM_TYPES)인가 ·
+    buys 에 적은 type 이 sells 의 type 과 겹치지 않나(한 물건에 사들이는 값이 둘이 되지 않게 — 파는 물건은 SHOP_RESALE 로 되산다)."""
+    out, types = [], set()
+    for e in use.get('sells') or []:
+        df = defs_by_id.get(e.get('item')) if isinstance(e, dict) else None
+        if not df or df.get('kind') != 'object' or not (df.get('comps') or {}).get('item') or df.get('type') not in SHOP_ITEM_TYPES:
+            out.append('%s: use(shop).sells 의 %r 는 가게가 팔 수 있는 아이템 정의가 아니다(type: %s)'
+                       % (rel, e.get('item') if isinstance(e, dict) else e, '|'.join(SHOP_ITEM_TYPES)))
+        else:
+            types.add(df['type'])
+    for k in (use.get('buys') or {}) if isinstance(use.get('buys'), dict) else ():
+        if k in types:
+            out.append('%s: use(shop).buys 의 %r 는 이 가게가 파는 type 이다 — 파는 물건은 파는 값의 절반에 되산다(따로 적지 않는다)' % (rel, k))
     return out
 
 
@@ -218,6 +255,7 @@ def _problems(pairs, root):
     quest_mons = []                                  # D69 2차 검사 재료(처치형 의뢰의 몬스터 id)
     companion_names = []                             # D81 2차 검사 재료(동료 이름 — 파티 안에서 이름이 곧 열쇠라 서로 달라야 한다)
     gift_weapons, weapon_names = [], set()           # p0.5.6 G6 2차 검사 재료(마을 인물이 건네는 무기 이름 · 무기 정의 이름)
+    shops, npc_shops = [], []                        # p0.5.13 2차 검사 재료(가게의 상품 · NPC 가 맡은 가게)
     for path, d in pairs:
         rel = os.path.relpath(path, root)
         stem = os.path.splitext(os.path.basename(path))[0]
@@ -270,6 +308,15 @@ def _problems(pairs, root):
                 out.append('%s: type %r 은(는) 엔진이 이미 제 뜻으로 다룬다 — use 부품을 달 수 없다' % (rel, d.get('type')))
         if comps.get('life') is not None:                    # D90(09-20) 마을 생활 판에서만 덮어쓸 칸들 — NPC·건물 공용(꼴은 _life_problems)
             out.extend(_life_problems(rel, kind, comps))
+        for u_ in (comps.get('use'), (comps.get('life') or {}).get('use') if isinstance(comps.get('life'), dict) else None):
+            if isinstance(u_, dict) and u_.get('kind') == 'shop':
+                shops.append((rel, u_))                      # p0.5.13 상품 2차 검사 재료
+        if kind == 'npc' and (comps.get('npc') or {}).get('shop') is not None:   # p0.5.13 NPC 가 맡은 가게(건물 정의 id) — NPC 두뇌 사실에 그 가게의 값이 실린다
+            npc_shops.append((rel, comps['npc']['shop']))
+        if kind == 'quest' and (comps.get('quest') or {}).get('gold') is not None:   # p0.5.13 의뢰 보상(골드) — 보고 때 보고한 사람에게
+            g_ = comps['quest']['gold']
+            if not (type(g_) is int and g_ >= 1):
+                out.append('%s: quest.gold 는 정수≥1(보상 골드)' % rel)
         if kind == 'npc' and (comps.get('npc') or {}).get('town_life') is not None and type(comps['npc']['town_life']) is not bool:
             out.append('%s: npc.town_life 는 true|false(마을 생활 판에서만 나오는 행인 — 러너의 행인 루프가 끈 판에서 건너뛴다)' % rel)
         sp = d.get('sprite')
@@ -398,6 +445,15 @@ def _problems(pairs, root):
     for rel, nm in gift_weapons:                     # 2차(p0.5.6 G6): 모르는 이름이면 엔진이 조용히 +1 로 만들고(GEAR_KINDS.get(nm, 1)) 설명도 못 찾는다
         if nm not in weapon_names:
             out.append('%s: npc.gift.weapon %r 는 무기 정의의 이름이 아니다(%s)' % (rel, nm, '·'.join(sorted(weapon_names))))
+    defs_by_id = {d.get('id'): d for _, d in pairs if isinstance(d, dict)}
+    for rel, u_ in shops:                            # 2차(p0.5.13): 가게의 상품이 실제 아이템 정의인가
+        out.extend(_shop_problems(rel, u_, defs_by_id))
+    for rel, sid in npc_shops:                       # 2차(p0.5.13): NPC 가 맡은 가게 = 쓰임(shop·lodge)이 있는 건물 정의
+        bd = defs_by_id.get(sid) if isinstance(sid, str) else None
+        bc = (bd or {}).get('comps') or {}
+        kinds_ = {((bc.get('use') or {}).get('kind')), (((bc.get('life') or {}).get('use') or {}).get('kind') if isinstance(bc.get('life'), dict) else None)}
+        if not bd or bd.get('kind') != 'building' or not (kinds_ & {'shop', 'lodge'}):
+            out.append('%s: npc.shop %r 는 쓰임(shop·lodge)이 있는 건물 정의가 아니다' % (rel, sid))
     return out
 
 
@@ -602,6 +658,8 @@ def npc(eid, life=False):
             'line_blessed': c.get('line_blessed'),
             # p0.5.10 신원 ID-2(설계 §3.2): 대화 장부의 닫는 말(두뇌가 꺼졌거나 실패한 마지막 대답)·고정 거절(상한 뒤 0콜) — 선택. 없으면 엔진 공통 문장(G.NPC_LINE_CLOSE·NPC_LINE_BUSY)
             'line_close': c.get('line_close'), 'line_busy': c.get('line_busy'),
+            # p0.5.13(경제 1a): 이 사람이 맡은 가게(건물 정의 id — 선택). 판정은 가게(건물의 쓰임)가 하고 이 칸은 NPC 두뇌 사실(그 가게의 값)의 재료뿐
+            'shop': c.get('shop'),
             # D71(09-14): NPC 가 먼저 거는 인사 — hail(기본)·hail_no_potion·hail_board·hail_return·hail_rumor·hail_oracle(전부 선택, 상황별)
             **{k: c.get(k) for k in ('hail', 'hail_no_potion', 'hail_board', 'hail_return', 'hail_rumor', 'hail_oracle',
                                      'hail_party', 'line_party',   # D84 조각 5: 파티 결성 판에서 입구의 규칙을 말해 주는 인사·대사 꼬리({party_need})

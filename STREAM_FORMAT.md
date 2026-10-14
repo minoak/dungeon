@@ -263,6 +263,22 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 - obs `sights.features[i].use = {kind, heal?}`(쓰임 부품이 있는 피처만) → 메뉴형 줄 머리('읽기'·'앉기'·'묵기' …)와 조합형 대상 태그(`interactable` + `readable`·`seat`·`drinkable`·`wares`·`practice`·`container`·`lodging`·`warmth`)의 재료. 쓰임 부품이 있는 건물만 문턱에서 `interact` 옵션이 열린다(없는 건물은 D60 그대로 goto 뿐).
 - D39 오브젝트 태그는 쓰임 부품이 있는 피처에도 붙는다(`tag.verb` = '앉아 봄'·'뒤져 봄' …, `note` = '물약 나옴'·'비어 있음').
 
+## 골드와 가게 — 2026-10-15 p0.5.13 경제 1a additive (스위치 없음 — 골드는 모든 판, 가게·묵기 값은 정의에 그 부품이 있는 세계에서만)
+
+- 몸: `tick.bots[].gold`(정수, **늘 실린다** — 옛 판엔 없다) · `level.party[]` 도 같은 스냅샷이다. 새 몸(판 시작)은 `START_GOLD`(5)로 시작하고, 층 전이·원정·부활은 지닌 골드를 그대로 옮긴다(판을 넘지 않는다).
+- 가게 = 쓰임 kind `shop`(건물 정의의 `use{kind:'shop', sells[{item, price}], buys{type: price}}` — 마을 생활 판의 장비점·잡화점). `interact` 이벤트(조합형은 `type:"use"` + `effect_type:"interact"`)의 새 `result`, 공통 칸 `use_kind:"shop"` · `what`(사고판 물건 이름) · `shop`(가게 이름) · `shop_id`(`f<n>`):
+  `bought`{target:`g<n>`, price, gold(남은 골드), potions? | slot, bonus, dropped?, dropped_id?} · `sold`{item(`i…`), n, price(한 개 값), got, gold, bag?|potions?} ·
+  `too_poor`{price, gold} · `no_deal`(이 가게는 그것을 사들이지 않는다) · `not_enough`{have, amount} · `no_room`{slot}(산 장비와 바꿔 들 때 들던 것을 내려놓을 발밑이 없다 — 산 것 없음).
+  물건 없이 가게를 쓰면 `browsed`{wares["단검 8골드" …], buys["보물 6골드" …]}(구경 결과에 `buys` 가 붙은 꼴).
+- 묵기 값(`lodge` 의 `price`): `lodged` 에 `paid`·`gold` 가 붙는다(값 있는 숙소만) · 모자라면 `too_poor`{price, gold}(`use_kind:"lodge"`, `what` = 숙소 이름 — 몸·지갑 그대로).
+- 상품은 가게 문턱이 **보이고** 2칸 안일 때만 대상이다(벽 너머·다른 구역이면 없다 — p0513b). `use g<n>` 에 `item` 으로 골드(`i7`)를 붙여도 산다(값은 가게가 정한다).
+- 상품 id `g<n>` = 가게(피처 번호 순) × 정의의 sells 순서(게시판 의뢰 `q<n>` 과 같은 꼴 — 상태 없음, 정의·피처에서 다시 센다). 산 장비는 손에서 태어난 개체(`id` 새 번호), 들던 것은 같은 번호로 발밑 피처가 된다(같은 틱 `features` 에 새 피처).
+- 사들이는 값: 정의의 `buys`(보물 6) · 그 가게가 파는 물건은 파는 값의 절반(내림). 흥정·재고·NPC 지갑 없음.
+- 건네기 `give`: `item` 에 `gold`·`treasure` 가 더해졌다 — 행동의 `amount`(골드 액수·보물 개수, 없으면 1)만큼 옮긴다. `given`{what:"골드 3"|"보물 2개", amount, gold?|bag?(건넨 쪽의 남은 것)} · `not_enough`{have, amount}. 받은 쪽 `received`{what, item, amount, gold?|bag?(받은 쪽의 것)}. 목격 `ally_give.what` 은 "골드"·"보물"(액수·개수 없음).
+- 의뢰 보상: 의뢰 정의의 `quest.gold` — 귀환 보고(`npc_report`) 때 완수했고 아직 보상을 받지 않은 의뢰의 골드가 **보고한 사람**에게 간다: `npc_report` 에 `reward`(합)·`paid[]`(의뢰 id)·`gold`(보고한 사람의 지금 골드). 장부 `quests.paid{id:{turn,by}}`(처음 보상이 나갈 때 생긴다 — 스트림 `end.quests` 에는 싣지 않는다). 의뢰의 `reward` 문자열은 이제 "<골드>골드"다.
+- 상인 선물: 장비 상인(단검)·아이템 상인(물약)의 선물(`npc_gift`)은 없어졌다 — 판매로 바뀌었다. 접수원 원정 물품·성직자 축복은 그대로.
+- 관측(모델 입력): '네 상태' 첫 줄 `골드 N` · 소지품 `i7`(골드)·`i8`(보물 — 있을 때만) · 가게 문턱 2칸 안이면 `notices[]` 의 `{kind:'shop', id, name, goods[{tid,name,type,price}], buys[{name,price}]}` 와 상품 대상 `g<n>`(`kind:"good"`, `price`, `shop`).
+
 ## 파일 규칙
 - 위치: `state/stream.jsonl`. **실행 시작 때 truncate**(이전 판 기록은 사라진다 — 보존하려면 실행 후 복사). 예외 = 이어가기(D79, 2026-09-16):
   러너가 스냅샷 자리(마지막으로 얼린 틱의 끝)까지 자른 뒤 **append** 한다 — 한 판 = 한 파일 그대로, `resume` 줄이 이음매.
@@ -421,7 +437,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 
 ## 스냅샷 스키마
 
-- **봇**: `char job sex x y hp maxhp bag potions weapon armor alive won order aware_of[]` · `boons?`(**2026-09-15 D74 additive**, 축복의 물약 병 수 — 있을 때만)
+- **봇**: `char job sex x y hp maxhp bag potions weapon armor alive won order aware_of[]` · `boons?`(**2026-09-15 D74 additive**, 축복의 물약 병 수 — 있을 때만) · `gold`(**2026-10-15 p0.5.13 additive**, 골드 — 늘)
   (`potions`=소지 회복 물약 병 수 — 2026-07-17 additive. `weapon`/`armor`=착용 장비 `{name, bonus}` 또는 null — 2026-07-30 D28 additive. **2026-09-12 D57 additive**: `id`(장비 개체 번호 = 피처 id, 층-로컬 — 내려놓으면 같은 번호의 피처로 돌아온다, 층 전이 때 새 번호)·`worn[]`(착용해 본 캐릭터). events `equip` 에 `id`·`dropped_id` additive.
   `status[]`=붙은 상태 태그 이름 정렬 리스트, **있을 때만** — 2026-09-06 D34 additive. `relations{other:{kind:n}}`=관계 뼈 횟수(살은 안 나간다 — decisions.relation), **뼈가 있을 때만** — 2026-09-06 D36 additive)
   — `order` = 진행 중 핑(raw: `exit`/`f<n>`/`m<n>`/`b<char>`/`@x,y`(explore 목표칸), 없으면 null).

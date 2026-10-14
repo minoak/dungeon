@@ -3,7 +3,7 @@
 (2026-09-20 — 파트너 "마을에서 커뮤니케이션 그리고 마을에서 여러 상호작용을 하면서 실제로 이 마을에서 캐릭터가 살아간다는 걸 보여줘야 해 …
  npc를 더 넣더라도 이 부분은 완성해야해" · 설계 원장 D83 의 남은 기둥 C "마을에서 할 일의 행동 수단이 없다")
 마을 v4 그림 속 고정물(분수·우물·석상·알림판·벤치 셋·탁자·좌판 둘·화덕·훈련대·궤짝·천막·화단) 곁의 바닥 칸에 쓰임 부품(D89 use)이 달린
-오브젝트가 서고, 숙소 셋은 묵기·가게 넷은 구경이 문턱에서 열리고, 새 주민(정착 일곱·행인 둘)이 선다. 전부 러너 스위치 DUNGEON_TOWN_LIFE=1
+오브젝트가 서고, 숙소 셋은 묵기·가게 넷은 구경(p0.5.13: 장비점·잡화점은 사고팔기 — verify_shop)이 문턱에서 열리고, 새 주민(정착 일곱·행인 둘)이 선다. 전부 러너 스위치 DUNGEON_TOWN_LIFE=1
 (러너 기본 0 — 론처가 켠다) 뒤다. 새 동사 없음(전부 기존 use/interact 밑) · 돈·가격·매매 없음.
 게이트:
   ① 끈 판 = 옛 판: 스위치 상수 0 · 피처는 옛 19개(정착 셋·건물 열둘·행인 셋·입구) 그대로 · 건물에 쓰임·켠 판용 문장 없음 · 표식(town_life) 없음 ·
@@ -12,7 +12,7 @@
      전부 출발 자리에서 path_to 도달 · 한 칸에 하나 · 출발 자리 2칸 밖 · 구역 연결 칸·문턱이 아니다 · 새 행인은 제 걷는 자리(한 줄) 안에서만 걷는다
   ③ 쓰임(메뉴형): 오브젝트 15 + 건물 7 을 한 번씩 — 줄 머리·결과 이름·사실 칸 · 곁의 사람은 본다(ally_use) · 묵기가 다친 몸을 고친다 ·
      궤짝은 한 번(다 쓴 뒤 다른 봇의 라벨에 효과·'뒤지기' 약속 없음) · 알림판은 쪽마다 다른 글 · 화단은 '살펴보기' · 판정 rng 무접촉
-  ④ 새 주민: 말 걸기(더미) = 켠 판용 대사 → 두 번째는 재방문 대사 · 옛 상인의 선물 그대로(물약 하나·빈손이면 단검) · 먼저 거는 인사({name}) ·
+  ④ 새 주민: 말 걸기(더미) = 켠 판용 대사 → 두 번째는 재방문 대사 · p0.5.13 옛 상인의 선물은 판매로(모두 대화만) · 먼저 거는 인사({name}) ·
      NPC 두뇌의 재료(역할·성격·세계의 사실)가 새 주민에게도 선다 — 프롬프트에 성격이 실린다(두뇌 호출은 대역)
   ⑤ 문장: 켠 판의 어떤 문장도 '서비스는 아직 준비 중'·'손님 받을 준비가 안 됐어'를 말하지 않는다 · 끈 판의 정의 문장은 그대로 ·
      건물 역할 부품 스위치(NOTICES)를 끈 판은 쓰임을 못 찾으니 건물의 켠 판용 문장도 접는다(거짓 방지) · 임시 문장 표식(note)
@@ -142,7 +142,7 @@ NEW_WALKERS = {"town_resident": "동네 주민", "shop_porter": "짐꾼"}
 OBJ_KIND = {"fountain": "drink", "well": "drink", "statue": "read", "guild_board": "read", "temple_bench": "sit", "guild_bench": "sit",
             "guild_bench_east": "sit", "tavern_table": "sit", "east_stall": "browse", "south_stall": "browse", "forge": "warm",
             "training_rack": "practice", "training_crate": "rummage", "camp_tent": "sit", "flowerbed": "read"}
-BLD_KIND = {"일반 여관": "lodge", "정원 숙소": "lodge", "공동 숙소": "lodge", "대장간": "browse", "공방": "browse", "장비점": "browse", "잡화점": "browse"}
+BLD_KIND = {"일반 여관": "lodge", "정원 숙소": "lodge", "공동 숙소": "lodge", "대장간": "browse", "공방": "browse", "장비점": "shop", "잡화점": "shop"}   # p0.5.13 장비점·잡화점 = 가게(사고팔기 — 값은 verify_shop)
 
 print("── ① 끈 판 = 옛 판")
 d0, bots0, st0 = town(on=False)
@@ -242,10 +242,12 @@ d3.composed_actions = d3.auto_approach = False        # 메뉴형 경로(게이�
 a, w, far = bots3
 rng3 = d3.rng.getstate()
 n_feat = len(d3.features)
-HEAD = {"drink": "마시기", "sit": "앉기", "browse": "구경하기", "warm": "불 쬐기", "practice": "몸 풀기", "rummage": "뒤지기", "lodge": "묵기", "read": "읽기"}
+HEAD = {"drink": "마시기", "sit": "앉기", "browse": "구경하기", "warm": "불 쬐기", "practice": "몸 풀기", "rummage": "뒤지기", "lodge": "묵기", "read": "읽기",
+        "shop": "사고팔기"}
 RESULT = {"drink": "drank", "sit": "sat", "browse": "browsed", "warm": "warmed", "practice": "practiced", "rummage": "rummaged",
-          "lodge": "lodged", "read": "read"}
+          "lodge": "lodged", "read": "read", "shop": "browsed"}   # p0.5.13 물건 없이 가게를 쓰면 진열·값(browsed + buys)
 got, heads_ok, wit_ok = {}, [], []
+a["gold"] = 100                                       # p0.5.13 묵기 값 — 이 절은 쓰임의 종류를 본다(값·모자람은 verify_shop)
 o3 = {o["id"]: d3.feature_at(o["x"], o["y"]) for o in d3.layout_result["life_objects"]}
 targets3 = [(i, f, OBJ_KIND[i]) for i, f in o3.items()] + [(nm, by_name(d3, nm), k) for nm, k in BLD_KIND.items()]
 for key, f, kind in targets3:
@@ -268,7 +270,7 @@ check("③ 몸에 남는 것 — 마시기·앉기·불 쬐기 HP +1 · 묵기�
       all(got[k]["heal"] == 1 for k in ("fountain", "well", "temple_bench", "tavern_table", "camp_tent", "forge"))
       and all(got[k]["heal"] == 3 and got[k]["hp"] == a["maxhp"] for k in ("일반 여관", "정원 숙소", "공동 숙소"))
       and got["east_stall"]["wares"] == ENT.get("produce_stall")["comps"]["use"]["wares"]
-      and got["잡화점"]["wares"] == ENT.get("general_store")["comps"]["life"]["use"]["wares"]
+      and got["잡화점"]["wares"] == ["회복 물약 10골드"] and got["잡화점"]["buys"] == ["보물 6골드", "회복 물약 5골드"]   # p0.5.13 가게 = 진열과 값
       and got["statue"]["text"].startswith("받침돌에 새겨진 글") and got["flowerbed"].get("verb") == "look"
       and brains._last_prose(got["flowerbed"]).startswith("화단을 살펴보았다: ") and got["training_crate"]["got"] in ("nothing", "potion"))
 check("③ 곁의 사람은 본다(ally_use — 같은 구역) · 멀리 다른 구역의 사람은 못 본다 · 피처는 하나도 사라지지 않는다 · 판정 rng 무접촉",
@@ -308,10 +310,8 @@ for eid, nm in list(NEW_SETTLED.items()) + list(NEW_WALKERS.items()):
 check("④ 새 주민 아홉 — 곁에 서면 '말 걸기' 줄 · 첫 말은 켠 판용 대사(정의의 line — life 가 있으면 그것) · 두 번째는 재방문 대사(again)",
       all(len(lab) == 1 and r1["line"] == ENT.npc(eid, life=True)["line"] and r2["line"] == ENT.npc(eid, life=True)["line_again"]
           and r2.get("again") is True for eid, (lab, r1, r2) in talk.items()), {e: v[1].get("result") for e, v in talk.items()})
-check("④ 옛 상인의 선물은 옛 그대로(D32 상점 v0) — 장비 상인: 빈손이면 단검 · 아이템 상인: 한 사람에 물약 하나 · 나머지는 대화만",
-      talk["gear_merchant"][1]["result"] == "npc_gift" and talk["gear_merchant"][1]["item"] == "단검" and b4["weapon"]["name"] == "단검"
-      and talk["item_merchant"][1]["result"] == "npc_gift" and talk["item_merchant"][1]["item"] == "물약" and b4["potions"] == 1
-      and all(talk[e][1]["result"] == "npc_talk" for e in talk if e not in ("gear_merchant", "item_merchant")))
+check("④ p0.5.13(경제 1a): 옛 상인의 선물(D32 — 빈손이면 단검·물약 하나)은 판매로 바뀌었다 — 새 주민 아홉 모두 대화만 · 빈손 그대로",
+      all(talk[e][1]["result"] == "npc_talk" for e in talk) and b4["weapon"] is None and b4["potions"] == 0)
 c4 = bots4[1]
 child = by_name(d4, "잡화점 집 막내")
 c4["x"], c4["y"] = stand_by(d4, child)
@@ -351,7 +351,7 @@ check("⑤ 끈 판의 정의 문장은 그대로 — 건물 아홉의 원래 sto
 inn1 = by_name(d1, "일반 여관")
 check("⑤ 켠 판의 일반 여관 — 역할 '묵어 가는 곳' · 특징 '…문턱에서 묵을 수 있다' · 관측의 about·role 로 실린다 · 되는 것만 말한다(묵기가 실제로 열려 있다)",
       d1.feature_roles[inn1.id] == "묵어 가는 곳" and "문턱에서 묵을 수 있다" in d1.place_story[inn1.id]["trait"]
-      and IA.use_of(d1, inn1) == {"kind": "lodge"}
+      and IA.use_of(d1, inn1) == {"kind": "lodge", "price": 4}   # p0.5.13 묵는 값 4(값은 verify_shop)
       and next(x for x in d1.view(bots1[0], bots1)["sights"]["features"] if x["id"] == "f%d" % inn1.id).get("role") == "묵어 가는 곳")
 old_notices = R.NOTICES_ON
 R.NOTICES_ON = False
@@ -384,7 +384,7 @@ check("⑥ 조합형 판(실판 기본) — 대상 태그: 우물 [object, inter
 act6, err6 = CA.parse({"type": "use", "target": "f%d" % well6.id}, o6)
 r6 = d6.act(c6, act6, bots6)
 inn6 = by_name(d6, "정원 숙소")
-c6["x"], c6["y"] = inn6.x, inn6.y
+c6["x"], c6["y"], c6["gold"] = inn6.x, inn6.y, 20     # p0.5.13 정원 숙소 값 8 — 이 절은 경로를 본다(값은 verify_shop)
 o6b = d6.view(c6, bots6)
 r6b = d6.act(c6, CA.parse({"type": "use", "target": "f%d" % inn6.id}, o6b)[0], bots6)
 tav6 = by_name(d6, "주점")
