@@ -1,5 +1,48 @@
 # 변경 기록
 
+## 2026-10-14 — p0.5.11 개인 로어북
+
+설계 원본(로컬): `.orch/drafts/personal_lorebook_design.md` v3(c11c — Codex c11r 리뷰 반영) · DECISIONS 10-13 87·89 · 10-14(§7 결정 5개 추천대로 · 측정 집계 도구는 자유도 벤치 v2 몫).
+
+- **새 모듈 `lorebook.py`**(엔진 무의존, 0콜): 받는 조건(`parse`) · 안쪽 열쇠(`inner_key` — `obj:<층 일련>:<번호>`·`gear:<uid>`·`place:<공간 id>`·`zone:`·`quest:`·`kind:`·사람 `b<char>`·`npc:<이름>`) ·
+  칸 단위 병합(`apply`) · 100개 상한(`fade` — 층 기록부터, 그다음 가장 오래전에 고친 것) · 쓸어내기(`sweep`) · 도감 합류(`merge`) · 관측 잇기(`observe` → `obs.lore` 목록 + 몸의 `_lore_refs`) ·
+  한 관측 6줄 고르기(`pick` — 보임 거리순 → 들은 말(말한 사람 → 이름 첫 자리 → 긴 이름 → 열쇠) → 소지품) · 그리기 재료(`Shown`) · 발급 상태(`stamp`·`gear_uid`·`restore_ids`).
+- **응답 칸 `lore_note`**(옛 `person_note` 대체 — 별칭 없음): `target`(보이는 ID — 개별) | `kind`(보이는 이름 — 종류) · 사람에게만 `name`. 쓸 수 있는 대상 = 이번 관측에 번호나 이름으로 나온 것 전부
+  (서 있는 방·구역 · 마을 구역 이름 · 몬스터 · 함정 `t<n>` · 피처·건물·계단·문 · 게시판 의뢰 · 소지 `i1`~`i4` — 물약 칸은 종류로) + 시야 밖에서 내게 말한 사람. 길 `w…`·자기 자신은 버린다.
+  버린 쓰기는 `decisions.lore_drop{said, why}`(프롬프트엔 알리지 않음). 엔진은 글을 읽지 않는다.
+- **칸 단위 병합(c02r 구멍 수리)**: 옛 파서는 이름 없는 쓰기를 통째로 버렸고, 러너는 항목을 새 dict 로 바꿔 끼워 이름만 고치면 글이 지워졌다 → 준 칸만 바꾸고 세계 칸(turn·depth·src)만 갱신.
+- **몬스터 종류 = 도감 원장 note**: 보이는 몬스터의 종 이름이면 열쇠 `monster:<종>` — 발급기 `_settle` 이 `book_line` 다음에 `lore_note` 를 접는다(같은 종이면 lore_note 가 이긴다 · 오프라인 소급 같음).
+  원장에 그 종이 없는 어긋난 상태면 `kind:<이름>` 에 두었다가 도감 쪽 note 가 생기면 러너가 지운다(`tick.lore_ops` merge). 모르는 짐승은 보이는 이름 그대로 `kind:낯선 짐승`.
+- **뜨기**: 그 대상 줄 바로 아래 `  · 네 기록(m3): 「…」` · `  · 네 기록(종류: 고블린): 「…」` · 사람은 0.5.9 꼴(이름 없는 기록은 `(이름 모름)` — 민옥 결정 3) · 방위 줄 판은 `  · <대상> — 네 기록…` ·
+  장소 절에 줄이 없는 대상(함정·문·소지품)은 대상 목록 줄 아래 · 들은 말로 뜬 것은 `## 떠오른 기록 (들은 말·말한 사람)`(옛 '떠오른 기억'). 새 활성화 '말한 사람'(안 보여도) — 쓸 수 있는 대상 ⊆ 뜨는 대상(상한 전).
+  한 관측 6줄(민옥 결정 4) — 잘린 것은 프롬프트에 표시 없이 `decisions.lore_cut` 에만.
+- **지침**: 인물 기록 판의 PEOPLE 블록 → RECORD 블록(기능 설명서 — 무엇이 되는지만, ⚠️문구 임시). 인물 기록 판의 도감 인식 초대·관계 한 줄 초대 문장을 거두고 사실만(민옥 결정 5 —
+  '…의 심층 정보가 열렸다' · '방금 너를 구했다') · 몬스터 '네 생각' 줄은 내 기록(종류)으로. 옛 판(인물 기록 꺼짐)은 바이트 그대로.
+- **엔진**: `Feature.__slots__` 에 `uid`(기록될 때만 값 — 옛 피클 그대로, 읽기는 `getattr`) · 줍기·내려놓기(`_put_gear`)가 uid 를 착용 이력처럼 옮긴다(건네기 `dict(g)`·층 이월 `adopt_gear` 는 dict 그대로) ·
+  `view` 끝에서 `obs.lore`(인물 기록 판에만) · `level_snapshot` 에 `scope`·건물 피처 `space` · `as_dict` 에 `uid`(있을 때만).
+- **러너**: 판 발급 상태 `lore_ids{scope, uid}` 하나를 모든 층이 든다 · 층(마을 포함)을 지을 때 `stamp` · 마을 `building_ids`(건물 문턱 피처 → 공간 id) · 씨앗 자르기(`LB.seed` — 이름 20·글 80) ·
+  `_carry` 가 `lore` 를 같은 객체로(층 이월·부활·귀환) · 틱마다 사라진 층 일련의 기록을 모든 몸(다른 세계·부활 대기 포함)에서 쓸어낸다 · 스트림(additive, 인물 기록 판에만):
+  `run_meta.lore`(시작 원장) · `resume.lore` · `tick.lore_ops{char: [{op set|fade|sweep|merge, key, entry?}]}`(본 스트림 하나가 모든 몸의 것을) · `decisions.lore_note`(key 채움)·`lore_drop`·`lore_shown`·`lore_cut` ·
+  `level.scope` · 건물 피처 `space` · 장비 `uid`. `think_all(…, lore_ops=)` 는 인물 기록 판에서만 넘긴다(옛 호출 꼴 그대로). `tools/freedom_bench.py` 씨앗도 같은 자르기 + `lore{}`.
+- **저장 판 4 → 5**(`snapshot._m4_lore` · `snapshot.dungeons`): 인물 기록 판에서만 — 몸에 `lore{}` · 사람 기록 이름·글 자르기 · 던전마다 `scope`(보존 층 깊이 순 → 세계 → 지금 층) · `lore_ids`.
+  이어가기는 저장된 `lore_ids` 와 '실제로 쓰인 가장 큰 번호 + 1'(`lorebook.used_ids`) 중 큰 쪽.
+- 게이트 `verify_lorebook`(새, 0콜 — 설계 §6.6 ①~⑰: 받는 조건 · 함정 · 칸 병합 · 같은 이름 둘 · 쓸 수 있는 것 ⊆ 뜨는 것 · 도감 칸 · 번호 안정 · 장비 따라가기 · 쓸어내기 · 6줄 상한·순서 · 길이 · 100개 ·
+  저장 판 5 · 정보 보호 · 러너 로그(스텁 두뇌 판으로 기록률·오기율·잘림률을 스트림 칸만으로 셈) · 옛 판 그대로 · RECORD 권유 낱말 0) · 빨간불 18종(리포 복사본에서 고친 자리를 하나씩 되돌리면
+  모두 FAIL — `ab_runs/p0511/redlight.py`, 로컬) · verify_people·verify_identity(person_note → lore_note · 병합 규칙 · '떠오른 기록') · verify_class_foundation·verify_npc_talk(판 번호 고정값 → 지금 판).
+  `_run_gates.sh` 등록. 게이트 99/99.
+- 기준선(전 = 1052a3d, 후 = 이 패치 작업 트리, 판 3개 × 120틱 · 게이트 전부): **(나) 0** — 134건 전부 전후 원문 고정 규칙(`ab_runs/baseline/p0511-rules.py`, 로컬 — 반례 9종 거부).
+  dungeon·classic 판의 **완성 프롬프트·로그 바이트 동일**(버전·판 번호만) · live(인물 기록 판)는 행동 로그 동일 · 프롬프트 차이는 판단마다 PEOPLE → RECORD 블록 한 쌍뿐 · 스트림은 새 칸뿐
+  (run_meta.lore = 씨앗 · level.scope 1 · 건물 space 12 = layout 건물 칸 · lore_shown 33 = 그 프롬프트에 뜬 사람 기록) · 피클 +1202 = 새 칸 + 스트림 자리 + 씨앗 글 공유 해제(`ab_runs/p0511/pickle_probe.py` — 구조 차이 0).
+- **p0511b(Codex 리뷰 p0511r 반영)**: ① 저장 판 4→5 이관이 옛 마을에 건물 피처 → 공간 id 를 다시 단다(`lorebook.town_building_ids` — layout 문턱 칸 = 건물 피처 자리, 러너가 지을 때 다는 짝과 같다).
+  없으면 이어간 판의 집 기록이 `place:` 가 아니라 층 기록 `obj:` 가 됐다. ② 다음 틱이 없는 자리의 남은 원장 변화(마지막 틱의 좇지 않는 세계 쓰기·바램 · 쓸어냄 · 합류)를 `end`·`stopped` 줄의
+  `lore_ops` 로 낸다(`_lore_left` — 틱 줄도 같은 함수). ③ 이름 들림이 층의 개별·소지 장비 기록에 걸리지 않는다(설계 §4.1 — 장비는 소지품 순서로) · 이름 들림 동률의 마지막 규칙을 안쪽 열쇠 순으로
+  (관측에 열쇠 없이 — 열쇠 머리 무리 b < kind·monster < npc < place·quest·zone 과 obs.lore 의 열쇠 순 싣기로 같은 순서). 권장: `IG.public` 이 관전 전용 칸(`lore_*`·`uid`·`scope`·`space`·`lore_ids`)을
+  어느 깊이든 걷는다(지금 결과엔 안 실린다 — 막아 두는 자리) · 덧붙여 관측 `obs.gear` 에서 장비 `uid` 를 뺐다(설계 §6.1 '관측에 안 나간다' — 자기 두뇌(BYO)가 받는 관측에 섞였다).
+  게이트 verify_lorebook 에 재현 검사(옛 마을 이관 · end 줄의 남은 변화 · 이름 들림 동률·장비 · obs.gear · IG.public) · 빨간불 24종.
+- **p0511c(Codex 재리뷰 p0511rr 반영)**: 판단 정지 중 멈춤·판단 정지 제한 시간·호출 한도 길은 stopped 줄 없이 로그를 닫아 앞 틱 끝의 쓸어냄(lore_ops)이 관전 로그에서 빠졌다 →
+  남은 변화가 있을 때만 그것을 실은 stopped 줄(reason = 그 사유, turn = 본 스트림의 마지막 틱) 하나를 낸다 — 남은 변화가 없으면 옛 계약 그대로(요약만 사유를 안다, verify_brain_pause).
+  verify_lorebook 의 멈춤 검사를 문자열 확인에서 네 길(곱게 멈춤 · 호출 한도 · 제한 시간 · 판단 정지 중 멈춤)을 러너 판으로 실제로 도는 회귀 검사로 바꿨다(0콜) · 빨간불 26종.
+
 ## 2026-10-13 — p0.5.10 신원 ID-2 NPC 대화 한 길
 
 설계 원본(로컬): `.orch/drafts/identity_design_v2.md`(c02c) §3·§7 ID-2·§8.1·§8.4-2 · DECISIONS 10-12 'NPC 대화 피로' · 10-13 순서 변경(ID-2 를 0.5.10 으로 — 실판 두 번 NPC 약속 루프).

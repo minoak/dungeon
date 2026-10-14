@@ -26,6 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 import dungeon_gm as G
 import info_guard as IG     # p0.5.4 정보 보호 — 모르는 결과의 폴백 축소·NPC 두뇌 입력의 공개 투영
 import identity as ID       # p0.5.9 신원 ID-1 — 호칭(보는 사람 기준)·NPC 입력의 실명·사람 열쇠 판정
+import lorebook as LB       # p0.5.11 개인 로어북 — lore_note 받기·병합·한 관측 6줄 고르기·그리기 재료
 from brain_config import BACKENDS, MODEL_IDS as _MODEL_ID, ANTHROPIC_THINKING, model_id, openai_base_url, OPENAI_DEFAULT_BASE
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -1532,6 +1533,7 @@ _WIRE_KEYS = frozenset((
     "town_sight",  # D86 마을의 시야 = 지금 선 구역: 마을 줄·기억 절 머리가 그린다
     "partyform",   # D84 조각 3 파티의 사실: "## 파티" 절·PARTY 동사 블록·명단 머리가 그린다
     "people",      # D85 인물 기록: 조건이 맞을 때만(보일 때 · 이름을 들을 때) 그린다 — 통째로 싣지 않는다(활성화가 곧 예산)
+    "lore",        # p0.5.11 개인 로어북: 사람 밖의 내 기록(지금 화면 번호에 이은 목록) — people 과 같은 고르기(한 관측 6줄)로 그 대상 줄 아래·떠오른 기록 절
     "status",  # 상태 태그(D34): 아래 _wire "## 네 몸 상태" 절이 그린다
     "relations",   # 관계 장부(D36): 뼈 횟수·초대는 _wire, 살(한 줄)은 _sheet 가 그린다
     "book_invite",   # 도감 인식 초대(D55): 해금·갱신 문턱에서 한 줄을 청한다 — 아래 "## 도감" 절
@@ -1583,7 +1585,6 @@ def _wire(obs, names=None, compose=False):
     people = obs.get("people")                  # D85 인물 기록(스위치 판에만) — 호칭은 내 기록, 없는 사람은 '낯선 사람'
     if people is not None:
         names = {**names, "?": STRANGER}        #   "?" = 모르는 사람의 호칭(_last_prose 도 같은 사전을 본다)
-    shown = set()                               # p0.5.9 아는 사람 기억이 이 관측에 이미 뜬 사람(같은 사람은 한 번)
     heard_head = "들은 말" if people is not None else "동료가 한 말"   # p0.5.9 신원 ID-1: 인물 기록 판엔 말한 이가 낯선 사람·마을 사람일 수 있다 — 옛 판 머리글은 그대로
 
     def nm(char):
@@ -1614,6 +1615,13 @@ def _wire(obs, names=None, compose=False):
         d = now - t
         return "방금" if d <= 0 else "%d턴 전에" % d
 
+    # p0.5.11 개인 로어북(인물 기록 판에만): 이 관측에 뜰 기록을 먼저 고르고(한 관측 6줄 — lorebook.pick), 각 자리는 고른 것만 그 대상 줄 아래에
+    #   그린다(같은 기록은 한 번). 자리 없는 것(들은 말로 떠오른 것)은 '## 떠오른 기록' 절. 재료는 보는 사람 자신의 관측뿐(obs.people·obs.lore).
+    rec = LB.Shown(obs, lambda k: nm(k[1:]) if ID.is_bot_key(k) else str(k)[4:]) if people is not None else None
+
+    def recl(anchor, label=None):
+        return rec.at(anchor, label) if (rec is not None and anchor) else []
+
     L = ["## 네 상태"]
     M = []          # (09-08 D44) 기억 절 모음 — 관측(L)과 따로 모아 조립 때 갈래 순서를 정한다
     # (09-08 D44) 직업·성별·힘·민첩은 '나는 누구'라 시트만 말한다 — 여기는 지금의 몸(관측)만. 파트너 "시트는 나는 누구인가를,
@@ -1634,6 +1642,7 @@ def _wire(obs, names=None, compose=False):
                   "- 여기는 마을이다 — 위험한 것이 없고, 마을 전체가 한눈에 보인다")
                  + ((" · 지금 있는 곳: %s%s" % (obs["town_zone"], (" — %s" % obs["town_zone_about"]) if obs.get("town_zone_about") else ""))
                     if obs.get("town_zone") else ""))   # D60(09-12) 구역 이름 · D75 구역 특징 한 줄
+        L += recl("zone")                       # p0.5.11 지금 선 마을 구역에 대한 내 기록
     elif compose:
         # D83(09-18 파트너 "승리조건을 두지말자 … 굳이 규칙을 주지 않아도 하고싶은 것 > 하고 싶은 것의 규칙이 따라 붙을거야"):
         #   지침(세계 설명)에서 뺀 원정의 규칙은 원정 중의 관측에 붙는다 — 문장은 옛 지침의 것 그대로. 마을의 관측에는 없다.
@@ -1651,6 +1660,7 @@ def _wire(obs, names=None, compose=False):
                                                  (" (보상: %s)" % q["reward"]) if q.get("reward") else "",
                                                  (" — 의뢰인 %s" % q["client"]) if q.get("client") else "",
                                                  " — 완수했다" if q.get("done") else (" — 이미 맡았다" if q.get("accepted") else "")))
+                L += recl(q.get("tid"))             # p0.5.11 이 의뢰에 대한 내 기록
         elif n.get("kind") == "place":               # D75(09-15) 장소·사람의 이야기 — 곁(2칸)에서만, 정보만(무엇을 하라는 말은 없다)
             L.append("- %s — %s" % (n.get("name", "?"), n.get("text", "")))
         elif n.get("kind") == "oracle":
@@ -1678,6 +1688,7 @@ def _wire(obs, names=None, compose=False):
     if z and not scan:
         L.append("- 서 있는 곳: %s" % (("%s %s" % (z.get("kind", "방"), z["id"]))
                                        if z.get("id") else z.get("kind", "통로")))
+        L += recl(z.get("id"))                  # p0.5.11 서 있는 방에 대한 내 기록
     if OBS_POS and obs.get("pos"):
         L.append("- 좌표: %s" % obs["pos"])
     if obs.get("order"):
@@ -1726,6 +1737,7 @@ def _wire(obs, names=None, compose=False):
         if z.get("at"):
             head += ", 너는 %s에 있다" % z["at"]
         L.append("- " + head.rstrip())
+        L += recl(z.get("id"))                   # p0.5.11 서 있는 공간에 대한 내 기록
         KR = {"N": "북쪽", "NE": "북동쪽", "E": "동쪽", "SE": "남동쪽",
               "S": "남쪽", "SW": "남서쪽", "W": "서쪽", "NW": "북서쪽"}
         ck = z.get("checked") or {}
@@ -1813,15 +1825,21 @@ def _wire(obs, names=None, compose=False):
                 L.append("- %s: %s" % (KR[b], opened))
             else:
                 L.append("- %s: 벽" % KR[b])      # (09-12 벽 한 줄 접기는 verify_scan ⑩ 8방위 전수성과 충돌해 되돌림)
+        if ex:                                             # p0.5.11 내 기록(방위 줄 판): 대상마다 줄이 없으니 몬스터 습성 줄처럼 아래에 — 무엇의 기록인지 이름을 앞에 붙인다
+            L += recl("exit", _exit_label(ex))
+        for dr in z.get("doors", []):
+            if dr.get("seen"):
+                L += recl(dr.get("id"), "문 %s" % dr.get("id"))
         for m in s.get("monsters", []):
             if m.get("lore") or m.get("deep_progress"):   # D53: 심층 전엔 한 줄 + 진행도 접미
                 L.append("  · %s 습성(네가 아는 것): %s%s" % (m.get("kind", "?"), m.get("lore") or "아직 잘 모른다", G._deep_sfx(m)))
-            if m.get("note"):                              # D55: 캐릭터 자신의 인식 — 사실과 다른 줄(섞지 않는다)
+            if m.get("note") and people is None:           # D55: 캐릭터 자신의 인식 — 사실과 다른 줄(섞지 않는다). p0.5.11 인물 기록 판은 내 기록(종류)으로 뜬다
                 L.append("  · %s에 대한 네 생각(네가 적어 둔 것): %s" % (m.get("kind", "?"), m["note"]))
-        for f in s.get("features", []):                    # p0.5.9 아는 사람 기억(로어북처럼): 방위 줄엔 사람마다 줄이 없으니 몬스터 습성 줄처럼 아래에 —
-            L += _known_line(people, f, shown, "%s %s" % (f.get("name", "?"), f.get("id", "?")))   #   누구의 기록인지 호칭을 앞에 붙인다
+            L += recl(m.get("id"), "%s %s" % (m.get("kind", "?"), m.get("id", "?")))
+        for f in s.get("features", []):                    # p0.5.9 아는 사람 기억(로어북처럼) → p0.5.11 대상 전부
+            L += recl(f.get("id"), "%s %s" % (f.get("name", "?"), f.get("id", "?")))
         for b in s.get("bots", []):
-            L += _known_line(people, b, shown, who(b.get("char", "?")))
+            L += recl("b%s" % b.get("char", "?"), who(b.get("char", "?")))
     else:
         if obs.get("floor_notice"):            # D65 개정(09-13): 보스층 진입 한마디(옛 관측 모드도 같은 자리)
             L += ["", "## %s (세계의 사실 — 한 번만 들린다)" % ("마을에 들어서며" if obs.get("town") else "이 층에 들어서며"), "- " + str(obs["floor_notice"])]
@@ -1832,12 +1850,14 @@ def _wire(obs, names=None, compose=False):
         ex = s.get("exit")
         if ex:
             L.append("- %s — %s%s%s" % (_exit_label(ex), at(ex), _exit_state(ex), _exit_gather(ex, names) + _exit_need_party(ex)))   # D65 봉인 · D66 모임(사실만)
+            L += recl("exit")                              # p0.5.11 내 기록 — 그 대상 줄 바로 아래(아래 줄들도 같다)
         for m in s.get("monsters", []):
             L.append("- %s — %s" % (G._mfact(m), at(m)))
             if m.get("lore") or m.get("deep_progress"):   # D53: 심층 전엔 한 줄 + 진행도 접미
                 L.append("  · 네가 아는 습성: %s%s" % (m.get("lore") or "아직 잘 모른다", G._deep_sfx(m)))
-            if m.get("note"):                              # D55: 캐릭터 자신의 인식 — 사실과 다른 줄(섞지 않는다)
+            if m.get("note") and people is None:           # D55: 캐릭터 자신의 인식 — 사실과 다른 줄(섞지 않는다). p0.5.11 인물 기록 판은 '네 기록(종류: …)'으로 뜬다
                 L.append("  · 네 생각(네가 적어 둔 것): %s" % m["note"])
+            L += recl(m.get("id"))
         for f in s.get("features", []):
             L.append("- %s %s%s — %s%s%s%s" % (f.get("name", "?"), f.get("id", "?"),
                                              (" (%s)" % f["role"]) if f.get("role") else "",   # D69 역할 한 줄(마을) — 이름·id 뒤
@@ -1845,14 +1865,14 @@ def _wire(obs, names=None, compose=False):
                                              " (와 본 자리)" if f.get("visited") else "",
                                              " (new)" if f.get("new") else "",
                                              (" — %s" % f["about"]) if f.get("about") else "") + G._tagsfx(f))   # D39 태그 접미 · D57 new(아무도 안 걸쳐 본 것) · D75 특징 한 줄
-            L += _known_line(people, f, shown)   # p0.5.9: 아는 사람(NPC)이 보이면 그 줄 바로 아래 내 기록 한 줄(로어북처럼 — DECISIONS 10-13)
+            L += recl(f.get("id"))               # p0.5.9 아는 사람(NPC)이 보이면 그 줄 바로 아래 내 기록 한 줄(로어북처럼 — DECISIONS 10-13) → p0.5.11 피처 전부
         for b in s.get("bots", []):
             L.append("- %s — HP %s/%s%s — %s%s%s"                                    # 09-08 D45: 숫자+태그(겉보기 4단 폐지)
                      % (who(b.get("char", "?")), b.get("hp", "?"), b.get("maxhp", "?"),
                         (" · " + " · ".join(b["status"])) if b.get("status") else "",   # D34 상태
                         at(b), _person_sfx(b, people),                                 # D85: 겉모습(인물 기록 판 — p0.5.9 아는 사람도 같은 꼴)
                         _ally_sfx(b, who)))                                            # D27 개정(09-12) 고른 행동 · 몸짓 깃발
-            L += _known_line(people, b, shown)   # p0.5.9: 아는 사람이 보이면 그 줄 바로 아래 내 기록 한 줄(조건 a — 보일 때만 뜬다)
+            L += recl("b%s" % b.get("char", "?"))   # p0.5.9: 아는 사람이 보이면 그 줄 바로 아래 내 기록 한 줄(조건 a — 보일 때만 뜬다)
         for q in s.get("blocked", []):          # D92(09-20) 눈에 든 소품 — 사실만(방위·거리·칸 수). ⚠️문구 임시
             L.append("- 큰 물건이 바닥 %d칸을 채우고 있다 — %s (그 칸은 지나갈 수 없다)" % (q.get("n", 1), at(q)))
         for w in s.get("ways", []):
@@ -1998,7 +2018,13 @@ def _wire(obs, names=None, compose=False):
             NB = []
 
     bi = obs.get("book_invite")             # D55 도감 인식 초대 — 해금 순간 첫 인식, N번마다 고칠 기회(메모 §2-5)
-    if bi:
+    if bi and people is not None:           # p0.5.11(민옥 결정 5): 인물 기록 판은 '한 줄 남겨 볼래' 안내를 거두고 사실만 — 기록은 언제든 lore_note 로 쓴다(옛 판 그대로)
+        M += ["", "## 도감"]
+        if bi.get("why") == "review":
+            M.append("- %s을(를) 그 뒤로 더 겪었다(지금까지 %d번)." % (bi.get("name", "?"), int(bi.get("n") or 0)))
+        else:
+            M.append("- %s의 심층 정보가 열렸다(지금까지 %d번 겪음)." % (bi.get("name", "?"), int(bi.get("n") or 0)))
+    elif bi:
         M += ["", "## 도감 — 네 생각 한 줄 (선택)"]
         if bi.get("why") == "review":
             M.append('- %s을(를) 그 뒤로 더 겪었다(지금까지 %d번). 적어 둔 생각: %s — 고쳐 쓰려면 응답 JSON 의 `book_line` 필드'
@@ -2034,7 +2060,12 @@ def _wire(obs, names=None, compose=False):
                          % (nm_, _by_phrase(e), e.get("zone", "?"), ago(e.get("turn", 0))))
 
     inv = next((r for r in (obs.get("relations") or []) if r.get("invite")), None)
-    if inv:                                 # 살 초대(D36) — 강한 뼈 직후 또는 문턱 결정에만 칸이 생긴다
+    if inv and people is not None:          # p0.5.11(민옥 결정 5): 인물 기록 판은 초대 문장을 거두고 사실만(구함·곁에서 죽음). '겪은 일이 쌓였다'는 사건이 아니라 초대의 문턱이라 뺀다
+        who_ = nm(inv.get("char", "?"))
+        fact = {"rescued": "%s가 방금 너를 구했다" % who_, "at_death": "%s가 죽을 때 네가 곁에 있었다" % who_}.get(inv["invite"])
+        if fact:
+            M += ["", "## 방금 있었던 일", "- %s." % fact]
+    elif inv:                               # 살 초대(D36) — 강한 뼈 직후 또는 문턱 결정에만 칸이 생긴다
         who_ = nm(inv.get("char", "?"))
         why = {"rescued": "%s가 방금 너를 구했다" % who_,
                "at_death": "%s가 죽을 때 네가 곁에 있었다" % who_,
@@ -2068,9 +2099,9 @@ def _wire(obs, names=None, compose=False):
             mt = m.get("turn")                   # D47 배관: 보관된 말 — 지난 턴보다 오래된 말은 얼마나 전인지 병기
             old = (" — %d턴 전" % (now - mt)) if (now is not None and mt is not None and now - mt >= 2) else ""
             L.append('- %s: "%s"%s%s' % (_npc_name(m.get("from")) or nm(m.get("from", "?")), m.get("text", ""), tag, old))   # D69 NPC 의 말은 이름으로
-    recall = _people_recall(obs, shown)      # D85 조건 (c) — 들은 말에 내가 적어 둔 이름이 나오면 그 기록이 떠오른다(지금 안 보이는 사람만)
+    recall = rec.recall() if rec is not None else []   # p0.5.11 들은 말로 떠오른 기록 — 말한 사람(안 보여도) · 말 속에 내가 적은 이름(글자 일치만)
     if recall:
-        L += ["", "## 떠오른 기억 (들은 말에 네가 적어 둔 이름이 나왔다)"] + recall
+        L += ["", "## 떠오른 기록 (들은 말·말한 사람)"] + recall
 
     # ── 조립(09-08 D44, 파트너 네 갈래 "시트=나는 누구인가 · 관측=뭘 보고 있나 · 기억=무엇을 기억하나 · 선택지=지금 주어진 것"):
     #   시트·지침은 claude_brain 이 앞에 붙이고 선택지는 뒤에 붙인다. 여기서는 **기억 → 관측** 순 — 내 선택(임시 가정): 지금 보고
@@ -2131,14 +2162,20 @@ def _wire(obs, names=None, compose=False):
                 if said:                         #   줄머리 '  · ' = 몬스터 습성 줄과 같은 꼴(안전 차단 접기 줄머리 '  · 최근 친목·건네기: '와 다르다)
                     told.update(said)
                     out.append('  · 설명: ' + ' '.join(said))
+                out += recl(target['id'])        # p0.5.11 장소 절에 줄이 없는 대상(함정·문·소지품·의뢰)의 내 기록 — 이미 그린 기록은 다시 안 그린다
         out += ["", "## 행동과 의사소통", "COMMON: " + " / ".join(G.CA.COMMON if obs.get('action_schema') else _compose_types())]
         out += G.CA.extra_lines(obs)            # p0.5.5(§7.2) 추가 행동 — 노출된 등록부 동사가 있을 때만(머리 한 줄 + 동사마다 한 줄). 지침 파일이 아니라 관측에 붙는다
         out += ["의사소통: 잡담 / 제안"]
-        if obs.get("people") is not None:       # D85 인물 기록 — 세계의 규칙 한 번(⚠️문구 임시)
-            out += ['', 'PEOPLE:',
-                    "- 사람의 이름과 직업은 겉으로 보이지 않는다. 네가 기록해 둔 사람만 그 이름으로 불리고, 나머지는 '낯선 사람'이다.",
-                    '- 기록(선택): 응답 JSON 에 `person_note` {"target": "b<번호> 또는 사람의 id", "name": "부를 이름", "text": "그 사람에 대해 기억해 둘 한 줄"} — '
-                    '지금 보이거나 방금 네게 말한 사람만. 같은 사람을 다시 기록하면 고쳐 쓴다. 기록한 사람이 보이거나 들은 말에 그 이름이 나오면 기록이 떠오른다.']
+        if obs.get("people") is not None:       # D85 인물 기록 → p0.5.11 개인 로어북 — 기능 설명서(무엇이 되는지만 · 쓰라는 말은 없다). ⚠️문구 임시(설계 §5.3)
+            out += ['', 'RECORD:',
+                    "- 사람의 이름과 직업은 겉으로 보이지 않는다. 네가 이름을 기록해 둔 사람만 그 이름으로 불리고, 나머지는 '낯선 사람'이다.",
+                    '- 기록(선택): 응답 JSON 에 `lore_note` — 보이는 것 하나에 대해 {"target": "<보이는 ID>", "text": "한 줄(%d자)"}, '
+                    '그 종류 전부에 대해 {"kind": "<보이는 이름>", "text": "한 줄"}. 사람에게는 "name"(부를 이름)도 쓸 수 있다. 한 판단에 하나. '
+                    '지금 보이는 것·서 있는 곳·네 소지품·네게 말한 사람에 대해 쓸 수 있다.' % LB.TEXT_LEN,
+                    '- 같은 대상을 다시 기록하면 준 칸만 고쳐 쓴다(빠진 칸은 그대로).',
+                    '- 기록한 대상이 보이거나, 그 사람이 네게 말하거나, 들은 말에 그 이름이 나오면 기록이 떠오른다. 한 번에 %d개까지(가까운 것부터).' % LB.SHOW_MAX,
+                    '- 층에 있는 것(방·몬스터·함정·바닥 물건)의 기록은 그 층이 사라지면 같이 사라진다. 사람·마을 장소·의뢰·종류의 기록은 남는다.',
+                    '- 기록은 %d개까지 — 넘치면 층에 있는 것부터, 그다음 가장 오래전에 고쳐 쓴 것부터 바랜다.' % LB.KEEP_MAX]
         pf = obs.get("partyform")
         if pf is not None and obs.get('action_schema') and (pf.get("here") or pf.get("mine")):   # D84 조각 3 — ⚠️문구 임시
             out += ['', 'PARTY:']
@@ -2257,50 +2294,10 @@ def _exit_state(ex):
 
 def _person_sfx(b, people):
     """보이는 사람 줄의 꼬리(D85): 겉모습. 스위치가 꺼진 판(people None)은 빈 문자열.
-    p0.5.9: 아는 사람도 같은 꼴(겉모습)이다 — 내 기록은 줄 꼬리가 아니라 그 줄 바로 아래 한 줄(_known_line)로 뜬다(사람 줄은 아는 사람·모르는 사람이 한 꼴)."""
+    p0.5.9: 아는 사람도 같은 꼴(겉모습)이다 — 내 기록은 줄 꼬리가 아니라 그 줄 바로 아래 한 줄(p0.5.11 lorebook.Shown)로 뜬다(사람 줄은 아는 사람·모르는 사람이 한 꼴)."""
     if people is None:
         return ""
     return (" — 겉모습: %s" % b["looks"]) if b.get("looks") else ""
-
-
-def _known_line(people, o, shown, label=None):
-    """아는 사람 기억 자동 활성화(p0.5.9, DECISIONS 2026-10-13 — '로어북처럼'): 시야 안의 사람 o(관측의 모험가 줄·NPC 피처)가 내 기록에
-    이름이 있는 사람(내 person_note · 시트 씨앗)이면 그 기록(이름·적어 둔 한 줄)을 한 줄로 — 그 사람 줄 바로 아래(줄머리 '  · ' = 몬스터 습성·
-    네 생각 줄과 같은 꼴). label = 방위 줄 판(D19 scan)처럼 사람마다 줄이 없을 때 앞에 붙일 호칭.
-    재료는 보는 사람 자신의 기록(obs.people = 내 몸의 people 사본)뿐이라 남의 기록이 섞일 길이 없다(정보 보호 위반 아님 — 내가 쓴 것).
-    모르는 사람(기록이 없거나 이름이 없다)·꺼진 판은 [] · 같은 사람은 한 관측에 한 번(shown) · 길이 = person_note 원문 상한(이름·한 줄)."""
-    if people is None:
-        return []
-    key = ("npc:%s" % o.get("name")) if o.get("type") == "npc" else ("b%s" % o["char"]) if o.get("char") is not None else None
-    e = people.get(key) if key else None
-    if not isinstance(e, dict) or not e.get("name") or key in shown:
-        return []
-    shown.add(key)
-    nm_ = " ".join(str(e["name"]).split())[:PERSON_NAME_LEN]
-    tx = " ".join(str(e.get("text") or "").split())[:NOTE_LEN]
-    return ["  · %s네 기록: %s%s" % (("%s — " % label) if label else "", nm_, (" — 「%s」" % tx) if tx else " (이름만 적어 두었다)")]
-
-
-def _people_recall(obs, shown=()):
-    """조건 (c) — 들은 말에 내가 적어 둔 이름이 나오면 그 기록이 떠오른다(D85, 로어북의 키워드 활성화). 엔진은 말의 뜻을 읽지 않는다 —
-    글자 일치만 본다. 지금 보이는 사람은 제 줄 아래 이미 기록이 뜨니 뺀다(shown 도). 이름은 2자 이상만(한 글자 이름은 아무 말에나 걸린다).
-    p0.5.9(DECISIONS 2026-10-12 76): 세계가 미리 써 둔 NPC 로어북(_npc_book)은 거뒀다 — 모험가에게 없는 항목이라 구분 단서였다. 떠오르는 것은 내 기록뿐."""
-    people = obs.get("people")
-    if people is None:
-        return []
-    sights = obs.get("sights") or {}
-    seen = ({"b%s" % b.get("char") for b in sights.get("bots", [])}
-            | {"npc:%s" % f.get("name") for f in sights.get("features", []) if f.get("type") == "npc"} | set(shown))
-    text = " ".join(str(m.get("text", "")) for m in (obs.get("messages") or []))
-    if not text.strip():
-        return []
-    out = []
-    for pid, e in sorted(people.items()):
-        nm_ = str(e.get("name") or "")
-        if pid in seen or len(nm_) < 2 or nm_ not in text:
-            continue
-        out.append("- %s: 「%s」" % (nm_, e.get("text") or "(이름만 적어 두었다)"))
-    return out
 
 
 def _exit_gather(ex, names=None):
@@ -2532,23 +2529,12 @@ def _parse_decision(raw, why, obs, char, roster):
         bline = (str(obj.get("book_line", "") or "").strip()[:NOTE_LEN] if bi else "")
         if bline:
             rel = {**rel, "book_line": {"key": bi["key"], "text": bline}}   # 발급기(bestiary)가 원장 note 로 남긴다(엔진 불가침)
-        pn = obj.get("person_note")                                          # D85 인물 기록 — 스위치 판에서만, 지금 보이거나 방금 내게 말한 사람만
-        if obs.get("people") is not None and isinstance(pn, dict):
-            ptg = re.sub(r"^(봇|b|bot)\s*", "", str(pn.get("target") or "").strip(), flags=re.I)
-            okc = ({str(b_.get("char")) for b_ in (obs.get("sights") or {}).get("bots", [])}
-                   | {str(m_.get("from")) for m_ in (obs.get("messages") or []) if str(m_.get("from", "")).isdigit()})
-            pname = " ".join(str(pn.get("name") or "").replace('"', "").split())[:PERSON_NAME_LEN]
-            ptext = " ".join(str(pn.get("text") or "").split())[:NOTE_LEN]
-            npc_f = next((f_ for f_ in (obs.get("sights") or {}).get("features", [])        # D85 조각 ②: NPC 도 같은 규칙 — 보이는 NPC(f<id>)나
-                          if f_.get("type") == "npc" and str(pn.get("target") or "").strip() in (f_.get("id"), f_.get("name"))), None)
-            if npc_f is None:                                                                  #   방금 내게 말한 NPC(from 'npc:<이름>')에 대해 적을 수 있다
-                spoke = {str(m_.get("from"))[4:] for m_ in (obs.get("messages") or []) if str(m_.get("from", "")).startswith("npc:")}
-                if str(pn.get("target") or "").strip() in spoke:
-                    npc_f = {"name": str(pn.get("target")).strip()}
-            if npc_f is not None and pname:
-                rel = {**rel, "person_note": {"to": "npc:%s" % npc_f["name"], "name": pname, "text": ptext}}
-            elif ptg in okc and ptg != str(char) and pname:
-                rel = {**rel, "person_note": {"to": ptg, "name": pname, "text": ptext}}
+        if obs.get("people") is not None and obj.get("lore_note") is not None:   # p0.5.11 개인 로어북(인물 기록 판에만) — 받는 조건은 lorebook.parse 한 곳(설계 §3.2).
+            ln, ldrop = LB.parse(obj.get("lore_note"), obs, char)               #   옛 칸 person_note 는 받지 않는다(관리자 결정 — 별칭 없음)
+            if ln:
+                rel = {**rel, "lore_note": ln}       # 러너 쓰기(think_all)가 안쪽 열쇠를 채워 그 몸의 장부에 병합한다
+            if ldrop:
+                rel = {**rel, "lore_drop": ldrop}    # 버린 쓰기(원응답·사유) — 프롬프트엔 알리지 않고 스트림에만(측정 재료)
         orc = next((n for n in (obs.get("notices") or [])                   # D61 신탁 응답 — 아직 안 답한 요청이 관측에 있을 때만 받는다
                     if n.get("kind") == "oracle" and n.get("id") and not n.get("replied")), None)
         oline = (str(obj.get("oracle_reply", "") or "").strip()[:120] if orc else "")
@@ -2686,13 +2672,14 @@ def social_all(d, bots, inbox=None):
     return out
 
 
-def think_all(d, bots, inbox=None, on_error=None):
+def think_all(d, bots, inbox=None, on_error=None, lore_ops=None):
     """order 없는(=재결정 필요한) 살아있는 봇만 '같은 틱-시작 스냅샷'에서 동시 사고.
     order 있는 봇은 엔진 자동보행 중이라 LLM 호출 안 함(콜 절약). inbox→obs.messages 주입.
     작정(D16): 남은 계획이 있는 봇은 LLM 대신 다음 수를 집행(src='plan', 콜 0) —
     엔진 착수 재검증(plan_step)이 깨지면 그 자리에서 계획이 찢기고 **같은 틱에** LLM 재결정으로
     넘어간다(틱 손실 없음, obs.last=plan_broken 이 사유를 보고). 작정 집행 틱엔 view() 미호출 —
-    inbox 는 다음 결정점까지 못 읽는다(D16 문서화된 트레이드오프, PLAN_MAX 로 억제)."""
+    inbox 는 다음 결정점까지 못 읽는다(D16 문서화된 트레이드오프, PLAN_MAX 로 억제).
+    lore_ops(p0.5.11) = 러너의 원장 변화 모음 {char: [{op, key, entry?}]} — 받은 기록 쓰기(set)·상한 바램(fade)을 여기 덧붙인다(러너가 tick.lore_ops 로 낸다)."""
     live = [b for b in bots if b["alive"] and not b["won"] and not b.get("order")]
     if not live:
         return {}
@@ -2791,11 +2778,17 @@ def think_all(d, bots, inbox=None, on_error=None):
                 rl["to"], {"bones": {}, "total": 0, "line": None, "line_turn": None,
                            "line_src": None, "queue": []})
             e["line"], e["line_turn"], e["line_src"] = rl["line"], d.turn, "self"
-        pn = dec.get("person_note")
-        if pn and by[c].get("people") is not None:   # D85 인물 기록 — 그 사람 항목에 겹쳐 쓴다(옛 줄은 스트림 decisions 에 남는다). 엔진은 내용을 안 읽는다
-            key = pn["to"] if str(pn["to"]).startswith("npc:") else "b%s" % pn["to"]   # 조각 ②: NPC 는 'npc:<이름>'(층을 넘어도 같은 사람 — 피처 id 는 층-로컬)
-            by[c]["people"][key] = {"name": pn["name"], "text": pn.get("text", ""), "turn": d.turn,
-                                    "depth": d.depth, "src": "self"}
+        if by[c].get("people") is not None:   # p0.5.11 개인 로어북 — 받은 쓰기를 그 몸의 장부에 칸 단위로 병합(엔진은 내용을 안 읽는다) · 뜬 것·잘린 것 로그
+            if dec.get("lore_note"):
+                ops = LB.apply(d, by[c], dec["lore_note"], d.turn)   # 결정 칸의 key 도 여기서 채워진다(같은 dict — 스트림에 안쪽 열쇠)
+                if ops and lore_ops is not None:
+                    lore_ops.setdefault(c, []).extend(ops)
+            if c in obss:                         # 이 판단의 프롬프트에 뜬 기록·상한에 잘린 기록(_wire 와 같은 고르기 — 결정론)
+                shown_, cut_ = LB.logged(obss[c], by[c].get("_lore_refs") or [])
+                if shown_:
+                    dec["lore_shown"] = shown_
+                if cut_:
+                    dec["lore_cut"] = cut_
         if dec.get("note"):              # D26 의미 기억 — 남긴 한 줄은 그 봇의 기억 로그로(FIFO)
             ns = by[c].setdefault("notes", [])
             ns.append(dec["note"])

@@ -31,6 +31,7 @@ import interactables as IA       # 쓰임 부품(D89, 09-20) — 정의의 use{k
 import judge                     # p0.5.3 판정 함수 묶음 — 엔진이 쓰는 것은 숙련 접근자(prof): 스폰이 몸에 정신·숙련을 붙인다(엔진 무의존 모듈)
 import info_guard as IG          # p0.5.4 정보 보호 — 봇이 보는 결과(last·궤적·목격·받은 일)는 공개 투영 사본, 모르는 결과의 폴백은 {type,target,status}만
 import identity as ID            # p0.5.9 신원 ID-1 — 사람의 호칭(기록은 열쇠로, 호칭은 그릴 때 보는 사람이) · 사람 열쇠 판정(엔진 무의존 모듈)
+import lorebook as LB            # p0.5.11 개인 로어북 — 안쪽 열쇠 → 지금 화면 번호(관측 obs.lore) · 장비 고유 번호(엔진 무의존 모듈)
 import town_layout as TL         # 마을 layout(town-layout-v1, 맵 트랙 저작 원본) → 격자 컴파일(엔진 무의존 모듈)
 import hashlib                  # D90(09-20) 들린 말 고르기 — 판정 rng 를 건드리지 않는 결정론 해시
 import math
@@ -585,6 +586,11 @@ def people_names(bot):
     return ID.people_names(bot)
 
 
+def _no_uid(g):
+    """p0511b: 몸의 장비 칸 dict 의 관측 사본 — 장비 고유 번호(uid, 개인 로어북의 안쪽 열쇠 gear:<uid>)를 뺀다. uid 가 없으면 같은 객체 그대로(옛 관측 바이트)."""
+    return {k: v for k, v in g.items() if k != 'uid'} if isinstance(g, dict) and 'uid' in g else g
+
+
 def party_leave(parties, char):
     """char 혼자 파티를 떠난다(D84 조각 3, 2026-09-19 파트너 "해체가 굳이 필요없네 탈퇴를 모두 하면 자연스럽게 해체가 되는거니까") —
     남의 소속은 건드리지 않는다. 남은 사람이 하나뿐이면 그 사람도 파티 없는 사람이 된다(혼자인 파티는 없다 = 해체는 탈퇴의 결과).
@@ -809,7 +815,9 @@ class Feature:
     """던전의 '오브젝트/피처' — 출구·보물·문·가구·발판 등. 칸이 아니라 이름붙은 객체.
     봇은 칸이 아니라 *보이는 피처*를 핑한다(Stage 2). 칸격자 substrate 탈출의 핵심 표현.
     concealed=숨김(인지 판정으로만 드러남), perception_gate=드러내는 데 필요한 인지 난도(0=자동)."""
-    __slots__ = ('id', 'type', 'name', 'x', 'y', 'room_id', 'concealed', 'perception_gate', 'worn', 'walker')
+    __slots__ = ('id', 'type', 'name', 'x', 'y', 'room_id', 'concealed', 'perception_gate', 'worn', 'walker', 'uid')
+    # uid(p0.5.11 개인 로어북): 장비 고유 번호 — 누군가 그 장비를 처음 기록할 때만 붙는다(lorebook.gear_uid). 기록되지 않은 장비엔 자리만 있고 값이 없다
+    #   (__init__ 이 채우지 않는다 = 옛 판 피클·스트림 그대로). 읽는 곳은 전부 getattr(f, 'uid', None) — 옛 피클의 Feature 에도 통한다.
 
     def __init__(self, fid, ftype, name, x, y, room_id=None,
                  concealed=False, perception_gate=0):
@@ -824,7 +832,8 @@ class Feature:
         return {'id': self.id, 'type': self.type, 'name': self.name,
                 'x': self.x, 'y': self.y, 'room_id': self.room_id,
                 'concealed': self.concealed, 'perception_gate': self.perception_gate,
-                **({'walker': True} if self.walker else {})}   # D73 additive — 걷는 NPC 표식(관전·검증이 정착 NPC 와 가른다)
+                **({'walker': True} if self.walker else {}),   # D73 additive — 걷는 NPC 표식(관전·검증이 정착 NPC 와 가른다)
+                **({'uid': u} if (u := getattr(self, 'uid', None)) else {})}   # p0.5.11 additive — 기록된 장비의 고유 번호(관전이 gear:<uid> 기록을 이 피처에 잇는다)
 
 
 class Room:
@@ -1887,6 +1896,8 @@ class Dungeon:
             fid = self._alloc_fid()
         f = Feature(fid, slot, g['name'], x, y, room_id=self._room_id_at(x, y))
         f.worn = set(g.get('worn') or ()) | ({wearer} if wearer else set())   # 내려놓는 이는 입고 있었다
+        if g.get('uid'):
+            f.uid = g['uid']             # p0.5.11 장비 고유 번호도 착용 이력처럼 바닥으로 따라간다(기록된 장비만 — 없으면 자리도 안 채운다)
         self.features[fid] = f
         return fid
 
@@ -2879,7 +2890,7 @@ class Dungeon:
                 'str': bot['str'], 'dex': bot['dex'], 'inventory': bot['bag'],
                 'potions': bot.get('potions', 0),   # 소지 회복 물약(07-17) — 자기 몸의 사실
                 **({'boons': bot['boons']} if bot.get('boons') else {}),   # D74(09-15) 축복의 물약 — 있을 때만(additive)
-                'gear': {'weapon': bot.get('weapon'), 'armor': bot.get('armor')},
+                'gear': {'weapon': _no_uid(bot.get('weapon')), 'armor': _no_uid(bot.get('armor'))},   # p0511b: 장비 고유 번호(안쪽 열쇠)는 관측에 안 나간다(기록 안 된 장비 = 옛 그대로)
                 **({'town': True} if self.town else {}),   # 마을(D29) — 층의 사실(던전 obs 무변경)
                 **({'town_zone': tz} if (self.town and (tz := self._town_zone(bot['x'], bot['y'])))   # D60(09-12) 지금 있는 구역 이름
                    else {}),
@@ -2935,7 +2946,13 @@ class Dungeon:
                            ')': 'weapon', '[': 'armor',
                             'T': 'grave', ' ': 'unknown',
                             **({PROP_BLOCK: 'blocking object'} if self.prop_cells else {})}}   # D92: 소품이 있는 세계에만
-        return CA.observe(self, bot, bots, obs) if self.composed_actions else obs
+        if self.composed_actions:
+            obs = CA.observe(self, bot, bots, obs)
+        if bot.get('people') is not None:      # p0.5.11 개인 로어북(인물 기록 판에만 — 옛 판 관측 그대로): 내 기록을 지금 화면 번호에 이어 싣는다.
+            lore_, bot['_lore_refs'] = LB.observe(self, bot, obs)   #   안쪽 열쇠(층 일련·장비 번호·공간 id)는 관측에 안 나간다 — 몸에만(같은 순서, _target_refs 선례)
+            if lore_:
+                obs['lore'] = lore_
+        return obs
 
     # ── 탐색 프런티어 (explore = 미지로 트인 출입구) ─────────────
     def _frontier_cells(self, cx, cy, seen):
@@ -5238,7 +5255,8 @@ class Dungeon:
             worn = set(getattr(f, 'worn', None) or ()) | {bot['char']}
             del self.features[f.id]
             did = self._put_gear(slot, old, tx, ty, bot['char']) if old else None   # 스왑: 헌 장비는 **같은 번호**로 그 자리에(슬롯=소지의 전부)
-            bot[slot] = {'id': f.id, 'name': f.name, 'bonus': bonus, 'worn': sorted(worn)}
+            bot[slot] = {'id': f.id, 'name': f.name, 'bonus': bonus, 'worn': sorted(worn),
+                         **({'uid': f.uid} if getattr(f, 'uid', None) else {})}   # p0.5.11 장비 고유 번호(기록된 장비만) — 줍기도 착용 이력과 같은 길
             self._witness(bots, tx, ty,          # 전달층(D22): 획득 문법 그대로 — 챙기는 걸 본 사람은 안다
                           {'kind': 'ally_loot', 'char': bot['char'], 'what': f.name},
                           exclude=(bot['char'],))
@@ -5826,7 +5844,7 @@ class Dungeon:
                 if oc != c and oc not in before[c] and c in by_char:
                     self._bone(by_char[c], oc, 'party')
         #   p0.5.9 신원 ID-1(DECISIONS 2026-10-12 62·67): 파티 결성 자동 소개는 없다 — 이름은 본인이 밝히거나 소개받거나 살펴서 안다.
-        #   들은 이름을 기록(person_note)할지는 에이전트가 정한다(엔진은 판정하지 않는다). 관계 뼈 'party'(위)는 그대로 남는다.
+        #   들은 이름을 기록(lore_note)할지는 에이전트가 정한다(엔진은 판정하지 않는다). 관계 뼈 'party'(위)는 그대로 남는다.
         for c in members:
             if c != me and c in by_char and by_char[c]['alive']:
                 self._receive(by_char[c], {'char': c, 'type': 'party_joined', 'from': me, 'members': members}, bots)
@@ -6314,15 +6332,17 @@ class Dungeon:
         """층 전체를 JSON 직렬화(스트림 'level' 라인의 몸통) — 웹/리플레이 뷰어가 엔진 없이
         렌더할 수 있는 진실. grid 는 raw 지형('#'/'.')만 — tile() 관전 글리프가 아니다
         (몹·피처·함정은 각자 배열로 나가므로 겹쳐 그리는 건 소비자 몫)."""
+        bids = getattr(self, 'building_ids', None) or {}   # p0.5.11 마을 건물 피처 → 공간 id(인물 기록 판에만 — 관전이 place:<공간> 기록을 문턱 피처에 잇는다)
         return {'depth': self.depth, 'w': self.w, 'h': self.h,
                 'master_seed': self.master_seed,
                 'level_seed': self._derive_seed(self.master_seed, self.depth),
+                **({'scope': self.scope} if getattr(self, 'scope', None) is not None else {}),   # p0.5.11 additive — 층 인스턴스 일련(obj:<일련>:… 기록의 층)
                 'grid': [''.join(row) for row in self.grid],
                 'exit': list(self.exit),
                 'rooms': [{'id': r.id, 'x': r.x, 'y': r.y, 'w': r.w, 'h': r.h,
                            'type': r.type, 'neighbours': list(r.neighbours)}
                           for r in self.rooms],       # feature.room_id 의 해소처(방 하이라이트용)
-                'features': [f.as_dict() for f in self.features.values()],
+                'features': [{**f.as_dict(), **({'space': bids[f.id]} if f.id in bids else {})} for f in self.features.values()],
                 'traps': [t.as_dict() for t in self.traps],
                 'monsters': [m.as_dict() for m in self.monsters],
                 **({'gate': {'sealed': bool(self.sealed), 'boss': (self.boss.id if self.boss else None)}}

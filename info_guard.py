@@ -22,6 +22,8 @@ public(result, viewer) — 결과 하나를 "그 사람이 실제로 볼 수 있
      `target`(공격 결과의 상대 이름) · 사람이 친 `by`(by_kind 'bot') · 교대의 `with` · 길막힘 동료의 `allies[].name` · 묘 `grave.name`.
      내부 열쇠(target_id · by_id · with_char · allies[].char)는 그대로 남는다 — 호칭은 그릴 때 보는 사람이 붙인다(identity.call).
      **저장용 정제**일 뿐 ID 를 바꾸지 않는다(설계 §2.3-3). 옛 판(인물 기록이 꺼진 몸)은 사본 꼴이 옛 그대로다.
+  ⑥ (p0.5.11 개인 로어북) 관전 전용 칸 SPECTATOR_KEYS — 결정의 lore_note·lore_drop·lore_shown·lore_cut · 원장 변화 lore_ops · 발급 상태 lore_ids ·
+     장비 고유 번호 uid · 층 일련 scope · 공간 id space. 어느 깊이든 걷는다(지금 결과에는 실리지 않는다 — 옮겨 적혀도 새지 않게).
   viewer(보는 사람)의 가시성(perceives, 4a)은 아직 쓰지 않는다.
 LLM 0콜 · 판정 rng 무접촉 · 엔진 무의존(dungeon_gm 을 import 하지 않는다 — 엔진이 이 모듈을 쓴다).
 """
@@ -33,6 +35,7 @@ import identity
 
 AUDIT = "audit"
 DROP_KEYS = ("social_event_id", "said")   # said = p0.5.10 러너 전용 칸(NPC 에게 건 말 — 말한 사람의 말은 결정 틱에 이미 배달됐고 대화 장부에 있다)
+SPECTATOR_KEYS = ("lore_note", "lore_drop", "lore_shown", "lore_cut", "lore_ops", "lore_ids", "uid", "scope", "space")   # ⑥ p0.5.11 관전 전용 칸 — 어느 깊이든 걷는다
 PERSON_ROLL_KEYS = ("roll", "mod", "total", "ac", "combat_roll", "skill_roll", "skill_dc")   # CA.attack_actor · SK.execute 의 사람 대상 굴림
 EFFECT_ROLL_KEYS = ("save",)                                                                # SK.execute effects[] 의 대상 내성 굴림
 
@@ -152,7 +155,21 @@ def public(result, viewer=None):
                     e.pop(k, None)
     if identity.knows(viewer):
         _drop_person_names(out)
-    return out
+    return _drop_spectator(out)
+
+
+def _drop_spectator(v):
+    """머리글 ⑥ — 개인 로어북의 관전 전용 칸(결정의 lore_* · 원장 변화 · 발급 상태 · 장비 고유 번호 · 층 일련 · 공간 id)을 어느 깊이에서든 뺀다(제자리).
+    지금 결과 dict 에는 이 칸이 실리지 않는다 — 누가 옮겨 적어도 모델 입력으로 새지 않게 막아 두는 자리(p0511b, Codex p0511r 권장)."""
+    if isinstance(v, dict):
+        for k in SPECTATOR_KEYS:
+            v.pop(k, None)
+        for x in v.values():
+            _drop_spectator(x)
+    elif isinstance(v, (list, tuple)):
+        for x in v:
+            _drop_spectator(x)
+    return v
 
 
 def fallback_view(rec):

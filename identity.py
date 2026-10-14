@@ -3,7 +3,7 @@
 
 원칙(설계 §0.2): **기록은 내부 열쇠로, 호칭은 그릴 때.** 결과·기억·장부에는 실명 문자열 대신 내부 열쇠를 적고,
 프롬프트를 그릴 때 보는 사람(viewer)의 호칭 함수가 이름을 붙인다. 판정은 엔진, 해석은 에이전트 — 누가 누구인지는
-모험가가 person_note 로 스스로 정리한다(DECISIONS 2026-10-12 67). 두뇌가 없는 NPC 자리만 엔진 규칙이 메운다(길드 등록 = 모험가 이름을 다 안다, 69).
+모험가가 lore_note(p0.5.11 개인 로어북 — 옛 person_note)로 스스로 정리한다(DECISIONS 2026-10-12 67). 두뇌가 없는 NPC 자리만 엔진 규칙이 메운다(길드 등록 = 모험가 이름을 다 안다, 69).
 
 내부 열쇠(이 모듈은 바꾸지 않는다): 모험가 'b<char>'(예 'b2') · NPC 'npc:<정의 name>'(예 'npc:대장장이').
   call(viewer, key, real)  — 모험가가 보는 호칭. 인물 기록 판(viewer['people'] 이 있다)은 내 기록 → 살펴 안 것(inspected, MP1 연결 자리 — 지금 비어 있다)
@@ -58,7 +58,7 @@ def _named(book, k):
 
 def people_names(viewer):
     """보는 사람 기준 호칭 사전(D85) — 이름을 아는 모험가만 {char: 이름}. 없는 사람은 부르는 쪽이 '낯선 사람'이라 쓴다.
-    우선순위(call 과 같다): 내 기록 people(내 person_note · 시트 씨앗) > 살펴 안 것 inspected(설계 §1.5 — **MP1 사람 search 의 연결 자리**:
+    우선순위(call 과 같다): 내 기록 people(내 lore_note · 시트 씨앗) > 살펴 안 것 inspected(설계 §1.5 — **MP1 사람 search 의 연결 자리**:
     search 가 이름 단계에 닿으면 엔진이 inspected[key].name 을 적는다. p0.5.9 지금은 아무도 채우지 않아 늘 비어 있다)."""
     v = viewer or {}
     out = {k[1:]: _named(v.get("inspected"), k) for k in (v.get("inspected") or {}) if is_bot_key(k) and _named(v.get("inspected"), k)}
@@ -74,7 +74,7 @@ def knows(viewer):
 def call(viewer, key, real=None, default=None):
     """보는 사람(viewer)이 사람(key)을 부르는 말 — 설계 §1.4. 우선순위:
       자기 자신 → '너'
-      인물 기록 판: ① 내 기록 people[key].name(내 person_note · 시트 씨앗) ② 살펴 안 것 inspected[key].name(MP1 사람 search 의 연결 자리 —
+      인물 기록 판: ① 내 기록 people[key].name(내 lore_note · 시트 씨앗) ② 살펴 안 것 inspected[key].name(MP1 사람 search 의 연결 자리 —
                     p0.5.9 지금은 비어 있다. 내 기록과 다르면 내 기록이 이긴다) ③ '낯선 사람'
       옛 판(인물 기록 꺼짐): 명단 실명(real {char: 실명}) → default(없으면 '낯선 사람')
     NPC('npc:<이름>')는 ID-6 전까지 정의 이름 그대로(지금 관측과 같은 바이트 — 모두에게 보이는 이름)."""

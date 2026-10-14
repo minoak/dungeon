@@ -22,6 +22,9 @@
                    (_m2_refs: 그 판 시트의 이름과 정확히 한 명이 맞을 때만 잇고, 못 잇거나 동명이인이면 by_unknown — 렌더는 '누군가').
       3→4(p0.5.10 신원 ID-2): NPC 되받기 장부 npc_replies{이름: n} → 대화 장부 npc_talk{'npc:<이름>': n}(대화 세 길이 한 장부를 센다).
                    자동 접근 대기(approach)에 결정 때의 말(say·to)이 실릴 수 있다 — 옛 대기에는 없을 뿐이라 변환은 없다(도착 때 '말없이 다가왔다').
+      4→5(p0.5.11 개인 로어북): 인물 기록 판의 몸에 로어북 장부 lore{} · 사람 기록의 이름·글을 20·80자로(옛 시트 씨앗은 안 잘랐다) ·
+                   던전(층 인스턴스)마다 일련 scope · 마을엔 건물 피처 → 공간 id(building_ids — layout 의 문턱 칸으로 다시 잇는다) ·
+                   최상위 lore_ids{scope, uid}(다음 층 일련·장비 번호). 인물 기록이 꺼진 판은 손대지 않는다(옛 피클 그대로).
 LLM 0콜 · 순수 파일(이관 함수만 몸 dict·반응 원장을 고친다 — 그때 judge 를 늦게 import).
 """
 import io
@@ -33,7 +36,7 @@ import time
 
 VERSION = 2                  # 판형(위 머리글) — 옛 코드(version 1 만 읽음)가 새 스냅샷을 거절하게 하는 문
 READS = (1, 2)               # 이 코드가 읽는 판형. 1 = p0.5.2 까지(내용 판 0)
-STATE_VERSION = 4            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
+STATE_VERSION = 5            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
 PKL = "snapshot.pkl"
 META = "snapshot.json"
 
@@ -122,7 +125,50 @@ def _m3_talk(snap):
     return snap
 
 
-MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
+def dungeons(snap):
+    """스냅샷 안의 던전(층 인스턴스) 전부 — 보존 층(깊이 순) → 다른 세계 → 지금 층, 같은 객체는 한 번(결정론 순서 — 이관이 일련을 이 순서로 붙인다)."""
+    seen, out = set(), []
+    saved = snap.get("saved") or {}
+    ds = [saved[k].get("d") for k in sorted(saved) if isinstance(saved[k], dict)]
+    ds += [w.get("d") for w in (snap.get("worlds") or []) if isinstance(w, dict)]
+    ds.append(snap.get("d"))
+    for d in ds:
+        if d is not None and id(d) not in seen:
+            seen.add(id(d))
+            out.append(d)
+    return out
+
+
+def _m4_lore(snap):
+    """4→5(p0.5.11 개인 로어북, 설계 §6.2): 인물 기록 판(people 이 있는 몸이 하나라도 있다)에서만 — 몸마다 lore{}(있으면 그대로) · 사람 기록의
+    이름·글을 20·80자로 · 일련 없는 던전에 scope(위 dungeons 순서로 1부터, 이미 붙은 번호 뒤로) · 마을 던전에 building_ids(lorebook.town_building_ids) ·
+    최상위 lore_ids(옛 판엔 장비 번호가 없어 uid=1).
+    러너가 이어갈 때 lore_ids 를 실제로 쓰인 가장 큰 번호 + 1 과 다시 견준다(망가진 발급 상태 방어 — lorebook.used_ids)."""
+    import lorebook                               # 늦은 import — 이관이 있을 때만
+    bodies = [b for b in _bodies(snap) if b.get("people") is not None]
+    if not bodies:
+        return snap
+    for b in bodies:
+        b.setdefault("lore", {})
+        for e in b["people"].values():
+            if isinstance(e, dict):
+                for k, n in (("name", lorebook.NAME_LEN), ("text", lorebook.TEXT_LEN)):
+                    if e.get(k):
+                        e[k] = lorebook.clip(e[k], n)
+    ds = dungeons(snap)
+    nxt = 1 + max([int(getattr(d, "scope", None) or 0) for d in ds] or [0])
+    for d in ds:
+        if getattr(d, "scope", None) is None:
+            d.scope, nxt = nxt, nxt + 1
+        if getattr(d, "town", False) and getattr(d, "building_ids", None) is None:   # p0511b(Codex p0511r 필수 ①): 옛 마을에 건물 피처 → 공간 id
+            bids = lorebook.town_building_ids(d)                                     #   (러너가 지을 때 다는 짝과 같다) — 없으면 건물 기록이 place: 가 아니라 층 기록이 된다
+            if bids:
+                d.building_ids = bids
+    snap.setdefault("lore_ids", {"scope": nxt, "uid": 1})
+    return snap
+
+
+MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
 
 
 def state_version_of(doc):

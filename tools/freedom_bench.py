@@ -118,8 +118,10 @@ def _bots(d, sheets):
         if SR.LEDGER_ON:
             b["ledger"] = G.new_ledger()
         if SR.STRANGERS_ON:
-            b["people"] = {"b%s" % oc: {"name": sheets[oc].get("name") or "봇%s" % oc, "text": str(txt), "turn": 0, "src": "sheet"}
+            b["people"] = {"b%s" % oc: {"name": SR.LB.clip(sheets[oc].get("name") or "봇%s" % oc, SR.LB.NAME_LEN),   # p0.5.11: 저장할 때 자른다(러너 씨앗과 같은 자)
+                                        "text": SR.LB.clip(txt, SR.LB.TEXT_LEN), "turn": 0, "src": "sheet"}
                            for oc, txt in sorted((sheets[c].get("relationships") or {}).items()) if oc in sheets and oc != c}
+            b["lore"] = {}                     # p0.5.11 개인 로어북(러너 새 판과 같은 칸)
         bots.append(b)
     return bots
 

@@ -236,13 +236,16 @@ class Issuer:
             return
         name = self.names.get(char) or ('봇%s' % char)
         recs = self.record(name)
-        bl = dec.get('book_line')
-        if isinstance(bl, dict) and bl.get('key') in recs and str(bl.get('text') or '').strip():
-            rec = recs[bl['key']]
-            rec['note'] = {'text': str(bl['text']).strip()[:NOTE_LEN], 'turn': turn, 'depth': self.depth,
-                           'n': int(rec.get('n', 1))}
-            self.dirty = True
-            out.append((name, bl['key'], 'note'))
+        # p0.5.11 개인 로어북: 몬스터 종류 기록(lore_note 의 열쇠 'monster:<이름>')도 같은 원장 note 다 — book_line 을 먼저, lore_note 를 나중에
+        #   접는다(한 결정에 같은 종이면 lore_note 가 이긴다 · 다른 종이면 둘 다 남는다, 설계 §2.3). 스트림 어휘라 오프라인 소급도 같은 원장.
+        ln = dec.get('lore_note')
+        for bl in (dec.get('book_line'), ln if isinstance(ln, dict) and str(ln.get('key') or '').startswith('monster:') else None):
+            if isinstance(bl, dict) and bl.get('key') in recs and str(bl.get('text') or '').strip():
+                rec = recs[bl['key']]
+                rec['note'] = {'text': str(bl['text']).strip()[:NOTE_LEN], 'turn': turn, 'depth': self.depth,
+                               'n': int(rec.get('n', 1))}
+                self.dirty = True
+                out.append((name, bl['key'], 'note'))
         first = next((k for k in sorted(recs) if recs[k].get('due')), None)   # 보여준 초대 = 종키 순 첫 due(엔진 _book_invite 와 같은 규칙)
         if first is not None:
             del recs[first]['due']

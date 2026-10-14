@@ -6,7 +6,7 @@
   ① 시스템 누출 0 — 캐릭터·NPC 의 말에 실명이 없는 각본(사람 공격·피격·쓰러짐·묘·목격·교대·길막힘·건넴·친목·사회 사건·NPC 인사·수첩·이어하기)
      동안 이름을 모르는 관측자의 완성 프롬프트(시트+지침+관측)에 남의 실명이 한 번도 없다 = 엔진이 쓴 문장의 누출 0
   ①' 정상 공개는 말 속에만 — "나는 카야야"(캐릭터 말) · "어서 와, 카야"(NPC 고정 대사)의 실명은 '들은 말' 따옴표 본문 줄에만 · 호칭·사람 줄·
-     결과·기억 문장엔 person_note 로 적기 전까지 없다 · 적은 뒤엔 호칭이 그 이름이 된다
+     결과·기억 문장엔 lore_note(p0.5.11 — 옛 person_note)로 적기 전까지 없다 · 적은 뒤엔 호칭이 그 이름이 된다
   ② 파티 결성 뒤 people 에 새 이름이 없다 · 관계 뼈 party 는 있다
   ③ 같은 사건이 관측자마다 다른 호칭으로 그려진다 · 기억·down_by·목격·statics·last·trail 에 사람 실명 문자열이 새로 저장되지 않는다
   ④ NPC 두뇌 입력: 모험가 실명이 있고 '봇N'·'bN'·'모험가 N'·char 번호가 없다 · 들은 말 속 ID 낱말이 이름으로 바뀐다 · NPC 가 앞서 한 말(prev,
@@ -20,9 +20,9 @@
   ⑩ 호칭 함수 직접(p059b 리뷰): identity.call 우선순위 = 내 기록 > 살펴 안 것(inspected — MP1 사람 search 의 연결 자리, 지금은 비어 있다) >
      옛 판 명단 > 낯선 사람 · people_names 도 같은 순서 · inspected 이름은 호칭만이고 '네 기록' 줄은 안 만든다
   A  아는 사람 기억 자동 활성화(DECISIONS 2026-10-13 — 로어북처럼): 계기는 둘 — **보일 때**(사람 줄 바로 아래 '  · 네 기록: 이름 — 「…」') ·
-     **들은 말에 그 이름이 나올 때**(시야 밖이면 '## 떠오른 기억', 설계 R6 — p059b 관리자 결정으로 유지) · 아무 계기 없으면(안 보이고 이름도 안 들리면)
+     **들은 말에 그 이름이 나올 때**(시야 밖이면 '## 떠오른 기록'(p0.5.11), 설계 R6 — p059b 관리자 결정으로 유지) · 아무 계기 없으면(안 보이고 이름도 안 들리면)
      안 뜬다 · 남의 기록이 안 섞인다 · 모르는 사람엔 없다 · 같은 사람은 한 관측에 한 번 · 여러 명이면 전부 · NPC·방위 줄 판(scan)·시트 씨앗도 ·
-     길이 = person_note 원문 상한
+     길이 = lore_note 원문 상한
 (기존 게이트는 별도 실행 — _run_gates.sh.)
 """
 import copy
@@ -235,10 +235,11 @@ check("① 마을(파티 결성·인물 기록 판): 건넴(받은 일)·사회 
 # ── ①' 정상 공개는 말 속에만 ─────────────────────────────────────────────
 print("── ①' 정상 공개 — 실명은 들은 말의 따옴표 본문에만, 적은 뒤에야 호칭이 된다")
 hi = [{"from": "2", "text": "나는 카야야. 아까는 미안.", "turn": 5, "to": "1", "to_me": True}]
-p1b, dec1b, _ = prompt(d, bots, b1, hi, {"type": "wait", "person_note": {"target": "b2", "name": "카야", "text": "나를 쳤다. 자기를 카야라 했다"}})
+p1b, dec1b, _ = prompt(d, bots, b1, hi, {"type": "wait", "lore_note": {"target": "b2", "name": "카야", "text": "나를 쳤다. 자기를 카야라 했다"}})
 check("①' 들은 말 속 '카야'만 — 그 줄 밖(호칭·사람 줄·결과·기억)엔 없다",
       lines_with(p1b, REAL["2"]) == ['- 낯선 사람(봇2): "나는 카야야. 아까는 미안." (너에게)'], lines_with(p1b, REAL["2"]))
-check("①' 들은 에이전트가 정리한다(엔진은 판정하지 않는다): person_note → {to:'2', name:'카야'}", dec1b.get("person_note", {}).get("name") == "카야", dec1b.get("person_note"))
+check("①' 들은 에이전트가 정리한다(엔진은 판정하지 않는다): lore_note → {key:'b2', name:'카야'}", dec1b.get("lore_note", {}).get("name") == "카야"
+      and dec1b["lore_note"].get("key") == "b2", dec1b.get("lore_note"))
 b1["people"]["b2"] = {"name": "카야", "text": "나를 쳤다. 자기를 카야라 했다", "turn": 5, "src": "self"}
 d.d20 = lambda: 20
 d.view(b2, bots)
@@ -340,10 +341,10 @@ print("── ⑥ 미리 쓴 NPC 로어북은 거뒀다 · 내 기록만 떠오�
 say6 = [{"from": "2", "text": "길드 접수원이 물약을 준대.", "turn": 5, "to": "1", "to_me": True}]
 d6, b6 = floor()
 p6, _, _ = prompt(d6, b6, b6[0], say6)
-check("⑥ 던전에서 'NPC 이름'을 들어도(내 기록 없음) 아무것도 안 뜬다", "## 떠오른 기억" not in p6 and "원정 물품" not in p6)
+check("⑥ 던전에서 'NPC 이름'을 들어도(내 기록 없음) 아무것도 안 뜬다", "## 떠오른 기록" not in p6 and "원정 물품" not in p6)
 b6[0]["people"]["npc:길드 접수원"] = {"name": "길드 접수원", "text": "물약을 하나 준다", "turn": 4, "src": "self"}
 p6b, _, _ = prompt(d6, b6, b6[0], say6)
-check("⑥ 내 기록은 뜬다 — '- 길드 접수원: 「물약을 하나 준다」'", "## 떠오른 기억" in p6b and "- 길드 접수원: 「물약을 하나 준다」" in p6b)
+check("⑥ 내 기록은 뜬다 — '- 길드 접수원: 「물약을 하나 준다」'", "## 떠오른 기록" in p6b and "- 길드 접수원: 「물약을 하나 준다」" in p6b)
 
 # ── ⑦ 판 2 → 3 이관 ───────────────────────────────────────────────────
 print("── ⑦ 판 2 스냅샷 이관(_m2_refs)")
@@ -400,7 +401,7 @@ d8.act(b8[1], {"type": "attack", "target": "b3"}, b8)
 p8, _, o8 = prompt(d8, b8, b8[0], [{"from": "2", "text": "가자", "turn": 5, "to": "1", "to_me": True}])
 check("⑧ 실명 호칭 그대로('[피격] 카야(b2)' · '피른의 묘' · '## 동료가 한 말') · people 없음 · 결과 사본의 실명 칸 그대로(옛 저장 꼴)",
       "[피격] 카야(b2)" in p8 and "피른의 묘" in p8 and "## 동료가 한 말" in p8 and "people" not in o8
-      and b8[0]["memories"][-1].get("by") == "카야" and "PEOPLE:" not in p8)
+      and b8[0]["memories"][-1].get("by") == "카야" and "RECORD:" not in p8 and "PEOPLE:" not in p8)
 
 # ── ⑨ NPC 정의 name 유일 ──────────────────────────────────────────────
 print("── ⑨ NPC 정의 name 유일")
@@ -451,13 +452,13 @@ pA3, _, _ = prompt(dA, bA, a3)
 check("A 모르는 사람엔 아무것도 안 뜬다 — 기록이 없는 피른(3)의 글엔 '네 기록' 줄이 없다", "네 기록" not in pA3)
 pA4, _, _ = prompt(dA, bA, a1, [{"from": "2", "text": "칼잡이라고 불러도 돼. 활잡이는 어디 갔지?", "turn": 5, "to": "1", "to_me": True}])
 check("A 같은 사람 기록은 한 관측에 한 번 — 이름을 들어도(조건 c) 보이는 사람은 줄 아래 한 번뿐",
-      pA4.count("네 기록: 칼잡이") == 1 and pA4.count("네 기록: 활잡이") == 1 and "## 떠오른 기억" not in pA4)
+      pA4.count("네 기록: 칼잡이") == 1 and pA4.count("네 기록: 활잡이") == 1 and "## 떠오른 기록" not in pA4)
 a3["x"], a3["y"] = 12, 5                             # 피른을 시야 밖(같은 방이라도 멀리)으로 — 아래에서 보이는지 확인한다
 far = not any(b_.get("char") == "3" for b_ in dA.view(a1, bA)["sights"]["bots"])
 if far:
     pA5, _, _ = prompt(dA, bA, a1)
     check("A 아무 계기 없으면 안 뜬다 — 시야 밖 활잡이(3)의 기록 줄은 없다(이름을 들은 말도 없다 · 명단의 호칭은 기록이 아니다)",
-          "네 기록: 활잡이" not in pA5 and "## 떠오른 기억" not in pA5 and "네 기록: 칼잡이" in pA5)
+          "네 기록: 활잡이" not in pA5 and "## 떠오른 기록" not in pA5 and "네 기록: 칼잡이" in pA5)
     gone, gone_line = "활잡이", "- 활잡이: 「(이름만 적어 두었다)」"
 else:
     a1["people"]["b9"] = {"name": "유령", "text": "어디에도 없는 사람", "turn": 4, "src": "self"}
@@ -465,11 +466,11 @@ else:
     check("A 아무 계기 없으면 안 뜬다 — 이 층에 없는 사람(b9)의 기록은 없다(이름을 들은 말도 없다)", "유령" not in pA5 and "어디에도 없는" not in pA5)
     gone, gone_line = "유령", "- 유령: 「어디에도 없는 사람」"
 pA5b, _, _ = prompt(dA, bA, a1, [{"from": "2", "text": "%s 못 봤어?" % gone, "turn": 5, "to": "1", "to_me": True}])
-check("A 둘째 계기 — 시야 밖이어도 들은 말에 그 이름이 나오면 '## 떠오른 기억'에 한 번(설계 R6 유지 · p059b 관리자 결정) · 사람 줄 아래 꼴은 아니다",
-      "## 떠오른 기억" in pA5b and pA5b.count(gone_line) == 1 and ("네 기록: %s" % gone) not in pA5b, [ln for ln in pA5b.splitlines() if gone in ln])
+check("A 둘째 계기 — 시야 밖이어도 들은 말에 그 이름이 나오면 '## 떠오른 기록'에 한 번(설계 R6 유지 · p059b 관리자 결정) · 사람 줄 아래 꼴은 아니다",
+      "## 떠오른 기록" in pA5b and pA5b.count(gone_line) == 1 and ("네 기록: %s" % gone) not in pA5b, [ln for ln in pA5b.splitlines() if gone in ln])
 a1["people"]["b2"] = {"name": "가" * 40, "text": "나" * 300, "turn": 4, "src": "sheet"}
 pA6, _, _ = prompt(dA, bA, a1)
-check("A 길이 = person_note 원문 상한(이름 %d · 한 줄 %d) — 시트 씨앗이 길어도" % (brains.PERSON_NAME_LEN, brains.NOTE_LEN),
+check("A 길이 = lore_note 원문 상한(이름 %d · 한 줄 %d) — 시트 씨앗이 길어도" % (brains.PERSON_NAME_LEN, brains.NOTE_LEN),
       "  · 네 기록: %s — 「%s」" % ("가" * brains.PERSON_NAME_LEN, "나" * brains.NOTE_LEN) in pA6)
 dS, bS = floor(scan=True)
 bS[0]["people"] = {"b2": {"name": "칼잡이", "text": "도적 같다", "turn": 4, "src": "self"}}

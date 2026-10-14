@@ -82,6 +82,7 @@ import bestiary
 import sheetkit                 # D31(09-05) 배경 정제(자유 입력 격리) — 러너도 같은 자를 쓴다
 import judge                    # p0.5.3 정신·숙련 칸 이름(PROF_KEYS) — 손 시트 검증·층 이월
 import identity as ID             # p0.5.9 신원 ID-1 — NPC 두뇌 입력의 호칭(NPC 는 모험가 이름을 안다)
+import lorebook as LB             # p0.5.11 개인 로어북 — 층 일련·장비 번호 발급 상태 · 씨앗 · 쓸어내기 · 관전 원장(run_meta.lore · tick.lore_ops)
 
 STATE = os.environ.get("DUNGEON_STATE_DIR") or os.path.join(HERE, "state")
 os.makedirs(STATE, exist_ok=True)
@@ -893,6 +894,8 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
         names = {b["id"]: b["name"] for b in res["spaces"]["buildings"]}   #   기존 오브젝트 체계로 그대로 된다(엔진 무접촉)
         ents = {b["id"]: b.get("entity") for b in res["spaces"]["buildings"]}   # D61: 피처 → 건물 정의 id(역할 부품 조회)
         d.building_defs = {}
+        if STRANGERS_ON:
+            d.building_ids = {}                    # p0.5.11 개인 로어북: 건물 피처 → 공간 id(place:<공간> 기록의 열쇠 — 문턱이 여럿인 건물도 한 곳, 이름 같은 집 둘은 따로) · 인물 기록 판에만
         for e in res.get("entrances", []):
             x, y = int(e["cell"][0]), int(e["cell"][1])
             if max(abs(x - d.exit[0]), abs(y - d.exit[1])) <= 1:   # 던전 입구 건물: 문턱이 '>' 바로 곁 — 입구 피처가 이미 그 자리(이름도 '던전 입구')
@@ -900,6 +903,8 @@ def build_town(path=None, apart=False, quests=None, walkers=False, guide=False):
             if d.grid[y][x] != G.FLOOR:
                 raise ValueError("건물 %r 문턱 (%d,%d)가 바닥이 아니다" % (e.get("building"), x, y))
             fid = d._add_feature("building", names.get(e.get("building"), "건물"), x, y)
+            if STRANGERS_ON:
+                d.building_ids[fid] = e.get("building")
             if NOTICES_ON:                         # D61 건물 역할 부품 — 정의의 board/oracle 을 _notices 가 읽는다
                 d.building_defs[fid] = ents.get(e.get("building"))
             try:                                   # D69 건물 역할 한 줄(정의 comps.building.role) — 관측 "모험가 길드 (의뢰 게시판 · …)"
@@ -1681,9 +1686,12 @@ def main():
             if LEDGER_ON:
                 b['ledger'] = G.new_ledger()   # 공간 장부(D17) 켬 — 이 층에서 본 것의 원장
             if STRANGERS_ON:                   # D85 인물 기록 — 씨앗 = 시트에 작가가 쓴 관계 문장(이 캐릭터가 이미 아는 사람). 없으면 아무도 모르는 채로
-                b['people'] = {"b%s" % oc: {"name": sheets[oc].get("name") or sheets[oc].get("job") or "모험가", "text": str(txt), "turn": 0, "src": "sheet"}   # p0.5.9: 이름 없는 시트도 '봇N' 라벨 대신
-                               for oc, txt in sorted((sheets[c].get("relationships") or {}).items()) if oc in sheets and oc != c}
+                b['people'] = LB.seed(sheets, c)   # p0.5.9: 이름 없는 시트도 '봇N' 라벨 대신 직업 · p0.5.11: 저장할 때 자른다(이름 20 · 글 80)
+                b['lore'] = {}                 # p0.5.11 개인 로어북 — 사람 밖의 내 기록(사람은 people 그대로)
             bots.append(b)
+        lore_ids = {"scope": 1, "uid": 1} if STRANGERS_ON else None   # p0.5.11 발급 상태(다음 층 일련·장비 번호) — 판 전체에 하나, 모든 층이 같은 dict 를 든다
+        if STRANGERS_ON:
+            LB.stamp(d, lore_ids)              #   첫 층(마을 또는 던전) 인스턴스의 일련
         saved = {}                             # 마을 판(D29): 층 보존 — depth → {'d': 던전, 'mem': 봇별
                                                #   층-로컬 기억}. "재입장=같은 1층"(파트너 확정 07-30)
         if PARTYFORM_ON:                       # D84: 세계는 지어질 때 등록한다 — 사람이 있든 비었든 같은 층은 같은 세계(합류·복원이 한 길)
@@ -1693,6 +1701,12 @@ def main():
         d.lore = lore                      #   지식 본문은 지금 정의로(피클에 든 옛 사본 대신 — 판정 무접촉)
         for sv in saved.values():
             sv["d"].lore = lore
+        lore_ids = None
+        if STRANGERS_ON:                   # p0.5.11 발급 상태를 잇는다 — 저장된 lore_ids 와 '실제로 쓰인 가장 큰 번호 + 1' 중 큰 쪽(망가진 상태 방어, 설계 §6.2)
+            ds_ = snapshot.dungeons(snap)
+            lore_ids = LB.restore_ids(snap.get("lore_ids"), ds_, snapshot._bodies(snap))
+            for d_ in ds_:
+                LB.stamp(d_, lore_ids)
     if resume_fail and resume_fail.get("pages"):   # 되살리기 실패 폴백 — 몸은 새로, 멈출 때 쓴 수첩 장은 유지(파트너 "요약해서 들고 있게")
         for b in bots:
             pg = resume_fail["pages"].get(b["char"])
@@ -1744,7 +1758,8 @@ def main():
                 **({'reaction': True, 'reaction_schema': 'social-v0.4'} if reaction_book is not None else {}),
                 **({"arch": DUNGEON_ARCH, "arch_v": dungeon_concept.ARCH_VERSION} if DUNGEON_ARCH else {}),   # D88(09-20 additive, 켠 판에만) 던전 생성 프로필·생성 규칙 버전 — 격자 크기는 아래 w/h. level 줄에 rooms[].art_style · architecture 가 실린다
                 **({"town_sight": "zone"} if (TOWN_SIGHT == "zone" and TOWN_ON) else {}),   # D86(09-19 additive, 켠 판에만) 마을의 시야 = 지금 선 구역 — 시야·정지 물리 메타(town_hear 급)
-                **({"strangers": True} if STRANGERS_ON else {}),   # D85(09-19 additive, 켠 판에만) 인물 기록 판 — 프롬프트의 호칭이 캐릭터마다 다르다(내가 적은 이름|낯선 사람) · decisions.person_note
+                **({"strangers": True} if STRANGERS_ON else {}),   # D85(09-19 additive, 켠 판에만) 인물 기록 판 — 프롬프트의 호칭이 캐릭터마다 다르다(내가 적은 이름|낯선 사람) · p0.5.11 decisions.lore_note
+                **({"lore": {b["char"]: LB.dump(b) for b in bots}} if STRANGERS_ON else {}),   # p0.5.11(additive, 켠 판에만) 개인 로어북 시작 원장 {char: {안쪽 열쇠: 항목}} — 관전이 tick.lore_ops 를 접어 지금 원장을 만든다
                 **({"loop": True} if LOOP_ON else {}),   # D94(09-20 additive, 켠 판에만) 원정 고리 판 — 길드 보고가 판을 닫지 않는다: 원정마다 expedition 줄(결산) 하나가 실리고 다음 원정은 새 시드의 1층부터. 판을 닫는 것은 틱 상한·전멸뿐
                 **({"revive": True} if REVIVE_ON else {}),   # D99(10-04 additive, 켠 판에만) 부활 판 — 쓰러진 사람은 일행이 마을에 들어설 때 신전 곁에서 깨어난다(revive 줄) · 메인이 쓰러지면 ascend 에 fell · 전멸 없음(판을 닫는 것은 틱 상한)
                 **({"town_life": True} if (TOWN_LIFE_ON and TOWN_ON) else {}),   # D90(09-20 additive, 켠 판에만) 마을 생활 판 — 구역의 들린 말(tick.overheard · 관측 notices kind 'overheard') 등 마을의 생활 부품. 0콜
@@ -1866,6 +1881,7 @@ def main():
                 **build, **({"model": model} if model else {}),   # p0.5.1(10-11 additive) 이 조각의 버전·지침 지문·모델(run_meta 와 같은 칸)
                 stopped=(stop_info.get("reason") or None),          # 앞 조각이 어떻게 끝났나: user(수첩 쓰고 멈춤)·user_paused(판단 정지 중 멈춤)·pause_timeout(F1 판단 정지 제한 시간)·unwatched(D91 관전자 없는 판 — 공개 서버)·budget(D96 호출 한도)·None(끊김·크래시)
                 **({"pages": pages_prev} if pages_prev else {}),   # 멈출 때 쓴 수첩 장(캐릭터별) — 이어가는 몸이 들고 간다
+                **({"lore": {b["char"]: LB.dump(b) for b in sorted(snapshot._bodies(snap), key=lambda b: b["char"])}} if STRANGERS_ON else {}),   # p0.5.11 이어가기 시작 원장(모든 몸)
                 party=[{"char": b["char"], "hp": b["hp"], "alive": b["alive"]} for b in bots])
     run_id = "%s@%s" % (DUNGEON_SEED, run_started)   # 캠페인(D78)의 판 식별자 — 이어가도 같은 판
 
@@ -1895,6 +1911,14 @@ def main():
     first_turn = int(snap["next_turn"]) if snap is not None else 1   # D79: 이어가기는 멈춘 다음 틱부터(틱 번호 연속 — 같은 판)
     segment = segment if snap is not None else 0
     stopped_now = None                       # D79 곱게 멈춤이 이 판을 닫았나(루프 뒤 end 를 쓰지 않는다 — 끊긴 판 = 이어갈 판)
+    lore_buf = {}                            # p0.5.11 개인 로어북 원장 변화 {char: [{op, key, entry?}]} — 다음 본 스트림 tick.lore_ops 로 나간다(쓰기·바램은 그 틱, 쓸어냄·합류는 다음 틱)
+
+    def _lore_left():                        # p0511b: 다음 틱이 없는 자리(end·stopped)에 남은 변화 — 있을 때만 {"lore_ops": …}(버퍼를 비운다)
+        if not lore_buf:
+            return {}
+        left = {c_: list(v_) for c_, v_ in sorted(lore_buf.items()) if v_}
+        lore_buf.clear()
+        return {"lore_ops": left} if left else {}
 
     def _snap_core():                        # D79 스냅샷 몸 — 루프 머리의 지역 상태 전부(같은 객체 그래프로 한 번에 피클: known·quests·reaction_book 공유 보존)
         return {"run_id": run_id, "seed": DUNGEON_SEED, "started": run_started, "max_turns": MAX_TURNS, "world": _world_fingerprint(),
@@ -1904,7 +1928,8 @@ def main():
                 "returned_party": returned_party, "segment": segment,
                 **({"expedition": expedition} if LOOP_ON else {}),   # D94: 켠 판에만(같은 규율) — 이어가는 러너가 몇 번째 원정인지 알아야 다음 던전의 시드가 같다
                 **({"waiting": waiting} if REVIVE_ON else {}),   # D99: 켠 판에만 — 대기 중인 몸도 얼린다(이어간 판에서 그 사람이 사라지지 않게)
-                **({"worlds": worlds, "parties": parties, "side_pos": side.tell()} if PARTYFORM_ON else {})}   # D84: 켠 판에만(옛 스냅샷과 같은 열쇠)
+                **({"worlds": worlds, "parties": parties, "side_pos": side.tell()} if PARTYFORM_ON else {}),   # D84: 켠 판에만(옛 스냅샷과 같은 열쇠)
+                **({"lore_ids": lore_ids} if STRANGERS_ON else {})}   # p0.5.11: 켠 판에만 — 이어가는 러너가 다음 층 일련·장비 번호를 잇는다
 
     def _snap_meta(next_turn, stop=None):    # 론처가 읽는 요약(json) — 피클을 열지 않고도 '지하 3층 t158 에서 멈춤'을 안다
         return {"run_id": run_id, "seed": DUNGEON_SEED, "started": run_started, "next_turn": next_turn, "turn_last": next_turn - 1,
@@ -2023,7 +2048,8 @@ def main():
                 event("🔮 신의 요청이 거두어졌다")
             last_oracle_id = oracle_now
         try:
-            decisions = brains.think_all(d, bots, inbox, on_error=lambda errors: _on_brain_error(turn, errors))
+            decisions = brains.think_all(d, bots, inbox, on_error=lambda errors: _on_brain_error(turn, errors),
+                                         **({"lore_ops": lore_buf} if STRANGERS_ON else {}))   # p0.5.11 받은 기록 쓰기·바램이 원장 변화 모음에(인물 기록 판에만 — 옛 판 호출 꼴 그대로)
         except run_control.StopRequested as stop_exc:   # D79: 판단 정지 대기 중 사용자가 멈춤 — 루프 머리 스냅샷(이 틱 전)이 진실. 조용히 닫는다
             # F1(09-18): 제한 시간(PAUSE_LIMIT_SEC) 동안 아무도 재시도를 안 누른 판도 같은 길로 스스로 닫는다 — 사유만 다르다
             # D91(09-20): 판단 정지 중에 온 멈춤 요청이 사유를 들고 있으면(unwatched = 관전자 없는 판) 그 사유를 그대로 적는다
@@ -2032,6 +2058,9 @@ def main():
                            else "pause_timeout" if isinstance(stop_exc, run_control.PauseTimeout)
                            else run_control.stop_reason(run_control.stop_requested(STATE), "user_paused"))
             snapshot.write_meta(STATE, _snap_meta(turn, {"reason": stopped_now, "pages": {}}))
+            left_ = _lore_left()                # p0511c(Codex p0511rr): 이 길은 stopped 줄을 쓰지 않는다(요약만 사유를 안다 — 옛 계약 그대로) — 다만 앞 틱 끝에 남은
+            if left_:                           #   원장 변화(쓸어냄·합류·다른 세계의 쓰기)가 있으면 그것을 실을 stopped 줄 하나(인물 기록 판에만 생긴다)
+                sw.emit("stopped", turn=turn - (1 if show else 0), reason=stopped_now, depth=W["d"].depth, **left_)   # turn = 본 스트림의 마지막 틱
             if stopped_now == "budget":
                 event("=== 이 판에 걸린 LLM 호출 한도(%d회)를 다 써서 원정을 멈춘다(t%d 전) — 같은 키로 이어가면 멈춘 자리에서 계속된다 ==="
                       % (brains.API_CALL_LIMIT, turn))
@@ -2173,6 +2202,7 @@ def main():
         # 여기서 즉시 직렬화되므로 GM 지연·이후 dict 변경과 독립(공유 오염 방어).
         # 스냅샷은 델타 아닌 전체 — 임의 틱 시킹용. visited 만 제외(파생: 스폰+틱별 봇 좌표 누적).
         tick_rec = {"turn": turn, "inbox": inbox_in, "decisions": decisions,
+                    **(_lore_left() if show else {}),   # p0.5.11 원장이 바뀐 틱에만(additive) — 본 스트림 하나가 모든 몸의 원장 변화를 싣는다(관전이 접는다)
                     **({'skill_events': G.SK.stream_records(turn_events)} if SKILLS_ON else {}),
                     **(reaction_book.drain() if reaction_book is not None else {}),
                     **({"hails": hails} if hails else {}),   # 말 걸림 정지 성사(D24) — additive 계측
@@ -2202,6 +2232,11 @@ def main():
             elif tier == 'note':                # D55 캐릭터가 남긴 인식(원장 note — 내용은 기계가 안 읽는다)
                 rec_ = (iss.record(nm).get(key) or {}).get('note') or {}
                 event('   \U0001f4d6 %s — %s에 대한 생각: "%s"' % (nm, bestiary.label(key, lore), rec_.get('text', '')))
+                if STRANGERS_ON:                # p0.5.11 도감 쪽에 같은 종 기록이 생겼다 — 로어북에 둔 같은 이름 기록(도감 편입 전 어긋남)은 합류해 지운다
+                    for b_ in [x_ for x_ in _everyone() if ledger_keys.get(x_["char"]) == nm]:
+                        ops_ = LB.merge(b_, key)
+                        if ops_:
+                            lore_buf.setdefault(b_["char"], []).extend(ops_)
             else:
                 event('   \U0001f4d6 %s — 도감 등재: %s' % (nm, bestiary.label(key, lore)))
         if iss.dirty and BESTIARY_FILE:         # 조우 수만 올라도 저장(원장의 n 이 스트림 투영과 어긋나지 않게)
@@ -2268,6 +2303,8 @@ def main():
                           for oc, e in (b.get("relations") or {}).items()}   # 관계 장부(D36)도 이월
         if b.get("people") is not None:
             n["people"] = b["people"]                 # D85 인물 기록도 이월 — 사람에 대한 기억은 층을 넘어도 그대로(같은 객체)
+        if b.get("lore") is not None:
+            n["lore"] = b["lore"]                     # p0.5.11 개인 로어북도 같은 객체로(층 기록은 그 층이 사라질 때 러너가 쓸어낸다)
         n["memories"] = list(b.get("memories") or [])   # 기억도 이월(D22) — 전사는 원정급
                                                   # 사건(장부=층의 기억과 대비. 구역 이름은
                                                   # 그 층의 것 — 층수 없인 모호하나 v0 수용)
@@ -2448,6 +2485,8 @@ def main():
                 d.quests = quests         # D69 의뢰 장부 — 새 층도 같은 객체(처치·획득 판정이 여기로 센다)
                 fresh = True
             d.plan_max = G.PLAN_MAX if PLAN_ON else 0    # 복원한 층·새로 지은 마을도 같은 스위치
+            if STRANGERS_ON:
+                LB.stamp(d, lore_ids)     # p0.5.11 새로 지은 층·마을에 일련(보존 층은 이미 있다 — 그대로)
             tw = None                     # D84: 간 층에서 지금 흐르고 있는 세계(사람이 있다) — 있으면 합류, 없으면(옛 판은 늘) 새로 연다
             if PARTYFORM_ON:
                 d.parties = parties
@@ -2573,7 +2612,8 @@ def main():
             for x in worlds:                      # D84: 다른 세계에 있는 사람도 한 장씩(옛 판은 세계가 하나라 돌지 않는다)
                 if x is not W:
                     pages.update(stop_pages(x["d"], x["bots"], names, turn - 1, req))
-            sw.emit("stopped", turn=turn - 1, reason=why, depth=d.depth, **({"pages": pages} if pages else {}))   # D79 additive
+            sw.emit("stopped", turn=turn - 1, reason=why, depth=d.depth, **({"pages": pages} if pages else {}),   # D79 additive
+                    **_lore_left())   # p0511b: 앞 틱 끝에 남은 원장 변화(다른 세계의 쓰기 · 쓸어냄 · 합류)
             stop_rec = {"reason": why, "pages": pages}
             _take_snapshot(sw, {**_snap_core(), "next_turn": turn, "stop": stop_rec}, _snap_meta(turn, stop_rec))
             event("=== 원정을 멈춘다(t%d, %s) — 마지막 기록에서 이어갈 수 있다%s%s ==="
@@ -2601,6 +2641,13 @@ def main():
                 W = nw
                 sw.emit("level", turn=turn, **W["d"].level_snapshot(), party=[G.bot_snapshot(b) for b in W["bots"]], follow=fc)
         d, bots, inbox, pending, open_props, open_acts = (W[k] for k in _WK)   # 거울 맞추기(스냅샷·판 끝 집계가 읽는다)
+        if STRANGERS_ON:                          # p0.5.11 사라진 층 인스턴스(원정 결산의 층 버리기 · 층을 보존하지 않는 판의 층 이동)의 기록을 모든 몸에서 쓸어낸다
+            live_ = {str(getattr(x_["d"], "scope", None)) for x_ in worlds} | {str(getattr(v_["d"], "scope", None)) for v_ in saved.values()}
+            live_.add(str(getattr(d, "scope", None)))
+            for b_ in _everyone() + sorted(waiting.values(), key=lambda b: b["char"]):
+                ops_ = LB.sweep(b_, live_)
+                if ops_:
+                    lore_buf.setdefault(b_["char"], []).extend(ops_)
         if flag:
             break
 
@@ -2656,6 +2703,7 @@ def main():
     sw.emit("end", turn=turn, outcome=outcome, depth=d.depth,
             **({'reaction_summary': reaction_book.summary(), 'reaction_floors': reaction_book.floors}
                if reaction_book is not None else {}),
+            **_lore_left(),                           # p0511b(Codex p0511r 필수 ②): 마지막 틱에 남은 원장 변화 — 좇지 않는 세계의 쓰기·바램 · 쓸어냄 · 합류(다음 틱이 없다)
             survivors=won, fallen=dead, remaining=left,
             bots=[G.bot_snapshot(b) for b in bots],
             **({"quests": G.quest_summary(quests)} if quests is not None else {}),   # D69 additive — 의뢰 장부(맡음·진행·완수·귀환·보고 틱)

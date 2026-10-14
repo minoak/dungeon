@@ -379,8 +379,8 @@ snap = {"version": 2, "state_version": 3,
         "waiting": {"3": {"char": "3", "npc_replies": {}}}}
 up = SN.upgrade(json.loads(json.dumps(snap)))
 again = SN.upgrade(json.loads(json.dumps(up)))
-check("⑦ STATE_VERSION 4 · MIGRATIONS 3 · 몸마다 npc_talk{'npc:'+이름} · 이미 있으면 큰 쪽 · 옛 칸 없음 · 빈 장부는 칸을 만들지 않는다 · 두 번 올려도 같다",
-      SN.STATE_VERSION == 4 and 3 in SN.MIGRATIONS and up["state_version"] == 4
+check("⑦ STATE_VERSION ≥ 4(p0.5.11 = 5) · MIGRATIONS 3 · 몸마다 npc_talk{'npc:'+이름} · 이미 있으면 큰 쪽 · 옛 칸 없음 · 빈 장부는 칸을 만들지 않는다 · 두 번 올려도 같다",
+      SN.STATE_VERSION >= 4 and 3 in SN.MIGRATIONS and up["state_version"] == SN.STATE_VERSION
       and up["bots"][0] == {"char": "1", "npc_talk": {"npc:" + GEAR: 2, "npc:" + PRIEST: 3}}
       and up["worlds"][0]["bots"][0] == {"char": "2", "npc_talk": {"npc:" + RECEPTION: 2}}
       and up["waiting"]["3"] == {"char": "3"} and again == up, up)
