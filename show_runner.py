@@ -2135,6 +2135,7 @@ def main():
             elif last_oracle_id:
                 event("🔮 신의 요청이 거두어졌다")
             last_oracle_id = oracle_now
+        todo0 = {b_["char"]: b_.get("todo") or "" for b_ in bots}   # p0.5.15 판단 전 목표 칸 — 바뀐 몸만 스트림 tick.todo_ops 로
         try:
             decisions = brains.think_all(d, bots, inbox, on_error=lambda errors: _on_brain_error(turn, errors),
                                          **({"lore_ops": lore_buf} if STRANGERS_ON else {}))   # p0.5.11 받은 기록 쓰기·바램이 원장 변화 모음에(인물 기록 판에만 — 옛 판 호출 꼴 그대로)
@@ -2159,6 +2160,10 @@ def main():
             w.update(d=d, bots=bots, inbox=inbox, pending=pending, open_props=open_props, open_acts=open_acts)
             return "break"
         brain_pause.resolved(turn)
+        todo_ops = [{"char": str(b_["char"]), "text": b_.get("todo") or ""} for b_ in bots
+                    if (b_.get("todo") or "") != todo0.get(b_["char"], "")]   # p0.5.15 목표 칸이 바뀐 몸(적음·덮어씀 · text "" = 비움) — 관전용
+        for o_ in todo_ops:
+            event("   봇%s 할 일 %s" % (o_["char"], ('적음: "%s"' % o_["text"]) if o_["text"] else "비움"))
         for c_, dec_ in (decisions or {}).items():   # D61 신탁 응답 — 캐릭터 장부(요청 id 별 한 번)·events.log. 판정 없음
             orp = dec_.get("oracle_reply") if isinstance(dec_, dict) else None
             if orp and orp.get("id"):
@@ -2307,6 +2312,7 @@ def main():
                     **({"npc_hails": npc_hails} if npc_hails else {}),  # D71(09-14 additive) 이 틱에 NPC 가 먼저 건 인사 [{npc,char,line,key,line_src?}]
                     **({"npc_replies": npc_replies} if npc_replies else {}),   # D93(09-20 additive) 이 틱에 NPC 가 되받은 말 [{npc,char,line,via 'to'|'reply',talk?}] — 다음 틱 inbox 'npc:' 로 들린다
                     **({"npc_away": away_ev} if away_ev else {}),   # p0.5.14(additive, 관전용) 등 돌림 시작·풀림 [{npc,char,ev 'start'|'end'}] — 모델 입력엔 없다(IG.SPECTATOR_KEYS)
+                    **({"todo_ops": todo_ops} if todo_ops else {}),   # p0.5.15(additive, 관전용) 목표 칸이 바뀐 몸 [{char, text}](text "" = 비움) — 모델 입력엔 없다(IG.SPECTATOR_KEYS)
                     **({"overheard": overheard} if overheard else {}),   # D90(09-20 additive) 이 틱의 관측에 실린 들린 말 [{char,zone,text}] — 구역에 들어선 첫 관측 한 번(0콜)
                     "events": turn_events,
                     "bots": [G.bot_snapshot(b) for b in bots],
@@ -2402,6 +2408,8 @@ def main():
             n["people"] = b["people"]                 # D85 인물 기록도 이월 — 사람에 대한 기억은 층을 넘어도 그대로(같은 객체)
         if b.get("lore") is not None:
             n["lore"] = b["lore"]                     # p0.5.11 개인 로어북도 같은 객체로(층 기록은 그 층이 사라질 때 러너가 쓸어낸다)
+        if b.get("todo"):
+            n["todo"] = b["todo"]                     # p0.5.15 목표 칸도 이월 — 다시 적거나 비울 때까지(층·원정·부활을 넘는다). 반복 신호의 연속(repeat)은 옮기지 않는다(새 몸 = 새로 센다)
         n["memories"] = list(b.get("memories") or [])   # 기억도 이월(D22) — 전사는 원정급
                                                   # 사건(장부=층의 기억과 대비. 구역 이름은
                                                   # 그 층의 것 — 층수 없인 모호하나 v0 수용)

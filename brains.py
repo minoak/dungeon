@@ -27,6 +27,7 @@ import dungeon_gm as G
 import info_guard as IG     # p0.5.4 정보 보호 — 모르는 결과의 폴백 축소·NPC 두뇌 입력의 공개 투영
 import identity as ID       # p0.5.9 신원 ID-1 — 호칭(보는 사람 기준)·NPC 입력의 실명·사람 열쇠 판정
 import lorebook as LB       # p0.5.11 개인 로어북 — lore_note 받기·병합·한 관측 6줄 고르기·그리기 재료
+import repeat_signal as RS  # p0.5.15 반복 신호 — 같은 대상·기다리기 연속을 세고 5·10번째에 관측 사실 한 줄
 from brain_config import BACKENDS, MODEL_IDS as _MODEL_ID, ANTHROPIC_THINKING, model_id, openai_base_url, OPENAI_DEFAULT_BASE
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -433,6 +434,8 @@ def npc_promise(line):
 NOTE_MAX = 5             # 유지 줄 수(합의 5~7 하한) — 넘치면 오래된 것부터 바랜다(FIFO,
                          #   사람도 옛 기억부터 바래듯). 판 간 영속은 없음(월드 러너 상 재론).
 NOTE_LEN = 80            # 한 줄 상한 — 수필 방지(say 160 의 절반: 기억은 말보다 압축된다)
+TODO_LEN = 80            # p0.5.15 목표 칸(응답 JSON 의 todo — 지금 하려는 일) 상한 — 넘으면 자른다(자른 사실은 남기지 않는다)
+TODO_HEAD = "할 일"      # p0.5.15 목표 칸이 관측 맨 위에 뜨는 줄의 머리 — p0515d 민옥 문구(DECISIONS 10-15 '0.5.15 문장 간소화')
 REASON_LEN = 2000        # 속마음(reason) 안전 상한 — 지침에 없다(10-11 민옥: 속마음은 동기, 길이를 강제하지 않는다 → 160 폐지).
                          #   폭주·반복 출력 방지용: 직전 속마음이 다음 판단 프롬프트('이유:')에 되실려 한 번의 폭주가 대물림되지 않게
 
@@ -1586,6 +1589,8 @@ _WIRE_KEYS = frozenset((
     "town_guide",            # D81 마을 안내 문단(시작 마을의 첫 관측 한 번): 제 절
     "npc_ears",              # D93(09-20) 내 말이 들리는 마을 사람(NPC 되받기 판의 마을에만): '네 상태' 절의 한 줄 + 응답 `to` 풀이의 재료
     "npc_away_said",         # p0.5.14(p0514b) 등 돌린 마을 사람에게 지목한 말의 결과 사실(다음 관측 한 번 — 궤적 설정과 무관): 직전 판단 절의 한 줄
+    "todo",                  # p0.5.15 목표 칸 — 스스로 적어 둔 할 일(think_all 이 그 몸에만 싣는다): 관측 맨 위 한 줄
+    "repeat",                # p0.5.15 반복 신호 — 같은 대상·기다리기 연속의 5·10번째(think_all 이 그 몸에만, 한 번): 직전 판단 절의 한 줄
     "notices",   # D61 건물 역할 부품: 게시판(의뢰)·신의 요청 — 마을 줄 아래, 문턱 근처에 섰을 때만 · D90(09-20) 들린 말(kind 'overheard')
     "gear"))   # 장비(07-30): 아는 키지만 wire 는 일부러 안 그린다 — 착용 정보의 표현은
                #   시트(_sheet 차림 줄, 불변 프리픽스=캐싱)가 소유하고, 비교는 입수 메뉴
@@ -1997,7 +2002,8 @@ def _wire(obs, names=None, compose=False):
     dry = obs.get("dry")
     trail = obs.get("trail") or []            # D38 궤적 — 마지막 결정 이후 일어난 일(순서). 1건이면 last 와 같다
     away_said = obs.get("npc_away_said") or []   # p0.5.14(p0514b) 등 돌린 마을 사람에게 지목한 말의 결과 사실 — 궤적이 꺼진 판에도 온다
-    if it or la or wit or dry or trail or hist or away_said:
+    rep = obs.get("repeat")                   # p0.5.15 반복 신호 — 같은 대상·기다리기 연속의 5·10번째(한 번)
+    if it or la or wit or dry or trail or hist or away_said or rep:
         M += ["", "## 네 직전 판단과 그 결과 (네 자신의 기억)"]
         if hist:
             M.append("- 최근 판단(오래된 것부터, 직전까지): " + " · ".join(_hist_item(h) for h in hist))
@@ -2032,6 +2038,8 @@ def _wire(obs, names=None, compose=False):
             M.append("- 네 눈으로 봤다: " + _witness_prose(w))
         if dry:                       # 무발견 신호(07-24) — 관찰 사실만(질문·조향 금지), 도달 1회
             M.append("- 한참을 걸었는데 새로 보이는 것이 없다 — 아는 자리만 이어진다")
+        if rep:                       # p0.5.15 반복 신호 — 무발견 신호 자리의 사실 한 줄(권유 없음). 꼬리표 '반복 중: …'은 RS.LINES·SAME 한 곳
+            M.append("- " + _repeat_line(rep, obs, nm))
 
     fl = obs.get("floor")                   # D40 ② 층 집계 — 세계가 센 횟수(숫자만 늘지 줄은 안 는다)
     if fl and (fl.get("n") or fl.get("w")):
@@ -2161,7 +2169,10 @@ def _wire(obs, names=None, compose=False):
         out += ["# 수첩 — 지난 층들 (층을 떠날 때 네가 쓴 한 장 + 세계가 센 횟수)"] + NB + [""]
     if M:
         out += ["# 기억 — 무엇을 기억하나"] + M + [""]
-    out += ["# 판단 공간 — 지금 보고 듣는 것" if compose else "# 관측 — 지금 보고 듣는 것", ""] + L
+    out += ["# 판단 공간 — 지금 보고 듣는 것" if compose else "# 관측 — 지금 보고 듣는 것", ""]
+    if obs.get("todo"):                      # p0.5.15 목표 칸 — 관측 맨 위 한 줄(엔진은 내용을 읽지 않는다). L 밖에 둔다 — 아래 '자리가 적힌 id' 고르기(place_txt)가
+        out += ["- %s: %s" % (TODO_HEAD, obs["todo"]), ""]   #   네가 적은 글 속 ID 를 장소 절의 자리로 잘못 읽지 않게
+    out += L
     if compose:
         # 메뉴가 사라져도 장비 효과·공격 가능 거리 같은 사실은 잃지 않는다.
         out += ["", "## 소지품 — 착용 현황"]
@@ -2333,6 +2344,32 @@ _BLOCK_TAGS = ("PROHIBITED_CONTENT", "SAFETY", "BLOCKLIST", "IMAGE_SAFETY", "REC
 def _exit_label(ex):
     """출구 라벨 — 보통 '계단(exit)', 보스층(D65, 09-13)은 '워프게이트(exit)'(obs exit.gate)."""
     return "워프게이트(exit)" if ex.get("gate") else "계단(exit)"
+
+
+def _repeat_line(rep, obs, nm):
+    """p0.5.15 반복 신호 한 줄(RS.line) — 대상 이름과 곁 여부는 그 관측에서: 사람(b<n>)은 이름 층 호칭(nm — 아는 이름 · 모르면 '낯선 사람', 꼬리 '(봇N)'은
+    다른 줄과 같은 꼴) · 계단은 출구 라벨 · 피처·몬스터는 관측의 이름 + ID(몬스터 이름은 도감이 가린 그대로) · 그 밖(문·상품·의뢰 …)은 조합형 대상 목록의
+    이름 + ID · '@x,y' 는 '마지막 본 자리'. 지금 안 보이면 ID 그대로. 곁(관측 거리 1칸 안)은 넘기지만 p0515d 꼬리표는 쓰지 않는다."""
+    tid = str(rep.get("target") or "")
+    if rep.get("wait") or not tid or tid == "self":
+        return RS.line(rep)
+    s = obs.get("sights") or {}
+    what, hit = tid, None
+    if ID.is_bot_key(tid):
+        what = nm(tid[1:])
+        hit = next((b for b in (s.get("bots") or []) if str(b.get("char")) == tid[1:]), None)
+    elif tid == "exit":
+        hit = s.get("exit")
+        what = _exit_label(hit or {})
+    elif tid[:1] == "@":
+        what = G.place_word(tid, "decide")
+    else:
+        hit = next((x for x in (s.get("features") or []) + (s.get("monsters") or []) if x.get("id") == tid), None)
+        hit = hit or next((t for t in (obs.get("targets") or []) if t.get("id") == tid), None)
+        if hit is not None:
+            what = "%s %s" % (hit.get("name") or hit.get("kind") or "?", tid)
+    near = hit is not None and hit.get("dist") is not None and int(hit["dist"]) <= 1
+    return RS.line(rep, what, near)
 
 
 def _exit_state(ex):
@@ -2567,6 +2604,8 @@ def _parse_decision(raw, why, obs, char, roster):
         then = _then(obj, obs)                      # 작정(D16) — 유효 수만 남긴 이어질 계획(없으면 [])
         note = (str(obj.get("note", "") or "").strip()[:NOTE_LEN]   # D26 남길 한 줄(선택 필드)
                 if NOTES_ON else "")
+        td_ = obj.get("todo")                                      # p0.5.15 목표 칸(선택) — 글이면 덮어쓰고 빈 글이면 비운다(없거나 null·글 아님 = 그대로).
+        todo = {"todo": " ".join(td_.split())[:TODO_LEN]} if isinstance(td_, str) else {}   #   한 줄로 펴서 TODO_LEN 에서 자른다
         inv = next((r for r in (obs.get("relations") or []) if r.get("invite")), None)
         rline = (str(obj.get("relation_line", "") or "").strip()[:NOTE_LEN]   # D36 살 — 초대가 있을 때만
                  if inv else "")                                             #   받는다(에지 없는 콜은 무시)
@@ -2600,7 +2639,7 @@ def _parse_decision(raw, why, obs, char, roster):
             if composed["type"] in ("wait", "rest"):    # 열린 결말 — then 못 이음(D48 뒤 follow 없음)
                 then = []
             return {**composed, **({"then": then} if then else {}),
-                    **({"note": note} if note else {}), **rel, **reaction,
+                    **({"note": note} if note else {}), **todo, **rel, **reaction,
                     "say": str(obj.get("say", "") or "")[:160],
                     "reason": str(obj.get("reason", "") or "")[:REASON_LEN], "src": "haiku"}
         if MENU:
@@ -2613,6 +2652,7 @@ def _parse_decision(raw, why, obs, char, roster):
                 return {**act,
                         **({"then": then} if then else {}),
                         **({"note": note} if note else {}),
+                        **todo,
                         **rel,
                         "say": str(obj.get("say", ""))[:160],
                         "reason": str(obj.get("reason", ""))[:REASON_LEN],
@@ -2633,6 +2673,7 @@ def _parse_decision(raw, why, obs, char, roster):
             out = {"type": typ,
                    **({"then": then} if then else {}),
                    **({"note": note} if note else {}),
+                   **todo,
                    **rel,
                    "say": str(obj.get("say", ""))[:160],
                    "reason": str(obj.get("reason", ""))[:REASON_LEN],
@@ -2769,6 +2810,9 @@ def think_all(d, bots, inbox=None, on_error=None, lore_ops=None):
             del dl[:-DIALOGUE_MAX]
         if NOTES_ON and b.get("notes"):
             o["notes"] = list(b["notes"])   # D26 의미 기억 — 스스로 남긴 한 줄들(자기 것=시야-온리 무관)
+        if b.get("todo"):
+            o["todo"] = b["todo"]           # p0.5.15 목표 칸 — 스스로 적어 둔 할 일(자기 것 — 다시 적거나 비울 때까지 매 판단)
+        RS.see(b, o)                        # p0.5.15 반복 신호 — 이 관측(들은 말까지)으로 연속의 '달라짐'을 적고, 5·10번째 차례면 o['repeat'] 한 번
         obss[b["char"]] = o             # 주입 솔기. 세계 정보가 아니라 자기 것이라 시야-온리 무관.
     if thinkers:
         _t0 = time.time()               # 플레이어가 실제로 기다리는 시간 = 틱 벽시계.
@@ -2799,6 +2843,12 @@ def think_all(d, bots, inbox=None, on_error=None, lore_ops=None):
     by = {b["char"]: b for b in live}
     trail_on = bool(getattr(d, "trail_on", False))
     for c, dec in out.items():          # 이번 판단을 자기 기억으로 저장 → 다음 결정의 obs.intent.
+        if "todo" in dec:                # p0.5.15 목표 칸 — 적은 글로 덮어쓰고 빈 글이면 비운다(엔진·러너는 내용을 읽지 않는다 · 완료 판정 없음)
+            if dec["todo"]:
+                by[c]["todo"] = dec["todo"]
+            else:
+                by[c].pop("todo", None)
+        RS.step(by[c], dec, obss.get(c))   # p0.5.15 반복 신호 — 판단 하나를 센다(같은 대상·기다리기 연속 · 작정 수도 판단 하나 — 관측이 없으면 None)
         if HISTORY_ON:                   # D38 개정 2-b(09-07 밤, 파트너 "캐릭터의 선택만"): 결정마다 한 항목 — 실 결정·
             hist = by[c].setdefault("history", [])   #   작정 수·폴백 전부(캐릭터가 정했거나 미리 정한 것 + 대신 골라진 것의 표식).
             hist.append({"turn": d.turn, "type": dec.get("type", ""), "target": dec.get("target"),

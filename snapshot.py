@@ -29,6 +29,8 @@
                    마을의 상인 선물(판매로 바뀌었다)을 걷고 상인·가게·숙소의 말을 지금 정의로 다시 읽는다(_m5_gold).
       6→7(p0.5.14 등 돌리기): 몸에 등 돌림 표식 npc_away{'npc:<이름>': 시작 틱}이 생겼다 — 옛 몸에서 대화 장부가 상한(고정 거절 차례)인 쌍을
                    이어간 틱(next_turn - 1)부터 등 돌림으로 올린다(_m6_away — 닫는 말의 진짜 틱은 옛 몸에 없다. 옛 규칙으로도 그 방문 동안은 거절이었다).
+      7→8(p0.5.15 반복 신호 + 목표 칸): 몸에 연속 칸 repeat · 목표 칸 todo(적었을 때만)가 생겼다 — 옛 몸의 최근 판단 장부(history)로 연속을 다시 세운다
+                   (_m7_repeat — 지난 신호 차례는 늦게 싣지 않는다 · 변화는 몰라 '달라진 것은 없다'는 붙이지 않는다). 목표 칸은 옛 몸에 없다.
 LLM 0콜 · 순수 파일(이관 함수만 몸 dict·반응 원장을 고친다 — 그때 judge 를 늦게 import).
 """
 import io
@@ -40,7 +42,7 @@ import time
 
 VERSION = 2                  # 판형(위 머리글) — 옛 코드(version 1 만 읽음)가 새 스냅샷을 거절하게 하는 문
 READS = (1, 2)               # 이 코드가 읽는 판형. 1 = p0.5.2 까지(내용 판 0)
-STATE_VERSION = 7            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
+STATE_VERSION = 8            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
 PKL = "snapshot.pkl"
 META = "snapshot.json"
 
@@ -246,7 +248,20 @@ def _m6_away(snap):
     return snap
 
 
-MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore, 5: _m5_gold, 6: _m6_away}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
+def _m7_repeat(snap):
+    """7→8(p0.5.15 반복 신호 + 목표 칸): 몸에 반복 신호의 연속 repeat{…}·목표 칸 todo 가 생겼다. 목표 칸은 옛 몸에 적은 적이 없다(칸을 만들지 않는다).
+    연속은 옛 몸의 최근 판단 장부 history(D38)의 끝에서 같은 열쇠가 이어진 수로 다시 세운다(repeat_signal.seed — 지난 신호 차례는 늦게 싣지 않고,
+    그동안의 변화는 몰라 '달라진 것은 없다'를 붙이지 않는다). 이어진 판단이 없거나 이미 칸이 있으면 그대로(제자리·한 번)."""
+    import repeat_signal as RS                    # 늦은 import — 이관이 있을 때만
+    for b in _bodies(snap):
+        if "repeat" not in b:
+            ch = RS.seed(b.get("history"), b.get("char"))
+            if ch:
+                b["repeat"] = ch
+    return snap
+
+
+MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore, 5: _m5_gold, 6: _m6_away, 7: _m7_repeat}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
 
 
 def state_version_of(doc):

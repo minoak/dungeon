@@ -886,7 +886,7 @@ snap12 = {"version": 2, "state_version": 6, "next_turn": 41,
           "waiting": {"3": {"char": "3", "gold": 5, "npc_talk": {"npc:" + ITEMS: 1}}}}
 up12 = SN.upgrade(json.loads(json.dumps(snap12)))
 check("⑫ 6→7 이관: 장부가 상한인 쌍만 등 돌림(이어간 틱 = next_turn - 1 = 40) · 이미 있는 표식은 그대로(7) · 상한 아래·걸린 쌍 없는 몸은 칸 없음 · 두 번 올려도 같다",
-      SN.STATE_VERSION == 7 and 6 in SN.MIGRATIONS and up12["state_version"] == 7
+      SN.STATE_VERSION >= 7 and 6 in SN.MIGRATIONS and up12["state_version"] == SN.STATE_VERSION   # p0.5.15: 판 8(반복 신호) — 6→7 이관은 그대로
       and up12["bots"][0].get("npc_away") == {"npc:" + GEAR: 40} and up12["worlds"][0]["bots"][0]["npc_away"] == {"npc:" + PRIEST: 7}
       and "npc_away" not in up12["waiting"]["3"] and SN.upgrade(json.loads(json.dumps(up12))) == up12, up12)
 S12 = tempfile.mkdtemp(prefix="snap_", dir=ROOT)
@@ -894,8 +894,8 @@ a12["npc_away"] = {"npc:" + GEAR: 33}
 SN.write(S12, {"run_id": "r12", "d": d12, "bots": bots12, "sheets": SHEETS, "next_turn": 77, "stream_pos": 0, "seed": 7, "started": "t"},
          {"run_id": "r12", "next_turn": 77})
 back12, _m12 = SN.load(os.path.join(S12, SN.PKL))   # 이 게이트가 방금 쓴 자기 피클(이어가기와 같은 길)
-check("⑫ 이어가기: 스냅샷을 쓰고 되읽어도 등 돌림 표식(쌍·시작 틱)이 그대로 · 판 7",
-      back12["state_version"] == 7 and back12["bots"][0].get("npc_away") == {"npc:" + GEAR: 33}
+check("⑫ 이어가기: 스냅샷을 쓰고 되읽어도 등 돌림 표식(쌍·시작 틱)이 그대로 · 판 7 이상(지금 판)",
+      back12["state_version"] == SN.STATE_VERSION >= 7 and back12["bots"][0].get("npc_away") == {"npc:" + GEAR: 33}
       and back12["bots"][0].get("npc_talk", {}).get("npc:" + GEAR) == G.NPC_REPLY_MAX, back12["bots"][0].get("npc_away"))
 leak12 = IG.public({"type": "wait", "result": "waited", "npc_away": [{"npc": GEAR, "char": "1", "ev": "start"}],
                     "deep": {"npc_away": {"npc:" + GEAR: 3}, "keep": 1}})
