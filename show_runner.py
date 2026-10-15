@@ -255,7 +255,8 @@ NPC_REPLY_ON = os.environ.get("DUNGEON_NPC_REPLY", "0") == "1" and NPC_BRAIN_ON 
 #   되받지 않는다 — NPC 두뇌는 use 대상일 때만 답한다"의 수선) NPC 되받기 — 캐릭터가 (a) 들리는 마을 사람을 말의 상대(`to` = 그 NPC 의 ID)로 지목해
 #   말했거나 (b) 그 NPC 가 자기에게 건넨 말(먼저 건 인사·앞선 답)을 읽은 결정에서 상대 없이 말했으면, 그 NPC 가 한 번 되받는다(두뇌 1콜 — 기존
 #   brains.npc_reply 재사용, 답은 다음 틱 같은 구역 사람의 inbox 로 'npc:<이름>' 잡담). 상한: 같은 캐릭터-NPC 쌍은 마을 방문당 G.NPC_REPLY_MAX 번
-#   (p0.5.10 신원 ID-2: use 말 걸기·자동 접근 도착과 **한 장부** bot['npc_talk'] — npc_turn. 마지막 차례 = 닫는 말, 그 뒤 지목하면 고정 거절 0콜) ·
+#   (p0.5.10 신원 ID-2: use 말 걸기·자동 접근 도착과 **한 장부** bot['npc_talk'] — npc_turn. 마지막 차례 = 닫는 말, 그 뒤 그 쌍은 등 돌림 —
+#   p0.5.14: 지목하면 대사 없이 말 건 사람의 다음 관측에 결과 사실 한 번, 0콜) ·
 #   한 틱에 NPC 당 1콜 · 캐릭터가 다시 말해야만 다시 답한다(연쇄 핑퐁 없음). **러너 기본 0**(론처가 켠다 — 게이트가 도는 기본 세계를 바꾸지 않는다) ·
 #   NPC 두뇌가 꺼진 판·더미 두뇌 판에선 저절로 꺼진다(콜 0 유지 — 관측·프롬프트도 옛 그대로).
 TOWN_LIFE_ON = os.environ.get("DUNGEON_TOWN_LIFE", "0") == "1"   # D90(09-20, 파트너 "마을에서 교류하고 여러 상호작용을 하며 실제로 이 마을에서 캐릭터가
@@ -679,16 +680,18 @@ def act_summary(res):
             if len(group) == 1:
                 return "홀로 계단을 올라 마을로"
             return "다 모였다 — 함께 마을로!! (%s)" % "·".join(group)
+        said_ = ("(등 돌림 — 대사 없음)" if res.get("talk") == "away"   # p0.5.14 등 돌린 쌍: NPC 는 말이 없다(로그 줄)
+                 else '"%s"' % res.get("line", "…"))
         if r == "npc_gift":
-            return '%s — %s 받음 — "%s"' % (res.get("npc", "?"), res.get("item", "?"), res.get("line", "…"))
+            return '%s — %s 받음 — %s' % (res.get("npc", "?"), res.get("item", "?"), said_)
         if r == "npc_talk":
-            return '%s — "%s"' % (res.get("npc", "?"), res.get("line", "…"))
+            return '%s — %s' % (res.get("npc", "?"), said_)
         if r == "npc_report":                      # D69 귀환 보고
             tt = res.get("titles") or {}
-            return '%s에게 원정 보고 — 완수 %s / 미완 %s%s — "%s"' % (
+            return '%s에게 원정 보고 — 완수 %s / 미완 %s%s — %s' % (
                 res.get("npc", "?"), "·".join(tt.get(x, x) for x in (res.get("done") or [])) or "없음",
                 "·".join(tt.get(x, x) for x in (res.get("undone") or [])) or "없음",
-                (" — 보상 %d골드" % res["reward"]) if res.get("reward") else "", res.get("line", "…"))   # p0.5.13 보상(있을 때만)
+                (" — 보상 %d골드" % res["reward"]) if res.get("reward") else "", said_)   # p0.5.13 보상(있을 때만)
         if r == "quest_accepted":                  # D69 의뢰 맡음
             return "\U0001f4dc 의뢰 맡음: %s — %s%s" % (res.get("title", "?"), res.get("goal", "?"),
                                                      (" (보상: %s)" % res["reward"]) if res.get("reward") else "")
@@ -1367,12 +1370,13 @@ def npc_say_targets(d, bots, decisions, inbox_in, spoke=(), pairs=()):
     NPC 가 먼저 말을 잇는 일은 없다 — 캐릭터가 다시 말해야만 다시 고른다(연쇄 핑퐁 없음).
     p0.5.10 신원 ID-2(설계 §3.2): ① 그 말이 그 NPC 에게 가는 자동 접근(bot['approach'] — say 를 실었다)에 실려 있으면 지금 되받지 않는다 —
     도착 때 use 의 판정(선물·보고)과 함께 한 번 답한다(10-13 실판: 17걸음 밖에서 '단검 주세요'를 되받은 장비 상인이 "골라 줄 테니 기다려요"라고
-    답했고, 도착 때의 선물은 고정 대사뿐이라 약속이 닫히지 않았다). ② 대화 장부(bot['npc_talk'])가 상한에 닿은 쌍: 지목('to')은 고른다(npc_turn 이
-    고정 거절 — 0콜, 그 NPC 의 이 틱 차례를 쓰지 않는다) · 답('reply' — 상대를 적지 않은 말을 엔진이 그 NPC 에게 한 답으로 읽은 것)은 고르지 않는다
-    (동료에게 한 잡담에 상인이 '바쁘네'로 끼어들지 않게). 반환 [{npc, bot, said, via, prev, over}] — prev = 그 NPC 가 이 캐릭터에게 앞서 한 말.
+    답했고, 도착 때의 선물은 고정 대사뿐이라 약속이 닫히지 않았다). ② 등 돌린 쌍(p0.5.14 — 닫는 말 뒤 · G.npc_turned, 장부가 상한인 옛 꼴 포함):
+    지목('to')은 고른다(npc_turn 이 'away' — 대사 없음·0콜, 그 NPC 의 이 틱 차례를 쓰지 않는다 · 말 건 사람의 다음 관측에 결과 사실) · 답('reply' — 상대를
+    적지 않은 말을 엔진이 그 NPC 에게 한 답으로 읽은 것)은 고르지 않는다(동료에게 한 잡담이 그 NPC 에게 한 말로 읽히지 않게).
+    반환 [{npc, bot, said, via, prev, over}] — prev = 그 NPC 가 이 캐릭터에게 앞서 한 말 · over = 등 돌린 쌍.
     p0510b(Codex p0510r 필수 ①): 두 제한을 나눈다 — **두뇌 콜 제한**(NPC 당 한 틱 한 콜: spoke = 이 틱 use 길에서 두뇌 차례를 쓴 NPC + 앞 번호의
-    되받기)은 보통 대답·닫는 말에만 걸고, **고정 거절**(상한 뒤, 0콜)은 그 제한을 받지 않는다 — 쌍(캐릭터, NPC)마다 한 틱 한 번만
-    (pairs = 이 틱 use 길로 이미 처리된 쌍). 그래서 정상 응답자·상한 도달자의 순서나 다른 사람의 use 와 상관없이 거절이 나간다."""
+    되받기)은 보통 대답·닫는 말에만 걸고, **등 돌림**(0콜)은 그 제한을 받지 않는다 — 쌍(캐릭터, NPC)마다 한 틱 한 번만
+    (pairs = 이 틱 use 길로 이미 처리된 쌍). 그래서 정상 응답자·등 돌린 쌍의 순서나 다른 사람의 use 와 상관없이 결과 사실이 간다."""
     out, taken, done = [], set(spoke), set(pairs)
     feats = {f.name: f for f in d.features.values() if f.type == "npc"}
     for b in bots:
@@ -1399,10 +1403,10 @@ def npc_say_targets(d, bots, decisions, inbox_in, spoke=(), pairs=()):
         ap = b.get("approach") or {}
         if ap.get("say") and str(ap.get("target")) == "f%d" % f.id:   # ① 말이 접근에 실렸다 — 도착 때 답한다
             continue
-        over = npc_talk_count(b, name) >= G.NPC_REPLY_MAX
-        if over and via == "reply":                          # ② 상한 뒤의 '답' 읽기는 하지 않는다
+        over = G.npc_turned(b, name) or npc_talk_count(b, name) >= G.NPC_REPLY_MAX   # p0.5.14 등 돌린 쌍(npc_turn 과 같은 판정)
+        if over and via == "reply":                          # ② 등 돌린 쌍의 '답' 읽기는 하지 않는다
             continue
-        if not over:                                         # 두뇌 콜 제한(NPC 당 한 틱 한 콜) — 거절(over)은 이 제한 밖
+        if not over:                                         # 두뇌 콜 제한(NPC 당 한 틱 한 콜) — 등 돌림(over, 0콜)은 이 제한 밖
             if name in taken:
                 continue
             taken.add(name)
@@ -1426,24 +1430,31 @@ def npc_turn(d, b, name, said, res, facts_of, brain_on, names=None):
     """p0.5.10 신원 ID-2 NPC 대화 한 길(설계 §3.2, DECISIONS 10-12 'NPC 대화 피로') — 대화 세 길이 모두 이 함수를 지난다:
     use 말 걸기(즉시 실행) · 자동 접근 도착(결정 때의 말 said 를 들고 온다) · 되받기(res 'npc_say'). 장부 하나 bot['npc_talk']['npc:<이름>'] = n.
       n < MAX-1  : 보통 대답 — 두뇌 1콜(꺼졌으면 고정 대사, 되받기 실패는 말 없음 = 옛 규칙)
-      n == MAX-1 : 마지막 대답 = 닫는 말(정확히 한 번) — 두뇌 1콜 + 장면 한 줄('이번이 마지막 대답'). 꺼졌거나 실패하면 정의 line_close(없으면 G.NPC_LINE_CLOSE)
-      n >= MAX   : 고정 거절 0콜 — 정의 line_busy(없으면 G.NPC_LINE_BUSY). use 의 판정(선물·보고)은 그대로 됐다 — 그때는 그 용건의 고정 대사(0콜).
-    n 은 대화 차례(두뇌 콜·실패 콜·고정 대사 모두 한 번)로 세고 상한에서 멈춘다(거절은 세지 않는다). 다음 마을 방문(새 봇 dict)에 풀린다.
-    res 는 제자리에서 고친다 — talk 'close'|'busy'(스트림 additive · NPC 두뇌 장면 재료). 반환 {line(None = 말 없음), src 'brain'|'fixed', stage 'talk'|'close'|'busy'}.
+      n == MAX-1 : 마지막 대답 = 닫는 말(정확히 한 번) — 두뇌 1콜 + 장면 한 줄('이번이 마지막 대답'). 꺼졌거나 실패하면 정의 line_close(없으면 G.NPC_LINE_CLOSE).
+                   p0.5.14: 그 틱부터 이 쌍은 등 돌림 — bot['npc_away']['npc:<이름>'] = 그 틱(d.turn)
+      등 돌림    : (p0.5.14 — 옛 고정 거절 '지금은 바쁘네.' 자리) 대사 없음·0콜 — res 의 line 을 걷고 talk 'away'. use 의 판정(선물·보고)은 그대로 됐다.
+                   말 건 사람에게는 결과 사실(G.NPC_AWAY_FACT): use·자동 접근 도착은 엔진이 결과에 이미 달았다(G.npc_away_res — 저장 사본 전) ·
+                   지목한 말은 부르는 쪽이 다음 관측 한 번 칸에(Dungeon.npc_away_said — 궤적 설정과 무관). 장부가 상한인데 표식이 없는 몸(이관 전 꼴)은 지금부터 등 돌림.
+    n 은 대화 차례(두뇌 콜·실패 콜·고정 대사 모두 한 번)로 세고 상한에서 멈춘다(등 돌림은 세지 않는다). 풀림: npc_away_expire(G.NPC_AWAY_TICKS — 장부도 다시 센다)
+    또는 다음 마을 방문(새 봇 dict) — 먼저 오는 쪽.
+    res 는 제자리에서 고친다 — talk 'close'|'away'(스트림 additive · NPC 두뇌 장면 재료). 반환 {line(None = 말 없음), src 'brain'|'fixed', stage 'talk'|'close'|'away'}.
     문장의 배달(다음 틱 편지함 — 말 건 사람과 엿들은 사람에게 같은 문장)은 부르는 쪽이 한다."""
     book = b.setdefault("npc_talk", {})
     k = npc_talk_key(name)
     n = int(book.get(k, 0))
     nd = (getattr(d, "npc_defs", None) or {}).get(name) or {}
     r = res.get("result")
-    if n >= G.NPC_REPLY_MAX:
-        res["talk"] = "busy"
-        line = res.get("line") if r in ("npc_gift", "npc_report") else (nd.get("line_busy") or G.NPC_LINE_BUSY)
-        return {"line": line, "src": "fixed", "stage": "busy"}
+    now = int(getattr(d, "turn", 0) or 0)
+    if G.npc_turned(b, name) or n >= G.NPC_REPLY_MAX:
+        b.setdefault("npc_away", {}).setdefault(k, now)
+        res.pop("line", None)
+        res["talk"] = "away"
+        return {"line": None, "src": "fixed", "stage": "away"}
     book[k] = n + 1
     close = n == G.NPC_REPLY_MAX - 1
     if close:
         res["talk"] = "close"
+        b.setdefault("npc_away", {})[k] = now                # p0.5.14 닫는 말의 틱 — 풀림(NPC_AWAY_TICKS)을 세는 기준
     line = None
     if brain_on:
         line = brains.npc_reply(b, res, said, facts_of(name), npc=nd, names=names)   # p0.5.9: NPC 입력은 실명(말 속 봇N 도 이름으로)
@@ -1455,9 +1466,11 @@ def npc_turn(d, b, name, said, res, facts_of, brain_on, names=None):
     return {"line": None if r == "npc_say" else res.get("line"), "src": "fixed", "stage": stage}
 
 
-def npc_say_replies(d, bots, decisions, inbox_in, facts_of, spoke=(), names=None, pairs=()):
+def npc_say_replies(d, bots, decisions, inbox_in, facts_of, spoke=(), names=None, pairs=(), away=None):
     """D93 되받기 — 고른 말마다 npc_turn(p0.5.10 대화 한 길: 결과 어휘 'npc_say' — 판정 없음, 문장만). 장부는 npc_turn 이 센다(실패한 콜도 센다).
-    두뇌 실패(None)면 그 NPC 는 말이 없다 — 고정 대사로 메우지 않는다(닫는 말 차례만 정의의 닫는 말). 상한 뒤 지목은 고정 거절(0콜).
+    두뇌 실패(None)면 그 NPC 는 말이 없다 — 고정 대사로 메우지 않는다(닫는 말 차례만 정의의 닫는 말).
+    p0.5.14 등 돌린 쌍의 지목은 말이 없다(0콜 — 반환에 싣지 않는다 · 관전 말풍선 없음): away(목록)를 주면 (봇, NPC 이름)을 거기 더한다 —
+    러너가 말 건 사람의 다음 관측에 결과 사실(Dungeon.npc_away_said — 궤적 설정과 무관한 한 번 칸)을 남기는 재료.
     장면 재료 offer = 와서 말을 걸면 그 자리에서 오갈 것(Dungeon.npc_offer — 선물 판정과 한 원천, p0.5.10 약속 문제).
     facts_of(NPC 이름) → 그 NPC 가 아는 사실(npc_facts). 반환 [{npc, char, line, via, talk?}] — 배달은 D69 NPC 의 답과 같은 길(다음 틱·같은 구역·잡담)."""
     out = []
@@ -1466,10 +1479,31 @@ def npc_say_replies(d, bots, decisions, inbox_in, facts_of, spoke=(), names=None
         res = {"result": "npc_say", "npc": name, **({"prev": t["prev"]} if t["prev"] else {}),
                "offer": [lbl for _k, lbl in d.npc_offer(b, name)]}
         got = npc_turn(d, b, name, t["said"], res, facts_of, True, names=names)
+        if got["stage"] == "away" and away is not None:
+            away.append((b, name))
         if got["line"]:
             b.setdefault("npc_hailed", set()).add(name)   # 말을 나눈 사이다 — 그 뒤에 곁을 지나도 '먼저 거는 인사'(D71, 방문당 한 번)를 새로 받지 않는다
             out.append({"npc": name, "char": b["char"], "line": got["line"], "via": t["via"],
                         **({"talk": got["stage"]} if got["stage"] != "talk" else {})})
+    return out
+
+
+def npc_away_expire(bots, turn):
+    """p0.5.14 등 돌림 풀림(쌍별) — 닫는 말의 틱에서 G.NPC_AWAY_TICKS 가 지난 쌍을 푼다: 표식을 지우고 대화 장부도 다시 센다(그 쌍의 칸을 지운다).
+    풀렸다는 표시는 모험가에게 없다(관측의 꼬리가 사라질 뿐). 세계 틱 머리에서 한 번(관측·인사보다 먼저). 원정을 다녀온 몸은 새 봇 dict 라 여기 올 일이 없다.
+    반환 [{npc, char, ev:'end'}] — 스트림 tick.npc_away(관전용)의 풀림 칸."""
+    out = []
+    for b in bots:
+        aw = b.get("npc_away")
+        if not aw:
+            continue
+        for k in sorted(aw):
+            if turn - int(aw[k]) >= G.NPC_AWAY_TICKS:
+                del aw[k]
+                (b.get("npc_talk") or {}).pop(k, None)
+                out.append({"npc": k[4:], "char": str(b["char"]), "ev": "end"})
+        if not aw:
+            b.pop("npc_away", None)                          # 빈 칸을 남기지 않는다(등 돌린 적 없는 몸과 같은 꼴)
     return out
 
 
@@ -2066,6 +2100,7 @@ def main():
             d.elsewhere = [{"char": b["char"], "job": b["job"], "depth": x["d"].depth}
                            for x in worlds if x is not w for b in x["bots"] if b["alive"]]
         d.turn = turn       # 장부(D17) 목격 스탬프 — 판정 무관여, "언제 봤나"의 단일 원천
+        away_ev = npc_away_expire(bots, turn)  # p0.5.14 등 돌림 풀림(NPC_AWAY_TICKS — 관측·인사보다 먼저) [{npc,char,ev:'end'}] — 스트림 tick.npc_away
         if PENDING_ON:                        # D47 배관: 걷는 동안 들은(안 세운) 말을 이번 결정에 함께 읽힌다
             inbox = merge_inbox(pending, inbox)
         npc_hails = []                        # D71 NPC 가 먼저 거는 인사 — 같은 구역·6칸 안, 캐릭터당 NPC 당 한 번, 잡담 · D76 걸음을 멈춘다(NPC_HAIL_STOP_ON)
@@ -2145,7 +2180,7 @@ def main():
         event("-- tick %d --  (사고:%s / 나머지 자동보행)%s" % (turn, thinkers, ("  [%s]" % brains._floor_name(d.depth)) if PARTYFORM_ON else ""))
         turn_events = []
         npc_says = []                        # D69 이번 틱 NPC 의 답 [(NPC 이름, 문장, 말 건 봇)] — 배달은 아래(잡담·정지 없음)
-        npc_used = []                        # p0510b 이번 틱 use 길의 NPC 대화 [(NPC 이름, 봇, 단계 talk|close|busy)] — 되받기의 두뇌 차례·쌍 중복 판정
+        npc_used = []                        # p0510b 이번 틱 use 길의 NPC 대화 [(NPC 이름, 봇, 단계 talk|close|away)] — 되받기의 두뇌 차례·쌍 중복 판정
         says = dict(social)                  # 걸으면서 한 말도 같은 배달 규칙을 탄다
         say_to = {}                          # D41 지목 — 이번 틱 말의 상대(봇 번호 | all), 없으면 혼잣말
         say_kind = {}                        # D47 말의 종류 — 잡담(기본)|제안. 사교 콜의 말은 종류 없음=잡담
@@ -2207,12 +2242,15 @@ def main():
                 write_map(d, bots, turn)
                 time.sleep(STEP_DELAY)
 
-        npc_replies = []                     # D93(09-20) 이 틱에 NPC 가 되받은 말 [{npc,char,line,via,talk?}] — 지목(to) 또는 그 NPC 의 말에 상대 없이 한 답(p0.5.10 talk = close 닫는 말 · busy 고정 거절).
+        npc_replies = []                     # D93(09-20) 이 틱에 NPC 가 되받은 말 [{npc,char,line,via,talk?}] — 지목(to) 또는 그 NPC 의 말에 상대 없이 한 답(p0.5.10 talk = close 닫는 말).
+        away_said = []                       # p0.5.14 이 틱에 등 돌린 NPC 를 지목해 말한 사람 [(봇, NPC 이름)] — 말이 없으니 npc_replies 에는 없다(다음 관측에 사실 한 번)
         if npc_reply_on and getattr(d, "town", False):   #   배달은 D69 NPC 의 답과 한 길(npc_says → 다음 틱·같은 구역·잡담). 이 틱에 use 로 이미 말한 NPC 는 건너뛴다
             npc_replies = npc_say_replies(d, bots, decisions, inbox_in, lambda nm_: npc_facts(d, nm_, bots, _fallen_now(), quests, _exp_n(), names),
-                                          spoke={n_ for n_, _c, st_ in npc_used if st_ != "busy"}, names=names,   # p0510b: 두뇌 차례를 쓴 NPC 만(거절은 0콜)
-                                          pairs={(c_, n_) for n_, c_, _st in npc_used})                           #   · use 길로 이미 처리된 쌍은 다시 답하지 않는다
+                                          spoke={n_ for n_, _c, st_ in npc_used if st_ != "away"}, names=names,   # p0510b: 두뇌 차례를 쓴 NPC 만(등 돌림은 0콜)
+                                          pairs={(c_, n_) for n_, c_, _st in npc_used}, away=away_said)           #   · use 길로 이미 처리된 쌍은 다시 답하지 않는다
             npc_says += [(r_["npc"], r_["line"], r_["char"]) for r_ in npc_replies]
+        away_ev += [{"npc": n_, "char": c_, "ev": "start"} for n_, c_, st_ in npc_used if st_ == "close"]   # p0.5.14 닫는 말 = 등 돌림의 시작(관전용)
+        away_ev += [{"npc": r_["npc"], "char": str(r_["char"]), "ev": "start"} for r_ in npc_replies if r_.get("talk") == "close"]
 
         if reaction_book is not None:
             for char, decision in sorted(decisions.items()):
@@ -2239,6 +2277,9 @@ def main():
 
         # 의논 핑퐁: say -> 동료가 *볼 수 있을 때만*(근접/시야) 다음 틱 받은편지함
         inbox, hails = deliver_and_hail(d, bots, says, say_to, say_kind, open_props)   # 사회층 한 틱(배달·뼈·정지 — D24·D36·D41·D47)
+        for b_, n_ in away_said:             # p0.5.14 등 돌린 NPC 에게 지목한 말 — 말 건 사람의 다음 관측에 결과 사실 한 번(0콜 · 궤적 설정과 무관 — p0514b)
+            d.npc_away_said(b_, n_)
+            event("   %s → 봇%s — 등 돌림(대사 없음)" % (n_, b_["char"]))
         for c in hails:
             event("   봇%s 멈칫 — %s" % (c, "제안을 받고 돌아본다" if (SAYKIND_ON and SAYTO_ON) else "말을 걸어온 동료 쪽을 돌아본다"))
         deliver_npc_says(d, bots, inbox, npc_says, turn)   # D69 NPC 의 답(· D93 되받은 말) — 마을의 잡담으로 들린다: 정지 없음·뼈 없음·사교 콜 없음
@@ -2265,6 +2306,7 @@ def main():
                     **({"oracle": oracle_new} if oracle_new else {}),   # D61 개정(09-13 additive) 이 틱에 새로 들린 신의 요청 {id,text}
                     **({"npc_hails": npc_hails} if npc_hails else {}),  # D71(09-14 additive) 이 틱에 NPC 가 먼저 건 인사 [{npc,char,line,key,line_src?}]
                     **({"npc_replies": npc_replies} if npc_replies else {}),   # D93(09-20 additive) 이 틱에 NPC 가 되받은 말 [{npc,char,line,via 'to'|'reply',talk?}] — 다음 틱 inbox 'npc:' 로 들린다
+                    **({"npc_away": away_ev} if away_ev else {}),   # p0.5.14(additive, 관전용) 등 돌림 시작·풀림 [{npc,char,ev 'start'|'end'}] — 모델 입력엔 없다(IG.SPECTATOR_KEYS)
                     **({"overheard": overheard} if overheard else {}),   # D90(09-20 additive) 이 틱의 관측에 실린 들린 말 [{char,zone,text}] — 구역에 들어선 첫 관측 한 번(0콜)
                     "events": turn_events,
                     "bots": [G.bot_snapshot(b) for b in bots],

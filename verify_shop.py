@@ -545,8 +545,8 @@ snap5 = {"version": 2, "state_version": 5, "d": ds, "bots": bs, "sheets": SHEETS
          "expedition": {"n": 2, "t0": 5, "fallen": 0, "said": ["goblin_cull"]}}
 snap6 = S.upgrade(pickle.loads(pickle.dumps(snap5)))   # 이 프로세스가 방금 만든 바이트만 되읽는다(피클 왕복 = 이어가기와 같은 길) — 밖에서 온 데이터가 아니다
 d6 = snap6["d"]
-check("⑪ 판 번호 6 · 옛 몸마다 골드 5",
-      S.STATE_VERSION == 6 and snap6["state_version"] == 6 and all(b_["gold"] == 5 for b_ in snap6["bots"]))
+check("⑪ 판 번호 6 이상(지금 판 — p0.5.14 = 7) · 옛 몸마다 골드 5",
+      S.STATE_VERSION >= 6 and snap6["state_version"] == S.STATE_VERSION and 5 in S.MIGRATIONS and all(b_["gold"] == 5 for b_ in snap6["bots"]))
 check("⑪ 앞선 결산이 적은 완수(고블린 소탕)는 보상 받은 것으로 · 보고 전 완수(장신구)는 아직 — 다음 보고에 받는다",
       set(snap6["quests"]["paid"]) == {"goblin_cull"})
 GR6 = by_name(d6, "길드 접수원")

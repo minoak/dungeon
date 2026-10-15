@@ -656,8 +656,9 @@ def npc(eid, life=False):
             # D95(09-20): 이미 축복을 받은 사람에게 하는 말 — 공물 판(Dungeon.offer_on)에서 신의 축복은 판당 한 번이라 그 사실을 말할 자리가 필요하다.
             #   끈 판은 이 칸을 아무도 읽지 않는다(엔진이 offer_on 일 때만 본다). 판정 무접촉 — 말뿐.
             'line_blessed': c.get('line_blessed'),
-            # p0.5.10 신원 ID-2(설계 §3.2): 대화 장부의 닫는 말(두뇌가 꺼졌거나 실패한 마지막 대답)·고정 거절(상한 뒤 0콜) — 선택. 없으면 엔진 공통 문장(G.NPC_LINE_CLOSE·NPC_LINE_BUSY)
-            'line_close': c.get('line_close'), 'line_busy': c.get('line_busy'),
+            # p0.5.10 신원 ID-2(설계 §3.2): 대화 장부의 닫는 말(두뇌가 꺼졌거나 실패한 마지막 대답) — 선택. 없으면 엔진 공통 문장(G.NPC_LINE_CLOSE).
+            #   (p0.5.14: 고정 거절 칸 line_busy 는 거뒀다 — 닫는 말 뒤는 등 돌림이라 NPC 가 아무 말도 하지 않는다)
+            'line_close': c.get('line_close'),
             # p0.5.13(경제 1a): 이 사람이 맡은 가게(건물 정의 id — 선택). 판정은 가게(건물의 쓰임)가 하고 이 칸은 NPC 두뇌 사실(그 가게의 값)의 재료뿐
             'shop': c.get('shop'),
             # D71(09-14): NPC 가 먼저 거는 인사 — hail(기본)·hail_no_potion·hail_board·hail_return·hail_rumor·hail_oracle(전부 선택, 상황별)

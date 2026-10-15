@@ -26,6 +26,7 @@ public(result, viewer) — 결과 하나를 "그 사람이 실제로 볼 수 있
      장비 고유 번호 uid · 층 일련 scope · 공간 id space. 어느 깊이든 걷는다(지금 결과에는 실리지 않는다 — 옮겨 적혀도 새지 않게).
      p0.5.12 관전 클릭 보기 칸도 — 이름이 고유한 known_ops·item_info 는 이름으로, 공개 칸과 이름이 겹치는 것은 자리로(묘 피처의 of ·
      층 줄 꼴의 zones{ids, rows}·doors[[x, y, id]]). 관측의 lore[].of · zone.doors · known.zones · 겉모습 looks 는 공개 칸이라 그대로 둔다.
+     p0.5.14 등 돌림 npc_away(누가 어느 NPC 에게서 등을 돌림당했나 · 시작 틱) — 그 사람에게 가는 몫은 자기 결과의 talk 'away' 와 관측의 NPC 줄 away 뿐이다.
   viewer(보는 사람)의 가시성(perceives, 4a)은 아직 쓰지 않는다.
 LLM 0콜 · 판정 rng 무접촉 · 엔진 무의존(dungeon_gm 을 import 하지 않는다 — 엔진이 이 모듈을 쓴다).
 """
@@ -38,7 +39,8 @@ import identity
 AUDIT = "audit"
 DROP_KEYS = ("social_event_id", "said")   # said = p0.5.10 러너 전용 칸(NPC 에게 건 말 — 말한 사람의 말은 결정 틱에 이미 배달됐고 대화 장부에 있다)
 SPECTATOR_KEYS = ("lore_note", "lore_drop", "lore_shown", "lore_cut", "lore_ops", "lore_ids", "uid", "scope", "space",   # ⑥ p0.5.11 관전 전용 칸 — 어느 깊이든 걷는다
-                  "known_ops", "item_info")   # p0.5.12 관전 클릭 보기의 이름이 고유한 칸(종 앎 변화 · 물건 설명 사전)
+                  "known_ops", "item_info",   # p0.5.12 관전 클릭 보기의 이름이 고유한 칸(종 앎 변화 · 물건 설명 사전)
+                  "npc_away")   # p0.5.14 등 돌림 — 스트림 tick.npc_away(누가 누구에게) · 몸의 npc_away{쌍: 시작 틱}. 그 사람의 몫은 결과 talk 'away'·관측 away 로만 간다
 PERSON_ROLL_KEYS = ("roll", "mod", "total", "ac", "combat_roll", "skill_roll", "skill_dc")   # CA.attack_actor · SK.execute 의 사람 대상 굴림
 EFFECT_ROLL_KEYS = ("save",)                                                                # SK.execute effects[] 의 대상 내성 굴림
 

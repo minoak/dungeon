@@ -389,7 +389,8 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None, names=None):
     if res.get("line"):
         scene.append('- (두뇌가 없을 때의 정해진 %s: "%s" — 같은 뜻이면 네 말로 바꿔도 된다)' % ("인사" if r == "npc_hail" else "대사", res["line"]))
     if res.get("talk") == "close":                    # p0.5.10 신원 ID-2 마지막 대답(대화 장부 MAX-1 번째, 러너 npc_turn) — 닫는 말은 한 번 ⚠️문구 임시
-        scene.append("- 이 사람과는 이번에 이야기를 충분히 나눴다 — 이번이 마지막 대답이다. 네 성격대로 귀찮다는 기색을 보이며 대화를 끝낸다")
+        scene.append("- 이 사람과는 이번에 이야기를 충분히 나눴다 — 이번이 마지막 대답이다. 네 성격대로 귀찮다는 기색을 보이며 대화를 끝낸다"
+                     " — 다시 오라거나 기다리라는 말은 하지 않는다")   # p0.5.14: 0.5.13 실판 닫는 말 "더 들으려면 내일 다시 와" ⚠️문구 임시
     prompt = (_npc_prompt_raw().replace("{name}", name).replace("{role}", npc.get("role") or "마을 사람")
               .replace("{persona}", npc.get("persona") or "평범한 마을 사람").replace("{maxlen}", str(NPC_LINE_LEN))
               .replace("{facts}", "\n".join("- " + str(x) for x in (facts or [])) or "- (특별히 아는 것 없음)")
@@ -405,8 +406,30 @@ def npc_reply(bot, res, said, facts, npc=None, roster=None, names=None):
     if not line and raw and not str(raw).lstrip().startswith("{"):
         line = str(raw).strip()
     line = " ".join(line.split())[:NPC_LINE_LEN]
+    if line and npc_promise(line):                    # p0.5.14 다시 오라·기다리라는 꼴 = 실패한 콜로 본다(0콜 후처리) — 부르는 쪽의 폴백(고정 대사·닫는 말·말 없음)이 메운다
+        _brainlog(kind="npc", npc=name, char=bot.get("char"), result=r, ok=False, why="promise", dropped=line)
+        return None
     _brainlog(kind="npc", npc=name, char=bot.get("char"), result=r, ok=bool(line), why=why)
     return line or None
+
+
+# p0.5.14 NPC 두뇌 대사의 약속 걸러내기(0.5.13 실판: 은퇴한 모험자 "더 들으려면 내일 다시 와", 주점 주인 "바깥 탁자에서 기다려" → 모험가가 그 자리에서 기다리기만 했다).
+#   세계가 이어 주지 못하는 '나중'을 상대에게 시키는 꼴만 좁게 — ① 다시/내일/나중에/다음에/이따 + 오라는 명령·청유 ② 기다리라는 명령·청유.
+#   그 명령꼴이 **말끝**(문장부호·따옴표·줄 끝)에 닿아야 걸린다 — 뒤에 말이 이어지면 거절·설명이다(p0514b · Codex p0514r: '기다려 줄 수는 없네' ·
+#   '내일 와 봤자 아무것도 없어'). '또 와서 졸라도 소용없어'(연결형)·'기다려도 소용없어'·'돌아오시길 기다리고 있을게요'·'친구를 기다리고 있어'(NPC 자신의 일 —
+#   '기다리고 있어'는 명령인지 지금 일인지 갈리지 않아 거르지 않는다)·'기다려야 해'(규칙 설명)·'앉아'(탁자는 세계에 있다)는 걸리지 않는다.
+#   걸린 줄은 두뇌 실패와 같은 길: use 의 보통 차례 = 정해진 대사 · 닫는 말 차례 = 닫는 말(정의 line_close → G.NPC_LINE_CLOSE) · 되받기 보통 차례 = 말 없음 · 먼저 거는 인사 = 정의 인사.
+_END = r"(?=\s*(?:[.!?~,…'\")」]|$))"
+_ASK = r"(?:\s?(?:줘|줘요|주게|주세요|봐|봐요|보게|보세요))?"   # 청유 꼬리('기다려 줘' · '와 봐') — 그 뒤도 말끝이어야 한다
+NPC_PROMISE_RE = re.compile(
+    r"(?:다시|내일|나중에|다음에|이따가?|좀\s?있다가?)\s*(?:다시\s*|또\s*)?(?:와(?:라|요)?" + _ASK + r"|오(?:게나?|너라|세요|시게|시오|십시오|렴))" + _END
+    + r"|기다려(?:라|요)?" + _ASK + _END
+    + r"|기다리(?:게나?|세요|시게|시오|십시오|렴|고\s?있어라|고\s?있게|고\s?계세요|고\s?계시오)" + _END)
+
+
+def npc_promise(line):
+    """p0.5.14 NPC 한마디가 상대에게 다시 오라거나 기다리라고 하나(위 NPC_PROMISE_RE — 0콜). 참이면 npc_reply 가 그 줄을 버린다."""
+    return bool(line) and NPC_PROMISE_RE.search(str(line)) is not None
 NOTE_MAX = 5             # 유지 줄 수(합의 5~7 하한) — 넘치면 오래된 것부터 바랜다(FIFO,
                          #   사람도 옛 기억부터 바래듯). 판 간 영속은 없음(월드 러너 상 재론).
 NOTE_LEN = 80            # 한 줄 상한 — 수필 방지(say 160 의 절반: 기억은 말보다 압축된다)
@@ -1251,9 +1274,9 @@ def _last_prose(last, names=None):
             got = ("물약을 받았다(소지 물약 +1)" if item == "물약"
                    else "축복의 물약을 받았다(소지 +1 — 마시면 공격 능력치가 1 오른다)" if item == "축복의 물약"   # D74(09-15) 기도의 답
                    else "%s을(를) 받아 걸쳤다" % item)
-            return '%s에게 말을 걸었다 — %s' % (last.get("npc", "?"), got)
+            return '%s에게 말을 걸었다 — %s%s' % (last.get("npc", "?"), got, G._away_sfx(last))
         if r == "npc_talk":
-            return '%s에게 말을 걸었다' % last.get("npc", "?")
+            return '%s에게 말을 걸었다%s' % (last.get("npc", "?"), G._away_sfx(last))   # p0.5.14 등 돌림: 대사 없이 결과 사실 한 마디
         if r == "npc_report":               # D69 귀환 보고 — 원정이 끝났다(세계의 사실)
             t_ = last.get("titles") or {}
             bits = []
@@ -1261,8 +1284,9 @@ def _last_prose(last, names=None):
                 bits.append("완수: " + "·".join(t_.get(x, x) for x in last["done"]))
             if last.get("undone"):
                 bits.append("미완: " + "·".join(t_.get(x, x) for x in last["undone"]))
-            return '%s에게 원정을 보고했다%s%s' % (last.get("npc", "?"), (" (%s)" % " / ".join(bits)) if bits else "",
-                                                (" — 보상 %d골드를 받았다(지금 골드 %d)" % (last["reward"], last.get("gold", 0))) if last.get("reward") else "")   # p0.5.13 ⚠️문구 임시
+            return '%s에게 원정을 보고했다%s%s%s' % (last.get("npc", "?"), (" (%s)" % " / ".join(bits)) if bits else "",
+                                                  (" — 보상 %d골드를 받았다(지금 골드 %d)" % (last["reward"], last.get("gold", 0))) if last.get("reward") else "",   # p0.5.13 ⚠️문구 임시
+                                                  G._away_sfx(last))
         if r == "quest_accepted":           # D69 의뢰 맡음 — 파티의 의뢰가 됐다
             return '게시판의 의뢰 「%s」를 맡았다 — %s%s' % (last.get("title", "?"), last.get("goal", "?"),
                                                       (" (보상: %s)" % last["reward"]) if last.get("reward") else "")
@@ -1561,6 +1585,7 @@ _WIRE_KEYS = frozenset((
     "floor_notice",          # D65 층에 들어서며 한 번 · D75 마을 진입 한마디 · D79 이어가기 안내: 제 절
     "town_guide",            # D81 마을 안내 문단(시작 마을의 첫 관측 한 번): 제 절
     "npc_ears",              # D93(09-20) 내 말이 들리는 마을 사람(NPC 되받기 판의 마을에만): '네 상태' 절의 한 줄 + 응답 `to` 풀이의 재료
+    "npc_away_said",         # p0.5.14(p0514b) 등 돌린 마을 사람에게 지목한 말의 결과 사실(다음 관측 한 번 — 궤적 설정과 무관): 직전 판단 절의 한 줄
     "notices",   # D61 건물 역할 부품: 게시판(의뢰)·신의 요청 — 마을 줄 아래, 문턱 근처에 섰을 때만 · D90(09-20) 들린 말(kind 'overheard')
     "gear"))   # 장비(07-30): 아는 키지만 wire 는 일부러 안 그린다 — 착용 정보의 표현은
                #   시트(_sheet 차림 줄, 불변 프리픽스=캐싱)가 소유하고, 비교는 입수 메뉴
@@ -1971,7 +1996,8 @@ def _wire(obs, names=None, compose=False):
     it, la, wit = obs.get("intent"), obs.get("last"), obs.get("witnessed")
     dry = obs.get("dry")
     trail = obs.get("trail") or []            # D38 궤적 — 마지막 결정 이후 일어난 일(순서). 1건이면 last 와 같다
-    if it or la or wit or dry or trail or hist:
+    away_said = obs.get("npc_away_said") or []   # p0.5.14(p0514b) 등 돌린 마을 사람에게 지목한 말의 결과 사실 — 궤적이 꺼진 판에도 온다
+    if it or la or wit or dry or trail or hist or away_said:
         M += ["", "## 네 직전 판단과 그 결과 (네 자신의 기억)"]
         if hist:
             M.append("- 최근 판단(오래된 것부터, 직전까지): " + " · ".join(_hist_item(h) for h in hist))
@@ -1997,6 +2023,8 @@ def _wire(obs, names=None, compose=False):
             M.append("- 그 결과: %s" % _last_prose(la, names))
             if la.get("bleed"):                   # 출혈(D34) — 걷는 동안 흘린 피(사실만)
                 M.append("- 걷는 동안 출혈로 피를 흘렸다 — 남은 HP %d" % la["bleed"].get("hp", 0))
+        for nm_ in away_said:                     # p0.5.14 대사 없이 세계의 사실만(⚠️문구 임시 — 사실 문장은 G.NPC_AWAY_FACT 한 곳)
+            M.append("- 네가 %s에게 건넨 말 — %s" % (nm_, G.NPC_AWAY_FACT))
         if trail and la and la.get("result") in ("wait_allies", "locked"):
             # D66(09-13): 꼬리표 판의 사각지대 수선 — '왜 안 됐나'는 꼬리표가 못 싣는다(09-11 wait_allies 진단, 파트너 "가르쳐줘야")
             M.append("- 왜 안 됐나: %s" % _last_prose(la, names))

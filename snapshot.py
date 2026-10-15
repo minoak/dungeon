@@ -27,6 +27,8 @@
                    최상위 lore_ids{scope, uid}(다음 층 일련·장비 번호). 인물 기록이 꺼진 판은 손대지 않는다(옛 피클 그대로).
       5→6(p0.5.13 경제 1a): 몸마다 골드(시작 지갑) · 의뢰 장부의 보상 받은 의뢰(paid — 옛 판에서 이미 보고한 완수는 다시 주지 않는다) ·
                    마을의 상인 선물(판매로 바뀌었다)을 걷고 상인·가게·숙소의 말을 지금 정의로 다시 읽는다(_m5_gold).
+      6→7(p0.5.14 등 돌리기): 몸에 등 돌림 표식 npc_away{'npc:<이름>': 시작 틱}이 생겼다 — 옛 몸에서 대화 장부가 상한(고정 거절 차례)인 쌍을
+                   이어간 틱(next_turn - 1)부터 등 돌림으로 올린다(_m6_away — 닫는 말의 진짜 틱은 옛 몸에 없다. 옛 규칙으로도 그 방문 동안은 거절이었다).
 LLM 0콜 · 순수 파일(이관 함수만 몸 dict·반응 원장을 고친다 — 그때 judge 를 늦게 import).
 """
 import io
@@ -38,7 +40,7 @@ import time
 
 VERSION = 2                  # 판형(위 머리글) — 옛 코드(version 1 만 읽음)가 새 스냅샷을 거절하게 하는 문
 READS = (1, 2)               # 이 코드가 읽는 판형. 1 = p0.5.2 까지(내용 판 0)
-STATE_VERSION = 6            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
+STATE_VERSION = 7            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
 PKL = "snapshot.pkl"
 META = "snapshot.json"
 
@@ -230,7 +232,21 @@ def _refresh_economy_words(d, G):
             p["about"] = d.place_story[fid]["trait"]
 
 
-MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore, 5: _m5_gold}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
+def _m6_away(snap):
+    """6→7(p0.5.14 등 돌리기): 몸마다 대화 장부 npc_talk 가 상한(dungeon_gm.NPC_REPLY_MAX — 옛 판의 고정 거절 차례)인 쌍을 등 돌림으로 —
+    npc_away{열쇠: 이어간 틱(next_turn - 1)}. 이미 표식이 있으면 그대로 · 상한 아래는 손대지 않는다 · 걸린 쌍이 없으면 칸을 만들지 않는다(제자리·한 번)."""
+    import dungeon_gm as G                        # 늦은 import — 이관이 있을 때만
+    now = max(0, int(snap.get("next_turn") or 1) - 1)
+    for b in _bodies(snap):
+        over = [k for k, n in sorted((b.get("npc_talk") or {}).items()) if int(n or 0) >= G.NPC_REPLY_MAX]
+        if over:
+            aw = b.setdefault("npc_away", {})
+            for k in over:
+                aw.setdefault(k, now)
+    return snap
+
+
+MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore, 5: _m5_gold, 6: _m6_away}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
 
 
 def state_version_of(doc):

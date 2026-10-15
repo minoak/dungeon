@@ -178,14 +178,20 @@ def _obj_note(res):
     return IA.obj_note(res)             # D89 뒤지기: 무엇이 나왔나·비었나(그 밖의 결과는 None)
 
 
+def _away_sfx(rec):
+    """p0.5.14 등 돌린 쌍에게 말을 건 결과(talk 'away')의 사실 꼬리 — 꼬리표(event_tags)·직전 결과 문장(brains._last_prose)이 같은 글을 쓴다. 아니면 빈 문자열."""
+    return (' — %s' % NPC_AWAY_FACT) if (rec or {}).get('talk') == 'away' else ''
+
+
 def _tagsfx(f):
     """오브젝트 태그 접미(D39) — ' — 말 걸어 봄 ×2 (물약 받음)'. 리모컨 라벨과 wire 시야 줄의 단일 소스(_mfact 선례).
     태그 없으면 빈 문자열(구판 문자열 그대로)."""
     t = f.get('tag') if isinstance(f, dict) else None
+    away = (' · %s' % NPC_AWAY_MARK) if (isinstance(f, dict) and f.get('away')) else ''   # p0.5.14 등 돌린 NPC — 그 사람의 관측 줄·라벨에만(obs 의 away 는 보는 사람 몫)
     if not t:
-        return ''
+        return away
     return ' — %s ×%d%s' % (t.get('verb', '?'), int(t.get('n', 0)),
-                             (' (%s)' % t['note']) if t.get('note') else '')
+                             (' (%s)' % t['note']) if t.get('note') else '') + away
 
 
 # ── 사건 사전(D40, 2026-09-06 파트너 확정 "꼬리표식으로 바꾸자·픽셀 던전 방식·위급은 4분의 1") ──
@@ -365,12 +371,13 @@ def event_tags(rec, names=None):
         elif r == 'no_effect' and rec.get('slot'):        # D56: 같거나 못한 장비 — 그대로 둠
             return [('misc', '그대로', '%s — 지금 것과 %s' % (rec.get('item', '?'), '같다' if rec.get('why') == 'same' else '못하다'))]
         elif r == 'npc_gift':
-            return [('talk', '대화', '%s: %s 받음' % (rec.get('npc', '?'), rec.get('item', '?')))]
+            return [('talk', '대화', '%s: %s 받음%s' % (rec.get('npc', '?'), rec.get('item', '?'), _away_sfx(rec)))]
         elif r == 'npc_talk':                                  # p0.5.10(설계 X10): 대사는 들은 말로만 온다 — 꼬리표엔 누구와 말했는지만
-            return [('talk', '대화', str(rec.get('npc', '?')))]
+            return [('talk', '대화', str(rec.get('npc', '?')) + _away_sfx(rec))]   # p0.5.14 등 돌림이면 결과 사실 한 마디
         elif r == 'npc_report':                                # D69 귀환 보고 — 원정의 끝
-            return [('talk', '보고', '%s: 완수 %d·미완 %d%s' % (rec.get('npc', '?'), len(rec.get('done') or []), len(rec.get('undone') or []),
-                                                            (' · 보상 %d골드' % rec['reward']) if rec.get('reward') else ''))]   # p0.5.13 보상(있을 때만)
+            return [('talk', '보고', '%s: 완수 %d·미완 %d%s%s' % (rec.get('npc', '?'), len(rec.get('done') or []), len(rec.get('undone') or []),
+                                                              (' · 보상 %d골드' % rec['reward']) if rec.get('reward') else '',   # p0.5.13 보상(있을 때만)
+                                                              _away_sfx(rec)))]
         elif r == 'quest_accepted':                            # D69 의뢰 맡음
             return [('quest', '의뢰 맡음', str(rec.get('title') or rec.get('quest') or '?'))]
         elif r == 'quest_already':
@@ -620,10 +627,17 @@ PARTY_LEAVE_ANYWHERE = True      # 탈퇴는 어디서나(⚠️임시 가정 �
 NPC_REPLY_MAX = 3                # D93(09-20) NPC 되받기 — 같은 캐릭터-NPC 쌍이 한 번의 마을 방문(봇 dict 수명) 동안 되받는 말의 상한(⚠️임시 가정 — 두뇌 콜 상한이기도 하다).
 #   캐릭터가 다시 말해야만 다시 답한다(NPC 가 먼저 잇지 않는다 = 연쇄 핑퐁 없음). 세는 곳은 러너(bot['npc_talk']) — 엔진은 숫자만 든다.
 #   p0.5.10 신원 ID-2(DECISIONS 10-12 'NPC 대화 피로'): 되받기만이 아니라 **대화 세 길(use 말 걸기·자동 접근 도착·되받기)이 한 장부**를 센다.
-#   MAX-1 번째 대답 = 닫는 말(한 번) · 그 뒤 말을 걸면 고정 거절(0콜) · 다음 마을 방문(새 봇 dict)에 풀린다. use 의 판정(선물·보고)은 막지 않는다.
+#   MAX-1 번째 대답 = 닫는 말(한 번) · 그 뒤 그 쌍은 등 돌림(p0.5.14 — 아래) · 다음 마을 방문(새 봇 dict)에 풀린다. use 의 판정(선물·보고)은 막지 않는다.
 NPC_TALK_RESULTS = ('npc_talk', 'npc_gift', 'npc_report')   # p0.5.10: 마을 NPC 에게 말을 건 결과(대화 장부가 세는 use 결과)
 NPC_LINE_CLOSE = "이야기는 이쯤 하지. 나도 할 일이 있어서."   # p0.5.10 닫는 말 — 두뇌가 꺼졌거나 실패한 마지막 대답(정의 line_close 가 없을 때). ⚠️문구 임시(민옥 교정 대기)
-NPC_LINE_BUSY = "지금은 바쁘네."                              # p0.5.10 고정 거절 — 상한 뒤 말을 걸면(0콜, 정의 line_busy 가 없을 때). ⚠️문구 임시(민옥 교정 대기)
+# p0.5.14 등 돌리기(DECISIONS 2026-10-15 — 0.5.13 실판: 고정 거절 "지금은 바쁘네." 53회가 '나중엔 된다'로 읽혀 NPC 곁 기다리기 루프).
+#   닫는 말 뒤 그 모험가-NPC 쌍은 등 돌림 — 몸의 npc_away{'npc:<이름>': 닫는 말의 틱}. 말을 걸면(use·자동 접근 도착·지목한 말 — 세 길 전부)
+#   NPC 는 아무 말도 하지 않고(대사 0 · 두뇌 0콜) 말 건 사람에게 결과 사실 NPC_AWAY_FACT 만 · 관측의 그 NPC 줄 꼬리 NPC_AWAY_MARK(그 사람에게만).
+#   풀림: NPC_AWAY_TICKS 틱 뒤(쌍별 — 표시 없이, 장부도 다시 센다) 또는 원정을 다녀오면(새 몸 = 새 봇 dict) — 먼저 오는 쪽. 풀리는 때·남은 틱은 어디에도 싣지 않는다.
+#   NPC 가 먼저 거는 인사도 등 돌린 쌍에는 없다. 가게 거래(진열대 상품 사기 · 가게에 팔기)는 가게 피처의 일이라 무관하다. use 자체는 막지 않는다(시도는 자유, 반응이 무반응).
+NPC_AWAY_TICKS = 200             # ⚠️값 임시(민옥 10-15 '(가) 시간 해제')
+NPC_AWAY_FACT = "이 사람과는 이미 충분히 대화를 나눴다. 지금은 더 들을 이야기가 없다."   # ⚠️문구 임시(민옥 교정 예정) — 결과 사실(대사가 아니다)
+NPC_AWAY_MARK = "더 들을 이야기가 없다"                                                # ⚠️문구 임시 — 관측의 그 NPC 줄 꼬리(' · ' 뒤)
 TALK_FIELDS = ('say', 'to')      # p0.5.10(설계 §3.2 보존): 자동 접근 대기(approach)가 결정 때의 말과 그 상대를 도착까지 들고 간다
 NPC_OFFER_REPORT = '원정 보고'    # p0.5.10 Dungeon.npc_offer 의 보고 항목 이름(NPC 두뇌 장면 '와서 말을 걸면: 원정 보고를 받는다')
 START_GOLD = 5                   # p0.5.13(경제 1a, DECISIONS 10-14 §10-5) 시작 지갑 — 새 몸(판 시작)이 지니는 골드. 첫 끼니를 먹으면 다음 끼니 값이 모자란 크기.
@@ -637,6 +651,25 @@ def _said_to_npc(action, res):
     if (isinstance(res, dict) and res.get('result') in NPC_TALK_RESULTS and res.get('npc') and (action or {}).get('say')
             and (action.get('to') in (None, '', 'all') or action.get('to') == 'npc:%s' % res['npc'])):
         res['said'] = action['say']
+    return res
+
+
+def npc_away_key(name):
+    """p0.5.14 등 돌림·대화 장부의 열쇠 = NPC 사람 열쇠 'npc:<정의 이름>'(러너 npc_talk_key 와 같은 꼴)."""
+    return 'npc:%s' % name
+
+
+def npc_turned(bot, name):
+    """p0.5.14 이 사람(bot)에게 이 NPC 가 등을 돌렸나 — 판정의 단일 원천(엔진 결과 · 러너 npc_turn · 관측 줄 · 인사가 모두 이것을 본다)."""
+    return npc_away_key(name) in ((bot or {}).get('npc_away') or {})
+
+
+def npc_away_res(bot, name, res):
+    """p0.5.14 등 돌린 쌍의 말 걸기 결과 — NPC 대사(line)를 걷고 talk 'away'(제자리). 판정(선물·보고)은 그대로 둔다(10-12 'use 의 판정은 막지 않는다').
+    결과가 저장 사본(last·trail)에 실리기 전에 엔진이 고치므로 말 건 사람의 다음 관측에 사실 문장(NPC_AWAY_FACT)이 뜬다."""
+    if npc_turned(bot, name):
+        res.pop('line', None)
+        res['talk'] = 'away'
     return res
 
 
@@ -2353,6 +2386,7 @@ class Dungeon:
                              **({'about': story_[f.id]['trait']} if (story_.get(f.id) or {}).get('trait') else {}),   # D75 특징 한 줄(있을 때만)
                              **IA.obs_fact(self, f),            # D89 쓰임 부품 {use:{kind[,heal]}}(정의에 use 가 있는 피처만 — 없으면 옛 obs 그대로)
                              **self._obj_tag_obs(bot, f),       # D39 오브젝트 태그(있을 때만)
+                             **({'away': True} if (f.type == 'npc' and npc_turned(bot, f.name)) else {}),   # p0.5.14 이 사람에게 등 돌린 NPC(보는 사람 몫 — 풀리는 때는 싣지 않는다)
                              **({'new': True} if (f.type in ('weapon', 'armor')            # D57: 아무도 착용한 적 없는 장비(객체 사실,
                                                  and not getattr(f, 'worn', None)) else {})})   #   파트너 "진짜 착용한 적이 없는 것만 new")
                  for f in self.features.values()
@@ -2908,6 +2942,7 @@ class Dungeon:
                 **({'town_sight': 'zone'} if (self.town and getattr(self, 'town_sight', None) == 'zone') else {}),   # D86 시야=지금 선 구역(관측 문장용)
                 **({'notices': nts_} if (nts_ := self._notices(bot) + self._overheard_once(bot)) else {}),   # D61 게시판(문턱 근처)·신의 요청(09-13 개정: 어느 층에서나) · D90 들린 말(구역에 들어선 첫 관측 한 번 — 풀이 걸린 판에만)
                 **({'npc_ears': ne_} if (ne_ := self._npc_ears(bot)) is not None else {}),   # D93(09-20) 내 말이 들리는 마을 사람(되받기 판의 마을에만 — 말의 상대 `to` 의 재료)
+                **({'npc_away_said': nas_} if (nas_ := bot.pop('npc_away_said', None)) else {}),   # p0.5.14(p0514b) 등 돌린 NPC 에게 지목한 말의 결과 사실 — 한 번(내보내고 비운다)
                 **({'quests': qs_} if (qs_ := self._quest_obs()) else {}),        # D69(09-14) 맡은 의뢰와 진행(파티 장부 — 정보만)
                 **({'expedition_returned': True} if (self.town and getattr(self, 'expedition_returned', False)
                                                      and (getattr(self, 'quests', None) or {}).get('reported') is None) else {}),   # D69 원정에서 돌아온 마을(보고 전)
@@ -3711,7 +3746,7 @@ class Dungeon:
                 if not b['alive'] or b['won']:
                     continue
                 hailed = b.setdefault('npc_hailed', set())
-                if f.name in hailed or f.name in (b.get('npc_met') or set()):
+                if f.name in hailed or f.name in (b.get('npc_met') or set()) or npc_turned(b, f.name):   # p0.5.14 등 돌린 쌍에는 먼저 말을 걸지 않는다
                     continue
                 if max(abs(b['x'] - f.x), abs(b['y'] - f.y)) > self.NPC_HAIL_RANGE or not self.hears(b, f.x, f.y):
                     continue
@@ -5107,6 +5142,15 @@ class Dungeon:
                 return [o for o in near if o['char'] not in group]
             group |= {o['char'] for o in add}
 
+    def npc_away_said(self, bot, name):
+        """p0.5.14 등 돌린 마을 사람에게 지목해 말했다(되받기 길 — 러너 npc_turn 이 'away' 로 판정) — NPC 는 답하지 않는다(0콜).
+        말 건 사람의 다음 관측에 한 번 결과 사실(관측 npc_away_said = 그 사람 이름 목록 → '네가 <이름>에게 건넨 말 — <사실>'). 몸의 한 번 칸
+        bot['npc_away_said'] 에 적고 view() 가 내보낸 뒤 비운다 — p0514b(Codex p0514r 필수 ②): 궤적이 꺼진 판(DUNGEON_TRAIL=0)에서도 가야 해서
+        궤적이 아니라 제 칸이다. 직전 결과(last)·궤적·층 집계는 건드리지 않는다(그 틱의 제 행동 결과가 따로 있다 · 말 한마디를 대화 사건으로 세지 않는다)."""
+        said = bot.setdefault('npc_away_said', [])
+        if name not in said:
+            said.append(name)
+
     def npc_offer(self, bot, name):
         """p0.5.10 신원 ID-2 — 이 사람(bot)이 지금 이 NPC(name) 앞에서 말을 걸면 오가는 것 [(종류, 이름)] — 0콜·무변경.
         종류 ∈ report(원정 보고를 받는다 — 그때는 이것 하나) · potions · boon · weapon. 빈 목록 = 줄 물건 없음(대화만).
@@ -5214,7 +5258,7 @@ class Dungeon:
             offer = self.npc_offer(bot, f.name)  # p0.5.10: 이 말 걸기에서 오갈 것(보고·선물)의 단일 원천 — 되받기 장면의 미리보기와 같은 함수
             if offer[:1] == [('report', NPC_OFFER_REPORT)]:   # D69(09-14): 원정에서 돌아온 뒤 보고 역할 NPC(접수원)에게 말을 걸면 = 보고(원정의 끝)
                 bot.setdefault('npc_met', set()).add(f.name)
-                return self._report_quests(bot, f, bots)
+                return npc_away_res(bot, f.name, self._report_quests(bot, f, bots))   # p0.5.14 등 돌림: 판정은 그대로 · 대사만 없다(아래 셋도 같다)
             gift = (getattr(self, 'npc_gifts', None) or {}).get(f.name) or {}
             served = bot.setdefault('shop_served', set())   # 방문 단위 — 층 전이의 재스폰이 새 봇 dict 를
             met = bot.setdefault('npc_met', set())          #   만들므로 마을에 다시 오면 자동으로 비어 있다
@@ -5245,19 +5289,19 @@ class Dungeon:
                 self._witness(bots, tx, ty,      # 마을=전체 시야 — 챙기는 걸 본 사람은 안다(ally_loot 문법 그대로)
                               {'kind': 'ally_loot', 'char': bot['char'], 'what': given},
                               exclude=(bot['char'],))
-                return {**base, 'result': 'npc_gift', 'npc': f.name, 'item': given,
-                        'line': self.npc_lines.get(f.name, '…') + self._party_rule_sfx(f.name, bot),
-                        **({'blessed': True} if boon_once else {})}   # D95: 공물 판의 축복은 한 사람에게 한 번 — NPC 두뇌에게 '이번 원정 몫'이라 말하지 않게(additive)
+                return npc_away_res(bot, f.name, {**base, 'result': 'npc_gift', 'npc': f.name, 'item': given,
+                                                  'line': self.npc_lines.get(f.name, '…') + self._party_rule_sfx(f.name, bot),
+                                                  **({'blessed': True} if boon_once else {})})   # D95: 공물 판의 축복은 한 사람에게 한 번 — NPC 두뇌에게 '이번 원정 몫'이라 말하지 않게(additive)
             line_again = (getattr(self, 'npc_lines_again', None) or {}).get(f.name)
             if blessed_done:                                 # D95: 이미 축복을 받은 사람 — 두 옛 대사('한 병 드릴게요'·'살아 돌아오면 또')가
                 lb = ((getattr(self, 'npc_defs', None) or {}).get(f.name) or {}).get('line_blessed')   #   둘 다 거짓이 되는 자리.
                 if lb:                                       #   정의의 line_blessed 가 있으면 그것을 말한다(없으면 옛 길 — 세계가 거짓말하지 않게 정의가 채운다)
-                    return {**base, 'result': 'npc_talk', 'npc': f.name, 'blessed': True,
-                            'line': lb + self._party_rule_sfx(f.name, bot),
-                            **({'again': True} if again else {})}
-            return {**base, 'result': 'npc_talk', 'npc': f.name,
-                    'line': (line_again if (again and line_again) else self.npc_lines.get(f.name, '…')) + self._party_rule_sfx(f.name, bot),
-                    **({'again': True} if again else {})}    # 스트림 additive — 재방문 계측(부검용)
+                    return npc_away_res(bot, f.name, {**base, 'result': 'npc_talk', 'npc': f.name, 'blessed': True,
+                                                      'line': lb + self._party_rule_sfx(f.name, bot),
+                                                      **({'again': True} if again else {})})
+            return npc_away_res(bot, f.name, {**base, 'result': 'npc_talk', 'npc': f.name,
+                                              'line': (line_again if (again and line_again) else self.npc_lines.get(f.name, '…')) + self._party_rule_sfx(f.name, bot),
+                                              **({'again': True} if again else {})})    # 스트림 additive — 재방문 계측(부검용)
         if f and f.type == 'treasure':
             del self.features[f.id]; bot['bag'] += 1
             self._witness(bots, tx, ty,          # 전달층(D22 확장 07-29): 획득도 목격 — 사라진 보물의 행방

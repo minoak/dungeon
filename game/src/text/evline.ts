@@ -194,17 +194,18 @@ export function evLine(e: StreamEvent, f: Frame, run: Run): EvLine | null {
       const item = esc(str(e.item, '장비'));
       return L('gold', `${item} 장착 (+${num(e.bonus)})${e.dropped ? ` — ${esc(str(e.dropped))} 내려놓음` : ''}`);
     }
-    if (r === 'npc_talk') return L('notable', `${esc(str(e.npc, 'NPC'))}: 「${esc(str(e.line))}」`);   // 마을 NPC(D29·D32)
+    const npcSaid = e.talk === 'away' ? '(등 돌림 — 대사 없음)' : `「${esc(str(e.line))}」`;   // p0.5.14 등 돌린 쌍: NPC 는 말이 없다(line 없음)
+    if (r === 'npc_talk') return L('notable', `${esc(str(e.npc, 'NPC'))}: ${npcSaid}`);   // 마을 NPC(D29·D32)
     if (r === 'npc_gift') {
       const item = esc(str(e.item, '무언가'));
-      return L('gold', `${esc(str(e.npc, 'NPC'))}에게서 ${item}${eul(item)} 받았다 — 「${esc(str(e.line))}」`);
+      return L('gold', `${esc(str(e.npc, 'NPC'))}에게서 ${item}${eul(item)} 받았다 — ${npcSaid}`);
     }
     if (r === 'npc_report') {                    // D69 귀환 보고 — 원정의 끝
       const titles = obj(e.titles) || {};
       const names = (v: unknown): string => arr(v).map(x => esc(str(titles[str(x)], str(x)))).join('·');
       const done = names(e.done), undone = names(e.undone);
       const bits = [done ? `완수: ${done}` : '', undone ? `미완: ${undone}` : ''].filter(Boolean).join(' / ');
-      return L('gold', `📜 ${esc(str(e.npc, 'NPC'))}에게 원정 보고${bits ? ` (${bits})` : ''}${e.reward ? ` · 보상 ${num(e.reward)}골드` : ''} — 「${esc(str(e.line))}」`);   // p0.5.13 보상(있을 때만)
+      return L('gold', `📜 ${esc(str(e.npc, 'NPC'))}에게 원정 보고${bits ? ` (${bits})` : ''}${e.reward ? ` · 보상 ${num(e.reward)}골드` : ''} — ${npcSaid}`);   // p0.5.13 보상(있을 때만)
     }
     if (r === 'quest_accepted') return L('gold', `📜 의뢰 맡음 — 「${esc(str(e.title, '?'))}」 ${esc(str(e.goal))}${e.reward ? ` (보상: ${esc(str(e.reward))})` : ''}`);   // D69
     if (r === 'quest_already') return L('dim', `📜 이미 맡은 의뢰 — 「${esc(str(e.title, '?'))}」`);
