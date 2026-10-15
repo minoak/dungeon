@@ -427,6 +427,8 @@ def load_party(path):
                 if not isinstance(rel, dict):
                     raise ValueError("봇%s relationships 는 객체여야 함" % char)
                 out["relationships"] = {str(o): str(t)[:FREETEXT_MAX] for o, t in rel.items()}
+            out.update(G.NE.sheet_fields(s))     # p0.5.16 욕구 무게(needs{욕구: {level, why?, src?}})·취향(taste{likes, dislikes}) — 있을 때만, 틀린 칸만 버린다(판을 막지 않는다 —
+                                                #   그 욕구는 보통). 게임 프롬프트엔 안 나간다(엔진만 읽는다 · run_meta.party 에 기록)
             lk = s.get("look")                  # D37(09-06) 외형 — 뷰어 전용(엔진·프롬프트 무접촉).
             if lk is not None:                  #   미등재 파츠·hex 아님 = ValueError = 폴백 경로 그대로
                 out["look"] = sheetkit.sanitize_look(lk)
@@ -527,11 +529,26 @@ def quest_sfx(res):
     return (" \U0001f4dc " + " · ".join(bits)) if bits else ""
 
 
+def _need_events(evs):
+    """p0.5.16 욕구 사건(needs.drain — 단계 변화·기운 빠짐·from_events 채움)을 관전 로그에 한 줄씩 남기고 그대로 돌려준다(tick.events 에 붓는다)."""
+    for e in evs:
+        s = G.NE.summary(e)
+        if s:
+            event("   봇%s %s" % (e.get("bot") or e.get("char") or "?", s))
+    return evs
+
+
 def act_summary(res):
     """봇 한 행동/자동보행 결과를 한 줄 요약 — 로그/이벤트 공용."""
     t = res["type"]
     if res.get('skill_id'):
         return G.SK.summary(res)
+    if res.get("result") in G.NE.NEED_RESULTS:             # p0.5.16 욕구(먹음·못 먹음) — 형태(use i9 · 가게 사 먹기)와 무관하게 욕구 모듈이(관전용 — 수치를 싣는다)
+        s_ = G.NE.summary(res)
+        if s_:
+            return s_
+    if res.get("result") == "no_regen":                    # p0.5.16 굶주린 몸이 쉬려 함
+        return "쉬려 했지만 — %s(%s)" % (G.NE.NO_REGEN_TAIL, G.NE.name_of(res.get("need")))
     if res.get("result") == "approaching":
         return "%s %s — 실행 거리까지 접근 시작 (%d걸음)" % (t, res.get("target", "?"), res.get("len", 0))
     if res.get("result") == "no_path" and res.get("parent_action_id"):
@@ -594,8 +611,8 @@ def act_summary(res):
         if r == "resting":
             return "휴식 중 (HP%d)" % res.get("hp", 0)
         if r == "rested":
-            return "휴식 끝 — HP +%d%s" % (res.get("healed", 0),
-                                          (", 나음: " + "·".join(res["cleared"])) if res.get("cleared") else "")
+            return "휴식 끝 — HP +%d%s%s" % (res.get("healed", 0), " · 기운 안 돎" if res.get("no_regen") else "",   # p0.5.16 굶주림
+                                            (", 나음: " + "·".join(res["cleared"])) if res.get("cleared") else "")
         if r == "rest_met":
             return "휴식 중단 — 동료(%s) 시야 진입" % ", ".join(res.get("allies", []))
         if r == "wait_met":
@@ -1915,6 +1932,8 @@ def main():
                 bestiary_progress=iss.progress(),   # D53(09-12 additive): 시작 진행도 {이름:{종키:{n, deep?}}} — 심층 해금
                                            #   시점이 obs 를 바꾸므로 이것도 전제. 오프라인 소급(bestiary.replay)의 시드
                 boss=BOSS_ON,              # D65(09-13 additive): 보스층·워프게이트 여부 — 최심층 판 모양(보스·봉인 출구·귀환 종료)을 바꾸는 실행모드 메타(town 급)
+                need_defs=G.NE.defs_meta(),   # p0.5.16(additive) 욕구 정의 {욕구: {name, start, decay, full_at, full_blocks, stages{min, word, effects?}, weights?, mood{time}?, tastes?}} —
+                                           #   측정 도구가 tick.bots[].needs 만으로 단계를 다시 센다(그 판이 알던 숫자 — 정의가 뒤에 바뀌어도). 관측 무접촉
                 bestiary_defs=lore,        # D63(09-13 additive): 지식 본문 정의 {종키:{name, lore, brief?, unlock?, review?}} — 도감·수첩 창이
                                            #   캐릭터 상태(모름·등재·심층)만큼 본문을 보여 주는 데 쓴다. 판정 무접촉·정의가 뒤에 바뀌어도 그 판이 알던 본문
                 **({"bestiary_plus": True} if BESTIARY_PLUS_ON else {}),   # D92(09-20 additive, 켠 판에만) 새 몬스터 풀 — 2층부터 몹 배치가 달라지는 판 파라미터(monsters 급)
@@ -1928,6 +1947,7 @@ def main():
                         **{k: b[k] for k in ("speech", "goal", "background")   # D31(09-05) additive —
                            if b.get(k)},                                       #   커스텀 시트 원문(있을 때만)
                         **({"traits": list(b["traits"])} if b.get("traits") else {}),   # 키워드 원본
+                        **{k: sheets[b["char"]][k] for k in ("needs", "taste") if (sheets.get(b["char"]) or {}).get(k)},   # p0.5.16(additive) 시트의 욕구 무게(level·why·src)·취향 — 있을 때만(0.5.16 은 생성 호출이 없어 비어 있다 = 모두 보통)
                         **({"look": b["look"]} if b.get("look") else {}),   # D37(09-06) 외형 — 뷰어 전용
                         **({"looks": lk_} if (STRANGERS_ON and (lk_ := sheetkit.looks_line({"look": b.get("look")}))) else {})}   # p0.5.12(additive, 켠 판에만) 겉모습 한 줄의 그림 부분 — 무기·갑옷은 틱의 bots 에서 잇는다(looks_line 과 같은 ' · ')
                        for b in bots])
@@ -2101,6 +2121,8 @@ def main():
                            for x in worlds if x is not w for b in x["bots"] if b["alive"]]
         d.turn = turn       # 장부(D17) 목격 스탬프 — 판정 무관여, "언제 봤나"의 단일 원천
         away_ev = npc_away_expire(bots, turn)  # p0.5.14 등 돌림 풀림(NPC_AWAY_TICKS — 관측·인사보다 먼저) [{npc,char,ev:'end'}] — 스트림 tick.npc_away
+        G.NE.tick(d, bots, turn)               # p0.5.16 욕구 — 틱마다 줄기·굶주림의 HP 깎임·끝난 기분 조각(판단 전 — 관측의 '몸과 기분'이 이 틱의 몸)
+        need_pre = G.NE.drain(d)               #   단계 변화·기운 빠짐 사건 — 이 틱 events 의 맨 앞(행동보다 먼저 일어났다 · 관전 로그는 틱 머리 줄 다음에)
         if PENDING_ON:                        # D47 배관: 걷는 동안 들은(안 세운) 말을 이번 결정에 함께 읽힌다
             inbox = merge_inbox(pending, inbox)
         npc_hails = []                        # D71 NPC 가 먼저 거는 인사 — 같은 구역·6칸 안, 캐릭터당 NPC 당 한 번, 잡담 · D76 걸음을 멈춘다(NPC_HAIL_STOP_ON)
@@ -2183,7 +2205,7 @@ def main():
             b.pop("hailed", None)            # 표시 소비 — 한 번 들은 말로 두 번 열리지 않는다
         thinkers = "·".join(sorted(decisions)) if decisions else "-"
         event("-- tick %d --  (사고:%s / 나머지 자동보행)%s" % (turn, thinkers, ("  [%s]" % brains._floor_name(d.depth)) if PARTYFORM_ON else ""))
-        turn_events = []
+        turn_events = list(_need_events(need_pre))   # p0.5.16 틱 머리의 욕구 사건(단계 변화·기운 빠짐)이 먼저 — 관전 로그도 '-- tick N --' 줄 다음
         npc_says = []                        # D69 이번 틱 NPC 의 답 [(NPC 이름, 문장, 말 건 봇)] — 배달은 아래(잡담·정지 없음)
         npc_used = []                        # p0510b 이번 틱 use 길의 NPC 대화 [(NPC 이름, 봇, 단계 talk|close|away)] — 되받기의 두뇌 차례·쌍 중복 판정
         says = dict(social)                  # 걸으면서 한 말도 같은 배달 규칙을 탄다
@@ -2297,6 +2319,7 @@ def main():
             for o_ in overheard:
                 event("   봇%s — %s에 들어서며 들린 말: 「%s」" % (o_["char"], o_["zone"], o_["text"]))
 
+        turn_events += _need_events(G.NE.drain(d))   # p0.5.16 행동이 낳은 욕구 사건(먹어서 바뀐 단계 · from_events 채움) — 행동 결과 뒤에
         # 스트림 tick — 빈 틱 포함 매 반복(turn 연속 불변식). GM 블록 *앞*에서 emit:
         # 여기서 즉시 직렬화되므로 GM 지연·이후 dict 변경과 독립(공유 오염 방어).
         # 스냅샷은 델타 아닌 전체 — 임의 틱 시킹용. visited 만 제외(파생: 스폰+틱별 봇 좌표 누적).
@@ -2387,6 +2410,8 @@ def main():
         n["gold"] = b.get("gold", 0)              # p0.5.13 골드도 이월 — 판 안에서는 층·원정·부활을 넘어 그 몸의 지갑이다(판을 넘지는 않는다)
         n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
         n["boons"] = b.get("boons", 0)            # 축복의 물약도 이월(D74, 09-15)
+        n["rations"] = b.get("rations", 0)        # p0.5.16 휴대식도 이월 — 들고 내려간다
+        G.NE.carry(b, n)                          # p0.5.16 욕구 충족도·살아 있는 기분 조각도 그 몸을 따라간다(무게·취향은 스폰이 시트에서 다시 읽었다)
         n["str"], n["dex"] = b["str"], b["dex"]   # 축복으로 오른 능력치는 이 판 안에서 영구(D74) — 시트 초기값을 덮는다
         n["maxhp"] = b["maxhp"]                   # D95(09-20): 공물로 오른 최대 HP 도 같은 급(힘·민첩과 함께). 아무도 안 올린 판에선 시트 값 그대로 = 무변화
         for k in judge.PROF_KEYS:                 # p0.5.3 정신·숙련도 몸을 따라간다(힘·민첩과 같은 급). 이관 전 옛 몸엔 없을 수 있어 있을 때만
@@ -2454,6 +2479,7 @@ def main():
         n["notes"] = list(b.get("notes") or [])   # 쓰러진 사람은 층을 떠나며 수첩을 쓰지 못했다 — 단기 절을 닫지 않고 그대로 둔다(기억 유지)
         n["hp"] = n["maxhp"]
         n["status"], n["bleed_steps"], n["critical"] = {}, 0, False
+        G.NE.reset(n)                             # p0.5.16 다시 온전한 몸 — 욕구는 판 시작과 같은 값, 기분 조각은 걷힌다(지닌 휴대식은 그대로)
         n["last"] = {"type": "revived", "depth": dep}
         n["memories"].append({"kind": "died", "char": c, **{k: db[k] for k in ("by", "by_kind", "by_id") if k in db},   # p0.5.9 by_id = 사람이 쓰러뜨렸을 때의 열쇠(호칭은 관측이 붙인다)
                               "depth": dep, "turn": t_down})

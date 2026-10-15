@@ -4,7 +4,7 @@
   ① 정의·검증기: 장비점·잡화점 = 가게(파는 것·값·사들이는 값 = 설계 §5.2 초기 값표) · 숙소 셋 묵는 값 1·4·8 · 의뢰 보상 15·12·8 · 골드 아이템(설명·규칙) ·
      상인 둘의 선물 없음(판매로) + 맡은 가게 · 접수원·성직자 선물 그대로 · 검증기가 잘못된 가게·값·보상·맡은 가게를 거절한다
   ② 시작 지갑: 새 몸 골드 5 · 스트림 스냅샷 늘 gold · 관측 gold · '네 상태' 첫 줄 '골드 5' · 소지품 i7(골드 — 액수) · i8(보물 — 있을 때만) · 옛 관측(칸 없음)은 옛 줄
-  ③ 가게 관측: 문턱 2칸 안에서만 가게 항목(상품 g1~g5 · 사들이는 값) + 상품 대상(값·설명) · 3칸 밖·끈 판(마을 생활 꺼짐)엔 없다 · 팔기 설명은 가게 곁에서만
+  ③ 가게 관측: 문턱 2칸 안에서만 가게 항목(상품 g1~g8 — p0.5.16 주점 식사·휴대식·햇사과가 더해져 번호가 밀렸다 · 사들이는 값) + 상품 대상(값·설명) · 3칸 밖·끈 판(마을 생활 꺼짐)엔 없다 · 팔기 설명은 가게 곁에서만
   ④ 사기: 골드 모자람 = too_poor(지갑·소지 그대로) · 물약 = 골드 −10·물약 +1 · 빈손에 무기 = 바로 든다 · 들던 무기는 같은 번호로 발밑에 · 발밑이 차 있으면
      no_room(골드 그대로 — 원자적) · 3칸 밖은 못 산다(대상 소실 · 메뉴형 too_far) · 목격은 물건 이름만(값·지갑 없음)
   ⑤ 팔기: 보물 2개 = +12(amount) · 지닌 것보다 많이 = not_enough(그대로) · 골드·축복은 안 산다(no_deal) · 장비점 장검 = 15(절반) · 잡화점 물약 = 5 ·
@@ -131,8 +131,8 @@ eq_use, gs_use = ENT.comps_of("equipment_store", True)["use"], ENT.comps_of("gen
 check("① 장비점 = 가게: 단검 8 · 가죽 갑옷 12 · 장검 30 · 사슬 갑옷 45 · 보물 6에 사들임(설계 §5.2) · 끈 판(life 없이)엔 쓰임이 없다",
       eq_use["kind"] == "shop" and [(e["item"], e["price"]) for e in eq_use["sells"]] == [("dagger", 8), ("leather_armor", 12), ("longsword", 30), ("chain_mail", 45)]
       and eq_use["buys"] == {"treasure": 6} and ENT.comps_of("equipment_store", False).get("use") is None)
-check("① 잡화점 = 가게: 회복 물약 10 · 보물 6에 사들임 · 휴대식(1b)·두건(MP 8)은 아직 없다",
-      gs_use["kind"] == "shop" and [(e["item"], e["price"]) for e in gs_use["sells"]] == [("potion", 10)] and gs_use["buys"] == {"treasure": 6})
+check("① 잡화점 = 가게: 회복 물약 10 · p0.5.16 휴대식 2 · 보물 6에 사들임 · 두건(MP 8)은 아직 없다",
+      gs_use["kind"] == "shop" and [(e["item"], e["price"]) for e in gs_use["sells"]] == [("potion", 10), ("ration", 2)] and gs_use["buys"] == {"treasure": 6})
 check("① 숙소 셋의 묵는 값: 공동 숙소 1 · 일반 여관 4 · 정원 숙소 8",
       [ENT.comps_of(e, True)["use"].get("price") for e in ("shared_lodging", "ordinary_inn", "garden_inn")] == [1, 4, 8]
       and all(ENT.comps_of(e, True)["use"]["kind"] == "lodge" for e in ("shared_lodging", "ordinary_inn", "garden_inn")))
@@ -229,13 +229,13 @@ obs = d.view(b1, bots)
 shop_n = [n for n in obs.get("notices") or [] if n.get("kind") == "shop"]
 goods_t = [t for t in obs["targets"] if t["kind"] == "good"]
 w = brains._wire(obs, NAMES, compose=True)
-check("③ 장비점 곁: 가게 항목 하나(상품 g1~g4 · 사들이는 값 보물 6·단검 4·가죽 갑옷 6·장검 15·사슬 갑옷 22)",
-      len(shop_n) == 1 and [g["tid"] for g in shop_n[0]["goods"]] == ["g1", "g2", "g3", "g4"]
+check("③ 장비점 곁: 가게 항목 하나(상품 g2~g5 · 사들이는 값 보물 6·단검 4·가죽 갑옷 6·장검 15·사슬 갑옷 22)",
+      len(shop_n) == 1 and [g["tid"] for g in shop_n[0]["goods"]] == ["g2", "g3", "g4", "g5"]
       and [(x["name"], x["price"]) for x in shop_n[0]["buys"]] == [("보물", 6), ("단검", 4), ("가죽 갑옷", 6), ("장검", 15), ("사슬 갑옷", 22)], shop_n)
-check("③ 상품 대상 넷(값·가게 이름·물건 설명·다루는 규칙) · 프롬프트 줄 '[g3] 장검 (item, good) · 값 30골드 (장비점)' · 팔기 설명은 가게 항목에",
-      [t["id"] for t in goods_t] == ["g1", "g2", "g3", "g4"] and all(t.get("desc") and t.get("rule") for t in goods_t)
-      and "- [g3] 장검 (item, good) · 값 30골드 (장비점)" in w and "팔기: `target` 은 이 가게(f%d)" % EQ.id in w
-      and "  · [g1] 단검 — 8골드" in w and "사들이는 값: 보물 6골드" in w)
+check("③ 상품 대상 넷(값·가게 이름·물건 설명·다루는 규칙) · 프롬프트 줄 '[g4] 장검 (item, good) · 값 30골드 (장비점)' · 팔기 설명은 가게 항목에",
+      [t["id"] for t in goods_t] == ["g2", "g3", "g4", "g5"] and all(t.get("desc") and t.get("rule") for t in goods_t)
+      and "- [g4] 장검 (item, good) · 값 30골드 (장비점)" in w and "팔기: `target` 은 이 가게(f%d)" % EQ.id in w
+      and "  · [g2] 단검 — 8골드" in w and "사들이는 값: 보물 6골드" in w)
 far = next((x, y) for y in range(d.h) for x in range(d.w)
            if d.grid[y][x] == G.FLOOR and d.feature_at(x, y) is None and max(abs(x - EQ.x), abs(y - EQ.y)) == 3)
 put(b1, far)
@@ -247,51 +247,52 @@ d_off, bots_off = town(on=False)
 check("③ 마을 생활을 끈 판: 가게가 없다(상품 0 · 가게 항목 0) — 묵기도 없다",
       IA.shops(d_off) == [] and IA.goods(d_off) == []
       and not any(IA.notices(d_off, b) for b in bots_off))
-check("③ 상품 번호: 가게(피처 번호 순) × sells 순 — g5 = 잡화점 회복 물약 10",
-      [(g["gid"], g["name"], g["price"]) for g in IA.goods(d)] == [("g1", "단검", 8), ("g2", "가죽 갑옷", 12), ("g3", "장검", 30), ("g4", "사슬 갑옷", 45), ("g5", "회복 물약", 10)]
-      and IA.good(d, "g5")["fid"] == GS.id)
+check("③ 상품 번호: 가게(피처 번호 순) × sells 순 — g1 = 주점 식사 3(p0.5.16) · g6 = 잡화점 회복 물약 10 · g7 휴대식 2 · g8 = 채소 좌판 햇사과 1",
+      [(g["gid"], g["name"], g["price"]) for g in IA.goods(d)] == [("g1", "식사", 3), ("g2", "단검", 8), ("g3", "가죽 갑옷", 12), ("g4", "장검", 30), ("g5", "사슬 갑옷", 45),
+                                                                   ("g6", "회복 물약", 10), ("g7", "휴대식", 2), ("g8", "햇사과", 1)]
+      and IA.good(d, "g6")["fid"] == GS.id and IA.good(d, "g1")["fid"] == by_name(d, "주점").id and IA.good(d, "g8")["fid"] == by_name(d, "채소 좌판").id)
 
 # ─────────────────────────────────────────────────────────────────────────────
 print("── ④ 사기")
 put(b1, stand_by(d, GS, bots))
 b1["gold"], b1["potions"] = 5, 0
-r = act(d, b1, bots, {"type": "use", "target": "g5"})
+r = act(d, b1, bots, {"type": "use", "target": "g6"})
 check("④ 골드 5로 물약(10) = too_poor — 지갑·소지 그대로 · 실패(resolution failed) · 문장 '값이 10골드인데 지닌 골드가 5다'",
       r["result"] == "too_poor" and r["price"] == 10 and r["gold"] == 5 and b1["gold"] == 5 and b1["potions"] == 0
       and r["resolution"]["status"] == "failed" and "값이 10골드인데 지닌 골드가 5다" in brains._last_prose(r), r)
 b1["gold"] = 23
-r = act(d, b1, bots, {"type": "use", "target": "g5"})
+r = act(d, b1, bots, {"type": "use", "target": "g6"})
 check("④ 골드 23으로 물약 = bought — 골드 13 · 물약 1 · 문장 '잡화점에서 회복 물약을 샀다 — 10골드를 냈다(남은 골드 13)'",
       r["result"] == "bought" and b1["gold"] == 13 and b1["potions"] == 1 and r["potions"] == 1 and r["effect_type"] == "interact"
       and brains._last_prose(r).startswith("잡화점에서 회복 물약을 샀다 — 10골드를 냈다(남은 골드 13)"), r)
 b1["gold"] = 12
-r = act(d, b1, bots, {"type": "use", "target": "g5", "item": "i7", "amount": 1})
+r = act(d, b1, bots, {"type": "use", "target": "g6", "item": "i7", "amount": 1})
 check("④ 골드(i7)를 상품에 써도 산다 — 값은 가게가 정한다(적은 액수 1은 보지 않는다) · 골드 2 · 물약 2",
       r["result"] == "bought" and b1["gold"] == 2 and b1["potions"] == 2, r)
 put(b1, stand_by(d, EQ, bots))
 b1["weapon"], b1["gold"] = None, 40
-r = act(d, b1, bots, {"type": "use", "target": "g1"})
+r = act(d, b1, bots, {"type": "use", "target": "g2"})
 check("④ 빈손에 단검(8) = 바로 든다(+1 · 손에서 태어난 번호) · 골드 32",
       r["result"] == "bought" and b1["weapon"]["name"] == "단검" and b1["weapon"]["bonus"] == 1 and b1["gold"] == 32 and r["slot"] == "weapon", r)
 dagger_id = b1["weapon"]["id"]
-r = act(d, b1, bots, {"type": "use", "target": "g3"})
+r = act(d, b1, bots, {"type": "use", "target": "g4"})
 dropped = d.features.get(dagger_id)
 check("④ 단검을 든 채 장검(30) = 장검을 들고 단검은 같은 번호로 발밑에(바꿔 들기 문법) · 골드 2",
       r["result"] == "bought" and b1["weapon"]["name"] == "장검" and b1["gold"] == 2 and r.get("dropped") == "단검"
       and dropped is not None and (dropped.x, dropped.y) == (b1["x"], b1["y"]) and dropped.type == "weapon", r)
 b1["gold"] = 60
-r = act(d, b1, bots, {"type": "use", "target": "g1"})
+r = act(d, b1, bots, {"type": "use", "target": "g2"})
 check("④ 발밑이 차 있는데(내려놓은 단검) 무기를 사면 no_room — 골드·손 그대로(원자적)",
       r["result"] == "no_room" and b1["gold"] == 60 and b1["weapon"]["name"] == "장검", r)
 put(b1, far)
 obs_f = d.view(b1, bots)
-r_far = d._interact(b1, "g1", bots)
-check("④ 3칸 밖: 상품이 대상이 아니다(조합형 invalid_target) · 메뉴형 interact g1 = too_far · 골드 그대로",
-      CA.parse({"type": "use", "target": "g1"}, obs_f)[1] == "invalid_target" and r_far["result"] == "too_far" and b1["gold"] == 60, r_far)
-check("④ 묵은 참조(작정·자동 접근이 들고 다니는 g1)도 3칸 밖에선 실물이 아니다 — 2칸 안에선 실물",
-      CA.entity(d, b1, "g1", bots, refs={"g1": {"kind": "good", "gid": "g1", "shop": "f%d" % EQ.id}}) is None
-      and CA.entity(d, dict(b1, x=EQ.x, y=EQ.y + 2 if d.grid[EQ.y + 2][EQ.x] == G.FLOOR else EQ.y), "g1", bots,
-                    refs={"g1": {"kind": "good", "gid": "g1", "shop": "f%d" % EQ.id}}) is not None)
+r_far = d._interact(b1, "g2", bots)
+check("④ 3칸 밖: 상품이 대상이 아니다(조합형 invalid_target) · 메뉴형 interact g2 = too_far · 골드 그대로",
+      CA.parse({"type": "use", "target": "g2"}, obs_f)[1] == "invalid_target" and r_far["result"] == "too_far" and b1["gold"] == 60, r_far)
+check("④ 묵은 참조(작정·자동 접근이 들고 다니는 g2)도 3칸 밖에선 실물이 아니다 — 2칸 안에선 실물",
+      CA.entity(d, b1, "g2", bots, refs={"g2": {"kind": "good", "gid": "g2", "shop": "f%d" % EQ.id}}) is None
+      and CA.entity(d, dict(b1, x=EQ.x, y=EQ.y + 2 if d.grid[EQ.y + 2][EQ.x] == G.FLOOR else EQ.y), "g2", bots,
+                    refs={"g2": {"kind": "good", "gid": "g2", "shop": "f%d" % EQ.id}}) is not None)
 
 
 def wall_scene(wall):
@@ -320,7 +321,7 @@ for o in bots:
 put(b1, stand_by(d, GS, bots))
 put(b2, near(d, GS, bots, 1, 4, skip=[(b1["x"], b1["y"])]))
 b1["gold"] = 20
-act(d, b1, bots, {"type": "use", "target": "g5"})
+act(d, b1, bots, {"type": "use", "target": "g6"})
 seen = [x for x in (b2.get("witnessed") or []) if x.get("kind") == "ally_use"]
 check("④ 곁의 사람은 '회복 물약을 샀다'를 본다 — 값·남은 지갑은 없다",
       seen and seen[-1].get("result") == "회복 물약을 샀다" and not any(k in seen[-1] for k in ("price", "gold")), seen)
@@ -356,8 +357,8 @@ check("⑤ 궤적 꼬리표(새 키 없음 · EVENT_KINDS 안) · 관전 요약 
       all(k in G.EVENT_KINDS for k, _, _ in tags) and tags[0][1] == "팔기" and R.act_summary(r) == IA.prose(r)
       and IA.tried(d, GS) == "들러 봄" and (b1.get("obj_tags") or {}).get(GS.id, {}).get("note") == "회복 물약 1개 팖", (tags, b1.get("obj_tags")))
 r = act(d, b1, bots, {"type": "use", "target": "f%d" % GS.id})
-check("⑤ 물건 없이 가게를 쓰면 진열·값(browsed + buys) — '잡화점에 진열된 것을 구경했다: 회복 물약 10골드 · 사들이는 것: 보물 6골드, 회복 물약 5골드'",
-      r["result"] == "browsed" and IA.prose(r) == "잡화점에 진열된 것을 구경했다: 회복 물약 10골드 · 사들이는 것: 보물 6골드, 회복 물약 5골드", r)
+check("⑤ 물건 없이 가게를 쓰면 진열·값(browsed + buys) — '잡화점에 진열된 것을 구경했다: 회복 물약 10골드, 휴대식 2골드 · 사들이는 것: 보물 6골드, 회복 물약 5골드, 휴대식 1골드'(p0.5.16 휴대식)",
+      r["result"] == "browsed" and IA.prose(r) == "잡화점에 진열된 것을 구경했다: 회복 물약 10골드, 휴대식 2골드 · 사들이는 것: 보물 6골드, 회복 물약 5골드, 휴대식 1골드", r)
 
 # ─────────────────────────────────────────────────────────────────────────────
 print("── ⑥ 묵기 값")
@@ -518,11 +519,11 @@ mb = bm[0]
 put(mb, stand_by(dm, by_name(dm, "잡화점"), bm))
 mb["gold"] = 12
 opts = [o for o in dm.view(mb, bm)["options"] if o["type"] == "interact" and str(o.get("target", "")).startswith("g")]
-check("⑩ 잡화점 곁의 메뉴 줄 '사기: 회복 물약 g5 — 10골드 (잡화점)' · 가게 줄 머리 '사고팔기:'",
-      [o["label"] for o in opts] == ["사기: 회복 물약 g5 — 10골드 (잡화점)"]
+check("⑩ 잡화점 곁의 메뉴 줄 '사기: 회복 물약 g6 — 10골드 (잡화점)' · '사기: 휴대식 g7 — 2골드 (잡화점)'(p0.5.16) · 가게 줄 머리 '사고팔기:'",
+      [o["label"] for o in opts] == ["사기: 회복 물약 g6 — 10골드 (잡화점)", "사기: 휴대식 g7 — 2골드 (잡화점)"]
       and any(o["label"].startswith("사고팔기: 잡화점") for o in dm.view(mb, bm)["options"]), [o["label"] for o in opts])
-rm = dm.act(mb, {"type": "interact", "target": "g5"}, bm)
-check("⑩ 그 줄(interact g5)로 산다 — 골드 2 · 물약 1", rm["result"] == "bought" and mb["gold"] == 2 and mb["potions"] == 1, rm)
+rm = dm.act(mb, {"type": "interact", "target": "g6"}, bm)
+check("⑩ 그 줄(interact g6)로 산다 — 골드 2 · 물약 1", rm["result"] == "bought" and mb["gold"] == 2 and mb["potions"] == 1, rm)
 wm = brains._wire(dm.view(mb, bm), NAMES, compose=False)
 check("⑩ 메뉴형 관측의 가게 항목은 '상품 ID 를 use'라고 말하지 않는다(사기는 메뉴 줄)", "잡화점 f" in wm and "상품 ID 를 use" not in wm)
 
@@ -588,9 +589,9 @@ def scripted(obs, char="?"):
             f = feats.get("공동 숙소")
             return {"type": "use", "target": f["id"]} if f else {"type": "wait"}
     if st["step"] == 1:
-        if any(t.get("id") == "g5" for t in obs.get("targets") or []):
+        if any(t.get("id") == "g6" for t in obs.get("targets") or []):
             st["step"] = 2
-            return {"type": "use", "target": "g5"}
+            return {"type": "use", "target": "g6"}
         f = feats.get("잡화점")
         return {"type": "goto", "target": f["id"]} if f else {"type": "wait"}
     return {"type": "wait"}

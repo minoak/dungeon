@@ -21,10 +21,11 @@ DISTANCE_ACTIONS = ('search', 'attack', 'use', 'give', 'bond')
 PARTY = ('party_form', 'party_leave')   # D84 조각 3(2026-09-19): 파티 장부가 걸린 판(obs.partyform)에서만 읽는 동사 — COMMON 밖(옛 판의 행동 계약은 그대로).
 #   party_form + target(b<번호>) = 파티 결성(길드 구역에서 청하고 맞받는다 — 거리 무관) · party_leave(대상 없음) = 파티 탈퇴
 ITEM_SLOTS = {'i1': 'potion', 'i2': 'weapon', 'i3': 'armor', 'i4': 'boon',   # i4=축복의 물약(D74, 09-15) — 병 단위, 있을 때만 관측에
-              'i7': 'gold', 'i8': 'treasure'}   # p0.5.13(경제 1a) 골드(액수)·보물(개수) — 있을 때만 관측에. i5·i6 은 master_plan §4.3(돌·두건), i9 는 1b(휴대식) 자리
-ITEM_NAMES = {'potion': '회복 물약', 'boon': '축복의 물약', 'gold': '골드', 'treasure': '보물'}   # 세는 소지의 이름(장비는 든 것의 이름)
+              'i7': 'gold', 'i8': 'treasure',   # p0.5.13(경제 1a) 골드(액수)·보물(개수) — 있을 때만 관측에. i5·i6 은 master_plan §4.3(돌·두건)
+              'i9': 'ration'}                   # p0.5.16(경제 1b) 휴대식(개수) — use = 먹는다(자기만) · give = 하나씩
+ITEM_NAMES = {'potion': '회복 물약', 'boon': '축복의 물약', 'gold': '골드', 'treasure': '보물', 'ration': '휴대식'}   # 세는 소지의 이름(장비는 든 것의 이름)
 ITEM_TAGS = {'potion': ['item', 'consumable', 'healing'], 'boon': ['item', 'consumable', 'blessing'],
-             'gold': ['item', 'currency'], 'treasure': ['item', 'valuable']}
+             'gold': ['item', 'currency'], 'treasure': ['item', 'valuable'], 'ration': ['item', 'consumable', 'food']}
 AMOUNT_MAX = 9999          # p0.5.13 amount(골드 액수·보물 개수) 칸의 상한 — 꼴만 본다(지닌 것보다 많은지는 실행이 판정한다)
 
 # ── 행동 등록부(p0.5.5, master_plan §7.1) — COMMON 옆의 '추가 행동' ─────────────────────────────────────────────
@@ -121,7 +122,9 @@ def item_text(d, bot, ftype, name):
     df = ENT.item_def(ftype, name)
     if df is None:
         return {}
-    return {'desc': ENT.item_desc(df, **(d.bless_fill(bot) if ftype == 'boon' else {})), 'rule': ENT.item_rule(ftype)}
+    taste = list(df['comps'].get('taste') or [])   # p0.5.16 먹을 것의 취향 꼬리표(있을 때만 — '[g3] 식사 — 고기·따뜻한 것')
+    return {'desc': ENT.item_desc(df, **(d.bless_fill(bot) if ftype == 'boon' else {})), 'rule': ENT.item_rule(ftype),
+            **({'taste': taste} if taste else {})}
 
 
 def observe(d, bot, bots, obs):
@@ -503,6 +506,10 @@ def execute(d, bot, action, bots):
             if kind == 'good' and item[2]['slot'] == 'gold':           # p0.5.13 골드를 상품에 쓴다 = 산다(값은 가게가 정한다 — 적은 액수는 보지 않는다)
                 res = d._interact(bot, rid, bots)
                 return {**res, 'type': 'use', 'effect_type': 'interact'}
+            if item[2]['slot'] == 'ration':                      # p0.5.16 휴대식 — 자기만 먹는다(남에게 넘기려면 give). 가게에 쓰면 위의 팔기
+                if not ((kind == 'item' and obj['slot'] == 'ration') or (kind == 'bot' and obj is bot)):
+                    return _base(bot, action, 'no_effect', reason_code='no_item_effect')
+                return d._eat_ration(bot, bots, base=_base(bot, action, 'nothing'), item_used=item_id)
             if item[2]['slot'] == 'boon':                        # D74(09-15) 축복의 물약 — 자기에게만(남에게 넘기려면 give)
                 if not ((kind == 'item' and obj['slot'] == 'boon') or (kind == 'bot' and obj is bot)):
                     return _base(bot, action, 'no_effect', reason_code='no_item_effect')
@@ -608,9 +615,10 @@ def decorate(bot, action, result):
         status = None
     elif r in ('lost', 'no_target', 'too_far', 'no_path', 'blocked', 'nothing', 'no_potion', 'no_boon', 'no_room', 'wait_allies', 'disabled', 'skill_failed', 'skill_missed',
                'offer_short',                              # offer_short = D95 바칠 보물이 모자람(청했으나 못 한 일 — no_potion 과 같은 급)
-               'too_poor', 'no_deal', 'not_enough'):       # p0.5.13 골드가 모자람 · 가게가 사들이지 않음 · 지닌 것보다 많이 팔거나 건네려 함
+               'too_poor', 'no_deal', 'not_enough',        # p0.5.13 골드가 모자람 · 가게가 사들이지 않음 · 지닌 것보다 많이 팔거나 건네려 함
+               'need_none'):                               # p0.5.16 배가 불러 먹지 못함(청했으나 몸이 거절 — too_poor 와 같은 급)
         status = 'failed'
-    elif r in ('no_effect', 'already_beside', 'used_up') or (action['type'] == 'search' and not result.get('found')):
+    elif r in ('no_effect', 'already_beside', 'used_up', 'no_regen') or (action['type'] == 'search' and not result.get('found')):   # p0.5.16 no_regen = 굶주린 몸이 쉬려 함(변화 없음)
         status = 'no_effect'                                   # used_up = D89 once 로 다 쓴 오브젝트를 다시 씀(실패가 아니라 변화 없음)
     elif r == 'attack' and not result.get('hit'):
         status = 'failed'

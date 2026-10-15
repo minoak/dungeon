@@ -16,7 +16,10 @@ master_plan §7.1). 등록부가 비어 관측의 다른 칸·행동·상태·�
 새 해시는 p0.5.6 작업 트리 코드에서 뽑았다.
 **2026-10-15 p0.5.13 갱신**(경제 1a): 새 몸이 골드 5를 지닌다 — 관측에 gold 칸, 봇 스냅샷에 gold 칸, 조합형 소지품·대상 목록에 i7(골드) 줄이 더해졌다.
 보물을 지닌 몸의 소지품·대상 목록에 i8(보물) 줄, 보물의 다루는 규칙에 amount 한 문장도 더해졌다.
-행동·상태·난수는 그대로다 — 그것만 되돌리면(gold_v0512) p0.5.6 해시와 세 시드 모두 일치한다. 새 해시는 p0.5.13 작업 트리 코드에서 뽑았다."""
+행동·상태·난수는 그대로다 — 그것만 되돌리면(gold_v0512) p0.5.6 해시와 세 시드 모두 일치한다. 새 해시는 p0.5.13 작업 트리 코드에서 뽑았다.
+**2026-10-16 p0.5.16 갱신**(욕구 틀 + 배고픔): 새 몸이 욕구 충족도(needs — 배고픔 시작값 70)를 지닌다 — 봇 스냅샷에 needs 칸이 더해졌다
+(이 판은 러너의 틱 머리가 아니라 엔진만 돌려 줄기가 없고, 보통 단계라 관측의 '몸과 기분'·휴대식·기분 조각 칸은 나오지 않는다).
+행동·상태·난수는 그대로다 — 그 칸만 되돌리면(needs_v0515) p0.5.13 해시와 세 시드 모두 일치한다. 새 해시는 p0.5.16 작업 트리 코드에서 뽑았다."""
 import hashlib
 import json
 import os
@@ -86,11 +89,28 @@ P056_EXPECTED = {   # 2026-10-12 p0.5.6: 관측 대상의 아이템 줄에 desc�
     217: '559207f5ed5428d284428f4d9d4e5120b5233e850f51b5ec86d1fbd8de69832d',
 }
 
-EXPECTED = {   # 2026-10-15 p0.5.13(경제 1a): 몸에 골드(시작 지갑 5) — 관측 gold 칸 · 봇 스냅샷 gold 칸 · 소지품·대상 목록의 i7(골드)·i8(보물) 줄 · 보물 규칙에 amount 한 문장
+P0513_EXPECTED = {   # 2026-10-15 p0.5.13(경제 1a): 몸에 골드(시작 지갑 5) — 관측 gold 칸 · 봇 스냅샷 gold 칸 · 소지품·대상 목록의 i7(골드)·i8(보물) 줄 · 보물 규칙에 amount 한 문장(p0.5.16 회귀 비교용으로 보존)
     7: 'aaac16d346a93dfa9bfc9ed8ba98f79174519c64a301bf4718d5cbf36a28c559',
     37: 'dd2dcaea4bf9ebccc006eab9362fedc4d13b3a8e0de6c26fba8836efe9ef699b',
     217: '383309f1fba78f5581cff307dff71ff445caf72e27d20a1f83ed581c60f12e30',
 }
+
+EXPECTED = {   # 2026-10-16 p0.5.16(욕구 틀 + 배고픔): 봇 스냅샷 needs 칸(배고픔 70)
+    7: '940df4944003b0e03d253693c292cab256b88b017f8bc9dc6cb221b33a2f76c7',
+    37: '0d2557d0b3630327bab05bd60e14b794d4cfd6f52e48f3faf6161401377ed565',
+    217: 'f6744ca2ecaa372c020fd5c8868a04c4f55e89aaead7fbd6c1977001f8be745e',
+}
+
+NEED_KEYS_P0516 = ('needs', 'moods', 'rations', 'need_lines')   # p0.5.16 이 몸·관측·봇 스냅샷에 더한 칸(이 판에 나오는 것은 needs 뿐)
+
+
+def needs_v0515(value):
+    """p0.5.16 욕구 칸만 되돌린 사본 — 그 밖의 바이트(행동·상태·난수)가 p0.5.13 기준선과 같은지 보는 데 쓴다."""
+    if isinstance(value, dict):
+        return {k: needs_v0515(v) for k, v in value.items() if k not in NEED_KEYS_P0516}
+    if isinstance(value, (list, tuple)):
+        return [needs_v0515(v) for v in value]
+    return value
 
 _TREASURE_NAMES = ('보물', '숨은 보물')
 
@@ -139,12 +159,14 @@ if __name__ == '__main__':
         records = trace_records(seed)
         actual = digest(records)
         assert actual == EXPECTED[seed], (seed, actual, EXPECTED[seed])
-        nogold = gold_v0512(records)
+        p0513 = digest(needs_v0515(records))
+        assert p0513 == P0513_EXPECTED[seed], (seed, p0513, P0513_EXPECTED[seed])
+        nogold = gold_v0512(needs_v0515(records))
         p056 = digest(nogold)
         assert p056 == P056_EXPECTED[seed], (seed, p056, P056_EXPECTED[seed])
         p055 = digest(items_v055(nogold))
         assert p055 == P055_EXPECTED[seed], (seed, p055, P055_EXPECTED[seed])
         old = digest(schema_v04(items_v055(nogold)))
         assert old == T13C_EXPECTED[seed], (seed, old, T13C_EXPECTED[seed])
-        print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치 · 골드 칸만 되돌리면 p0.5.6 · 아이템 설명 칸까지 되돌리면 p0.5.5 · 관측 계약 문자열까지 되돌리면 t13c 기준선과 일치' % seed)
-    print('ALL PASS — verify_skill_off (3시드 × 80틱, 기준선 = 78fbe84 + D51 + D66 + t13c + p0.5.5 + p0.5.6 + p0.5.13 2026-10-15)')
+        print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치 · 욕구 칸만 되돌리면 p0.5.13 · 골드 칸까지 되돌리면 p0.5.6 · 아이템 설명 칸까지 되돌리면 p0.5.5 · 관측 계약 문자열까지 되돌리면 t13c 기준선과 일치' % seed)
+    print('ALL PASS — verify_skill_off (3시드 × 80틱, 기준선 = 78fbe84 + D51 + D66 + t13c + p0.5.5 + p0.5.6 + p0.5.13 + p0.5.16 2026-10-16)')

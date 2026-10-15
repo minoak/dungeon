@@ -1,0 +1,83 @@
+{
+  "id": "hunger",
+  "name": "배고픔",
+  "kind": "need",
+  "tags": [
+    "need",
+    "body"
+  ],
+  "comps": {
+    "need": {
+      "about": "@prompts",
+      "start": 70,
+      "decay": 4,
+      "full_at": 81,
+      "full_blocks": true,
+      "stages": {
+        "full": {
+          "min": 81,
+          "word": "배부름",
+          "line": "@prompts"
+        },
+        "normal": {
+          "min": 41,
+          "word": "보통"
+        },
+        "hungry": {
+          "min": 16,
+          "word": "배고픔",
+          "line": "@prompts"
+        },
+        "starving": {
+          "min": 0,
+          "word": "굶주림",
+          "line": "@prompts",
+          "effects": {
+            "no_regen": true,
+            "hp_drain": {
+              "every": 60,
+              "floor": 50
+            }
+          }
+        }
+      },
+      "mood": {
+        "like": {
+          "time": 120,
+          "line": "@prompts"
+        },
+        "plain": {
+          "time": 60,
+          "line": "@prompts"
+        },
+        "dislike": {
+          "time": 60,
+          "line": "@prompts"
+        }
+      },
+      "weights": {
+        "낮음": {
+          "every": 6,
+          "fill": 150,
+          "mood_time": 50
+        },
+        "높음": {
+          "every": 3,
+          "fill": 70,
+          "mood_time": 150
+        }
+      },
+      "tastes": [
+        "고기",
+        "생선",
+        "단것",
+        "과일",
+        "채소",
+        "빵",
+        "매운 것",
+        "따뜻한 것"
+      ]
+    }
+  },
+  "note": "p0.5.16(경제 1b, .orch/drafts/economy_design.md §3.3·§3.4·§3.6·§3.8.2) 첫 욕구. 숫자는 설계 초안 그대로 — 판 시작 70, 4틱마다 1(100→0 = 400틱), 81 이상 가득 참(먹기 거절), 굶주림에만 효과(쉬어도 HP 가 안 참 + 60틱마다 HP −1, 최대 HP 의 50%에서 멈춤). 무게(낮음·높음)의 숫자는 사교 예시(§3.8.2)를 옮긴 임시 값 — 0.5.16 은 모든 캐릭터가 보통이라 실판엔 닿지 않는다. 취향 어휘는 §3.6. 내성(tolerance)은 호기심 단계부터(§10-23). 문장은 말 파일(전부 민옥 교정 대기)."
+}

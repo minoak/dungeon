@@ -34,7 +34,8 @@ _HEAD = re.compile(r"^## `([^`]+)`")
 # 말 칸 판별: comps 아래 경로의 마지막 키. space.role(구역의 종류 = 식별자)·note(개발 메모)·walk(걷는 자리) 등은 말이 아니다.
 _WORD_KEYS = {"role", "persona", "trait", "history", "brief", "deep", "text", "texts", "wares", "goal", "reward", "client",
               "overheard", "speech", "background",
-              "desc", "lore"}                       # p0.5.6 아이템 — item.desc(물건 설명) · item.lore(속 — 자리만)
+              "desc", "lore",                       # p0.5.6 아이템 — item.desc(물건 설명) · item.lore(속 — 자리만)
+              "about"}                              # p0.5.16 욕구 — need.about(한 줄 뜻). 단계·기분 문장은 끝 키가 line 이라 이미 말 칸이다
 _NOT_WORDS = ("space.",)                            # 이 접두의 경로는 말이 아니다(구역 종류 id)
 
 # 사람용 설명 — (경로 끝 맞춤, 설명). 앞의 것이 이긴다. life.* 는 describe 가 꼬리를 붙인다. 말 파일 제목 줄의 줄표 뒤에 찍힌다.
@@ -82,6 +83,11 @@ DESC = [
 def describe(kind, path):
     """(종류, 경로) → 사람용 설명 한 줄. 모르는 경로면 빈 문자열(제목에 줄표가 안 붙는다)."""
     base = path[5:] if path.startswith("life.") else path
+    if kind == "need":                              # p0.5.16 욕구 — 단계 id·기분 갈래가 경로 가운데에 든다(끝 맞춤으로는 못 가른다)
+        return ("욕구의 한 줄 뜻 — 캐릭터를 만들 때 무게를 정하는 데 쓴다(게임 프롬프트엔 안 나간다)" if base == "need.about"
+                else "상태 문장 — 그 단계에 있는 동안 '몸과 기분' 줄에 뜬다(몸과 마음의 보고 · 지시·권유 없이)" if ".stages." in base
+                else "기분 조각 — 채운 뒤 정해진 틱 동안 '몸과 기분' 줄에 뜬다({what} = 먹은 것 · {what:을} = 이름 + 조사)" if ".mood." in base
+                else "")
     d = next((txt for tail, txt in DESC if base == tail or base.endswith("." + tail)), "")
     if kind == "companion" and path.startswith(("npc.", "story.")):
         d += " · 동료로 안 뽑혀 마을 주민일 때"

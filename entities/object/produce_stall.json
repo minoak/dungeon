@@ -8,13 +8,18 @@
   ],
   "comps": {
     "use": {
-      "kind": "browse",
-      "wares": "@prompts"
+      "kind": "shop",
+      "sells": [
+        {
+          "item": "apple",
+          "price": 1
+        }
+      ]
     },
     "story": {
       "trait": "@prompts",
       "history": "@prompts"
     }
   },
-  "note": "D90(2026-09-20) 마을 생활 — 마을 v4 그림 속 고정물 곁에 서는 오브젝트(배치 = art/town-v4 layout 의 life_objects, 마을 생활 스위치 판에서만). 돈·가격·매매는 없다(D69 에서 제출 뒤로 보류) — 노점 상인의 '아직 사고팔 수는 없다'와 같은 말. 이름·글·trait·history 전부 SilenceBreaker 임시 문장(2026-09-20 D90 마을 생활) — 파트너 교정 대기."
+  "note": "D90(2026-09-20) 마을 생활 — 마을 v4 그림 속 고정물 곁에 서는 오브젝트(배치 = art/town-v4 layout 의 life_objects, 마을 생활 스위치 판에서만). 이름·글·trait·history 전부 SilenceBreaker 임시 문장(2026-09-20 D90 마을 생활) — 파트너 교정 대기. 2026-10-16 p0.5.16(경제 1b): 구경(browse) → 가게(shop) — 햇사과 1골드(사는 순간 그 자리에서 먹는다 · 경제 설계 §5.2 임시 값). 옛 진열품(순무·말린 콩·절인 양배추·햇사과)과 '구경만 된다(사고팔기는 아직 없다)'는 걷었다."
 }

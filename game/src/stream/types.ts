@@ -47,6 +47,8 @@ export interface RunMeta {
   strangers?: boolean;                                                 // D85 인물 기록 판(호칭이 캐릭터마다 다르다)
   lore?: Record<Char, Record<string, LoreEntry>>;                      // p0.5.11 개인 로어북 시작 원장(인물 기록 판에만)
   item_info?: Record<string, { desc?: string; rule?: string }>;        // p0.5.12 물건 설명 사전 {"<type>:<이름>": {desc, rule}}(인물 기록 판에만)
+  need_defs?: Record<string, { name: string; start: number; decay: number; full_at: number; full_blocks: boolean;
+                               stages: Record<string, { min: number; word: string; effects?: Record<string, unknown> }>; [k: string]: unknown }>;   // p0.5.16 욕구 정의(0.5.16 부터 늘)
   [k: string]: unknown;
 }
 
@@ -58,6 +60,9 @@ export interface Bot {
   alive: boolean; won: boolean; potions?: number;
   boons?: number;                                // D74(09-15) 축복의 물약 병 수 — 있을 때만
   gold?: number;                                 // p0.5.13 골드 — 0.5.13 부터 늘 실린다(옛 판엔 없다)
+  rations?: number;                              // p0.5.16 휴대식 개수 — 있을 때만
+  needs?: Record<string, number>;                // p0.5.16 욕구 충족도 {욕구 id: 0~100} — 0.5.16 부터 늘 실린다(관전용 — 단계·숫자는 run_meta.need_defs 로 읽는다)
+  moods?: NeedMood[];                            // p0.5.16 살아 있는 기분 조각(있을 때만)
   weapon?: Gear | null; armor?: Gear | null;
   order?: string | null;                         // 'm0' 'b1' 'f2' 'exit' '@x,y' 'follow:b1' 'rest' …
   status?: string[] | null;                      // 상태 태그(둔화·출혈·중독 …)
@@ -65,6 +70,9 @@ export interface Bot {
   aware_of?: unknown[];
   [k: string]: unknown;
 }
+
+/** p0.5.16 기분 조각 — src = 욕구 id · size = like|plain|dislike · until = 끝나는 틱(그 틱부터 없다). */
+export interface NeedMood { src: string; size: string; line: string; until: number }
 
 export interface Monster {
   id: number; kind: string; x: number; y: number; hp: number; maxhp: number;
@@ -173,6 +181,7 @@ export interface StreamEvent {
   to?: unknown;                                  // walk: [x,y] / give·bond: 받는 봇 char
   reason?: string; job?: string;
   id?: string; monster?: string;                 // 몹 이벤트
+  bot?: Char; need?: string;                     // p0.5.16 욕구 사건(type 'need' — 몸의 변화라 char 대신 bot) · 욕구 결과의 욕구 id
   [k: string]: unknown;
 }
 

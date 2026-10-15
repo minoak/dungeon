@@ -57,7 +57,8 @@ life_npcs = [d for d in ENT.by_kind('npc') if d['id'] in LIFE_NPC_IDS or d['comp
 check('① 정의 로드 — 마을 v3 공간 정의(맵 9·건물 12, 이전 지도 정의 포함) + 동료 프리셋(D81 — 수는 늘어난다) + 쓰임 오브젝트(D89 — 수는 늘어난다)'
       ' + 아이템(p0.5.6 — 수는 늘어난다)',
       {d['kind'] for d in defs.values()} == set(ENT.KINDS)
-      and len(defs) - len(ENT.by_kind('companion')) - len(use_objs) - len(life_npcs) - len(item_objs) == 45 and len(ENT.by_kind('companion')) >= 3   # D92(09-20): 새 몬스터 셋(48 → 51) · p0.5.6: 아이템 여섯이 아이템 갈래로(51 → 45)
+      and len(defs) - len(ENT.by_kind('companion')) - len(use_objs) - len(life_npcs) - len(item_objs) - len(ENT.by_kind('need')) == 45 and len(ENT.by_kind('companion')) >= 3   # D92(09-20): 새 몬스터 셋(48 → 51) · p0.5.6: 아이템 여섯이 아이템 갈래로(51 → 45) · p0.5.16: 욕구 정의도 '수는 늘어난다' 갈래(꼴·동작은 verify_needs)
+      and {d['id'] for d in ENT.by_kind('need')} >= {'hunger'}
       and len(ENT.by_kind('monster')) == 6 and len(ENT.by_kind('trap')) == 3 and len(ENT.by_kind('npc')) - len(life_npcs) == 9       #   monster 3 → 6(옛 세 종 + 새 몬스터 풀 셋 — 아래 ⑨)
       and LIFE_NPC_IDS <= {d['id'] for d in life_npcs}
       and core_objs == {'exit', 'chest', 'fountain'}

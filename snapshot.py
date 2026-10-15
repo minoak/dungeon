@@ -31,6 +31,8 @@
                    이어간 틱(next_turn - 1)부터 등 돌림으로 올린다(_m6_away — 닫는 말의 진짜 틱은 옛 몸에 없다. 옛 규칙으로도 그 방문 동안은 거절이었다).
       7→8(p0.5.15 반복 신호 + 목표 칸): 몸에 연속 칸 repeat · 목표 칸 todo(적었을 때만)가 생겼다 — 옛 몸의 최근 판단 장부(history)로 연속을 다시 세운다
                    (_m7_repeat — 지난 신호 차례는 늦게 싣지 않는다 · 변화는 몰라 '달라진 것은 없다'는 붙이지 않는다). 목표 칸은 옛 몸에 없다.
+      8→9(p0.5.16 욕구 틀 + 배고픔): 몸마다 욕구 충족도 needs(정의의 시작값)·기분 조각 moods·휴대식 rations · 식사·햇사과를 팔게 된
+                   주점 주인·주점·채소 좌판·노점 상인의 말을 지금 정의로 다시 읽는다(_m8_needs). 세계의 욕구 사건 버퍼(need_log)는 getattr 기본값으로 받는다.
 LLM 0콜 · 순수 파일(이관 함수만 몸 dict·반응 원장을 고친다 — 그때 judge 를 늦게 import).
 """
 import io
@@ -42,7 +44,7 @@ import time
 
 VERSION = 2                  # 판형(위 머리글) — 옛 코드(version 1 만 읽음)가 새 스냅샷을 거절하게 하는 문
 READS = (1, 2)               # 이 코드가 읽는 판형. 1 = p0.5.2 까지(내용 판 0)
-STATE_VERSION = 8            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
+STATE_VERSION = 9            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
 PKL = "snapshot.pkl"
 META = "snapshot.json"
 
@@ -199,19 +201,23 @@ def _m5_gold(snap):
     return snap
 
 
-def _refresh_economy_words(d, G):
-    """마을 던전 하나 — ECONOMY_DEFS 의 NPC·건물 피처의 말을 지금 정의(마을 생활 판이면 life 를 얹은 것)로 다시 읽는다. 선물은 정의에 없으면 걷는다."""
+def _refresh_economy_words(d, G, defs=ECONOMY_DEFS):
+    """마을 던전 하나 — defs(기본 ECONOMY_DEFS)의 NPC·건물·오브젝트 피처의 말을 지금 정의(마을 생활 판이면 life 를 얹은 것)로 다시 읽는다. 선물은 정의에 없으면 걷는다.
+    p0.5.16: 오브젝트(마을 생활 판의 채소 좌판 같은 것)는 type 이 같은 피처의 특징·이야기(place_story)만."""
     life = bool(getattr(d, "town_life", False))
-    by_name = {G.ENT.get(e)["name"]: e for e in ECONOMY_DEFS if G.ENT.get(e)["kind"] == "npc"}
+    by_name = {G.ENT.get(e)["name"]: e for e in defs if G.ENT.get(e)["kind"] == "npc"}
+    by_type = {G.ENT.get(e)["type"]: e for e in defs if G.ENT.get(e)["kind"] == "object"}
     bdefs = getattr(d, "building_defs", None) or {}
     for fid, f in d.features.items():
-        eid = by_name.get(f.name) if f.type == "npc" else (bdefs.get(fid) if f.type == "building" else None)
-        if eid not in ECONOMY_DEFS:
+        eid = (by_name.get(f.name) if f.type == "npc" else bdefs.get(fid) if f.type == "building" else by_type.get(f.type))
+        if eid not in defs:
             continue
         comps = G.ENT.comps_of(eid, life)
         story = comps.get("story")
         if story and fid in (getattr(d, "place_story", None) or {}):
             d.place_story[fid] = dict(story)
+        if f.type not in ("npc", "building"):        # 오브젝트 — 말은 특징·이야기뿐(위에서 다시 읽었다)
+            continue
         if f.type == "npc":
             spec = G.ENT.npc(eid, life=life)
             d.npc_defs[f.name] = {k: v for k, v in spec.items() if v not in (None, [], "")}
@@ -261,7 +267,26 @@ def _m7_repeat(snap):
     return snap
 
 
-MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore, 5: _m5_gold, 6: _m6_away, 7: _m7_repeat}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
+NEED_DEFS = ("tavern_keeper", "tavern", "produce_stall", "street_vendor")   # p0.5.16 이관이 말을 새로 읽는 정의 — 식사를 팔게 된 주점(주인의 '안은 아직 준비 중'·맡은 가게) ·
+#   햇사과를 팔게 된 채소 좌판('구경만 된다') · 노점 상인('아직 값은 안 매겼어요' — 가게가 생겨 거짓이 된 말, 경제 설계 §7)
+
+
+def _m8_needs(snap):
+    """8→9(p0.5.16 욕구 틀 + 배고픔): 몸마다 욕구 충족도 needs{욕구: 시작값}(정의의 start — 옛 판의 몸은 이 순간이 '판 시작'이다) · 빈 기분 조각 moods ·
+    휴대식 rations 0 — 이미 있으면 그대로(제자리·한 번). 무게·취향은 시트에서 스폰이 읽는다(옛 시트엔 칸이 없어 모두 보통 — 몸에 칸을 만들지 않는다).
+    마을 던전마다 식사·햇사과를 팔게 된 주점 주인·주점·채소 좌판과 노점 상인의 말을 지금 정의로 다시 읽는다(NEED_DEFS — 상품·값은 피클에 없다: 정의에서 늘 다시 센다)."""
+    import dungeon_gm as G                        # 늦은 import — 이관이 있을 때만
+    for b in _bodies(snap):
+        b.setdefault("needs", {nid: int(sp["start"]) for nid, sp in G.NE.live()})
+        b.setdefault("moods", [])
+        b.setdefault("rations", 0)
+    for d in dungeons(snap):
+        if getattr(d, "town", False):
+            _refresh_economy_words(d, G, NEED_DEFS)
+    return snap
+
+
+MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore, 5: _m5_gold, 6: _m6_away, 7: _m7_repeat, 8: _m8_needs}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
 
 
 def state_version_of(doc):

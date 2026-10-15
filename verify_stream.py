@@ -64,7 +64,9 @@ KINDS = {"run_meta", "level", "tick", "descend", "end"}
 BOT_FIELDS = {"char", "job", "sex", "x", "y", "hp", "maxhp", "bag", "potions",
               "weapon", "armor",     # 장비(07-30 additive) — STREAM_FORMAT 개정과 한 몸
               "gold",                # p0.5.13 골드(additive, 늘 실린다) — STREAM_FORMAT '골드와 가게' 절과 한 몸
+              "needs",               # p0.5.16 욕구 충족도(additive, 늘 실린다) — STREAM_FORMAT '욕구와 배고픔' 절과 한 몸
               "alive", "won", "order", "aware_of"}
+BOT_OPT = {"moods", "rations"}       # p0.5.16 있을 때만 실리는 칸(살아 있는 기분 조각 · 휴대식) — 이 게이트의 판(메뉴형 던전)엔 먹을 길이 없어 보통 안 나온다
 MON_FIELDS = {"id", "kind", "x", "y", "hp", "maxhp", "ac", "atk", "dmg",
               "alive", "state", "concealed", "target", "desperate"}
 TRAP_FIELDS = {"x", "y", "kind", "name", "dc", "dmg", "hidden", "sprung"}
@@ -87,7 +89,7 @@ def audit(recs):
     viol = 0
     cov = {"trap_dmg": 0, "chest_trap": 0, "chest_loot": 0, "fountain_heal": 0,
            "fountain_harm": 0, "mon_dmg": 0, "walk_treasure": 0, "interact_treasure": 0,
-           "potion_get": 0, "drink": 0,
+           "potion_get": 0, "drink": 0, "need_drain": 0,
            "down": 0, "killed": 0, "exit_party": 0, "skipped": 0}
     prev, mon_prev = {}, {}
     for r in recs:
@@ -129,6 +131,8 @@ def audit(recs):
                             dpot[e["char"]] += 1
                         elif e.get("got") == "treasure":
                             dbag[e["char"]] += 1
+                elif t == "need" and e.get("result") == "need_drain":   # p0.5.16 굶주림 — 틱 머리에 HP −1(최대 HP 의 절반에서 멈춘다 — 사건 hp 가 깎인 뒤 값)
+                    dhp[e["bot"]] -= 1; cov["need_drain"] += 1   #   욕구 사건은 행위가 아니라 몸의 변화 — char 대신 bot(실행된 결정 = 그 char 의 이벤트 하나 규칙 그대로)
                 elif t == "drink" and e.get("result") == "drink_heal":
                     dhp[e["char"]] += e["heal"]      # 확정 완전 회복(07-17) — heal=만피까지의 결손
                     dpot[e["char"]] -= 1; cov["drink"] += 1
@@ -250,7 +254,7 @@ check("level: rooms 필드 전수 + feature.room_id 해소 가능(dangling 없�
 check("level: 매복몹(concealed) 포함 전수 노출(관전자 등급 진실)",
       all(any(m["concealed"] for m in lv["monsters"]) for lv in levels))
 check("봇 스냅샷 필드 전수(level.party + tick.bots + end.bots)",
-      all(set(b) == BOT_FIELDS
+      all(BOT_FIELDS <= set(b) <= BOT_FIELDS | BOT_OPT
           for r in levels + ticks + [end]
           for b in r.get("party", r.get("bots", []))))
 check("몹/함정/피처 스냅샷 필드 전수(level·tick 양쪽)",
@@ -346,7 +350,7 @@ check("커버리지: 원장 델타 규칙 전부 ≥1회 실발화(죽은 규칙
       all(agg.get(k, 0) > 0 for k in REQUIRED))
 check("스윕이 wiped(전멸) 결말도 커버", "wiped" in outcomes)
 print("        (커버리지: " + ", ".join("%s=%d" % (k, agg.get(k, 0)) for k in REQUIRED)
-      + " / skipped=%d)" % agg.get("skipped", 0))
+      + " / skipped=%d · need_drain=%d)" % (agg.get("skipped", 0), agg.get("need_drain", 0)))
 print("        (스윕 outcomes: %s)" % sorted(set(outcomes)))
 
 print()

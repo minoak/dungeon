@@ -22,6 +22,10 @@
         {
           "item": "treasure",
           "w": 1
+        },
+        {
+          "item": "ration",
+          "w": 1
         }
       ]
     },

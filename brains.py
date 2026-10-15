@@ -436,6 +436,7 @@ NOTE_MAX = 5             # 유지 줄 수(합의 5~7 하한) — 넘치면 오�
 NOTE_LEN = 80            # 한 줄 상한 — 수필 방지(say 160 의 절반: 기억은 말보다 압축된다)
 TODO_LEN = 80            # p0.5.15 목표 칸(응답 JSON 의 todo — 지금 하려는 일) 상한 — 넘으면 자른다(자른 사실은 남기지 않는다)
 TODO_HEAD = "할 일"      # p0.5.15 목표 칸이 관측 맨 위에 뜨는 줄의 머리 — p0515d 민옥 문구(DECISIONS 10-15 '0.5.15 문장 간소화')
+NEED_HEAD = "몸과 기분"  # p0.5.16 욕구 — '네 상태' 절의 한 줄 머리(지금 단계의 상태 문장·기분 조각). 지침의 기능 설명 한 줄과 같은 낱말 ⚠️임시(민옥 교정 대기)
 REASON_LEN = 2000        # 속마음(reason) 안전 상한 — 지침에 없다(10-11 민옥: 속마음은 동기, 길이를 강제하지 않는다 → 160 폐지).
                          #   폭주·반복 출력 방지용: 직전 속마음이 다음 판단 프롬프트('이유:')에 되실려 한 번의 폭주가 대물림되지 않게
 
@@ -1019,6 +1020,10 @@ def _last_prose(last, names=None):
     if t == "recalled":                   # D99 메인이 쓰러져 원정이 끝났다 — 함께 마을로 돌아온 동료 쪽 사실 ⚠️문구 임시
         return ("%s가 지하 %d층에서 쓰러져 원정이 끝났다. 너도 일행과 함께 마을로 돌아왔다"
                 % (_who(last.get("fell")), int(last.get("depth") or 0)))
+    if r in ("need_fill", "need_none"):    # p0.5.16 먹었다·배가 불러 못 먹었다 — 형태(use i9 · 가게 사 먹기)와 무관하게 욕구 모듈이 문장을 소유(숫자 없음) ⚠️문구 임시
+        return G.NE.prose(last)
+    if r == "no_regen":                   # p0.5.16 굶주린 몸이 쉬려 함 — 쉬어도 차지 않는다(사실만) ⚠️문구 임시
+        return "쉬려 했지만 — %s" % G.NE.NO_REGEN_TAIL
     if r == "approaching":
         return "%s — %s 실행 거리까지 접근을 시작했다" % (_tgt_name(tgt, names), t)
     if r == "no_path" and last.get("parent_action_id"):
@@ -1204,6 +1209,8 @@ def _last_prose(last, names=None):
             return "쉬는 중이다 (HP %d)" % last.get("hp", 0)
         if r == "rested":                     # 휴식 완료 — 관찰 사실만
             cl = last.get("cleared") or []
+            if last.get("no_regen"):          # p0.5.16 굶주린 몸 — HP 는 그대로, 몸 상태만 나았다 ⚠️문구 임시
+                return "쉬었다 — %s%s" % (G.NE.NO_REGEN_TAIL, (", 몸 상태는 나았다: " + "·".join(cl)) if cl else "")
             return "푹 쉬었다 — HP %d 회복%s" % (
                 last.get("healed", 0),
                 (", 몸 상태가 나았다: " + "·".join(cl)) if cl else "")
@@ -1564,6 +1571,7 @@ def _trail_prose(trail, names=None):
 _WIRE_KEYS = frozenset((
     "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "potions",
     "gold",    # p0.5.13 골드(경제 1a): '네 상태' 첫 줄
+    "rations", "need_lines",   # p0.5.16 휴대식 · 몸과 기분(경제 1b): '네 상태' 첫 줄 아래 한 줄씩
     "depth", "turn",
     "zone", "known", "witnessed", "memories", "dry", "last", "trail", "floor", "floors", "history", "dialogue",
     "order", "ascii_view", "legend",
@@ -1674,6 +1682,10 @@ def _wire(obs, names=None, compose=False):
                 (", 회복 물약 %d병" % obs["potions"]) if obs.get("potions") else "",
                 (", 축복의 물약 %d병" % obs["boons"]) if obs.get("boons") else "",   # D74(09-15) 있을 때만
                 obs.get("depth", 1)))
+    if obs.get("rations"):                       # p0.5.16 휴대식 — 있을 때만(물약 줄과 따로: 옛 첫 줄 글자를 그대로 둔다)
+        L.append("- 휴대식 %d개" % obs["rations"])
+    if obs.get("need_lines"):                    # p0.5.16 몸과 기분 — 지금 몸과 마음의 상태(상태 문장·기분 조각, 사실만 · 숫자 없음). 보통이면 줄이 없다
+        L.append("- %s: %s" % (NEED_HEAD, " ".join(obs["need_lines"])))
     if obs.get("town"):
         # 마을(D29) — 사실만: 안전·전체 가시. 여기서 뭘 할지는 캐릭터 몫(추천 안 싣는다).
         # D70(09-14 파트너 "구역 단위로 가자"): 장소는 다 알고, 사람과 목소리는 같은 구역 안에서만 — 세계의 사실(⚠️문구 임시)
@@ -2215,7 +2227,8 @@ def _wire(obs, names=None, compose=False):
             told = set()                         # p0.5.6 아이템 설명(물건 설명 + 다루는 규칙): 같은 글은 한 관측에 한 번(같은 물건 둘·같은 type 둘)
             for target in obs.get('targets', []):
                 out.append('- [%s] %s (%s)%s%s%s' % (
-                    target['id'], target.get('name', target['id']), ', '.join(target['tags']),
+                    target['id'], target.get('name', target['id']) + ((' — ' + '·'.join(target['taste'])) if target.get('taste') else ''),   # p0.5.16 먹을 것의 취향 꼬리표('식사 — 고기·따뜻한 것')
+                    ', '.join(target['tags']),
                     (' — ' + at(target)) if ('dist' in target and target['id'] not in placed) else '',
                     ((' · %d골드' if target.get('slot') == 'gold' else ' · %d개') % target['count']) if 'count' in target else '',   # p0.5.13 골드는 액수
                     (' · 값 %d골드%s' % (target['price'], (' (%s)' % target['shop']) if target.get('shop') else '')) if 'price' in target else ''))   # p0.5.13 상품

@@ -26,8 +26,17 @@
     "life": {
       "story": {
         "history": "@prompts"
+      },
+      "use": {
+        "kind": "shop",
+        "sells": [
+          {
+            "item": "meal",
+            "price": 3
+          }
+        ]
       }
     }
   },
-  "note": "role 은 관측 한 줄(SilenceBreaker 임시 문구, 2026-09-14 D69 — 파트너 문장 대기). story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). 2026-09-20 D90: life = 마을 생활 스위치 판에서만 덮어쓰는 칸(끈 판의 문장은 그대로). 쓰임은 없다(앉는 자리는 바깥 탁자 오브젝트) — 옛 history 의 '샛길 쪽 뒷문'은 마을 v4 에 샛길이 없어 뺐다. life 의 문장은 SilenceBreaker 임시 문장(2026-09-20 D90 마을 생활) — 파트너 교정 대기."
+  "note": "role 은 관측 한 줄(SilenceBreaker 임시 문구, 2026-09-14 D69 — 파트너 문장 대기). story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). 2026-09-20 D90: life = 마을 생활 스위치 판에서만 덮어쓰는 칸(끈 판의 문장은 그대로). 쓰임은 없다(앉는 자리는 바깥 탁자 오브젝트) — 옛 history 의 '샛길 쪽 뒷문'은 마을 v4 에 샛길이 없어 뺐다. life 의 문장은 SilenceBreaker 임시 문장(2026-09-20 D90 마을 생활) — 파트너 교정 대기. 2026-10-16 p0.5.16(경제 1b): 마을 생활 판의 주점은 가게(shop) — 식사 3골드(사는 순간 그 자리에서 먹는다 · 사들이는 것은 없다 · 경제 설계 §5.2 임시 값). 주인(tavern_keeper)의 npc.shop 이 이 건물이다."
 }

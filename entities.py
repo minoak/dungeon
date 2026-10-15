@@ -20,6 +20,8 @@
     (interactables.py 의 kind 별 처리), 새 오브젝트·새 건물 기능은 JSON 한 장이다(D69 결정 ② "정의의 부품이 메뉴를 낸다").
     p0.5.13(경제 1a): 돈(골드)은 가게(kind shop — 사기·팔기)와 묵기 값(lodge price)이 읽는다. 의뢰 보상은 quest.gold, NPC 가 맡은 가게는 npc.shop.
     오브젝트의 story(trait·history)는 NPC·건물과 같은 꼴 — 배치한 쪽이 place_story 에 걸면 피처 줄 끝의 한 줄(about)이 된다.
+  · 욕구(p0.5.16 경제 1b): kind need 의 comps.need(시작값·줄어드는 빠르기·단계와 상태 문장·효과·기분 조각·무게·취향 어휘) → needs.py.
+    먹을 것은 오브젝트의 satisfies{욕구: 양}·taste[꼬리표] — 휴대식(type ration, 소지 칸 i9)·그 자리에서 먹는 음식(type food). 새 욕구 = JSON 한 장.
 자리만 있고 아직 안 읽는 것: ai.start·ai.concealed(스폰 코드가 명시), item.lore(p0.5.6 — 물건의 속, 물건 search 를 설계할 때),
 loot·container·heal·consumable·exit 부품(메모 "부품은 필요할 때 하나씩"). 클라이언트 스프라이트 프레임 번호는
 game/src/assets/world.ts 가 소유 — sprite 필드는 텍스처 참조(wl-<이름>[#프레임])이고 검증은 텍스처 파일 존재까지.
@@ -35,13 +37,17 @@ import words   # D100(10-06): 말 칸은 prompts/world/ 의 말 파일 — read(
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, 'entities')
 SPRITE_DIR = os.path.join(HERE, 'game', 'src', 'assets', 'world')
-KINDS = ('monster', 'trap', 'object', 'npc', 'map', 'building', 'quest', 'companion')   # quest(D61, 09-12): 길드 게시판의 의뢰 — 정보만
+KINDS = ('monster', 'trap', 'object', 'npc', 'map', 'building', 'quest', 'companion',   # quest(D61, 09-12): 길드 게시판의 의뢰 — 정보만
+         'need')   # p0.5.16(경제 1b): 욕구 — 시간이 지나면 줄고 채우면 차는 수치 하나의 정의(아래 NEED_*, 처리는 needs.py)
 #   companion(D81, 09-17): 동료 프리셋 — 파티에 뽑히면 동료 칸의 시트(sheet), 안 뽑히면 마을 주민(npc·story, 2단계)
 COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
          'trap': {'trap', 'knowledge'},
          'object': {'equipment', 'consumable', 'loot', 'container', 'heal', 'exit', 'knowledge',
-                    'use', 'story', 'item'},     # D89(09-20): use=쓰임 부품(곁에서 쓰면 무슨 일이 나는가) · story=D75 와 같은 꼴(오브젝트의 특징 한 줄·이야기)
+                    'use', 'story', 'item',
+                    'satisfies', 'taste'},     # D89(09-20): use=쓰임 부품(곁에서 쓰면 무슨 일이 나는가) · story=D75 와 같은 꼴(오브젝트의 특징 한 줄·이야기)
          #   item=p0.5.6 아이템 표지(몸에 지닐 수 있는 것) + 물건 설명 desc(말 파일) · 속 lore(자리만) — 아래 ITEM_TYPES
+         #   satisfies·taste=p0.5.16 먹을 것 — satisfies{욕구 id: 채우는 양} · taste[취향 꼬리표](아래 _food_problems)
+         'need': {'need'},
          'npc': {'npc', 'knowledge', 'story', 'life'},   # story=D75(09-15) 장소·사람 소개(trait 한 줄·history 본문) — 도감 지식과 다른 층(해금 없음)
          'map': {'space', 'story', 'overheard'}, 'building': {'building', 'board', 'oracle', 'story', 'use', 'life'},   # D61 건물 역할 부품(메모 §4-4 [제안]): 게시판·신탁 · story=D75 · use=D89 문턱에서 쓰는 기능
          #   overheard=D90(09-20) 구역의 '들린 말' 고정 풀(메모 §4-4 "거리 분위기 '들린 말' 한 줄 고정 풀(0콜)") — 문장 목록, 마을 생활 스위치 판에서만 읽는다
@@ -79,10 +85,12 @@ USE_KINDS = {'read': ('text', 'texts', 'verb'),   # 적힌 글을 읽는다 — 
 #   무엇이 오를지는 신이 고른다(바치는 이가 지정하지 않는다). 값·후보는 상수 한 곳(interactables.OFFER_COST·OFFER_STATS)이라
 #   정의가 읽는 칸이 없다. 세계의 스위치(Dungeon.offer_on — 러너 DUNGEON_OFFER)를 켠 판에서만 쓰임이 선다(interactables.use_of).
 USE_GATED_KINDS = ('offer',)                   # 세계의 스위치 뒤에 있는 kind — 끈 판에서는 정의에 부품이 있어도 '없는 것'이다(관측·메뉴·태그·실행 한 눈)
-USE_LOOT = ('potion', 'treasure', 'nothing')   # rummage 에서 나오는 것 — 물약 수·보물 수(bag)·빈손
-SHOP_ITEM_TYPES = ('potion', 'weapon', 'armor')   # p0.5.13 가게가 팔 수 있는 아이템 type — 엔진이 산 사람의 몸에 넣는 길이 있는 것만(물약 수 · 무기 칸 · 갑옷 칸).
+USE_LOOT = ('potion', 'treasure', 'nothing',   # rummage 에서 나오는 것 — 물약 수·보물 수(bag)·빈손
+            'ration')                          # p0.5.16 휴대식(rations) — 던전 통·궤짝·항아리에 낮은 가중치로
+SHOP_ITEM_TYPES = ('potion', 'weapon', 'armor',   # p0.5.13 가게가 팔 수 있는 아이템 type — 엔진이 산 사람의 몸에 넣는 길이 있는 것만(물약 수 · 무기 칸 · 갑옷 칸).
+                   'ration', 'food')              # p0.5.16 휴대식(소지 수 rations) · 그 자리에서 먹는 음식(사는 순간 먹는다 — 몸에 들지 않는다)
 #   축복의 물약은 팔지 않는다(신의 몫 — D95), 보물은 사들이기만 한다(값나가는 물건 — 가게에서 나오면 수입원이 된다), 골드는 물건이 아니다
-SHOP_BUY_TYPES = ('treasure', 'potion', 'weapon', 'armor')   # p0.5.13 buys 에 적을 수 있는 type — 팔 수 있는 소지(골드·축복의 물약은 사들이지 않는다)
+SHOP_BUY_TYPES = ('treasure', 'potion', 'weapon', 'armor', 'ration')   # p0.5.13 buys 에 적을 수 있는 type — 팔 수 있는 소지(골드·축복의 물약은 사들이지 않는다 · p0.5.16 휴대식은 판다)
 USE_READ_VERBS = ('look',)                     # D90(09-20) read 의 동사 변형 — look = '살펴보기'(글이 아닌 것: 화단). 표현은 interactables.VERBS
 USE_RESERVED_TYPES = ('exit', 'stairs_up', 'npc', 'treasure', 'potion', 'weapon', 'armor', 'chest', 'fountain', 'grave', 'building')
 #   엔진이 이미 제 뜻으로 다루는 피처 type — 오브젝트 정의가 이 type 에 use 를 달면 거절한다(_interact 의 타입 분기가 먼저 잡아
@@ -92,7 +100,20 @@ USE_RESERVED_TYPES = ('exit', 'stairs_up', 'npc', 'treasure', 'potion', 'weapon'
 #   엔진이 몸의 소지(물약 수·축복 물약 수·모은 보물·무기 칸·갑옷 칸)에 넣는 type 만 아이템이다 — 새 아이템은 그것을 드는 엔진 코드와 함께
 #   이 목록에 든다. 그 자리에서 쓰고 끝나는 것(상자·샘·통)은 설비이고, 거기서 나와 몸으로 들어오는 것이 아이템이다.
 #   아이템 type 의 오브젝트 정의는 item 부품(물건 설명 desc — 말 파일)이 있어야 하고, 그 밖 type 은 item 부품을 달 수 없다(줍기가 거짓이 된다).
-ITEM_TYPES = ('potion', 'boon', 'treasure', 'weapon', 'armor', 'gold')   # gold = p0.5.13 골드(몸의 정수 — 받기·팔기·의뢰 보상으로 들어온다. 바닥에 놓이는 피처는 아직 없다)
+ITEM_TYPES = ('potion', 'boon', 'treasure', 'weapon', 'armor', 'gold',   # gold = p0.5.13 골드(몸의 정수 — 받기·팔기·의뢰 보상으로 들어온다. 바닥에 놓이는 피처는 아직 없다)
+              'ration', 'food')   # p0.5.16 휴대식(몸의 정수 rations, 소지 칸 i9 — 사기·뒤지기·받기) · food = 가게에서 사는 순간 그 자리에서 먹는 음식(식사·햇사과 — 몸에 들지 않는다)
+FOOD_TYPES = ('ration', 'food')   # p0.5.16 먹는 아이템 type — satisfies(채우는 욕구) 부품이 있어야 하고, 그 밖 type 에는 satisfies 를 달 수 없다(먹는 길이 없다)
+
+# p0.5.16(경제 1b, .orch/drafts/economy_design.md §3) 욕구 정의(kind need — entities/need/<id>.json 의 comps.need)의 어휘. 처리는 needs.py.
+#   단계(stages)가 없는 정의는 엔진이 건너뛴다(이름·뜻만 — 생성 호출이 무게를 미리 채우는 자리, §3.2 끝).
+NEED_KEYS = ('about', 'start', 'decay', 'full_at', 'full_blocks', 'stages', 'mood', 'weights', 'from_events', 'tastes',
+             'tolerance')   # tolerance = 내성(§3.2.1) — 검증기는 자리만 허용한다(엔진은 아직 읽지 않는다 · DECISIONS 10-15 §10-23 호기심 단계부터)
+NEED_STAGE_KEYS = ('min', 'word', 'line', 'effects')   # 단계 하나 — min(이 값 이상) · word(낱말 — 스트림·측정용, 관측에 안 나간다) · line(상태 문장 — 말 파일) · effects
+NEED_EFFECTS = ('no_regen', 'hp_drain')   # 엔진에 코드로 있는 효과만 — no_regen(쉬기·앉기·마시기·불 쬐기·묵기로 HP 가 차지 않음) · hp_drain{every 틱, floor 최대 HP 의 %}
+NEED_MOODS = ('like', 'plain', 'dislike')   # 채운 뒤 기분 조각 — 좋아하는 꼬리표가 맞음 · 맞는 게 없음 · 싫어하는 꼬리표가 맞음(좋아함보다 먼저 본다)
+NEED_LEVELS = ('낮음', '보통', '높음')      # 욕구 무게(§3.8.2) — 보통 = 정의의 decay·채움 100%·기분 시간 100%. weights 에는 낮음·높음만 적는다
+NEED_WEIGHT_KEYS = ('every', 'fill', 'mood_time')   # 등급 하나가 함께 바꾸는 셋(§10-13): 몇 틱마다 1 · 채움 % · 기분 조각 시간 %
+_NEED_FILL_RE = re.compile(r'\{what(?::(을|은|이|과))?\}')   # 기분 문장의 자리 — {what} 먹은 것 이름, {what:을} 이름 + 받침에 맞는 조사
 SHOP_RESALE = 2    # p0.5.13 가게가 제가 파는 물건을 되사는 값 = 파는 값 // 이것(절반, 내림 — 경제 설계 §5.1 '사들이는 값은 파는 값의 절반')
 ITEM_KEYS = ('desc', 'lore')    # desc = 겉(보면 아는 것 — 관측 대상 목록) · lore = 속(search 로만 드러날 것 — 자리만, 아직 아무도 안 읽는다)
 ITEM_FILL = {'bonus': '장비 보정(equipment.bonus) — equipment 부품이 있는 정의만',          # 설명 속 중괄호 자리 → 값의 출처(엔진이 채운다)
@@ -221,6 +242,105 @@ def _shop_problems(rel, use, defs_by_id):
     return out
 
 
+def _pos_int(v, lo=1, hi=None):
+    return type(v) is int and v >= lo and (hi is None or v <= hi)
+
+
+def _need_problems(rel, comps):
+    """p0.5.16 욕구 정의(comps.need)의 꼴 — 모르는 칸·단계 구간·효과 어휘·기분 문장 자리·무게 등급. 단계가 없는 정의(이름·뜻만)는 about 만 본다."""
+    nd = comps.get('need')
+    if not isinstance(nd, dict):
+        return ['%s: need 부품(객체)이 있어야 한다' % rel]
+    out = []
+    extra = set(nd) - set(NEED_KEYS)
+    if extra:
+        out.append('%s: need 가 모르는 칸 %s' % (rel, sorted(extra)))
+    if nd.get('about') is not None and not (isinstance(nd['about'], str) and nd['about'].strip()):
+        out.append('%s: need.about 는 비지 않은 문자열(생성 호출에 보이는 한 줄 뜻)' % rel)
+    if nd.get('tolerance') is not None and not isinstance(nd['tolerance'], dict):
+        out.append('%s: need.tolerance 는 객체(내성 — 자리만, 엔진은 아직 읽지 않는다)' % rel)
+    st = nd.get('stages')
+    if st is None:                                   # 이름·뜻만 있는 욕구 — 엔진이 건너뛴다(그 밖 칸이 있으면 뜻 없는 숫자라 거절)
+        rest = set(nd) - {'about', 'tolerance'}
+        if rest:
+            out.append('%s: 단계(stages)가 없는 욕구는 about·tolerance 만 둔다(엔진이 건너뛴다) — 남는 칸 %s' % (rel, sorted(rest)))
+        return out
+    for k in ('start', 'full_at'):
+        if not _pos_int(nd.get(k), 0, 100):
+            out.append('%s: need.%s 는 정수 0~100' % (rel, k))
+    if not _pos_int(nd.get('decay')):
+        out.append('%s: need.decay 는 정수≥1(몇 틱마다 1씩 줄어드나)' % rel)
+    if type(nd.get('full_blocks')) is not bool:
+        out.append('%s: need.full_blocks 는 true|false(가득 차면 채우는 것을 거절하나 — 몸에 들어가는 것만 참)' % rel)
+    if not (isinstance(st, dict) and st and all(isinstance(v, dict) for v in st.values())):
+        return out + ['%s: need.stages 는 {단계 id: {min, word, line?, effects?}}' % rel]
+    mins = []
+    for sk, sv in st.items():
+        if set(sv) - set(NEED_STAGE_KEYS):
+            out.append('%s: need.stages.%s 가 모르는 칸 %s' % (rel, sk, sorted(set(sv) - set(NEED_STAGE_KEYS))))
+        if not _pos_int(sv.get('min'), 0, 100):
+            out.append('%s: need.stages.%s.min 은 정수 0~100' % (rel, sk))
+        else:
+            mins.append(sv['min'])
+        if not (isinstance(sv.get('word'), str) and sv['word'].strip()):
+            out.append('%s: need.stages.%s.word(낱말) 가 없다' % (rel, sk))
+        if sv.get('line') is not None and not (isinstance(sv['line'], str) and sv['line'].strip() and '{' not in sv['line'] and '}' not in sv['line']):
+            out.append('%s: need.stages.%s.line 은 중괄호 없는 비지 않은 문장' % (rel, sk))
+        ef = sv.get('effects')
+        if ef is not None:
+            if not isinstance(ef, dict) or set(ef) - set(NEED_EFFECTS):
+                out.append('%s: need.stages.%s.effects 는 {%s} 중에서' % (rel, sk, '|'.join(NEED_EFFECTS)))
+            else:
+                if 'no_regen' in ef and ef['no_regen'] is not True:
+                    out.append('%s: need.stages.%s.effects.no_regen 은 true' % (rel, sk))
+                hd = ef.get('hp_drain')
+                if hd is not None and not (isinstance(hd, dict) and set(hd) == {'every', 'floor'} and _pos_int(hd['every']) and _pos_int(hd['floor'], 1, 100)):
+                    out.append('%s: need.stages.%s.effects.hp_drain 은 {every: 정수≥1(틱), floor: 정수 1~100(최대 HP 의 %%에서 멈춘다)}' % (rel, sk))
+                if ef and not sv.get('line'):
+                    out.append('%s: need.stages.%s 에 효과가 있으면 그 효과를 말하는 상태 문장(line)이 있어야 한다' % (rel, sk))
+    if mins and (0 not in mins or len(set(mins)) != len(mins)):
+        out.append('%s: need.stages 의 min 은 서로 달라야 하고 0 이 하나 있어야 한다(모든 값이 한 단계에 든다)' % rel)
+    md = nd.get('mood')
+    if md is not None:
+        if not (isinstance(md, dict) and set(md) <= set(NEED_MOODS) and 'plain' in md):
+            out.append('%s: need.mood 는 {%s}(plain 은 꼭) → {time, line}' % (rel, '|'.join(NEED_MOODS)))
+        else:
+            for mk, mv in md.items():
+                if not (isinstance(mv, dict) and set(mv) == {'time', 'line'} and _pos_int(mv['time']) and isinstance(mv['line'], str) and mv['line'].strip()):
+                    out.append('%s: need.mood.%s 는 {time: 정수≥1(틱), line: 문장}' % (rel, mk))
+                elif '{' in _NEED_FILL_RE.sub('', mv['line']) or '}' in _NEED_FILL_RE.sub('', mv['line']):
+                    out.append('%s: need.mood.%s.line 의 자리는 {what}·{what:을|은|이|과} 뿐이다' % (rel, mk))
+    wt = nd.get('weights')
+    if wt is not None:
+        if not (isinstance(wt, dict) and set(wt) <= {'낮음', '높음'}):
+            out.append('%s: need.weights 는 {낮음|높음: {every, fill, mood_time}}(보통 = decay·100·100 이라 적지 않는다)' % rel)
+        else:
+            for lv, w in wt.items():
+                if not (isinstance(w, dict) and set(w) == set(NEED_WEIGHT_KEYS) and all(_pos_int(w[k]) for k in NEED_WEIGHT_KEYS)):
+                    out.append('%s: need.weights.%s 는 {every: 틱≥1, fill: %%≥1, mood_time: %%≥1}' % (rel, lv))
+    fe = nd.get('from_events')
+    if fe is not None and not (isinstance(fe, list) and all(isinstance(e, dict) and set(e) == {'event', 'amount'} and isinstance(e['event'], str)
+                                                            and e['event'] and _pos_int(e['amount'], 1, 100) for e in fe)):
+        out.append('%s: need.from_events 는 [{event: 행동 결과 이름(result), amount: 정수 1~100}]' % rel)
+    tt = nd.get('tastes')
+    if tt is not None and not (isinstance(tt, list) and all(isinstance(t, str) and t.strip() for t in tt) and len(set(tt)) == len(tt)):
+        out.append('%s: need.tastes 는 서로 다른 꼬리표 목록(취향 어휘)' % rel)
+    return out
+
+
+def _food_problems(rel, d, comps):
+    """p0.5.16 먹을 것 — 먹는 type(FOOD_TYPES)은 satisfies 가 있어야 하고 그 밖 type 은 달 수 없다 · taste 는 satisfies 와 함께.
+    욕구 id 가 단계 있는 정의인지·꼬리표가 어휘 안인지는 2차(_problems 끝)가 본다."""
+    sat, taste, typ, out = comps.get('satisfies'), comps.get('taste'), d.get('type'), []
+    if (typ in FOOD_TYPES) != (sat is not None):
+        out.append('%s: type %r — 먹는 type(%s)만 satisfies(채우는 욕구)가 있고, 있어야 한다' % (rel, typ, '|'.join(FOOD_TYPES)))
+    if sat is not None and not (isinstance(sat, dict) and sat and all(isinstance(k, str) and _pos_int(v, 1, 100) for k, v in sat.items())):
+        out.append('%s: satisfies 는 {욕구 id: 정수 1~100}' % rel)
+    if taste is not None and (sat is None or not (isinstance(taste, list) and all(isinstance(t, str) and t.strip() for t in taste))):
+        out.append('%s: taste 는 꼬리표 목록이고 satisfies 가 있는 정의에만' % rel)
+    return out
+
+
 # D90(2026-09-20) 마을 생활 부품 life{<부품 이름>: {덮어쓸 칸}} — 마을 생활 스위치(러너 DUNGEON_TOWN_LIFE)를 켠 판에서만 읽는다.
 #   왜: 건물 아홉 동의 '…서비스는 아직 준비 중이다', 옛 상인의 '아직 손님 받을 준비가 안 됐어' 같은 문장은 켠 판에서 거짓이 된다.
 #   끈 판은 옛 판과 바이트가 같아야 하므로 원래 칸은 그대로 두고, 켠 판용 문장·쓰임을 이 부품에 따로 둔다(comps_of 가 합친다).
@@ -256,6 +376,7 @@ def _problems(pairs, root):
     companion_names = []                             # D81 2차 검사 재료(동료 이름 — 파티 안에서 이름이 곧 열쇠라 서로 달라야 한다)
     gift_weapons, weapon_names = [], set()           # p0.5.6 G6 2차 검사 재료(마을 인물이 건네는 무기 이름 · 무기 정의 이름)
     shops, npc_shops = [], []                        # p0.5.13 2차 검사 재료(가게의 상품 · NPC 가 맡은 가게)
+    foods = []                                       # p0.5.16 2차 검사 재료(먹을 것의 satisfies·taste)
     for path, d in pairs:
         rel = os.path.relpath(path, root)
         stem = os.path.splitext(os.path.basename(path))[0]
@@ -328,8 +449,13 @@ def _problems(pairs, root):
             out.append('%s: object 는 type(엔진 피처 type) 필요' % rel)
         if kind == 'object':                                 # p0.5.6 아이템 표지·설명(G1~G4)
             out.extend(_item_problems(rel, d, comps))
+            out.extend(_food_problems(rel, d, comps))        # p0.5.16 먹을 것(satisfies·taste)
+            if comps.get('satisfies') is not None:
+                foods.append((rel, comps))
             if d.get('type') == 'weapon' and (comps.get('equipment') or {}).get('slot') == 'weapon':
                 weapon_names.add(d.get('name'))
+        if kind == 'need':                                   # p0.5.16 욕구 정의
+            out.extend(_need_problems(rel, comps))
         if kind in ('npc', 'companion'):                     # G6 재료 — 선물 무기는 이름으로 건너간다(엔진은 GEAR_KINDS 에서 보정을 푼다)
             gw = ((comps.get('npc') or {}).get('gift') or {}).get('weapon')
             if gw is not None:
@@ -454,6 +580,15 @@ def _problems(pairs, root):
         kinds_ = {((bc.get('use') or {}).get('kind')), (((bc.get('life') or {}).get('use') or {}).get('kind') if isinstance(bc.get('life'), dict) else None)}
         if not bd or bd.get('kind') != 'building' or not (kinds_ & {'shop', 'lodge'}):
             out.append('%s: npc.shop %r 는 쓰임(shop·lodge)이 있는 건물 정의가 아니다' % (rel, sid))
+    needs_ = {d.get('id'): ((d.get('comps') or {}).get('need') or {}) for _, d in pairs if isinstance(d, dict) and d.get('kind') == 'need'}
+    tastes_ = {t for nd in needs_.values() if isinstance(nd, dict) for t in (nd.get('tastes') or []) if isinstance(t, str)}
+    for rel, comps in foods:                         # 2차(p0.5.16): 먹을 것이 채우는 욕구 = 단계가 있는 욕구 정의 · 꼬리표 = 욕구 정의들의 취향 어휘 안
+        for nid in (comps.get('satisfies') if isinstance(comps.get('satisfies'), dict) else ()):
+            if not (needs_.get(nid) or {}).get('stages'):
+                out.append('%s: satisfies 의 %r 는 단계가 있는 욕구 정의가 아니다' % (rel, nid))
+        for t in (comps.get('taste') if isinstance(comps.get('taste'), list) else ()):
+            if t not in tastes_:
+                out.append('%s: taste 의 %r 는 취향 어휘(욕구 정의의 tastes)에 없다' % (rel, t))
     return out
 
 
@@ -671,6 +806,11 @@ def npc(eid, life=False):
 def companions():
     """동료 프리셋 {id: 정의} — 파일 이름(id) 순(D81). 시트는 sheetkit.build_companion_sheet(정의)로 조립한다."""
     return {d['id']: d for d in sorted(by_kind('companion'), key=lambda d: d['id'])}
+
+
+def need_defs():
+    """p0.5.16 욕구 정의 전부 [정의] — id 순(결정론). 단계가 없는 정의(이름·뜻만)도 든다 — 엔진이 쓰는 것만 고르는 건 needs.live()."""
+    return sorted(by_kind('need'), key=lambda d: d['id'])
 
 
 def lore(plus=True):

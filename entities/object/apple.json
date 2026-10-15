@@ -1,0 +1,22 @@
+{
+  "id": "apple",
+  "name": "햇사과",
+  "kind": "object",
+  "type": "food",
+  "tags": [
+    "object",
+    "item"
+  ],
+  "comps": {
+    "item": {
+      "desc": "@prompts"
+    },
+    "satisfies": {
+      "hunger": 20
+    },
+    "taste": [
+      "과일"
+    ]
+  },
+  "note": "p0.5.16(경제 1b) 채소 좌판의 햇사과 — 사는 순간 그 자리에서 먹는다(type food). 1골드, 배고픔 +20(경제 설계 §4.1·§5.2 — 마지막 한 닢으로도 먹을 수 있게, 임시 값). 설명은 SilenceBreaker 임시 문장."
+}

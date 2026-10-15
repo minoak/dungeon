@@ -28,13 +28,16 @@
                   practice→practiced · rummage→rummaged{got[,potions|bag,quest]} · lodge→lodged{heal,hp,cleared[,paid,gold]} | too_poor{price,gold} ·
                   warm→warmed{heal,hp} · offer→offered{cost,bag,stat,value[,hp]} | offer_short{cost,bag} · once 로 다 쓴 뒤→used_up ·
                   shop→browsed{wares,buys}(물건 없이 쓰면 진열과 값) · buy(g<n>)→bought{what,price,gold,…}|too_poor|no_room ·
-                  sell(item)→sold{what,n,price,got,gold,…}|no_deal|not_enough
+                  sell(item)→sold{what,n,price,got,gold,…}|no_deal|not_enough ·
+                  p0.5.16 그 자리에서 먹는 음식(type food)의 buy → need_fill{via:'buy',need,what,price,gold,…}|need_none{why:'full'}(사지 않는다)|too_poor ·
+                  쉬기 효과가 막힌 몸(needs.no_regen — 굶주림)의 sit·drink·warm·lodge → heal 0 + no_regen{욕구 id}(묵기는 몸 상태는 낫는다)
   (뒤져서 나온 것의 칸 이름이 `found` 가 아니라 `got` 인 까닭: `found` 는 수색 결과의 [{kind,name…}] 목록 계약이라
    tags.py·bestiary.py 가 모든 이벤트의 found 를 목록으로 돈다 — 문자열을 실으면 그 집계기들이 죽는다.)
 """
 import hashlib
 
 import entities as ENT
+import needs as NE
 
 # kind → 표현 재료. label=메뉴형 줄 머리 · tag=조합형 대상의 사실 태그 · tried=D39 오브젝트 태그의 '~해 봄' · seen=목격(ally_use)의 괄호 한 마디
 # ⚠️문구 임시 — 전부 SilenceBreaker 초안(파트너 문장 대기)
@@ -67,11 +70,13 @@ RESULTS = ('read', 'sat', 'drank', 'browsed', 'practiced', 'rummaged', 'lodged',
            'bought', 'sold', 'too_poor', 'no_deal', 'not_enough', 'no_room')   # p0.5.13 가게·묵기 값 — 샀다 / 팔았다 / 골드가 모자랐다 /
 #   이 가게는 그것을 사들이지 않는다 / 판다는 개수만큼 지니지 않았다 / 산 장비와 바꿔 들 때 들던 것을 내려놓을 발밑이 없다
 SHOP_RANGE = 2       # p0.5.13 상품(g<n>)이 관측 대상이 되고 살 수 있는 거리 — 가게 피처(문턱)에서 체비셰프 칸 수(게시판 의뢰의 range 2 와 같은 자)
-COUNTED = {'treasure': 'bag', 'potion': 'potions', 'boon': 'boons', 'gold': 'gold'}   # 몸의 정수로 세는 소지 type → 몸 칸
+COUNTED = {'treasure': 'bag', 'potion': 'potions', 'boon': 'boons', 'gold': 'gold',   # 몸의 정수로 세는 소지 type → 몸 칸
+           'ration': 'rations'}                                                     # p0.5.16 휴대식(소지 칸 i9)
 AMOUNT_SLOTS = ('gold', 'treasure')   # p0.5.13 개수(amount)를 받는 소지 — 골드(액수)·보물(개수). 물약·축복은 지금처럼 한 병씩
 _HEAL_KINDS = {'sit': 'sat', 'drink': 'drank', 'warm': 'warmed'}
-_GOT_KR = {'potion': '물약', 'treasure': '보물'}
-_GOT_SEEN = {'potion': '물약을 꺼냈다', 'treasure': '보물을 꺼냈다', 'nothing': '빈손이었다'}
+_GOT_KR = {'potion': '물약', 'treasure': '보물', 'ration': '휴대식'}
+_GOT_SEEN = {'potion': '물약을 꺼냈다', 'treasure': '보물을 꺼냈다', 'nothing': '빈손이었다',
+             'ration': '휴대식을 꺼냈다'}   # p0.5.16 ⚠️문구 임시
 
 # ── D95(2026-09-20) 공물 — 파트너 "원정을 돌고 나서 보물이나 특정 재물을 신에게 바치면 신이 모험가의 능력치를 올려줄수 있어야 한다고
 #    생각해. 캐릭터를 관리하는건 신의 몫으로 두는거지" / "결산을 통해서 얻은 자원들로 캐릭터 성장에 이용해야 한다".
@@ -82,7 +87,8 @@ _STAT_KR = {'str': '힘', 'dex': '민첩', 'maxhp': '최대 HP'}         # dunge
 _STAT_OBJ = {'str': '힘을', 'dex': '민첩을', 'maxhp': '최대 HP 를'}   # 목적격 — 라틴 글자 뒤는 띄어 쓴다('HP 가 전부 돌아오고' 관례)
 _OFFER_SEEN = {'offered': '신전에 보물을 바쳤다', 'offer_short': '바치려다 그만두었다'}   # ⚠️문구 임시 — 곁의 사람이 보는 한 마디(ally_use 괄호)
 # p0.5.13 가게·묵기 값의 목격 한 마디(ally_use 괄호) — 무엇을 사고팔았나는 보이고, 얼마를 냈는지·남은 지갑은 보이지 않는다. ⚠️문구 임시
-_TRADE_SEEN = {'bought': '%s 샀다', 'sold': '%s 팔았다', 'buy_short': '사려다 그만두었다', 'lodge_short': '묵으려다 그만두었다'}
+_TRADE_SEEN = {'bought': '%s 샀다', 'sold': '%s 팔았다', 'buy_short': '사려다 그만두었다', 'lodge_short': '묵으려다 그만두었다',
+               'ate': '%s 사 먹었다', 'full': '사 먹으려다 그만두었다'}   # p0.5.16 그 자리에서 먹는 음식 — 먹었다·안 먹었다는 보이고 배가 불렀는지는 보이지 않는다
 
 _IDX = {'src': None, 'n': -1, 'by_type': {}}
 
@@ -174,7 +180,8 @@ def fact_text(fact):
         return '불을 쬐면 HP +%d (상처가 있을 때)' % heal
     if k == 'lodge':
         price = int((fact or {}).get('price') or 0)  # p0.5.13 묵는 값 — 값이 있는 숙소만 꼬리가 붙는다(⚠️문구 임시)
-        return '묵으면 HP 가 전부 돌아오고 몸 상태가 낫는다' + ((' — 값 %d골드' % price) if price else '')
+        return (('묵으면 몸 상태가 낫는다' if (fact or {}).get('no_regen')   # p0.5.16 굶주린 몸 — HP 가 돌아온다는 말을 하지 않는다(보는 사람 몫의 사실)
+                 else '묵으면 HP 가 전부 돌아오고 몸 상태가 낫는다') + ((' — 값 %d골드' % price) if price else ''))
     if k == 'offer':                             # D95 — 값·오르는 칸은 사실, 무엇이 오를지는 말하지 않는다(신이 고른다)
         return '모은 보물 %d개를 바치면 %s 중 하나가 1 오른다(무엇이 오를지는 신이 정한다)' % (
             OFFER_COST, '·'.join(_STAT_KR[s] for s in OFFER_STATS))
@@ -252,9 +259,10 @@ def handle(d, bot, f, bots=None, target_id=None):
                **({'verb': use['verb']} if use.get('verb') else {}),   # D90 동사 변형(살펴보기) — 있을 때만(문장·꼬리표가 읽는다)
                **({'page': n % len(pages) + 1, 'pages': len(pages)} if len(pages) > 1 else {})}
     elif kind in _HEAL_KINDS:
-        heal = max(0, min(_heal_of(use), bot['maxhp'] - bot['hp']))
+        nr = NE.no_regen(bot)                                  # p0.5.16 굶주림 — 쉬어도 기운이 돌아오지 않는다(상태 문장이 약속하는 규칙)
+        heal = 0 if nr else max(0, min(_heal_of(use), bot['maxhp'] - bot['hp']))
         bot['hp'] += heal
-        out = {**base, 'result': _HEAL_KINDS[kind], 'heal': heal, 'hp': bot['hp']}
+        out = {**base, 'result': _HEAL_KINDS[kind], 'heal': heal, 'hp': bot['hp'], **({'no_regen': nr} if nr else {})}
     elif kind == 'browse':
         out = {**base, 'result': 'browsed', 'wares': list(use['wares'])}
     elif kind == 'practice':
@@ -271,6 +279,9 @@ def handle(d, bot, f, bots=None, target_id=None):
             qv = d._quest_event('loot', object='treasure')     # D69: 보물은 어디서 나왔든 획득이다(상자 선례)
             if qv:
                 out['quest'] = qv
+        elif got == 'ration':                                  # p0.5.16 휴대식 — 소지 칸 i9 에 하나
+            bot['rations'] = int(bot.get('rations') or 0) + 1
+            out['rations'] = bot['rations']
         seen = _GOT_SEEN[got]
     elif kind == 'offer':                                      # D95(09-20) 공물 — 모은 보물을 내면 신이 몸의 한 칸을 올린다. 굴림 없음(결정론)
         bag = int(bot.get('bag') or 0)
@@ -290,15 +301,17 @@ def handle(d, bot, f, bots=None, target_id=None):
         if gold < price:
             out, seen = {**base, 'result': 'too_poor', 'price': price, 'gold': gold}, _TRADE_SEEN['lodge_short']
         else:
-            heal = max(0, bot['maxhp'] - bot['hp'])
-            bot['hp'] = bot['maxhp']
+            nr = NE.no_regen(bot)                              # p0.5.16 굶주림 — 묵어도 HP 는 차지 않는다(몸 상태는 낫는다 — 휴식의 소거는 그대로)
+            heal = 0 if nr else max(0, bot['maxhp'] - bot['hp'])
+            bot['hp'] += heal
             cleared = sorted(bot.get('status') or {})
             if cleared:
                 bot['status'], bot['bleed_steps'], bot['slow_beat'] = {}, 0, 0
             if price:
                 bot['gold'] = gold - price
             out = {**base, 'result': 'lodged', 'heal': heal, 'hp': bot['hp'], 'cleared': cleared,
-                   **({'paid': price, 'gold': bot['gold']} if price else {})}   # 값 없는 숙소는 옛 결과 그대로
+                   **({'paid': price, 'gold': bot['gold']} if price else {}),   # 값 없는 숙소는 옛 결과 그대로
+                   **({'no_regen': nr} if nr else {})}
     elif kind == 'shop':                                       # p0.5.13 물건 없이 가게를 쓰면 = 진열과 값을 본다(사기는 상품 ID, 팔기는 item 칸 — buy·sell)
         out = {**base, 'result': 'browsed', 'wares': ['%s %d골드' % (g['name'], g['price']) for g in goods(d) if g['fid'] == f.id],
                'buys': ['%s %d골드' % (n, p) for n, p in buy_list(use)]}
@@ -375,7 +388,7 @@ def buy_list(use):
         out.append((df['name'] if df else t, int(p)))
     for e in use.get('sells') or []:
         p = int(e['price']) // ENT.SHOP_RESALE
-        if p:
+        if p and ENT.get(e['item']).get('type') in ENT.SHOP_BUY_TYPES:   # p0.5.16 그 자리에서 먹는 음식(food)은 지닐 수 없어 되사는 값이 없다
             out.append((ENT.get(e['item'])['name'], p))
     return out
 
@@ -417,13 +430,23 @@ def buy(d, bot, gid, bots=None):
         return {**base, 'result': 'too_far'}
     base.update(what=g['name'], shop=f.name, shop_id='f%d' % f.id)
     price, gold = g['price'], int(bot.get('gold') or 0)
+    df = ENT.get(g['item'])
+    if g['type'] == 'food' and NE.full_block(bot, df):      # p0.5.16 그 자리에서 먹는 음식 — 배가 불러 들어가지 않으면 사지 않는다(값을 보기 전에 몸이 거절한다 · 돈 그대로)
+        d._witness_use(bots, f.x, f.y, [bot], f.name, 'f%d' % f.id, _TRADE_SEEN['full'])
+        return {**base, **NE.eat(d, bot, df, getattr(d, 'turn', 0), via='buy'), 'price': price, 'gold': gold}
     if gold < price:
         d._witness_use(bots, f.x, f.y, [bot], f.name, 'f%d' % f.id, _TRADE_SEEN['buy_short'])
         return {**base, 'result': 'too_poor', 'price': price, 'gold': gold}
     extra = {}
-    if g['type'] == 'potion':
-        bot['potions'] = int(bot.get('potions') or 0) + 1
-        extra['potions'] = bot['potions']
+    if g['type'] == 'food':                                    # p0.5.16 사는 순간 그 자리에서 먹는다(몸에 들지 않는다) — 결과는 need_fill(via buy)
+        bot['gold'] = gold - price
+        fill = NE.eat(d, bot, df, getattr(d, 'turn', 0), via='buy')
+        d._witness_use(bots, f.x, f.y, [bot], f.name, 'f%d' % f.id, _TRADE_SEEN['ate'] % (g['name'] + _j(g['name'], '을', '를')))
+        return {**base, **fill, 'price': price, 'gold': bot['gold']}
+    if g['type'] in ('potion', 'ration'):                      # 몸의 정수로 세는 소지(물약 · p0.5.16 휴대식)
+        key = COUNTED[g['type']]
+        bot[key] = int(bot.get(key) or 0) + 1
+        extra[key] = bot[key]
     else:                                                      # weapon · armor(ENT.SHOP_ITEM_TYPES — 검증기가 막는다)
         slot, old = g['type'], bot.get(g['type'])
         if old and d.feature_at(bot['x'], bot['y']) is not None:
@@ -451,7 +474,7 @@ def sell(d, bot, f, slot, amount=None, bots=None, target_id=None, item_id=None):
     if not price:
         return {**base, 'result': 'no_deal'}
     n = count(amount) if slot in AMOUNT_SLOTS else 1
-    have = (1 if bot.get(slot) else 0) if slot in ('weapon', 'armor') else int(bot.get(COUNTED[slot]) or 0)
+    have = (1 if bot.get(slot) else 0) if slot in ('weapon', 'armor') else int(bot.get(COUNTED[slot]) or 0)   # p0.5.16 휴대식은 한 번에 하나(amount 없음 — 물약 문법)
     if have < n:
         return {**base, 'result': 'not_enough', 'have': have, 'amount': n}
     got, extra = price * n, {}
@@ -467,7 +490,7 @@ def sell(d, bot, f, slot, amount=None, bots=None, target_id=None, item_id=None):
 
 # ── 표현 — 결과 dict 하나를 세 군데(자기 문장·궤적 꼬리표·관전 요약)가 읽는다. 전부 사실만. ⚠️문구 임시 ──
 def _hp_sfx(res):
-    return ('(HP +%d)' % res['heal']) if res.get('heal') else ''
+    return ('(HP +%d)' % res['heal']) if res.get('heal') else (' — ' + NE.NO_REGEN_TAIL) if res.get('no_regen') else ''   # p0.5.16 굶주림 — 쉬었지만 HP 가 안 찼다
 
 
 def _j(word, final, open_):
@@ -500,6 +523,7 @@ def prose(last):
     shop = last.get('shop') or '가게'                 # p0.5.13 가게 결과의 what = 사고판 물건 이름 · shop = 가게 이름
     if r == 'bought':
         tail = ((' · 소지 물약 %d병' % last['potions']) if 'potions' in last
+                else (' · 소지 휴대식 %d개' % last['rations']) if 'rations' in last   # p0.5.16 ⚠️문구 임시
                 else (' · 바로 %s%s' % ('손에 들었다' if last.get('slot') == 'weapon' else '걸쳤다',
                                      (' — 들던 %s%s 발밑에 놓였다' % (last['dropped'], _j(last['dropped'], '은', '는'))) if last.get('dropped') else '')))
         return '%s에서 %s%s 샀다 — %d골드를 냈다(남은 골드 %d)%s' % (shop, what, _j(what, '을', '를'), last.get('price', 0), last.get('gold', 0), tail)
@@ -525,10 +549,14 @@ def prose(last):
             return '%s%s 뒤졌다 — 물약 하나가 나왔다(소지 물약 %d병)' % (what, _j(what, '을', '를'), last.get('potions', 1))
         if got == 'treasure':
             return '%s%s 뒤졌다 — 보물 하나가 나왔다(모은 보물 %d개)' % (what, _j(what, '을', '를'), last.get('bag', 1))
+        if got == 'ration':                         # p0.5.16 ⚠️문구 임시
+            return '%s%s 뒤졌다 — 휴대식 하나가 나왔다(소지 휴대식 %d개)' % (what, _j(what, '을', '를'), last.get('rations', 1))
         return '%s%s 뒤졌다 — 비어 있다' % (what, _j(what, '을', '를'))
     if r == 'lodged':
         cl = last.get('cleared') or []
         paid = (' · %d골드를 냈다(남은 골드 %d)' % (last['paid'], last.get('gold', 0))) if last.get('paid') else ''   # p0.5.13 값 있는 숙소만
+        if last.get('no_regen'):                    # p0.5.16 굶주림 — 묵었지만 HP 는 차지 않았다(몸 상태는 나았다)
+            return '%s에 묵었다 — %s%s%s' % (what, NE.NO_REGEN_TAIL, (' · 나은 상태: ' + '·'.join(cl)) if cl else '', paid)
         if not last.get('heal') and not cl:
             return '%s에 묵었다 — 나을 상처가 없었다%s' % (what, paid)
         return '%s에 묵었다 — 몸이 다 나았다(HP +%d%s)%s' % (what, last.get('heal', 0), (', 나은 상태: ' + '·'.join(cl)) if cl else '', paid)
@@ -558,7 +586,7 @@ def event_tags(rec):
     if r == 'read':
         return [('use', '살펴봄' if rec.get('verb') == 'look' else '읽음', '%s "%s"' % (what, str(rec.get('text') or '')[:30]))]
     if r in ('sat', 'drank', 'warmed'):
-        return [('use', '사용', '%s +%d (HP %d)' % (what, rec.get('heal', 0), rec.get('hp', 0)))]
+        return [('use', '사용', '%s +%d (HP %d)%s' % (what, rec.get('heal', 0), rec.get('hp', 0), ' · 기운 안 돎' if rec.get('no_regen') else ''))]   # p0.5.16 굶주림
     if r == 'browsed':
         return [('use', '구경', what)]
     if r == 'practiced':
@@ -569,10 +597,13 @@ def event_tags(rec):
             return [('loot', '획득', '%s → 물약 (소지 %d)' % (what, rec.get('potions', 0)))]
         if got == 'treasure':
             return [('loot', '획득', '%s → 보물' % what)]
+        if got == 'ration':                          # p0.5.16
+            return [('loot', '획득', '%s → 휴대식 (소지 %d)' % (what, rec.get('rations', 0)))]
         return [('use', '사용', '%s — 비어 있음' % what)]
     if r == 'lodged':
-        return [('use', '사용', '%s — 묵음 +%d (HP %d)%s' % (what, rec.get('heal', 0), rec.get('hp', 0),
-                                                       (' · %d골드' % rec['paid']) if rec.get('paid') else ''))]   # p0.5.13 값 있는 숙소만
+        return [('use', '사용', '%s — 묵음 +%d (HP %d)%s%s' % (what, rec.get('heal', 0), rec.get('hp', 0),
+                                                         (' · %d골드' % rec['paid']) if rec.get('paid') else '',   # p0.5.13 값 있는 숙소만
+                                                         ' · 기운 안 돎' if rec.get('no_regen') else ''))]          # p0.5.16 굶주림
     shop = rec.get('shop') or '가게'                 # p0.5.13 가게 — 새 키를 만들지 않는다(loot·use·misc 재사용, EVENT_KINDS 무수정)
     if r == 'bought':
         return [('loot', '구입', '%s ← %s %d골드 (남은 %d)' % (what, shop, rec.get('price', 0), rec.get('gold', 0)))]

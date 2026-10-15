@@ -631,7 +631,7 @@ up8 = SN.upgrade(json.loads(json.dumps(snap8)))
 bs8 = {b_["char"]: b_ for b_ in up8["bots"] + up8["worlds"][0]["bots"] + list(up8["waiting"].values())}
 check("⑦ 판 8 · 이관 등록부 0..7 · 7→8: 최근 판단 장부의 끝에서 같은 열쇠가 이어진 수(goto·use 섞임 7 · wait 2 · 장부 가득 10 · 자기 자신 b7/self 3)로 연속을 다시 세운다 ·"
       " 변화는 몰라 moved · 지난 차례는 싣지 않는다(due 없음) · 끝이 탐색·장부 없음 = 칸 없음 · 이미 칸이 있으면 그대로 · 목표 칸은 만들지 않는다 · 두 번 올려도 같다",
-      SN.STATE_VERSION == 8 and sorted(SN.MIGRATIONS) == list(range(8)) and up8["state_version"] == 8
+      SN.STATE_VERSION >= 8 and sorted(SN.MIGRATIONS) == list(range(SN.STATE_VERSION)) and up8["state_version"] == SN.STATE_VERSION   # p0.5.16: 판 9(욕구) — 8 이상
       and chain(bs8["1"]) == {"key": "f3", "n": 7, "verb": "use", "body": None, "moved": True}
       and chain(bs8["4"]) == {"key": RS.WAIT, "n": 2, "verb": "wait", "body": None, "moved": True}
       and chain(bs8["2"]).get("n") == 10 and "repeat" not in bs8["3"] and "repeat" not in bs8["6"]
@@ -649,7 +649,7 @@ S8 = tempfile.mkdtemp(prefix="snap_", dir=ROOT)
 SN.write(S8, {"run_id": "r8", "d": d8, "bots": bots8, "sheets": {}, "next_turn": 9, "stream_pos": 0, "seed": 7, "started": "t"},
          {"run_id": "r8", "next_turn": 9})
 back8, _m8 = SN.load(os.path.join(S8, SN.PKL))    # 이 게이트가 방금 쓴 자기 피클
-check("⑦ 스냅샷 쓰기/되읽기: 목표 칸·연속 칸이 그대로 · 판 8", back8["state_version"] == 8 and back8["bots"][0].get("todo") == TODO_B
+check("⑦ 스냅샷 쓰기/되읽기: 목표 칸·연속 칸이 그대로 · 지금 판(8 이상)", back8["state_version"] == SN.STATE_VERSION and back8["bots"][0].get("todo") == TODO_B
       and back8["bots"][0].get("repeat") == bots8[0]["repeat"] and "todo" not in back8["bots"][1], back8["bots"][0].get("repeat"))
 
 print("── ⑧ 0콜")

@@ -29,6 +29,8 @@ public(result, viewer) — 결과 하나를 "그 사람이 실제로 볼 수 있
      p0.5.14 등 돌림 npc_away(누가 어느 NPC 에게서 등을 돌림당했나 · 시작 틱) — 그 사람에게 가는 몫은 자기 결과의 talk 'away' 와 관측의 NPC 줄 away 뿐이다.
      p0.5.15 목표 칸 변경 todo_ops(누가 무엇을 적었나 — 관전용 스트림 칸). 적은 사람의 몫은 think_all 이 그 몸의 관측에만 싣는 todo 한 줄이다(몸의 todo 칸은
      남의 관측·봇 스냅샷에 실리지 않는다 — 결과 dict 에 옮겨 적히는 길이 없다). 반복 신호(관측 repeat)도 그 몸의 관측에만 실린다.
+  ⑦ (p0.5.16 욕구) 욕구 결과(NEED_RESULTS)의 숫자 칸 NEED_NUM_KEYS — 충족도 전후(before·after)·내성 배율(tol)·단계 id(from·to). 에이전트는 숫자를 보지 않는다
+     (경제 설계 §3.8.6 — 몸의 상태는 '몸과 기분' 문장으로만). 몸의 needs·moods·need_w·taste 는 ⑥ 관전 칸에 든다(스트림 tick.bots[] 에만).
   viewer(보는 사람)의 가시성(perceives, 4a)은 아직 쓰지 않는다.
 LLM 0콜 · 판정 rng 무접촉 · 엔진 무의존(dungeon_gm 을 import 하지 않는다 — 엔진이 이 모듈을 쓴다).
 """
@@ -43,7 +45,10 @@ DROP_KEYS = ("social_event_id", "said")   # said = p0.5.10 러너 전용 칸(NPC
 SPECTATOR_KEYS = ("lore_note", "lore_drop", "lore_shown", "lore_cut", "lore_ops", "lore_ids", "uid", "scope", "space",   # ⑥ p0.5.11 관전 전용 칸 — 어느 깊이든 걷는다
                   "known_ops", "item_info",   # p0.5.12 관전 클릭 보기의 이름이 고유한 칸(종 앎 변화 · 물건 설명 사전)
                   "npc_away",   # p0.5.14 등 돌림 — 스트림 tick.npc_away(누가 누구에게) · 몸의 npc_away{쌍: 시작 틱}. 그 사람의 몫은 결과 talk 'away'·관측 away 로만 간다
-                  "todo_ops")   # p0.5.15 목표 칸 변경 — 스트림 tick.todo_ops(누가 무엇을 적었나). 그 사람의 몫은 자기 관측의 todo 한 줄뿐이다
+                  "todo_ops",   # p0.5.15 목표 칸 변경 — 스트림 tick.todo_ops(누가 무엇을 적었나). 그 사람의 몫은 자기 관측의 todo 한 줄뿐이다
+                  "needs", "moods", "need_w", "taste")   # p0.5.16 욕구 — 몸의 충족도·기분 조각·무게·취향(스트림 tick.bots[] 의 관전 칸). 그 사람의 몫은 자기 관측의 '몸과 기분' 문장뿐
+NEED_RESULTS = ("need_fill", "need_none", "need_stage", "need_drain")   # p0.5.16 욕구 결과·사건(needs.NEED_RESULTS 와 같은 목록 — 엔진 무의존이라 사본)
+NEED_NUM_KEYS = ("before", "after", "tol", "from", "to")   # p0.5.16 ⑦ 욕구 결과의 숫자·단계 이름(충족도 전후 · 내성 배율 · 단계 id) — 먹은 사람의 last·궤적에도 안 간다(§3.8.6 숫자 노출 금지)
 PERSON_ROLL_KEYS = ("roll", "mod", "total", "ac", "combat_roll", "skill_roll", "skill_dc")   # CA.attack_actor · SK.execute 의 사람 대상 굴림
 EFFECT_ROLL_KEYS = ("save",)                                                                # SK.execute effects[] 의 대상 내성 굴림
 
@@ -163,6 +168,9 @@ def public(result, viewer=None):
                     e.pop(k, None)
     if identity.knows(viewer):
         _drop_person_names(out)
+    if result.get("result") in NEED_RESULTS:      # ⑦ p0.5.16 욕구 결과 — 충족도 전후·내성 배율·단계 id 를 걷는다(무엇을 먹었나·배가 불러 못 먹었나는 남는다)
+        for k in NEED_NUM_KEYS:
+            out.pop(k, None)
     return _drop_spectator(out)
 
 

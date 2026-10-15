@@ -1,0 +1,22 @@
+{
+  "id": "ration",
+  "name": "휴대식",
+  "kind": "object",
+  "type": "ration",
+  "tags": [
+    "object",
+    "item"
+  ],
+  "comps": {
+    "item": {
+      "desc": "@prompts"
+    },
+    "satisfies": {
+      "hunger": 50
+    },
+    "taste": [
+      "빵"
+    ]
+  },
+  "note": "p0.5.16(경제 1b) 휴대식 — 몸의 정수(bot['rations'], 소지 칸 i9). 잡화점에서 2골드에 사고(1골드에 되판다), 던전 통·궤짝·항아리에서도 나온다. use(i9) = 먹는다 · give = 하나씩 건넨다. 배고픔 +50(경제 설계 §4.1 — 임시 값). 바닥에 놓이는 피처는 없다(스프라이트 없음). 설명은 SilenceBreaker 임시 문장."
+}

@@ -1,0 +1,23 @@
+{
+  "id": "meal",
+  "name": "식사",
+  "kind": "object",
+  "type": "food",
+  "tags": [
+    "object",
+    "item"
+  ],
+  "comps": {
+    "item": {
+      "desc": "@prompts"
+    },
+    "satisfies": {
+      "hunger": 70
+    },
+    "taste": [
+      "고기",
+      "따뜻한 것"
+    ]
+  },
+  "note": "p0.5.16(경제 1b) 주점의 식사 — 사는 순간 그 자리에서 먹는다(type food — 몸에 들지 않는다). 3골드, 배고픔 +70(경제 설계 §4.1·§5.2 — 임시 값). 설명은 SilenceBreaker 임시 문장."
+}

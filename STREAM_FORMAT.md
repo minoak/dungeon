@@ -111,6 +111,36 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 - NPC 의 말은 언제나 다음 틱 `inbox` 의 `from:"npc:<이름>"` 잡담으로 온다(말 건 사람과 같은 구역 사람에게 같은 문장). 말 건 사람의 관측 `last`·`trail` 문장에는 대사가 없다(받은 것·보고까지).
 - (p0.5.14 — 아래 절) 닫는 말 뒤의 고정 거절(`talk:"busy"`·`G.NPC_LINE_BUSY`·정의 `line_busy`)은 없어졌다 — 그 자리는 등 돌림(`talk:"away"`)이다.
 
+## 욕구와 배고픔 — 2026-10-16 p0.5.16 경제 1b additive (스위치 없음 — 모든 판 · DECISIONS 2026-10-14·10-15)
+
+- 몸: `tick.bots[].needs` = `{욕구 id: 충족도 0~100}`(**늘 실린다** — 옛 판엔 없다. 0.5.16 의 욕구는 배고픔 `hunger` 하나) · `moods` = 살아 있는 기분 조각
+  `[{src: 욕구 id, size: like|plain|dislike, line: 문장, until: 끝나는 틱}]`(있을 때만 — 같은 욕구의 조각은 새것이 덮는다 · `until` 틱부터 없다) · `rations` = 휴대식 개수(있을 때만).
+  `level.party[]` 도 같은 스냅샷이다. 새 몸은 정의의 `start`(배고픔 70), 층 전이·원정은 충족도·기분 조각을 그대로 옮기고, 부활은 시작값으로 되돌린다(기분 조각은 걷힌다).
+- `run_meta.need_defs` = `{욕구 id: {name, start, decay, full_at, full_blocks, stages{단계 id: {min, word, effects?}}, weights?, mood?{갈래: {time}}, from_events?, tastes?}}`(늘 —
+  그 판이 알던 숫자. 단계·효과를 스트림만으로 다시 센다) · `run_meta.party[].needs`(`{욕구: {level, why?, src?}}`)·`taste`(`{likes, dislikes}`) — 시트에 있을 때만(0.5.16 은 없다 = 모두 보통).
+- 욕구 사건(`tick.events[]`, **`type:"need"` — 행위가 아니라 몸의 변화라 `char` 대신 `bot`**(그 몸의 번호) — '실행된 결정 = 그 char 의 이벤트 하나' 규칙 그대로):
+  `need_stage{bot, need, from, to}`(단계 id — 그 틱에 단계가 바뀌었다: 줄기·먹기·채움 어느 쪽이든) · `need_drain{bot, need, hp, maxhp}`(굶주림의 hp_drain — 틱 머리에 HP −1,
+  `hp` 는 깎인 뒤 값 · 최대 HP 의 절반(올림)에서 멈춘다) · `need_fill{bot, need, via:"event", src_key: 결과 이름, tol, before, after, mood?, what?}`(정의의 `from_events` — 그 결과가 그 욕구를 채웠다) ·
+  `need_none{bot, need, why:"full", via:"event", src_key}`(가득 찬 욕구 — 행동은 일어났고 더 차지 않았다). 틱 머리 사건(줄기·깎임)이 그 틱 행동 결과보다 앞에, 행동이 낳은 사건은 뒤에 실린다.
+- 먹기(행동 결과 — `char` 가 있다): `need_fill{need, via:"eat"|"buy", what, src_key: 먹을 것 정의 id, tol: 100(내성 자리 — 아직 없다), before, after, mood?: like|plain|dislike}` ·
+  `need_none{need, why:"full", what, src_key}`(배가 불러 들어가지 않는다 — 물건·돈 그대로 · resolution failed).
+  휴대식 `use i9`(조합형 `type:"use"`, `rations`=남은 개수) · 메뉴형 `drink{item:"ration"}`(같은 결과, `type:"use"`) · 그 자리에서 먹는 음식(식사·햇사과 — 정의 type `food`)의 사기
+  `use g<n>`(`type:"use"`+`effect_type:"interact"`, `via:"buy"`, `price`, `gold`(남은 골드), `shop`, `shop_id`) — 배가 부르면 사지 않는다(`need_none{via:"buy", price, gold}` — 값을 보기 전에 몸이 거절) ·
+  배고픈데 모자라면 `too_poor`(p0.5.13 그대로). 휴대식 사기는 `bought{rations}`(먹지 않는다) · 팔기 `sold{rations}` · 건네기 `give{item:"ration"}` → `given{what:"휴대식", rations}` ·
+  뒤지기 `rummaged{got:"ration", rations}`(통·궤짝·항아리 가중치 1).
+- 굶주림의 `no_regen`: `sat`·`drank`·`warmed`·`lodged` 가 `heal:0` + `no_regen: 욕구 id`(묵기는 몸 상태 소거·값은 그대로) · 쉬기는 HP 차단과 상태 회복이 따로다 —
+  나을 몸 상태(`status`)가 없으면 `rest` = `result:"no_regen"{need, hp}`(눕지 않는다 — order 없음 · resolution no_effect) · 몸 상태가 있으면 `resting` 으로 눕고 HP 는 그대로,
+  REST_MIN 틱 뒤 `walk` 결과 `rested{ticks, healed, cleared[], no_regen}`(만피를 기다리지 않는다) · 쉬는 도중 굶주림에 들면 몸 상태가 없을 때만 그 틱 `walk` 결과 `no_regen{need, hp, ticks, healed}`(깨어남).
+  물약·샘·스킬 회복은 그대로다.
+- 관측(모델 입력): `need_lines`(지금 단계의 상태 문장 + 살아 있는 기분 조각 — **문장** 수 `needs.LINE_CAP` 2개까지(조각 하나가 두 문장이면 그것만으로 찬다 · 남은 자리보다 긴 조각은 앞 문장만) ·
+  가장 낮은 충족도부터 — 보통 단계면 칸이 없다) → '네 상태' 절 `- 몸과 기분: …`(`brains.NEED_HEAD`) ·
+  `rations` → `- 휴대식 N개` · 소지품 `i9`. 굶주린 몸 몫의 쉬는 자리 사실은 회복 수치를 걷는다(`use.heal` 없음 · 묵기 `use.no_regen` → '묵으면 몸 상태가 낫는다') ·
+  메뉴형 '쉰다' 줄은 몸 상태가 있을 때만(HP 말 없이 '한동안 쉬면 몸 상태(…)가 낫는다').
+  먹을 것의 대상 줄에 취향 꼬리표(`taste` — '[g1] 식사 — 고기·따뜻한 것'). **숫자는 안 간다**: 공개 투영(`IG.NEED_NUM_KEYS`)이 욕구 결과의 `before`·`after`·`tol`·`from`·`to` 를 걷고,
+  몸의 `needs`·`moods`·`need_w`·`taste` 는 관전 칸(`IG.SPECTATOR_KEYS`). 남의 관측에는 내 욕구가 없다 — 곁의 사람은 '휴대식 … 먹었다'·'식사를 사 먹었다'(`ally_use`)만 본다.
+- events.log: `봇N 배고픔: 보통 → 배고픔` · `봇N 배고픔 — 기운이 빠졌다 (HP 9/14)` · 먹은 행동 줄에 충족도 전후·기분 갈래(관전용).
+- 저장 판 8 → 9(`snapshot._m8_needs`): 옛 몸에 시작 충족도·빈 기분 조각·휴대식 0 · 식사·햇사과를 팔게 된 주점 주인·주점·채소 좌판의 말을 지금 정의로. 세계의 욕구 사건 버퍼(`need_log`)는 피클에 없어도 된다.
+
 ## 반복 신호 + 목표 칸 — 2026-10-15 p0.5.15 (모든 판 · DECISIONS 2026-10-15)
 
 - **목표 칸(응답 `todo`, 선택)**: 지금 하려는 일 — 글이면 몸의 `todo`(글 하나)를 덮어쓰고, 빈 글(`""`)이면 지운다. 칸이 없거나 `null`·글이 아니면 그대로.
@@ -521,7 +551,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | | ↳ `trap.status` | (2026-09-06 D34 additive) 함정의 특수 — 판정 실패·생존 시 붙은 태그 이름(spike=출혈, dart=중독) |
 | | ↳ `woke` | (2026-09-06 D35 additive) `'rest'` — 쉬다 새 몹이 시야에 들어 `result=encounter` 로 깬 것(걷다 만난 것과 구분) |
 | | ↳ `door` | (2026-09-06 D40 additive, scan 판만) 이 걸음이 문 타일(+)을 밟았다 — `'d<n>'`. D30 동료 목격(`ally_use{what:'문'}`)과 같은 순간의 **자기 경험** 표식(궤적 꼬리표 "[문 사용] d3"·층 집계 재료). 어떤 result 에도 병기될 수 있다 |
-| | ↳ (휴식 결과) | (2026-09-06 D35 additive) `resting{hp}` = 휴식 틱(HP +1) / `rested{ticks, healed, cleared[]}` = 완료(만피&&REST_MIN, 상태 태그 소거·order 파기) / `rest_met{allies[]}` = 쉬다 동료가 시야에 들어 깸(wait_met 문법) |
+| | ↳ (휴식 결과) | (2026-09-06 D35 additive) `resting{hp}` = 휴식 틱(HP +1) / `rested{ticks, healed, cleared[]}` = 완료(만피&&REST_MIN, 상태 태그 소거·order 파기 — p0.5.16 굶주린 몸은 HP 가 차지 않아 REST_MIN 만 · `no_regen: 욕구 id` 덧붙음) / `rest_met{allies[]}` = 쉬다 동료가 시야에 들어 깸(wait_met 문법) |
 | `rest` | `result=resting(hp)` | (2026-09-06 D35 additive) 휴식 개시 — order='rest'(이후 틱은 walk 결과로). 꺼진 판(run_meta.rest=false)에선 type 이 wait/explore 로 바뀌어 나간다(폴백) |
 | `interact` | `target`, `result=exit(party[])/wait_allies(missing[])/treasure/potion(potions — 2026-07-17 additive)/chest_loot(roll,mod,total,loot)/chest_trap(roll,mod,total,dmg,hp,down?,status? — 2026-09-06 D34: 생존 시 중독)/fountain_heal(roll,heal,hp)/fountain_harm(roll,dmg,hp,down?,status? — 2026-09-06 D34: 생존 시 중독)/equip(item,slot,bonus,dropped? — 2026-07-30 D28 additive)/ascend(party[] — 마을 복귀, D29 additive)/npc_talk(npc,line,again? — 마을 NPC 말 걸기, D29 additive. `again:true` = 2026-09-06 D32 개정 additive: 같은 방문에서 두 번째 이후 말 걸기(방문 장부 `npc_met`, 선물 여부와 무관) — 이때 line 은 town.json `line_again`("아까 왔잖아. …") 고정 대사)/npc_gift(npc,item,line — 마을 상점 v0, D32 additive 2026-09-05: 아이템 상인=물약 1/방문·장비 상인=빈손이면 단검, 정해진 대사만. **2026-09-15 D74**: 성직자=축복의 물약(`gift.boon`, item '축복의 물약', 방문당 한 병). 받는 장면은 동료 witnessed 에 ally_loot)/nothing/too_far/no_target` · **2026-09-14 D69 additive**(`run_meta.quests` 판): `quest_accepted(quest,title,goal,reward?,client?,board — target 'q<n>')` / `quest_already(quest,title,by,since)` / `npc_report(npc,line,done[],undone[],titles{},bag — 귀환 뒤 보고 역할 NPC, 원정의 끝)` · treasure/chest_loot 에 `quest?[]`(획득형 의뢰 진행) · npc_talk/npc_gift/npc_report 에 `line_src?:'brain'`+`line_fixed?`(NPC 두뇌가 line 을 썼다 — 원문은 line_fixed) | 계단(파티 동반 하강/대기)·줍기·상자·샘·물약 집기·장비 착용(스왑 시 dropped=그 자리에 놓은 헌 장비 이름 — 같은 칸에 새 피처로 실린다). exit 의 party=함께 내려간 char 명단 |
 | `attack` | `result=attack/no_target/too_far`(**항상 존재**). `attack` 일 때만 `target`(몹 종류)·`target_id`(`m<n>`)·`roll mod total ac hit`·`surprise? crit? dmg? monster_hp? killed?` 존재 — 실패 2종은 `char/type/result` 뿐. `quest?[]`(2026-09-14 D69 additive) = 이 처치가 채운 의뢰 `{id,title,n,need,done}`(스킬 처치의 skill 결과에도 같은 자리) | 봇의 공격. **result 로 분기하라.** surprise=우리 기습(we-ambush) |
@@ -535,6 +565,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | `monster_join` | `id monster ally(m<n>) ally_kind state(HUNTING|WANDERING)` | (2026-09-11 D51 additive) 도주하던 몹이 근처 다른 몹 곁에 닿아 합류 — 보이는 봇이 있으면 함께 문다(HUNTING), 없으면 곁에서 진정. 합류 전 이동은 `monster_move`에 `fleeing:true, joining:true` |
 | `monster_attack` | `id monster target roll mod total ac hit`, `surprise? from_hiding? dmg? hp? down? grave? status?` | 몹의 공격. surprise=몹 기습(they-ambush), from_hiding=매복자가 정체 드러내는 일격. **hit 이면 피격 인터럽트**(D1 개정): 당한 봇의 진행 중 order 가 그 자리에서 비워진다(다음 틱 스냅샷 `order:null` + 그 봇 재결정으로 관측 가능). 피격은 시드 RNG 결정론이므로 리플레이 무해. `status`(2026-09-06 D34 additive, `run_meta.status` 판만) = 몹의 특수로 붙은 태그(그림자거미=둔화, 생존 시). `ac` 는 중독이면 −2 된 값 그대로. `grave`(2026-07-20 D22 additive, `DUNGEON_GRAVES` 판만) = down 과 함께 `{id,name,x,y}` — 쓰러진 자리에 선 '~의 묘' 피처(글리프 `T`). trap/chest_trap/fountain_harm 의 down 에도 같은 문법으로 병기 |
 | `monster_move` | `id monster to=[x,y]`, `fleeing?`, `door?` | 몹 이동 — **봇 시야에 들어온 이동만** 기록(시야 밖 배회는 무음. 전체 위치는 스냅샷 monsters 로 시킹) |
+| `need` | `bot`(char 대신 — 몸의 변화), `need`, `result=need_stage(from,to)/need_drain(hp,maxhp)/need_fill(via:event,src_key,tol,before,after,mood?)/need_none(why:full,via:event,src_key)` | (2026-10-16 p0.5.16 additive) 욕구 사건 — '욕구와 배고픔' 절. 먹기(휴대식·사 먹기)는 이 type 이 아니라 그 행동의 결과(`need_fill`/`need_none` + `char`)다 |
 | `npc_move` | `id(f<n>) npc to=[x,y]` | (2026-09-14 D73 additive, `run_meta.town_walkers` 마을 판만) 행인 NPC 의 한 걸음 — 전부 기록(마을은 지형이 다 보인다). 관전 로그엔 안 싣고 지도가 보여 준다 |
 
 ### 2026-10-11 t13: 전투 표시용 선택 필드

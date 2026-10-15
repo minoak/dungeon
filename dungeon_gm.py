@@ -28,6 +28,7 @@ import skill_core as SK
 import skill_combat as SC
 import entities as ENT           # 엔티티 저장소(D50, 09-11) — 몬스터·함정·오브젝트·NPC 정의(수치·이름·지식 본문)
 import interactables as IA       # 쓰임 부품(D89, 09-20) — 정의의 use{kind} 가 오브젝트·건물 상호작용을 낸다(엔진 무의존 모듈 — 순환 import 없음)
+import needs as NE               # p0.5.16 욕구 부품(경제 1b) — 줄기·채우기·단계(문장·효과·사건)·기분 조각(엔진 무의존 모듈)
 import judge                     # p0.5.3 판정 함수 묶음 — 엔진이 쓰는 것은 숙련 접근자(prof): 스폰이 몸에 정신·숙련을 붙인다(엔진 무의존 모듈)
 import info_guard as IG          # p0.5.4 정보 보호 — 봇이 보는 결과(last·궤적·목격·받은 일)는 공개 투영 사본, 모르는 결과의 폴백은 {type,target,status}만
 import identity as ID            # p0.5.9 신원 ID-1 — 사람의 호칭(기록은 열쇠로, 호칭은 그릴 때 보는 사람이) · 사람 열쇠 판정(엔진 무의존 모듈)
@@ -276,6 +277,12 @@ def event_tags(rec, names=None):
         return [('skill', '스킬', SK.summary(rec))]
     if t == 'pushed':
         return [('hurt', '밀림', '스킬에 의해 한 칸 밀려났다')]
+    if r in NE.NEED_RESULTS:                                  # p0.5.16 욕구(먹음·못 먹음·기운 빠짐) — 형태(use·interact·need)와 무관하게 그 모듈이 소유
+        tg = NE.event_tags(rec)
+        if tg:
+            return tg
+    if r == 'no_regen':                                       # p0.5.16 굶주린 몸이 쉬려 함(쉬기 시작·쉬는 도중) — 변화 없음
+        return [('misc', '헛손질', '쉬기 — ' + NE.NO_REGEN_TAIL)]
     if r == 'approaching':
         return [('start', '접근 시작', '%s %s' % (t, place_word(tgt, 'decide')))]
     if r == 'no_path' and rec.get('parent_action_id'):
@@ -509,7 +516,8 @@ def event_tags(rec, names=None):
             return [('lost', '기다림 끝', (', '.join(nm(c) for c in rec.get('allies', [])) or '동료') + ' 시야 밖으로')] + extras
         if r == 'rested':
             cl = rec.get('cleared') or []
-            return [('rest_done', '휴식 완료', 'HP +%d%s' % (rec.get('healed', 0), (', 나음: ' + '·'.join(cl)) if cl else ''))] + extras
+            return [('rest_done', '휴식 완료', 'HP +%d%s%s' % (rec.get('healed', 0), ' · 기운 안 돎' if rec.get('no_regen') else '',   # p0.5.16 굶주림
+                                                            (', 나음: ' + '·'.join(cl)) if cl else ''))] + extras
         if r == 'swapped':
             return [('swap', '자리 교대', rec.get('with', '동료'))] + extras
         if r == 'entered':
@@ -2392,6 +2400,11 @@ class Dungeon:
                  for f in self.features.values()
                  if f.type != 'exit' and not f.concealed and (f.x, f.y) in seen
                  and (not getattr(f, 'walker', False) or self.hears(bot, f.x, f.y))]   # D73: 행인은 사람 — 마을 구역 지각(D70)을 탄다(정착 NPC 는 장소처럼 늘 보인다)
+        if NE.no_regen(bot):                   # p0.5.16 굶주린 몸 — 쉬는 자리의 사실은 보는 사람 몫이다: 앉기·마시기·불 쬐기는 HP 를 약속하지 않고(회복 수치를 걷는다)
+            for f_ in feats:                   #   묵기는 '몸 상태가 낫는다'만 말한다(상태 문장 '쉬어도 기운이 돌아오지 않는다'와 같은 규칙 — 거짓 선택지를 만들지 않는다)
+                u_ = f_.get('use')
+                if u_ and not u_.get('spent') and u_.get('kind') in ('sit', 'drink', 'warm', 'lodge'):
+                    f_['use'] = {**{k: v for k, v in u_.items() if k != 'heal'}, **({'no_regen': True} if u_['kind'] == 'lodge' else {})}
         if self.events:                        # D22 개정(09-06 파트너 발제 "두란의 묘지를 발견한다면
             for f in self.features.values():   #   [두란의 죽음을 발견] 한 줄"): 묘는 공공연한 표지판 —
                 if (f.type == 'grave' and (f.x, f.y) in seen   # 죽음을 못 본 동료도 묘를 본 순간 안다
@@ -2670,6 +2683,9 @@ class Dungeon:
             _add('drink', None, '축복의 물약을 마신다 — 네 %s이 1 오른다 (한 턴 소모, 소지 %d병)'
                  % (STAT_KR['dex' if int(bot.get('atk_range') or 1) > 1 else 'str'], bot['boons']))
             options[-1]['item'] = 'boon'
+        if bot.get('rations'):                 # p0.5.16 휴대식 — 소지 중일 때만(물약 선례). 메뉴형은 drink(item=ration) 길 — 배가 불렀는지는 몸이 답한다 ⚠️문구 임시
+            _add('drink', None, '휴대식을 먹는다 (한 턴 소모, 소지 %d개)' % bot['rations'])
+            options[-1]['item'] = 'ration'
         # D47 ②(2026-09-09 파트너 "제안은 열리게 하는 대신 응답에서 제안 승낙 시 선택지 안에서 행동할 수 있게"): 건네기·친목은
         # **곁(체비셰프≤1 — 동행의 '곁'과 같은 자)의 동료에게 늘 열리는 즉시 행동**이다 — 제안이 있어서 생기는 줄이 아니다(파트너
         # 초안 §A-1 "관계가 동료라는 이유만으로 행동을 숨기지는 않는다"). 승낙 = 이 줄을 고르는 것(엔진은 제안 내용을 안 읽는다).
@@ -2688,6 +2704,9 @@ class Dungeon:
                     if bot.get('boons'):                  # D74(09-15) 축복의 물약도 건넨다(물약 문법)
                         _add('give', a['id'], '건네기: 축복의 물약 → %s (곁, 소지 %d병)' % (who_, bot['boons']))
                         options[-1]['item'] = 'boon'
+                    if bot.get('rations'):                # p0.5.16 휴대식도 건넨다(물약 문법 — 하나씩)
+                        _add('give', a['id'], '건네기: 휴대식 → %s (곁, 소지 %d개)' % (who_, bot['rations']))
+                        options[-1]['item'] = 'ration'
                     for slot in ('weapon', 'armor'):
                         g = bot.get(slot)
                         if g:
@@ -2761,12 +2780,14 @@ class Dungeon:
                     ' ※ 그는 지금 너를 따르는 중이다 — 서로 따르면 아무도 못 움직인다'
                     if mutual else ''))                # 곁에서 나를 계속 따르는 행동은 눈에 보인다
                                                        # (보이는 동료 한정=allies 루프 — 시야-온리)
-        if self.rest_verb and (bot['hp'] < bot['maxhp'] or bot.get('status')):
+        nr_ = NE.no_regen(bot)                         # p0.5.16 굶주린 몸은 쉬어도 HP 가 차지 않는다 — 회복을 약속하는 줄을 내지 않는다(몸 상태가 있으면 '상태가 낫는다' 줄만)
+        if self.rest_verb and (bot.get('status') or (bot['hp'] < bot['maxhp'] and not nr_)):
             # 휴식(D35) — 다쳤거나 몸 상태가 있을 때만 어휘가 된다(성한 몸은 '기다린다'가 서 있기를
             # 담당). 라벨=사실만: 회복량·완료 조건·깨는 사건. 안전은 약속하지 않는다.
             _add('rest', None,
-                 '쉰다: 이 자리에서 — 틱마다 HP %d 회복, 다 나으면 몸 상태(출혈·둔화·중독)가 낫는다.'
-                 ' 맞거나 새것을 보거나 말을 걸어오면 깬다' % REST_HP)
+                 ('쉰다: 이 자리에서 — 한동안 쉬면 몸 상태(출혈·둔화·중독)가 낫는다.' if nr_ else   # ⚠️문구 임시(p0.5.16)
+                  '쉰다: 이 자리에서 — 틱마다 HP %d 회복, 다 나으면 몸 상태(출혈·둔화·중독)가 낫는다.' % REST_HP)
+                 + ' 맞거나 새것을 보거나 말을 걸어오면 깬다')
         if self.wait_verb:                             # wait(D25) — 제자리 대기(사건 기반, 숫자 없음)
             _add('wait', None, '기다린다: 이 자리에서 — 동료가 오거나 새 일이 생기면 깨어난다')
         # 돌아가기(D17-1 귀환 핑) — 장부의 제자리 물건(id 있는 것)로 시야 밖 복귀. 라벨=사실만
@@ -2933,6 +2954,8 @@ class Dungeon:
                 'gold': bot.get('gold', 0),         # p0.5.13 골드 — 자기 몸의 사실(늘 — '모은 보물'과 같은 급, 0 도 사실이다)
                 'potions': bot.get('potions', 0),   # 소지 회복 물약(07-17) — 자기 몸의 사실
                 **({'boons': bot['boons']} if bot.get('boons') else {}),   # D74(09-15) 축복의 물약 — 있을 때만(additive)
+                **({'rations': bot['rations']} if bot.get('rations') else {}),   # p0.5.16 휴대식 — 있을 때만(additive)
+                **({'need_lines': nl_} if (nl_ := NE.lines(bot, getattr(self, 'turn', 0))) else {}),   # p0.5.16 '몸과 기분' — 지금 단계의 상태 문장·기분 조각(숫자 없음, 보통 단계엔 없다)
                 'gear': {'weapon': _no_uid(bot.get('weapon')), 'armor': _no_uid(bot.get('armor'))},   # p0511b: 장비 고유 번호(안쪽 열쇠)는 관측에 안 나간다(기록 안 된 장비 = 옛 그대로)
                 **({'town': True} if self.town else {}),   # 마을(D29) — 층의 사실(던전 obs 무변경)
                 **({'town_zone': tz} if (self.town and (tz := self._town_zone(bot['x'], bot['y'])))   # D60(09-12) 지금 있는 구역 이름
@@ -3257,7 +3280,9 @@ class Dungeon:
         """봇 자기 행동의 최신 결과 메모 — 원칙 "봇은 자기 행동의 결과를 관측할 수 있어야 한다".
         view()가 obs['last']로 노출. 자기 경험만 담으므로 시야-온리 무위반(세계 정보 아님).
         D38(09-06): 같은 줄을 궤적(bot['trail'])에도 잇는다 — _trail_add 참조(기록은 한 번, 보기 둘).
-        p0.5.4(§6.3 경로 1): 원본(res — 스트림이 읽는다)이 아니라 공개 투영 사본을 남긴다 — audit·사람 대상 굴림·전역 사건 번호가 빠진다."""
+        p0.5.4(§6.3 경로 1): 원본(res — 스트림이 읽는다)이 아니라 공개 투영 사본을 남긴다 — audit·사람 대상 굴림·전역 사건 번호가 빠진다.
+        p0.5.16: 그 몸의 행동·자동 보행 결과가 욕구 정의의 from_events 이면 그 욕구를 채운다(needs.on_result — 배고픔은 없다, 새 욕구의 데이터 길)."""
+        NE.on_result(self, bot, res, getattr(self, 'turn', 0))
         bot['last'] = {k: v for k, v in IG.public(res, bot).items() if k != 'char'}
         self._trail_add(bot, bot['last'], plan=plan)
 
@@ -4073,6 +4098,9 @@ class Dungeon:
         이동 계획을 찢었지만 쉬는 중엔 찢을 계획이 없다(D23 회의가 앉을 자연 무대)."""
         if not self.rest_verb:                          # 꺼진 판 — 미노출 동사(환각 방어=대기/탐색 폴백)
             return self._set_wait(bot, bots) if self.wait_verb else self._set_explore(bot, None, bots)
+        nr = NE.no_regen(bot)
+        if nr and not bot.get('status'):                # p0.5.16 굶주린 몸 — 쉬어도 기운이 돌아오지 않는다. 나을 몸 상태도 없으면 쉬어서 바뀌는 것이 없다 — 눕지 않고 사실만 돌려준다
+            return {'char': bot['char'], 'type': 'rest', 'result': 'no_regen', 'need': nr, 'hp': bot['hp']}   # (몸 상태가 있으면 눕는다 — HP 는 그대로, 상태는 REST_MIN 틱 뒤 낫는다)
         bot['order'], bot['path'] = 'rest', []
         bot['rest'] = {'n': 0, 'healed': 0,
                        'allies': {o['char'] for o in bots if o is not bot
@@ -4108,17 +4136,22 @@ class Dungeon:
                     self._bone(o, bot['char'], 'waited')
             return {**base, 'result': 'rest_met', 'allies': sorted(came)}
         w['allies'] = here
-        heal = min(REST_HP, bot['maxhp'] - bot['hp'])
+        nr = NE.no_regen(bot)
+        if nr and not bot.get('status'):              # p0.5.16 쉬는 도중 굶주림에 들었고 나을 몸 상태도 없다 — 더 쉬어도 바뀌는 것이 없다(끝없는 휴식을 막는다). 일어나 사실을 본다
+            bot['order'], bot['path'], bot['plan'] = None, [], []
+            bot['rest'] = None
+            return {**base, 'result': 'no_regen', 'need': nr, 'hp': bot['hp'], 'ticks': w['n'], 'healed': w['healed']}
+        heal = 0 if nr else min(REST_HP, bot['maxhp'] - bot['hp'])   # p0.5.16 굶주린 몸은 HP 가 차지 않는다(몸 상태는 아래에서 그대로 낫는다 — HP 차단과 상태 회복은 따로)
         if heal > 0:
             bot['hp'] += heal; w['healed'] += heal
         w['n'] += 1
-        if bot['hp'] >= bot['maxhp'] and w['n'] >= REST_MIN:   # 푹 쉬었다 — 몸 상태가 낫는다
+        if (bot['hp'] >= bot['maxhp'] or nr) and w['n'] >= REST_MIN:   # 푹 쉬었다 — 몸 상태가 낫는다(굶주린 몸은 만피가 오지 않으니 기다리지 않는다)
             cleared = sorted(bot.get('status') or {})
             bot['status'], bot['bleed_steps'], bot['slow_beat'] = {}, 0, 0
             bot['order'], bot['path'], bot['plan'] = None, [], []
             bot['rest'] = None
             return {**base, 'result': 'rested', 'ticks': w['n'], 'healed': w['healed'],
-                    'cleared': cleared}
+                    'cleared': cleared, **({'no_regen': nr} if nr else {})}
         return {**base, 'result': 'resting', 'hp': bot['hp']}
 
     def _wait_tick(self, bot, bots, base):
@@ -5514,6 +5547,8 @@ class Dungeon:
         (세계는 낭비를 말리지 않는다 — 리모컨 라벨의 사실 주석이 알려줄 뿐). 빈 손 = no_potion
         정직 보고(plan_step 열린 동사 선례: 유무는 발동 시점 판정)."""
         base = {'char': bot['char'], 'type': 'drink'}
+        if item == 'ration':                      # p0.5.16 휴대식 — 메뉴형의 즉시 동사(조합형은 use i9). 공용 지점 _eat_ration
+            return self._eat_ration(bot, bots, base={**base, 'type': 'use', 'item': 'ration'})
         if item == 'boon':                        # D74(09-15) 축복의 물약 — 같은 동사, 다른 병(공용 지점 _bless)
             eff = self._bless(bot, bots)
             return {**base, 'result': 'drink_boon', **eff} if eff else {**base, 'result': 'no_boon'}
@@ -5527,6 +5562,21 @@ class Dungeon:
                       exclude=(bot['char'],))
         return {**base, 'result': 'drink_heal', 'heal': heal, 'hp': bot['hp'],
                 'potions': bot['potions']}
+
+    def _eat_ration(self, bot, bots=None, base=None, item_used=None):
+        """p0.5.16 휴대식(i9)을 먹는다 — 메뉴형 drink(item=ration)과 조합형 use(self, i9)의 공용 지점. 배가 불러 들어가지 않으면
+        need_none{why:'full'}(휴대식은 그대로 남는다 — 시도는 자유, 거절은 몸의 반응), 먹으면 하나가 줄고 need_fill(배고픔 전후·기분 갈래).
+        곁의 사람은 '휴대식을 먹었다'만 본다(배가 얼마나 찼는지·기분은 속 상태라 안 보인다). 빈손이면 nothing."""
+        base = dict(base or {'char': bot['char'], 'type': 'use'})
+        if not int(bot.get('rations') or 0):
+            return {**base, 'result': 'nothing', 'reason_code': 'item_not_owned'}
+        df = ENT.item_def('ration')
+        res = NE.eat(self, bot, df, getattr(self, 'turn', 0), via='eat')
+        ate = res['result'] == 'need_fill'
+        if ate:
+            bot['rations'] = int(bot['rations']) - 1
+        self._witness_use(bots, bot['x'], bot['y'], [bot], df['name'], None, '먹었다' if ate else '먹으려다 그만두었다')   # ⚠️문구 임시
+        return {**base, **res, 'rations': int(bot.get('rations') or 0), **({'item_used': item_used} if item_used else {})}
 
     BLESS_GAIN = 1     # p0.5.6: 축복의 물약 한 병이 올리는 양 — _bless 와 물건 설명의 {gain}(entities.item_desc)이 같은 값을 읽는다
 
@@ -5770,6 +5820,13 @@ class Dungeon:
             recv['boons'] = recv.get('boons', 0) + 1
             what = '축복의 물약'
             extra, got = {'boons': bot['boons']}, {'boons': recv['boons']}
+        elif item == 'ration':                              # p0.5.16 휴대식 — 물약과 같은 문법(하나씩). 받은 사람이 먹을지는 받은 사람 몫(건네기는 먹이기가 아니다)
+            if not bot.get('rations'):
+                return {**base, 'result': 'nothing'}
+            bot['rations'] -= 1
+            recv['rations'] = int(recv.get('rations') or 0) + 1
+            what = '휴대식'
+            extra, got = {'rations': bot['rations']}, {'rations': recv['rations']}
         elif item in IA.AMOUNT_SLOTS:                       # p0.5.13 골드(액수)·보물(개수) — 원자적으로 옮긴다(빼면 1). 지닌 것보다 많으면 not_enough(둘 다 그대로)
             key, n = IA.COUNTED[item], IA.count(amount)
             have = int(bot.get(key) or 0)
@@ -6554,6 +6611,8 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
             'potions': 0,                   # 소지 회복 물약(07-17) — 첫 소비 아이템. 층 이월은
                                             # 러너 재스폰이 담당(bag 이월 선례)
             'boons': 0,                     # 축복의 물약(D74, 09-15) — 신전 기도의 답. 마시면 공격 능력치 +1. 층 이월=러너 재스폰(str/dex 도 함께)
+            'rations': 0,                   # p0.5.16 휴대식(소지 칸 i9) — 사기·뒤지기·받기. 층 이월=러너 _carry(물약 선례)
+            **NE.fields(sheet),             # p0.5.16 욕구 — needs{욕구: 충족도}·moods[기분 조각](+시트의 무게 need_w·취향 taste 가 있을 때만). 층 이월=러너 _carry, 부활=시작값
             'status': {},                   # 상태 태그(D34, 09-06): 태그→{n, by, since}. 몹·함정의 특수가
                                             # 붙이고 휴식(D35)만 지운다. 층 이월=러너 재스폰(물약 선례)
             'bleed_steps': 0,               # 출혈 걸음 부기(BLEED_STEPS 마다 HP 1)
@@ -6610,6 +6669,8 @@ def bot_snapshot(b):
             'gold': b.get('gold', 0),         # p0.5.13 골드(additive — 늘 실린다: 판의 돈 흐름 측정이 시작·끝·최저를 본다)
             'potions': b.get('potions', 0),   # 회복 물약 소지(07-17 additive)
             **({'boons': b['boons']} if b.get('boons') else {}),   # 축복의 물약(D74 09-15 additive, 있을 때만)
+            **({'rations': b['rations']} if b.get('rations') else {}),   # p0.5.16 휴대식(additive, 있을 때만)
+            **NE.snap(b),                     # p0.5.16 욕구 needs{욕구: 충족도}·moods(있을 때만) — 관전·측정용(관측엔 '몸과 기분' 문장만 간다)
             'weapon': b.get('weapon'), 'armor': b.get('armor'),   # 장비(07-30 additive)
             'order': b.get('order'),
             **({'approach': dict(b['approach'])} if b.get('approach') and b.get('order') else {}),

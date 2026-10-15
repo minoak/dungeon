@@ -417,12 +417,13 @@ snap = {"version": 2, "state_version": 3,
         "waiting": {"3": {"char": "3", "npc_replies": {}}}}
 up = SN.upgrade(json.loads(json.dumps(snap)))
 again = SN.upgrade(json.loads(json.dumps(up)))
+NEED9 = {"needs": {nid: sp["start"] for nid, sp in G.NE.live()}, "moods": [], "rations": 0}   # p0.5.16 8→9 이관: 욕구 시작값·빈 기분 조각·휴대식 0
 check("⑦ STATE_VERSION ≥ 4(p0.5.11 = 5) · MIGRATIONS 3 · 몸마다 npc_talk{'npc:'+이름} · 이미 있으면 큰 쪽 · 옛 칸 없음 · 빈 장부는 칸을 만들지 않는다 · 두 번 올려도 같다",
       SN.STATE_VERSION >= 4 and 3 in SN.MIGRATIONS and up["state_version"] == SN.STATE_VERSION
       and up["bots"][0] == {"char": "1", "npc_talk": {"npc:" + GEAR: 2, "npc:" + PRIEST: 3}, "gold": G.START_GOLD,   # gold = p0.5.13 5→6 이관(시작 지갑)
-                            "npc_away": {"npc:" + PRIEST: 0}}   # p0.5.14 6→7: 상한(3)인 쌍은 등 돌림(이어간 틱 = next_turn - 1 — 이 자료엔 next_turn 이 없어 0)
-      and up["worlds"][0]["bots"][0] == {"char": "2", "npc_talk": {"npc:" + RECEPTION: 2}, "gold": G.START_GOLD}
-      and up["waiting"]["3"] == {"char": "3", "gold": G.START_GOLD} and again == up, up)
+                            "npc_away": {"npc:" + PRIEST: 0}, **NEED9}   # p0.5.14 6→7: 상한(3)인 쌍은 등 돌림(이어간 틱 = next_turn - 1 — 이 자료엔 next_turn 이 없어 0)
+      and up["worlds"][0]["bots"][0] == {"char": "2", "npc_talk": {"npc:" + RECEPTION: 2}, "gold": G.START_GOLD, **NEED9}
+      and up["waiting"]["3"] == {"char": "3", "gold": G.START_GOLD, **NEED9} and again == up, up)
 
 print("── ⑧ 러너 풀런(스텁 — 0콜): 10-13 장비 상인 장면")
 NPC_PROMPTS = []
@@ -696,7 +697,7 @@ check("⑪ NPC 15명 고정 대사 전부(끈 판·마을 생활 판 · 대사·
       len(fixed) > 60 and not hits, hits)
 NEW_LINES = {("gear_merchant", "line_again"): "아까 왔잖아. 물건은 장비점 진열대에 있어 — 오늘 있는 건 그게 다야.",   # p0.5.13 선물 → 판매로 한 번 더 바뀐 칸(약속 꼴 없음 그대로)
              ("innkeeper", "line"): "빈 방은 많은데 아직 손님 받을 준비가 안 됐어.", ("innkeeper", "line_again"): "아까 왔잖아. 아직 준비가 안 됐다니까.",
-             ("tavern_keeper", "line_again"): "아까 왔잖아. 아직 준비 중이라니까.", ("street_vendor", "line_again"): "아까 봤죠? 사고파는 건 아직이에요.",
+             ("tavern_keeper", "line_again"): "아까 왔잖아. 아직 준비 중이라니까.", ("street_vendor", "line_again"): "아까 봤죠? 여기선 사고팔지 않아요.",   # p0.5.16 '사고파는 건 아직'이 마을의 가게와 어긋나 다시 바뀐 칸
              ("apprentice_adventurer", "line_again"): "저는 아직 심사가 안 끝나서 파티를 못 구해요.",
              ("item_merchant", "line_again"): "아까 왔잖아. 물건은 잡화점 진열대에 있어.",   # p0.5.13 선물 → 판매로 한 번 더 바뀐 칸
              ("guild_receptionist", "line_again"): "아까 왔잖아요. 이번 원정 몫은 이미 드렸어요 — 원정 물품은 한 원정에 한 번이에요.",

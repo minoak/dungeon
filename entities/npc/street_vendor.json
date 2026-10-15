@@ -8,7 +8,7 @@
     "vendor"
   ],
   "sprite": "wl-npc-vendor#0",
-  "note": "SilenceBreaker 임시 초안(2026-09-14 D73 마을 행인) — 문장·이름·성격 전부 파트너 대기. walk.region 은 layout 구역 id, rate 는 틱당 한 걸음 확률. 2026-09-15: 여성 SD 외형과 4방향 걷기 적용(art/npc-sprites-v1). story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md).",
+  "note": "SilenceBreaker 임시 초안(2026-09-14 D73 마을 행인) — 문장·이름·성격 전부 파트너 대기. walk.region 은 layout 구역 id, rate 는 틱당 한 걸음 확률. 2026-09-15: 여성 SD 외형과 4방향 걷기 적용(art/npc-sprites-v1). story(trait·history)는 SilenceBreaker 임시 문장(2026-09-15 D75) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). 2026-10-16 p0.5.16: 마을에 값 매긴 가게가 생겨 '아직 값은 안 매겼어요'·'사고파는 건 아직'·'(아직 사고팔 수는 없다)'가 거짓이 됐다(경제 설계 §7) — 이 노점은 사고팔지 않는다는 임시 문장으로(민옥 교정 대기).",
   "comps": {
     "npc": {
       "line": "@prompts",

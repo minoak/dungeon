@@ -68,7 +68,7 @@ def main():
     for seed, expected in baseline.PRE_FX_EXPECTED.items():
         records = baseline.trace_records(seed)
         actual = baseline.digest(records)
-        stripped = baseline.digest(strip(baseline.schema_v04(baseline.items_v055(baseline.gold_v0512(records)))))   # p0.5.5: 관측 계약 문자열(v0.5) · p0.5.6: 아이템 설명 칸 · p0.5.13: 골드·보물 소지 줄도 D66 시절 꼴로 되돌려 비교
+        stripped = baseline.digest(strip(baseline.schema_v04(baseline.items_v055(baseline.gold_v0512(baseline.needs_v0515(records))))))   # p0.5.5: 관측 계약 문자열(v0.5) · p0.5.6: 아이템 설명 칸 · p0.5.13: 골드·보물 소지 줄 · p0.5.16: 욕구 칸도 D66 시절 꼴로 되돌려 비교
         assert actual == baseline.EXPECTED[seed], (seed, actual, baseline.EXPECTED[seed])
         assert stripped == expected, (seed, stripped, expected)
         print('  OK 시드=%s: 새 기준선 일치, 표시 필드 제외 시 기존 관측·상태·난수 일치' % seed)

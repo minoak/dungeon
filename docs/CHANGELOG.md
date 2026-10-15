@@ -1,5 +1,63 @@
 # 변경 기록
 
+## 2026-10-16 — p0.5.16 욕구 틀 + 배고픔(경제 1b)
+
+근거: 설계 `.orch/drafts/economy_design.md`(로컬) §3(욕구 뼈대 3.1~3.6 · 3.8.2~3.8.3)·§4.1·§5.2·§7·§8.1 '1b'·§10 ·
+DECISIONS 2026-10-14(§10 1~11 추천대로)·2026-10-15(§10 12~25 관리자 추천안 — 22 나눔: 0.5.16 엔진만 · 15 모두 보통 · 23 내성은 호기심부터 · 19 need_fill/need_none · 20 문장 2개).
+
+- **욕구 부품**(새 kind `need` — `entities/need/<id>.json` 의 `comps.need` + 말 파일 `prompts/world/need/<id>.md`, 처리는 새 모듈 `needs.py`): `start`·`decay`(몇 틱마다 1)·`full_at`·`full_blocks`
+  (가득 차면 몸에 들어가는 것을 거절)·`stages{id: {min, word, line?(말 파일), effects?}}`·`mood{like|plain|dislike: {time, line}}`(`{what}`·`{what:을|은|이|과}` 자리)·
+  `weights{낮음|높음: {every, fill, mood_time}}`(보통 = decay·100·100)·`from_events[{event: 결과 이름, amount}]`·`tastes`(취향 어휘)·`about`(말 파일 — 생성 호출용)·`tolerance`(자리만).
+  단계가 없는 정의는 엔진이 건너뛴다. 검증기(`entities._need_problems`·`_food_problems` + 2차: satisfies 의 욕구 = 단계 있는 정의 · taste ⊆ 어휘). 효과 어휘 둘만 코드: `no_regen` · `hp_drain{every, floor%}`.
+  엔진 지점 셋: 줄기(`NE.tick` — 러너 `_tick_world` 머리, 판단 전 · `turn % every`) · 채우기(`NE.eat` — 먹을 것의 `satisfies` / `NE.on_result` — `Dungeon._note_last` 가 몸이 겪은 결과마다) ·
+  단계 판정(`NE._set` — 단계가 바뀌면 사건). 세계 버퍼 `d.need_log`(getattr — 옛 피클 무관) → 러너가 틱 머리·tick 기록 직전 두 번 붓는다. 판정 rng 무접촉.
+- **배고픔**(`hunger` — 설계 초안 숫자): 시작 70 · 4틱마다 1 · 81 이상 배부름(먹기 거절) · 41~80 보통(문장 없음) · 16~40 배고픔 · 0~15 굶주림(`no_regen` + `hp_drain` 60틱·50%) ·
+  기분 조각 좋아함 120·기본 60·싫어함 60틱 · 무게 낮음 6틱·150%·50% / 높음 3틱·70%·150%(사교 예시를 옮긴 임시 값 — 0.5.16 은 모두 보통) · 취향 어휘 8.
+  문장·숫자 전부 임시(민옥 교정 대기).
+- **먹을 것**: 오브젝트의 새 부품 `satisfies{욕구: 양}`·`taste[꼬리표]`. 휴대식 `ration`(새 아이템 type — 몸의 정수 `rations`, 소지 칸 **i9**, +50 · 빵) ·
+  식사 `meal`·햇사과 `apple`(새 type `food` — 사는 순간 그 자리에서 먹는다, +70 고기·따뜻한 것 / +20 과일). `ITEM_TYPES`·`SHOP_ITEM_TYPES`·`SHOP_BUY_TYPES`(ration)·`USE_LOOT`(ration) ·
+  다루는 규칙 두 칸(item_rules `ration`·`food`).
+- **먹기 끝까지**: 조합형 `use i9`(자기만 — 남에게는 no_item_effect) · 메뉴형 `drink{item:ration}` → 공용 `Dungeon._eat_ration` · 주점 식사·햇사과 = `IA.buy` 의 food 길(배가 부르면 값을 보기 전에 거절 —
+  `need_none{via:buy}`, 돈 그대로 · 모자라면 too_poor) · 휴대식 사기(소지 +1 — 먹지 않는다)·팔기(절반 1)·건네기(물약 문법)·뒤지기(통·궤짝·항아리 w1) · 목격 `ally_use`('먹었다'·'식사를 사 먹었다' — 숫자·기분 없음).
+  `IA.buy_list` 는 지닐 수 없는 음식(food)의 되사는 값을 내지 않는다.
+- **가게**: 주점(마을 생활 판 `life.use` = shop, 식사 3) · 잡화점 휴대식 2 · 채소 좌판(browse → shop, 햇사과 1 — 옛 진열품·'구경만 된다' 걷음) · 주점 주인 `npc.shop: tavern`(NPC 두뇌 사실에 값).
+  상품 번호가 밀렸다(g1 = 주점 식사 · 장비점 g2~g5 · 잡화점 g6·g7 · 채소 좌판 g8 — `IA.goods` 규칙 그대로).
+- **굶주림 효과**: `IA.handle` 의 sit·drink·warm·lodge → `heal 0` + `no_regen`(묵기는 상태 소거·값은 그대로) · 쉬기는 HP 차단과 상태 회복을 따로 —
+  `_set_rest` 는 나을 몸 상태가 없을 때만 `result:no_regen`(눕지 않는다 — 쉬어도 바뀌는 것이 없어 끝없는 휴식이 되는 것을 막는다) · 몸 상태가 있으면 눕고 `_rest_tick` 이 HP 를 채우지 않은 채
+  REST_MIN 틱 뒤 상태를 지운다(`rested{healed, cleared, no_regen}` — 만피를 기다리지 않는다) · 쉬는 도중 굶주림에 들면 상태가 없을 때만 깬다 ·
+  관측: 굶주린 몸 몫의 쉬는 자리 사실에서 회복 수치를 걷고(묵기 '묵으면 몸 상태가 낫는다') 메뉴형 '쉰다' 줄은 몸 상태가 있을 때만 HP 말 없이('한동안 쉬면 몸 상태가 낫는다') · 물약·샘·스킬은 그대로.
+  `hp_drain` 은 `NE.tick` 이 HP −1 · 최대 HP 의 floor%(올림)에서 멈춤 · 사건 `need_drain` + 그 몸의 궤적 한 칸(꼬리표 `허기`).
+- **관측·지침**: `obs.need_lines`(문장 수 ≤ `LINE_CAP` 2 — 조각이 아니라 문장을 센다(`NE.sentences`) · 가장 낮은 충족도의 상태 문장부터, 그다음 새 기분 조각 · 남은 자리보다 긴 조각은 앞 문장만) →
+  '네 상태' `- 몸과 기분: …`(`brains.NEED_HEAD`) · `obs.rations` → `- 휴대식 N개` ·
+  먹을 것의 대상 줄에 취향 꼬리표('[g1] 식사 — 고기·따뜻한 것') · 결과 문장(`NE.prose` — 숫자 없음). 지침 '네가 아는 세계'에 기능 설명 한 줄 '`몸과 기분`은 지금 네 몸과 마음의 상태다.' · use 설명에 '먹기'.
+  공개 투영: `IG.NEED_NUM_KEYS`(욕구 결과의 before·after·tol·from·to) · `SPECTATOR_KEYS` 에 needs·moods·need_w·taste.
+- **시트**: `load_party` 가 `needs{욕구: {level, why?, src?}}`·`taste{likes, dislikes}` 를 거른다(`NE.sheet_fields` — 틀린 칸만 버리고 판을 막지 않는다 · why 40자 · 좋아함 2·싫어함 1).
+  스폰이 몸의 `need_w`(보통이 아닌 것만)·`taste` 로 건다. 0.5.16 은 시트에 칸이 없어 모두 보통(생성 호출·론처 칸은 0.5.17). 론처 저장(character_presets)은 아직 이 칸을 모른다.
+- **스트림**: `tick.bots[].needs`(늘)·`moods`·`rations`(있을 때만) · 사건 `type:need`(`bot` — char 없음: '실행된 결정 = 그 char 의 이벤트 하나')의 `need_stage`·`need_drain`·`need_fill(via event)`·`need_none(via event)` ·
+  행동 결과 `need_fill{via eat|buy}`·`need_none{why full}` · `rest`/`walk` 의 `no_regen` · `run_meta.need_defs`(늘)·`party[].needs/taste`(있을 때만) · events.log 단계·깎임 줄. STREAM_FORMAT '욕구와 배고픔' 절·이벤트 표 `need` 줄.
+  관전 화면 TS 는 스트림 타입만(`game/src/stream/types.ts` — Bot.needs·moods·rations · NeedMood · StreamEvent.bot·need · RunMeta.need_defs). 사건 줄(evline)·초점 카드는 다음.
+- **거짓이 된 말(§7)**: 주점 주인 마을 생활 대사('안은 아직 준비 중' → 식사를 낸다) · 노점 상인('아직 값은 안 매겼어요'·'사고파는 건 아직'·'(아직 사고팔 수는 없다)' → 이 노점은 사고팔지 않는다) — 전부 임시.
+- **저장 판 9**(`snapshot._m8_needs`): 옛 몸에 시작 충족도·빈 기분 조각·휴대식 0 · 주점 주인·주점·채소 좌판·노점 상인의 말을 지금 정의로(`_refresh_economy_words` 에 정의 목록·오브젝트 갈래).
+- 게이트 `verify_needs`(새 — 정의·검증기 · **시험용 욕구 정의 한 장(+말 파일)만 더해 고리 전체** · 코드에 욕구 id 글자 없음 · 단계 경계·t120/t220 · 굶주림 효과가 문장대로 · 먹기 끝까지 · 무게·취향 ·
+  줄 상한 · 이관·피클 · 남에게 안 보임 · 문장 게이트(빨간불 표본) · 러너 풀런 둘(배고픔 · 시험 욕구) · 배선) · `_run_gates.sh` 등록.
+  고친 게이트(새 칸·번호·판): verify_entities(need 갈래) · verify_items(아이템 11장·규칙 8칸·i9) · verify_shop(상품 번호 밀림·잡화점 휴대식) · verify_townlife(채소 좌판·주점 = 가게) ·
+  verify_stream(봇 스냅샷 needs · 원장 감사 need_drain) · verify_class_foundation·verify_npc_talk·verify_repeat_goal(판 9 이관 칸·판 번호 8 이상) · verify_skill_off·verify_combat_stream(새 해시 — 욕구 칸만 되돌리면 p0.5.13 해시).
+- 검증: 게이트 103/103(_run_gates.sh 102 + tools/check_words — 기준선 '후' 산출 p0516-after · verify_house ⑩ polls 15→14 는 빨간불과 나란히 돌린 부하 잡음 → `--only` 재산출 15, HEAD 사본 3회도 15).
+  verify_needs 75칸. 빨간불 52종(고친 자리를 리포 복사본에서 줄 전체로 하나씩 망가뜨리면 verify_needs 가 전부 FAIL — `ab_runs/p0516/redlight.py`, 로컬) 놓침 0 · 깨짐 0.
+  기준선(전 = 213be8f v0.5.15, 후 = 이 작업 트리, 판 3 × 120틱 · 게이트 전부): **(나) 0** — 1853건 전부 전후 원문 고정 규칙(`ab_runs/baseline/p0516-rules.py`, 로컬 — 정규식 없음 ·
+  되돌림 탐침: 후 줄마다 p0.5.16 칸만 걷으면 스트림·프롬프트·피클이 전과 같다 · 결산은 Collector 로 다시 센다 · 산출 반례 6건 (나) · 피클 반례 6건 거부). 판 셋의 행동·사건은 같다(더미 두뇌는 먹지 않는다) —
+  차이 = 몸의 배고픔 칸(틱마다) · t120 need_stage 셋 · '몸과 기분' 줄 · 지침 한 줄·'먹기' · 주점·채소 좌판의 쓰임·태그·노점 상인 말 · 버전·지문 · 저장 판 9 · 피클 +653~1318.
+- p0516b(Codex 리뷰 p0516r 반영): ① 쉬기 회귀 — 굶주림의 `no_regen` 이 HP 회복만 막고 몸 상태 소거는 막지 않는다(위 '굶주림 효과' — 만피·출혈이면 0.5.15 처럼 쉬어 낫는다) ·
+  휴식 완료 문장 '쉬었다 — 기운이 돌아오지 않았다, 몸 상태는 나았다: …'·꼬리표 '· 기운 안 돎'·관전 로그 · 메뉴 '쉰다' 줄의 굶주린 몸 문구(전부 임시).
+  ② 줄 상한을 문장 수로(굶주림 두 문장 + 기분 한 문장 = 세 문장이 나가던 것). ③ 기준선 규칙 — 피클의 몸 욕구 칸을 걷기 전에 값으로 맞대고, t120 뒤 관측의 need_lines 가 빠져도 거부.
+  권장 반영: verify_needs 에 실행 검증 — 피클 왕복(사건 버퍼 없는 옛 세계)에서 먹기 · 러너 판의 각본 두뇌가 배고파지면 휴대식을 먹는다(행동이 낳은 need_stage 가 같은 틱 기록에 · 기분 조각의 스트림 만료).
+- 검증(p0516b 뒤 다시): 게이트 103/103(_run_gates.sh 102 + tools/check_words — 기준선 '후' 산출 p0516b-after, 혼자 산출 · 잡음 0). verify_needs 81칸.
+  빨간불 62종(옛 52 + 쉬기 분리·문장 상한·기분 만료·옛 피클 버퍼 10) 놓침 0 · 깨짐 0. 기준선 **(나) 0** — 1853건(판 셋의 행동·사건은 p0516-after 와 같다 — 더미 두뇌는 굶주리지 않는다) ·
+  산출 반례 6건 (나) · 피클 반례 15건(판 셋 × 5) 거부 · 스트림 반례 9건(판 셋 × 3) 거부.
+- p0516c(Codex 재리뷰 p0516rr 반영 — 기준선 규칙만, 게임 코드 무수정): 피클 탐침이 결산 수집기의 `need_defs`·`item_info` 새 물건·`need_stage` 수를 걷기 전에 기대값과 맞댄다
+  (= `needs.defs_meta()` · `show_runner.item_info()` · 후 스트림에서 그 틱까지 센 수). 결산 수집기 반례 10건(정의 누락·정의 오류·need_stage 999 × 판 셋 + live 휴대식 설명) 거부 —
+  피클 반례 모두 25건 · 스트림 9건 · 산출 6건 전부 거부, 기준선 **(나) 0**(1853건, p0516b-after 그대로).
+
 ## 2026-10-15 — p0.5.15 반복 신호 + 목표 칸
 
 근거: 0.5.13 실판 분석(로컬 `.orch/drafts/run_0513_haiku_analysis.md` — Haiku 600틱: 몇 턴 전 계획을 잃음(t17 '보물 팔러 던전' 출발 → t28 상인 곁에서 이탈) ·

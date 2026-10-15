@@ -296,8 +296,10 @@ check("⑧ 자료는 정말 옛 꼴: 판형 1 · state_version 없음 · 몸에 
       and all(not (set(b) & set(judge.PROF_KEYS)) for b in snapshot._bodies(raw8)) and OLD.load(os.path.join(S8, "snapshot.pkl"))[0]["version"] == 1)
 new8, m8 = snapshot.load(os.path.join(S8, "snapshot.pkl"))
 bodies8, bodies_raw = snapshot._bodies(new8), snapshot._bodies(raw8)
-same_rest = all(set(nb) - set(judge.PROF_KEYS) - ({"lore"} if rb.get("people") is not None else set()) - {"gold"} == set(rb)   # p0.5.11 4→5: 인물 기록 판의 몸에 빈 로어북 장부
+same_rest = all(set(nb) - set(judge.PROF_KEYS) - ({"lore"} if rb.get("people") is not None else set()) - {"gold"}
+                - {"needs", "moods", "rations"} == set(rb)                                                                 # p0.5.11 4→5: 인물 기록 판의 몸에 빈 로어북 장부
                 and nb.get("gold") == G.START_GOLD                                                                          # p0.5.13 5→6: 옛 몸에 시작 지갑
+                and nb.get("needs") == {nid: sp["start"] for nid, sp in G.NE.live()} and nb.get("moods") == [] and nb.get("rations") == 0   # p0.5.16 8→9: 욕구 시작값·빈 기분·휴대식 0
                 and nb.get("lore", {}) == {} and all(nb[k] == rb[k] for k in rb if isinstance(rb[k], (int, str, float, bool, type(None), list, dict, set, tuple)))
                 for nb, rb in zip(bodies8, bodies_raw))
 check("⑧ 새 로더: 내용 판 0 → %d · 판형 %d · 몸마다 직업 기본값(전사 0/0/0 · 도적 0/4/4 · 궁수 0/2/0) · 다른 칸 그대로" % (snapshot.STATE_VERSION, snapshot.VERSION),
