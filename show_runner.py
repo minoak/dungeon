@@ -92,7 +92,7 @@ DUNGEON_H = int(os.environ.get("DUNGEON_H", "20"))
 # D88(2026-09-20) 던전 생성 프로필 — 기본 '' = 옛 생성기(방 5~9×3~5 · 폭 1 통로, 옛 판과 바이트 동일). 'concept' =
 #   dungeon_concept.ConceptDungeon(큰 홀·회랑·작은 방 · 폭 2~3 통로 · 기둥, 구역 분류는 4×4 블록 — 작업지시서
 #   art/dungeon-v2/IMPLEMENTATION_GUIDE.md '본편 통합 순서' 1). 층을 짓는 세 자리(new_floor·시작·전이)가 같은 클래스를
-#   쓴다 — 하나라도 다르면 주점 소문(new_floor 미리보기)이 실제 1층과 다른 숫자를 말한다. 그 프로필은 42×34 에서
+#   쓴다 — 하나라도 다르면 new_floor 로 지은 층(도구·게이트)이 실제 층과 달라진다. 그 프로필은 42×34 에서
 #   검증됐으므로 DUNGEON_W/H 를 환경에 **명시하지 않았을 때만** 그 크기를 쓴다(명시하면 그 값 — 너무 작으면 생성기가
 #   ValueError 로 이유를 말한다). 세계 지문·run_meta 에는 켠 판에만 적는다(arch · arch_v).
 DUNGEON_ARCH = "concept" if os.environ.get("DUNGEON_ARCH", "") == "concept" else ""
@@ -125,7 +125,7 @@ N_TRAP = int(os.environ.get("DUNGEON_TRAPS", "3"))
 N_LURK = int(os.environ.get("DUNGEON_LURKERS", "1"))
 BESTIARY_PLUS_ON = os.environ.get("DUNGEON_BESTIARY_PLUS", "0") == "1"   # D92(09-20 파트너 "던전에 추가 오브젝트나 몬스터 혹은 이벤트를
 #   넣는 것만 하면 될 것 같아" · 메모 §4-3 '요구하는 대응이 다른 종류'): 새 몬스터 풀(상태형 독칼 고블린·무리형 새끼거미·단단한 고블린 중갑병) —
-#   2층부터 고블린의 절반이 새 종으로 바뀐다(1층은 그대로 — 의뢰·주점 소문의 실측). 러너 기본도 0(론처가 켠다) = 옛 판과 비트까지 같다
+#   2층부터 고블린의 절반이 새 종으로 바뀐다(1층은 그대로 — 의뢰 goblin_cull 이 1층 고블린에 걸려 있다). 러너 기본도 0(론처가 켠다) = 옛 판과 비트까지 같다
 FLOOR_LIFE_ON = os.environ.get("DUNGEON_FLOOR_LIFE", "0") == "1"   # D92(09-20 파트너 "던전에 추가 오브젝트나 몬스터 혹은 이벤트를 넣는 것만
 #   하면 될 것 같아"): 던전 살림 — 뒤지는 통·나무 상자·항아리(rummage, 한 번)·읽는 석판(그 층을 세계가 센 사실)·모닥불(2층부터, 곁에서 쓰면 HP).
 #   새 동사는 없다(전부 기존 use/interact 밑 · 부품은 entities/object 의 JSON). 러너 기본도 0(론처가 켠다) = 옛 판과 비트까지 같다.
@@ -1248,12 +1248,13 @@ def town_for_run(apart, quests, walkers=False, guide=False):
 
 
 def new_floor(nd, lore, quests=None, seed=None):
-    """던전 층 하나(nd ≥ 1) — 시작 층·층 전이·소문 미리보기가 같은 인자로 짓는다(D69 에서 한곳으로). 시드 파생이라 같은 nd 는 같은 층.
-    seed(D94, 09-20)를 주면 그 마스터 시드로 짓는다 — 원정 고리 판의 두 번째 원정부터 소문 미리보기가 그 원정의 1층을 세기 위해서다(기본 = 판의 시드)."""
+    """던전 층 하나(nd ≥ 1) — 러너의 시작 층·층 전이와 같은 인자로 짓는다(D69 에서 한곳으로). 시드 파생이라 같은 nd 는 같은 층.
+    seed(D94, 09-20)를 주면 그 마스터 시드로 짓는다 — 원정 고리 판의 n 번째 원정의 층(expedition_seed(n))을 짓는다(기본 = 판의 시드).
+    p0.5.17: 주점 소문 미리보기(floor_rumor)는 거뒀다 — 지금 쓰는 곳은 도구(tools/freedom_bench)·게이트(verify_arch·verify_loop)다."""
     d = FLOOR_CLS(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED if seed is None else seed, depth=nd,
                   n_monsters=N_MON + nd - 1, n_traps=N_TRAP, n_lurkers=N_LURK,
-                  bestiary_plus=BESTIARY_PLUS_ON,   # D92 새 몬스터 풀 — 생성 세 자리(소문 미리보기·시작·전이)가 같은 값을 넘긴다
-                  floor_life=FLOOR_LIFE_ON,   # D92 던전 살림 — 같은 규율(세 자리가 같은 값: 소문 미리보기와 실제 1층이 같은 층이어야 한다)
+                  bestiary_plus=BESTIARY_PLUS_ON,   # D92 새 몬스터 풀 — 생성 세 자리(new_floor·시작·전이)가 같은 값을 넘긴다
+                  floor_life=FLOOR_LIFE_ON,   # D92 던전 살림 — 같은 규율(세 자리가 같은 값: new_floor 로 지은 층과 실제 층이 같은 층이어야 한다)
                   scan=SCAN_ON, n_potions=N_POTION, loops=LOOPS_ON, selfstop=SELF_ON,
                   graves=GRAVES_ON, events=EVENTS_ON, dry_signal=DRY_ON, hail=HAIL_ON,
                   wait_verb=WAIT_ON, motion=MOTION_ON, ally_doing=ALLY_DOING_ON,
@@ -1285,18 +1286,6 @@ def expedition_done(done, said):
     return [x for x in (done or []) if x not in set(said or ())]
 
 
-def floor_rumor(d):
-    """D69 소문 재료 — 층 하나의 실제 배치를 세계가 센 숫자로(0콜): 몬스터 종별 수·함정·보물·상자·물약·장비. 주점 주인의 '아는 것'."""
-    kinds = {}
-    for m in d.monsters:
-        kinds[m.kind] = kinds.get(m.kind, 0) + 1
-    feats = {}
-    for f in d.features.values():
-        if f.type in ("treasure", "chest", "potion", "weapon", "armor", "fountain"):
-            feats[f.type] = feats.get(f.type, 0) + 1
-    return {"depth": d.depth, "monsters": kinds, "traps": len(d.traps), "features": feats}
-
-
 def shop_facts(d, eid):
     """p0.5.13(경제 1a) NPC 가 맡은 가게(정의 npc.shop — 건물 정의 id)의 값 한 줄 — 그 건물의 쓰임이 이 세계에서 실제로 서 있을 때만(마을 생활을 끈 판·
     옛 마을은 None — 가게가 없는 세계에서 값을 말하지 않게). 가게(shop) = 파는 값·사들이는 값, 숙소(lodge) = 묵는 값. ⚠️문구 임시"""
@@ -1320,7 +1309,10 @@ def shop_facts(d, eid):
 
 def npc_facts(d, npc_name, bots, fallen, quests, expedition=0, names=None):
     """D69 NPC 두뇌의 '아는 것' — 전부 세계의 사실(정의·장부·배치)이고 캐릭터 시트는 없다. NPC 역할별로 다른 사실을 준다:
-    접수원=게시판 의뢰·맡은 의뢰·진행·보고 결과 / 주점 주인=지하 1층 실측 소문 / 성직자=신의 요청·묘. 공통=파티 명단·귀환 여부.
+    접수원=게시판 의뢰·맡은 의뢰·진행·보고 결과 / 의뢰인(의뢰 정의의 client 가 그 NPC — 지금은 주점 주인)=제 의뢰를 누가 맡았나 / 성직자=신의 요청·묘.
+    공통=파티 명단·귀환 여부.
+    p0.5.17(민옥 10-16 "마을 NPC 는 마을 이야기를 한다"): 던전 층의 실측(옛 주점 주인·떠돌이 모험자의 '지하 N층 소문' 줄 — 몬스터 종별 수·함정·
+    보물·상자·물약·장비)은 어느 NPC 에게도 주지 않는다. 제 의뢰를 맡았다는 사실은 마을 일이라 그 분기 밖으로 옮겨 남겼다.
     expedition(D94, 09-20) = 지금 몇 번째 원정인가(원정 고리 판에서만 1 이상 — 끈 판은 0 이라 옛 문장 그대로). 2 이상이면 '아직 안 내려갔다'가
     거짓이라 앞선 원정을 말한다. fallen 은 부르는 쪽이 이 원정 몫만 넘긴다(고리 판).
     p0.5.9 신원 ID-1(설계 §1.6, DECISIONS 69): NPC 는 길드에 등록된 모험가 이름을 처음부터 안다 — 인물 기록 판에서도 실명. 쓰러진 사람도
@@ -1354,17 +1346,10 @@ def npc_facts(d, npc_name, bots, fallen, quests, expedition=0, names=None):
                                                        if qid in quests["accepted"] else "게시 중")
             board.append("%s(%s%s) — %s" % (qd.get("title", qid), qd.get("goal", ""), (", 보상: %s" % qd["reward"]) if qd.get("reward") else "", st))
         facts.append("게시판 의뢰: " + (" / ".join(board) or "없음"))
-    if nd.get("role") and "소문" in nd["role"] and getattr(d, "rumor", None):
-        r = d.rumor
-        mons = ", ".join("%s %d마리" % (k, v) for k, v in r["monsters"].items()) or "몬스터 없음"
-        fe = r.get("features") or {}
-        facts.append("지하 %d층 소문(세계가 센 실제 수): %s · 함정 %d개 · 보물 %d · 상자 %d · 물약 %d · 장비 %d"
-                     % (r["depth"], mons, r["traps"], fe.get("treasure", 0), fe.get("chest", 0), fe.get("potion", 0),
-                        fe.get("weapon", 0) + fe.get("armor", 0)))
-        if quests is not None:
-            mine = [G.quest_def(q) or {} for q in quests["accepted"] if (G.quest_def(q) or {}).get("client") == npc_name]
-            if mine:
-                facts.append("네가 낸 의뢰를 이 파티가 맡았다: " + ", ".join(q.get("title", "?") for q in mine))
+    if quests is not None:                   # 제 의뢰를 맡은 사람(마을 일) — p0.5.17: 옛 소문 분기(역할의 '소문' + 소문 재료) 밖으로
+        mine = [G.quest_def(q) or {} for q in quests["accepted"] if (G.quest_def(q) or {}).get("client") == npc_name]
+        if mine:
+            facts.append("네가 낸 의뢰를 이 파티가 맡았다: " + ", ".join(q.get("title", "?") for q in mine))
     shop_ = shop_facts(d, nd.get("shop"))       # p0.5.13(경제 1a) 맡은 가게의 값 — 그 가게가 이 세계에서 실제로 문을 연 판에만(값을 지어내지 않게 · 깎아 주는 길은 없다)
     if shop_:
         facts.append(shop_)
@@ -1731,9 +1716,7 @@ def main():
     if snap is None:                       # ── 새 판: 세계를 짓고 파티를 놓는다 ──
         if TOWN_ON:                            # 마을 판(D29): 원정은 고향에서 시작한다
             d, tstarts = town_for_run(TOWN_APART_ON, quests, TOWN_WALKERS_ON, TOWN_GUIDE_ON)   # D69 흩어진 출발·의뢰 장부 · D73 행인 · D81 마을 안내(게이트 스텁 허용)
-            d.lore = lore
-            if npc_brain or NPC_HAIL_ON:       # D69·D71 주점 소문 재료 — 지하 1층의 실제 배치(같은 시드=같은 층, 0콜): NPC 답·인사의 숫자
-                d.rumor = floor_rumor(new_floor(1, lore))
+            d.lore = lore                      # (p0.5.17: 여기서 짓던 주점 소문 재료 — 지하 1층 미리보기 — 는 거뒀다. 마을 NPC 는 던전 안을 모른다)
         else:
             d = FLOOR_CLS(w=DUNGEON_W, h=DUNGEON_H, seed=DUNGEON_SEED, n_potions=N_POTION, depth=START_DEPTH,   # D67: 프리셋이면 최심층
                           n_monsters=N_MON + START_DEPTH - 1, n_traps=N_TRAP, n_lurkers=N_LURK, scan=SCAN_ON,   #   (층 전이와 같은 몹 수 규칙)
@@ -2072,7 +2055,7 @@ def main():
         재료는 전부 이미 있는 것이다: 보고가 가른 완수/미완 의뢰 · 일행이 들고 온 보물 · 이 원정이 닿은 가장 깊은 층(보존 층 목록) ·
         이 원정에서 쓰러진 사람. 새 수치나 보상은 만들지 않는다(D69 에서 제출 뒤로 미뤄 둔 것).
         낸 뒤에 다음 원정을 연다 — 장부의 귀환·보고 표식을 지우고(마을이 '돌아온 뒤'라고 말하지 않게), 사람이 없는 던전 층의 보존을
-        버리고(다음 원정은 새 시드의 지하 1층부터 — 파트너 확정), 주점의 소문 재료를 그 1층으로 다시 센다(옛 숫자는 거짓이 된다).
+        버리고(다음 원정은 새 시드의 지하 1층부터 — 파트너 확정). (p0.5.17: 여기서 주점의 소문 재료를 새 1층으로 다시 세던 일은 소문과 함께 거뒀다.)
         몸·소지·관계·기억·도감은 손대지 않는다 — 층 전이가 이어 주는 길 그대로 다음 원정으로 간다."""
         nonlocal returned_party
         n_ = int(expedition["n"])
@@ -2100,8 +2083,6 @@ def main():
             del saved[k]
         expedition.update(n=n_ + 1, t0=turn, fallen=len(fallen),
                           said=sorted(set(expedition.get("said") or []) | set(rep.get("done") or [])))   # 이 결산이 말한 완수 의뢰(다음 결산이 되풀이하지 않게)
-        if getattr(d, "rumor", None) is not None:             # D71 주점 소문은 '지하 1층 실측' — 새 원정의 1층으로 다시 센다(0콜)
-            d.rumor = floor_rumor(new_floor(1, lore, seed=expedition_seed(_exp_n() or 1)))
 
     def _everyone():                         # 판에 있는 사람 전부 — 옛 판은 이 층의 사람들 그대로
         return sorted((b for x in worlds for b in x["bots"]), key=lambda b: b["char"]) if PARTYFORM_ON else bots

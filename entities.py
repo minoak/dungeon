@@ -58,7 +58,7 @@ UNLOCK_EVENTS = {'encounter', 'kill', 'search_first', 'trap_avoid', 'trap_disarm
 #   코드가 세는 건 encounter 뿐(bestiary.Issuer, D53) — 나머지는 검증기만 아는 예약어(정의에 적어도 아직 안 센다).
 BASELINE_MONSTER = '고블린'   # 모르는 종(장면 저작의 임의 이름)은 기준선 몹의 몸 — 낯선 짐승도 몸은 있다
 SPAWN_POOLS = ('plus',)       # D92(09-20) ai.spawn.pool 어휘 — plus = 새 몬스터 풀(스위치 DUNGEON_BESTIARY_PLUS 를 켠 판에만 놓인다)
-PLUS_MIN_DEPTH = 2            # D92 새 몬스터가 놓이기 시작하는 층 — 1층은 의뢰(goblin_cull)·주점 소문의 실측이 걸려 있어 바꾸지 않는다
+PLUS_MIN_DEPTH = 2            # D92 새 몬스터가 놓이기 시작하는 층 — 1층은 의뢰(goblin_cull)가 1층 고블린에 걸려 있어 바꾸지 않는다
 
 
 class EntityError(ValueError):
@@ -346,8 +346,8 @@ def _food_problems(rel, d, comps):
 #   끈 판은 옛 판과 바이트가 같아야 하므로 원래 칸은 그대로 두고, 켠 판용 문장·쓰임을 이 부품에 따로 둔다(comps_of 가 합친다).
 #   덮는 것은 문장과 건물의 쓰임뿐 — 판정에 닿는 칸(선물·보고·걸음)은 여기 둘 수 없다.
 LIFE_PARTS = {'npc': ('npc', 'story'), 'building': ('building', 'story', 'use')}
-LIFE_NPC_KEYS = ('line', 'line_again', 'role', 'persona', 'hail', 'hail_no_potion', 'hail_board', 'hail_return', 'hail_rumor',
-                 'hail_oracle', 'hail_party', 'line_party')
+LIFE_NPC_KEYS = ('line', 'line_again', 'role', 'persona', 'hail', 'hail_no_potion', 'hail_board', 'hail_return',
+                 'hail_oracle', 'hail_party', 'line_party')   # p0.5.17: hail_rumor(주점 소문 인사) 칸은 거뒀다
 
 
 def _life_problems(rel, kind, comps):
@@ -796,8 +796,9 @@ def npc(eid, life=False):
             'line_close': c.get('line_close'),
             # p0.5.13(경제 1a): 이 사람이 맡은 가게(건물 정의 id — 선택). 판정은 가게(건물의 쓰임)가 하고 이 칸은 NPC 두뇌 사실(그 가게의 값)의 재료뿐
             'shop': c.get('shop'),
-            # D71(09-14): NPC 가 먼저 거는 인사 — hail(기본)·hail_no_potion·hail_board·hail_return·hail_rumor·hail_oracle(전부 선택, 상황별)
-            **{k: c.get(k) for k in ('hail', 'hail_no_potion', 'hail_board', 'hail_return', 'hail_rumor', 'hail_oracle',
+            # D71(09-14): NPC 가 먼저 거는 인사 — hail(기본)·hail_no_potion·hail_board·hail_return·hail_oracle(전부 선택, 상황별)
+            #   p0.5.17(민옥 10-16 "마을 NPC 는 마을 이야기를 한다"): 주점 주인의 소문 인사 hail_rumor(지하 1층 실측 수)는 거뒀다 — 정의에 적어도 읽지 않는다
+            **{k: c.get(k) for k in ('hail', 'hail_no_potion', 'hail_board', 'hail_return', 'hail_oracle',
                                      'hail_party', 'line_party',   # D84 조각 5: 파티 결성 판에서 입구의 규칙을 말해 주는 인사·대사 꼬리({party_need})
                                      'hail_blessed')},   # D95(09-20): 공물 판에서 이미 축복을 받은 사람에게 거는 인사 — 축복이 판당 한 번이라 옛 인사가 거짓이 되는 자리
             'walk': (dict(c['walk']) if isinstance(c.get('walk'), dict) else None)}   # D73(09-14) 행인: {region: layout 구역 id, rate}

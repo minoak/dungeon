@@ -93,9 +93,10 @@ probs = ENT._problems([(os.path.join("q", os.path.basename(p)), d) for p, d in b
 check("① 검증기: 모르는 req.kind · 없는 monster · depth 없는 reach 를 전부 잡는다",
       any("req.kind" in p for p in probs) and any("monster 정의가 아니다" in p for p in probs) and any("depth" in p for p in probs))
 npc_rec = ENT.npc("guild_receptionist")
-check("① 접수원 정의: role·report·line_report 3종 · 주점 주인 role 에 '소문' · 성직자 role 에 '신'",
+check("① 접수원 정의: role·report·line_report 3종 · 주점 주인 role 은 있되 '소문'이 없다(p0.5.17 마을 이야기만 — 소문 인사 칸도 없다) · 성직자 role 에 '신'",
       npc_rec["report"] is True and npc_rec["role"] and npc_rec["line_report"] and npc_rec["line_report_failed"] and npc_rec["line_report_empty"]
-      and "소문" in (ENT.npc("tavern_keeper")["role"] or "") and "신" in (ENT.npc("temple_attendant")["role"] or ""))
+      and ENT.npc("tavern_keeper")["role"] and "소문" not in ENT.npc("tavern_keeper")["role"] and "hail_rumor" not in ENT.npc("tavern_keeper")
+      and "신" in (ENT.npc("temple_attendant")["role"] or ""))
 check("① 건물 정의 role — 길드·주점·신전 셋 다 한 줄, 던전 입구는 없음",
       all(ENT.get(b)["comps"]["building"].get("role") for b in ("guild_hall", "tavern", "temple"))
       and not ENT.get("dungeon_gate")["comps"]["building"].get("role"))
@@ -261,11 +262,13 @@ check("⑥ 실패 → None(고정 대사가 남는다) · 예외도 None", brain
       and (lambda: (setattr(brains, "_call_claude", lambda p, m="haiku": (_ for _ in ()).throw(RuntimeError("x"))), brains.npc_reply(b6, res6, None, [], npc={}))[1])() is None)
 brains._call_claude = lambda prompt, model="haiku": ""   # 되돌림(더미 폴백)
 facts6 = show_runner.npc_facts(d4, "주점 주인", [b4], [], Q4)
-d4.rumor = show_runner.floor_rumor(G.Dungeon.from_ascii(rows, seed=7, depth=1, monsters={"g": {"kind": "고블린"}})[0])   # 손 안 댄 장면
+Q4["accepted"]["lost_trinket"] = {"turn": 3, "by": "1"}             # 주점 주인이 낸 의뢰(의뢰 정의 client) — p0.5.17: 소문 재료 없이도 그 사실은 남는다
 facts6b = show_runner.npc_facts(d4, "주점 주인", [b4], ["2"], Q4)
-check("⑥ npc_facts: 파티 줄·귀환 여부 · 주점 주인은 소문(실측 수)·자기 의뢰 · 접수원은 게시판 상태 · 성직자는 신의 요청 없음 줄",
+del Q4["accepted"]["lost_trinket"]
+check("⑥ npc_facts: 파티 줄·귀환 여부 · 주점 주인은 제 의뢰를 맡았다는 사실(p0.5.17: '지하 1층 소문' 줄은 없다) · 접수원은 게시판 상태 · 성직자는 신의 요청 없음 줄",
       any(s.startswith("파티:") for s in facts6) and any("돌아온 뒤" in s for s in facts6)
-      and any("소문" in s and "고블린 3마리" in s and "보물 1" in s for s in facts6b) and any("쓰러진 사람" in s for s in facts6b)
+      and "네가 낸 의뢰를 이 파티가 맡았다: 잃어버린 장신구" in facts6b and not any("소문" in s for s in facts6 + facts6b)
+      and not any("네가 낸 의뢰" in s for s in facts6) and any("쓰러진 사람" in s for s in facts6b)
       and any("게시판 의뢰:" in s and "2층 답사" in s and "완수" in s for s in show_runner.npc_facts(d4, "길드 접수원", [b4], [], Q4))
       and any("신의 요청은 없다" in s for s in show_runner.npc_facts(d4, "성직자", [b4], [], Q4)))
 
@@ -393,7 +396,7 @@ d10, s10 = show_runner.build_town(quests=Q10)
 rec10 = by_name(d10, "npc", "길드 접수원")
 tav10 = by_name(d10, "npc", "주점 주인")
 tem10 = by_name(d10, "npc", "성직자")
-d10.rumor = {"depth": 1, "monsters": {"고블린": 2, "그림자거미": 1}, "traps": 3, "features": {"treasure": 4}}
+d10.rumor = {"depth": 1, "monsters": {"고블린": 2, "그림자거미": 1}, "traps": 3, "features": {"treasure": 4}}   # p0.5.17: 옛 피클에 남았을 소문 재료 — 엔진은 더 읽지 않는다
 a10 = mkbot("1", rec10.x + 2, rec10.y + 2)                       # 접수원 근처(같은 구역, 곁 아님), 물약 0
 g1 = d10.npc_greetings([a10])
 check("⑩ 물약 0 이면 hail_no_potion — 이름 채움 · 한 번만(두 번째 호출 빈 목록)",
@@ -412,8 +415,9 @@ check("⑩ 돌아온 파티(보고 전)면 물약보다 hail_return 이 먼저",
 t10 = mkbot("5", tav10.x + 1, tav10.y + 2); e10 = mkbot("6", tem10.x + 2, tem10.y + 1)
 d10.oracle = {"id": "x", "text": "조심해라", "turn": 1}
 g3 = {g[0]: g for g in d10.npc_greetings([t10, e10])}
-check("⑩ 주점 주인 hail_rumor(고블린 2마리·함정 3) · 성직자 hail_oracle(신의 요청)",
-      g3.get("주점 주인", [None] * 6)[5] == "hail_rumor" and "고블린 2마리" in g3["주점 주인"][2] and "함정도 3개" in g3["주점 주인"][2]
+check("⑩ 주점 주인은 기본 hail — 옛 소문 재료가 세계에 남아 있어도 숫자 인사가 없다(p0.5.17) · 성직자 hail_oracle(신의 요청)",
+      g3.get("주점 주인", [None] * 6)[5] == "hail" and g3["주점 주인"][2] == ENT.npc("tavern_keeper")["hail"].replace("{name}", "카야")
+      and "마리" not in g3["주점 주인"][2] and "함정" not in g3["주점 주인"][2]
       and g3.get("성직자", [None] * 6)[5] == "hail_oracle")
 far10 = mkbot("7", *s10["1"])                                    # 광장(번화가) — 접수원과 다른 구역
 d10.oracle = None
@@ -550,8 +554,9 @@ n12["x"], n12["y"] = next((w1.x + dx, w1.y + dy) for dx, dy in ((1, 0), (-1, 0),
                           if d12.grid[w1.y + dy][w1.x + dx] == G.FLOOR and d12.feature_at(w1.x + dx, w1.y + dy) is None)
 r12 = d12._interact(n12, "f%d" % w1.id, [n12])
 g12 = {g[0]: g for g in d12.npc_greetings([mkbot("3", *near12(w1, 2, 2))])}
-check("⑫ 말 걸기: npc_talk(정의 대사) · 두 번째는 line_again · 인사(D71)는 행인도 건다 — 앞마당의 인사는 던전 말이 아니라 사람 묻는 말(D82: 떠돌이 모험자의 hail_rumor 없음)",
-      r12["result"] == "npc_talk" and "거미" in r12["line"] and d12._interact(n12, "f%d" % w1.id, [n12]).get("again") is True
+check("⑫ 말 걸기: npc_talk(정의 대사 — p0.5.17: '2층 거미' 대신 마을 쪽 말) · 두 번째는 line_again · 인사(D71)는 행인도 건다 — 앞마당의 인사는 던전 말이 아니라 사람 묻는 말(D82: 떠돌이 모험자의 hail_rumor 없음)",
+      r12["result"] == "npc_talk" and r12["line"] == ENT.npc("wandering_adventurer")["line"] and "거미" not in r12["line"]
+      and d12._interact(n12, "f%d" % w1.id, [n12]).get("again") is True
       and "떠돌이 모험자" in g12 and g12["떠돌이 모험자"][5] == "hail" and "hail_rumor" not in (d12.npc_defs.get("떠돌이 모험자") or {})
       and "던전" not in g12["떠돌이 모험자"][2])
 
@@ -661,7 +666,7 @@ check("⑧ HARNESS D69·D70·D71 · CHANGELOG · README(길드 보고·구역·�
       all(k in src(os.path.join("design", "HARNESS_DESIGN.md")) for k in ("D69", "D70", "D71"))
       and "D70" in src(os.path.join("docs", "CHANGELOG.md")) and "D71" in src(os.path.join("docs", "CHANGELOG.md"))
       and "접수원" in src("README.md") and "같은 구역" in src("README.md") and "먼저 말" in src("README.md")
-      and "req" in src(os.path.join("docs", "entities.md")) and "hail_rumor" in src(os.path.join("docs", "entities.md"))
+      and "req" in src(os.path.join("docs", "entities.md")) and "hail_oracle" in src(os.path.join("docs", "entities.md"))   # p0.5.17: hail_rumor 칸은 거뒀다
       and "npc_hails" in src(os.path.join("game", "src", "stream", "parse.ts")) and "npc_hails" in src(os.path.join("game", "src", "scene", "Bubbles.ts"))
       and "npc_hails" in src(os.path.join("game", "src", "text", "evline.ts")))
 check("⑧ 러너 스위치 3 · 론처 체크박스 2 + env 2",

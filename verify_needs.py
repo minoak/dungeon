@@ -656,8 +656,8 @@ for b_ in botsS:
 snap8 = {"version": 2, "state_version": 8, "d": dS, "bots": botsS, "sheets": SHEETS}
 snap9 = S.upgrade(pickle.loads(pickle.dumps(snap8)))   # 이 프로세스가 방금 만든 바이트만 되읽는다(피클 왕복 = 이어가기와 같은 길)
 d9 = snap9["d"]
-check("⑥ 이관 8→9: 판 번호 9 · 옛 몸마다 배고픔 시작값 70 · 빈 기분 · 휴대식 0",
-      S.STATE_VERSION == 9 and 8 in S.MIGRATIONS and snap9["state_version"] == 9
+check("⑥ 이관 8→9: 판 번호 9 이상(p0.5.17: 판 10 — 소문 거둠) · 옛 몸마다 배고픔 시작값 70 · 빈 기분 · 휴대식 0",
+      S.STATE_VERSION >= 9 and 8 in S.MIGRATIONS and snap9["state_version"] == S.STATE_VERSION
       and all(b_.get("needs") == {"hunger": 70} and b_.get("moods") == [] and b_.get("rations") == 0 for b_ in snap9["bots"]))
 check("⑥ 이관 8→9: 피클에 얼어 있던 주점 주인의 '안은 아직 준비 중'·맡은 가게 없음 · 채소 좌판의 '구경만 된다'가 지금 정의로",
       d9.npc_lines[TK.name] == ENT.npc("tavern_keeper", life=True)["line"] and d9.npc_lines_again[TK.name] == ENT.npc("tavern_keeper", life=True)["line_again"]
@@ -832,7 +832,8 @@ sf = src("STREAM_FORMAT.md")
 check("⑩ STREAM_FORMAT: 욕구 절(tick.bots[].needs·moods · need_fill · need_none · need_stage · need_drain · bot · run_meta.need_defs · rations)",
       "## 욕구와 배고픔" in sf and all(k in sf for k in ("`tick.bots[].needs`", "need_fill{", "need_none{", "need_stage{", "need_drain{", "`run_meta.need_defs`",
                                                      "`moods`", "`rations`", "char` 대신 `bot`", "| `need` |")))
-check("⑩ _run_gates.sh 에 verify_needs 등록 · VERSION 0.5.16", "verify_needs" in src("_run_gates.sh") and src("VERSION").strip() == "0.5.16")
+check("⑩ _run_gates.sh 에 verify_needs 등록 · VERSION 0.5.16 이상(p0.5.17: 다음 판에서 깨지지 않게)", "verify_needs" in src("_run_gates.sh")
+      and tuple(int(x) for x in src("VERSION").strip().split(".")) >= (0, 5, 16))
 
 shutil.rmtree(ROOT, ignore_errors=True)
 print("ALL PASS — verify_needs (p0.5.16 욕구 틀 + 배고픔: %d checks · 정의·검증기 · 데이터만으로 새 욕구 · 단계 경계 · 굶주림 효과 · 먹기 끝까지 · 저장 · 남에게 안 보임 · 문장 · 러너 · 배선, 실 LLM 0콜)" % C.n

@@ -1,5 +1,34 @@
 # 변경 기록
 
+## 2026-10-16 — p0.5.17 마을 NPC 는 마을 이야기만
+
+근거: 0.5.15 Haiku 실판 분석(로컬 `.orch/drafts/run_0515_haiku_analysis.md` · state/bot2.log t25~t180 — 주점 주인 소문 '1층 고블린 4·그림자거미 1·함정 3개'를 듣고
+셋이 함정 위치를 NPC 에게 되묻고 '던전 입구 쪽 바닥을 직접 살핀다'는 할 일로 마을 길을 탐색 70회, 던전 진입 0) · 민옥 결정(2026-10-16) "마을 NPC 는 마을에 대한 이야기를 한다.
+던전 상세 정보는 아예 없앤다" · 단 NPC 자신의 과거사는 괜찮다. 기능을 끄는 스위치가 아니라 정보 경로를 없앴다(쓰지 않는 칸·함수를 남기지 않는다).
+
+- **없앤 경로**: 러너 `floor_rumor`(지하 1층 미리보기를 지어 몬스터 종별 수·함정·보물·상자·물약·장비를 세던 함수)와 그 두 호출 — 새 마을 판의 `d.rumor`(NPC 두뇌·인사 판마다) ·
+  원정 결산의 '새 1층으로 다시 세기' · `npc_facts` 의 '지하 N층 소문(세계가 센 실제 수)' 줄(역할에 '소문'이 든 NPC — 주점 주인·떠돌이 모험자) ·
+  엔진 `Dungeon.rumor` 칸(두 초기화)·`_npc_hail_line` 의 `hail_rumor` 분기와 `{monsters}{traps}{treasure}` 채우기 · 정의 키(`entities.npc`·`LIFE_NPC_KEYS`)·말 설명표(`words.DESC`)의 `hail_rumor` ·
+  주점 주인 정의의 `hail_rumor` 칸과 말.
+- **남긴 것**: `npc_facts` 의 '네가 낸 의뢰를 이 파티가 맡았다'(마을 일 — 소문 분기 밖으로, 의뢰인 = 의뢰 정의 client · 지금은 주점 주인/잃어버린 장신구) · 접수원 게시판 사실 ·
+  던전 안의 석판(`_tablet_facts` — 던전 안의 정보) · 길드 의뢰 그대로 · `new_floor`(도구 tools/freedom_bench·게이트 verify_arch·verify_loop 가 쓴다 — `seed` 인자 포함).
+- **말(전부 임시 — SilenceBreaker, 민옥 교정 대기, 옛 문장은 말 파일 주석)**: 주점 주인 역할·성격·특징·이야기 · 떠돌이 모험자 대사·재방문 대사('2층 거미')·역할·성격·특징·이야기 ·
+  주점 건물 역할·특징·이야기(두 판). NPC 지침(`prompts/npc_prompt.md`)에 앎의 범위 한 줄 '지금 던전 안이 어떤지(어느 층에 무엇이 얼마나 있는지)는 모른다.' — 모험가 지침은 그대로.
+  정의 note 의 `{monsters}/{traps}/{treasure}` 설명(접수원·성직자·주점 주인) · `docs/entities.md` 인사 줄 · `design/WORLD_TONE.md` 2-5·소문 줄에 결정 표시.
+- **저장 판 10**(`snapshot._m9_rumor`): 던전마다 옛 `rumor` 칸을 걷고, 마을 던전의 주점 주인·떠돌이 모험자·주점의 말을 지금 정의로(`_refresh_economy_words` — 이번에 행인의 걷는 자리
+  `walk` 는 옛 정의 사본의 것을 지킨다: 지을 때 layout 의 walker_rects 가 덮은 자리).
+- 스트림: 새 칸 없음 · `tick.npc_hails[].key` 에 `hail_rumor` 가 더는 없다 · STREAM_FORMAT 새 절.
+- 게이트 `verify_npc_scope`(새 — 정의·말 · NPC 지침 · 엔진 인사(옛 소문 재료가 남아도 읽지 않음) · 모든 NPC 의 사실 묶음 · 러너 풀런(스텁 두뇌 — 1층 실측이 NPC 요청에 없다) · 저장 판 10 · 배선) ·
+  `_run_gates.sh` 등록. 고친 게이트: verify_guild ①⑥⑩⑫⑧(소문 기대 → 없음·의뢰 사실) · verify_people ⑩(역할 문장을 정의에서) · verify_needs ⑥⑩(판 번호 9 이상 · VERSION 0.5.16 이상).
+- 검증: 게이트 104/104(_run_gates.sh 103 + tools/check_words — 기준선 '후' 산출 p0517-after · verify_house ⑩ polls 15→14·turn_last 5→4 는 실행 잡음 → `--only` 재산출이 전과 바이트 같음).
+  verify_npc_scope 23칸. 빨간불 32종(고친 자리를 리포 복사본에서 줄 전체로 하나씩 되살리거나 망가뜨리면 verify_npc_scope 가 전부 FAIL — 의뢰 사실·말 4종은 verify_guild 도 FAIL ·
+  `ab_runs/p0517/redlight.py`, 로컬) 놓침 0 · 깨짐 0. 기준선(전 = 51eb12b v0.5.16 103/103, 후 = 이 작업 트리, 판 3 × 120틱 · 게이트 전부): **(나) 0** — 244건 전부 전후 원문 고정 규칙
+  (`ab_runs/baseline/p0517-rules.py`, 로컬 — 정규식 없음 · 말 쌍 13 = HEAD·작업 트리 사본의 정의에서 읽은 원문 · 스트림 탐침(버전·지문·새 말만 되돌리면 줄마다 전과 같다) ·
+  프롬프트 탐침(옛 말 → 새 말 = 후 글자까지) · 피클 탐침(전 피클의 소문 칸을 HEAD floor_rumor 값과 맞댄 뒤 걷고 말 칸을 새 원문으로 → 구조 차이 0 · 메모 없는 길이 같음) ·
+  피클 반례 15건·스트림 반례 4건 거부 · 산출 반례 6건 (나)). 판 셋의 행동·사건은 같다 — 차이 = live 판 관측의 주점·주점 주인·떠돌이 모험자 역할·특징·마을 안내(about·role 66·66·3) ·
+  프롬프트 줄 · 말 지문(prompts/world/) · 버전 · 저장 판 10 · 세계 칸 rumor 없음 · 피클 −466(live)·−9(dungeon·classic) · 게이트 출력(판 번호·말 칸 295→294·verify_npc_talk ⑪ 115→113칸·
+  verify_town 주점 주인 인사 '소문 하나 들을래? … 고블린 1마리 … 함정도 0개' → '잠깐 쉬었다 가. 요즘 어떻게 지내?'·고친 검사 이름·새 게이트).
+
 ## 2026-10-16 — p0.5.16 욕구 틀 + 배고픔(경제 1b)
 
 근거: 설계 `.orch/drafts/economy_design.md`(로컬) §3(욕구 뼈대 3.1~3.6 · 3.8.2~3.8.3)·§4.1·§5.2·§7·§8.1 '1b'·§10 ·

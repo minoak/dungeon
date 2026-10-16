@@ -323,7 +323,7 @@ check("⑩ (a) 다시 보면 그 NPC 줄 바로 아래 '  · 네 기록: 주점 
 fb10[0]["people"]["npc:주점 주인"] = dict(a1["people"]["npc:주점 주인"])
 p10d = full_prompt(fl10, fb10, fb10[0], [{"from": "2", "text": "주점 주인이 널 찾던데?", "turn": 9, "to": "1", "to_me": True}])[0]
 check("⑩ (c) 던전에서 이름을 들으면 내 기록이 떠오른다(세계가 써 둔 칸은 없다)",
-      "- 주점 주인: 「소문을 물으면 숫자까지 알려 준다. 말이 짧다」" in p10d and "소문 · 쉬어 가는 자리" not in p10d)
+      "- 주점 주인: 「소문을 물으면 숫자까지 알려 준다. 말이 짧다」" in p10d and G.ENT.npc("tavern_keeper")["role"] not in p10d)   # p0.5.17: 역할 문장이 바뀌어도 지금 정의의 것으로
 _, dec10e, _ = full_prompt(d10, bots10, a1, [{"from": "npc:길드 접수원", "text": "두란 님, 어서 오세요.", "turn": 6, "to": "1", "to_me": True}],
                            {"type": "search", "target": "self", "lore_note": {"target": "길드 접수원", "name": "접수원 누님", "text": "물약을 챙겨 준다"}})
 check("⑩ 방금 내게 말한 NPC 에 대해서도 적을 수 있다 — 내가 붙인 이름으로", (dec10e.get("lore_note") or {}).get("key") == "npc:길드 접수원"

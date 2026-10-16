@@ -33,6 +33,8 @@
                    (_m7_repeat — 지난 신호 차례는 늦게 싣지 않는다 · 변화는 몰라 '달라진 것은 없다'는 붙이지 않는다). 목표 칸은 옛 몸에 없다.
       8→9(p0.5.16 욕구 틀 + 배고픔): 몸마다 욕구 충족도 needs(정의의 시작값)·기분 조각 moods·휴대식 rations · 식사·햇사과를 팔게 된
                    주점 주인·주점·채소 좌판·노점 상인의 말을 지금 정의로 다시 읽는다(_m8_needs). 세계의 욕구 사건 버퍼(need_log)는 getattr 기본값으로 받는다.
+      9→10(p0.5.17 마을 NPC 는 마을 이야기만): 던전마다 옛 소문 재료 칸 rumor(지하 1층 실측)를 걷고, 던전 소문을 거둔 주점 주인·떠돌이 모험자·주점의 말
+                   (정의 사본의 소문 인사 칸·역할·성격·대사·특징·이야기)을 지금 정의로 다시 읽는다(_m9_rumor).
 LLM 0콜 · 순수 파일(이관 함수만 몸 dict·반응 원장을 고친다 — 그때 judge 를 늦게 import).
 """
 import io
@@ -44,7 +46,7 @@ import time
 
 VERSION = 2                  # 판형(위 머리글) — 옛 코드(version 1 만 읽음)가 새 스냅샷을 거절하게 하는 문
 READS = (1, 2)               # 이 코드가 읽는 판형. 1 = p0.5.2 까지(내용 판 0)
-STATE_VERSION = 9            # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
+STATE_VERSION = 10           # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
 PKL = "snapshot.pkl"
 META = "snapshot.json"
 
@@ -220,7 +222,10 @@ def _refresh_economy_words(d, G, defs=ECONOMY_DEFS):
             continue
         if f.type == "npc":
             spec = G.ENT.npc(eid, life=life)
+            walk_ = (d.npc_defs.get(f.name) or {}).get("walk")   # p0.5.17: 행인의 걷는 자리는 지을 때 layout 이 덮을 수 있다(walker_rects) — 말만 다시 읽는다
             d.npc_defs[f.name] = {k: v for k, v in spec.items() if v not in (None, [], "")}
+            if walk_:
+                d.npc_defs[f.name]["walk"] = walk_
             d.npc_lines[f.name] = spec.get("line") or "…"
             if spec.get("line_again"):
                 d.npc_lines_again[f.name] = spec["line_again"]
@@ -286,7 +291,24 @@ def _m8_needs(snap):
     return snap
 
 
-MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore, 5: _m5_gold, 6: _m6_away, 7: _m7_repeat, 8: _m8_needs}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
+RUMOR_DEFS = ("tavern_keeper", "wandering_adventurer", "tavern")   # p0.5.17 이관이 말을 새로 읽는 정의 — 던전 소문을 거둔 주점 주인(소문 인사·역할·성격·특징·이야기) ·
+#   떠돌이 모험자('2층 거미' 대사·역할의 '던전 소문'·성격) · 주점(역할·특징·이야기의 소문 구절)
+
+
+def _m9_rumor(snap):
+    """9→10(p0.5.17 마을 NPC 는 마을 이야기만 — 민옥 10-16 '던전 상세 정보는 아예 없앤다'): 던전마다 옛 소문 재료 칸 rumor(지하 1층 실측 —
+    이 코드는 더 만들지도 읽지도 않는다)를 걷는다 · 마을 던전마다 RUMOR_DEFS 의 말을 지금 정의로 다시 읽는다(피클에 얼어 있던 정의 사본에서
+    소문 인사 칸 hail_rumor·'소문' 역할이 빠진다 — 행인의 걷는 자리는 그대로). 이미 건넨 인사·대화(편지함·기억)는 그 판에서 일어난 일이라 손대지 않는다(제자리·한 번)."""
+    import dungeon_gm as G                        # 늦은 import — 이관이 있을 때만
+    for d in dungeons(snap):
+        vars(d).pop("rumor", None)
+        if getattr(d, "town", False):
+            _refresh_economy_words(d, G, RUMOR_DEFS)
+    return snap
+
+
+MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore, 5: _m5_gold, 6: _m6_away, 7: _m7_repeat, 8: _m8_needs,
+              9: _m9_rumor}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
 
 
 def state_version_of(doc):

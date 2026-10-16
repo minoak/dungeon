@@ -1060,7 +1060,6 @@ class Dungeon:
         self.quest_boards = {}     # D69 의뢰 정의 id → (게시판 건물 피처 id, range)
         self.expedition_returned = False   # D69 워프게이트로 돌아온 마을 — 원정을 마친 상태(접수원 보고로 끝난다). 러너가 켠다
         self.town_hear = None      # D70(09-14) 마을 사람 지각 — 'zone' 이면 동료·목소리·목격이 같은 구역(또는 곁 1칸)에서만. None=옛 판(전체 시야)
-        self.rumor = None          # D71 주점 소문 재료(지하 1층 실측 — 러너 floor_rumor). 인사 문장의 숫자 자리에 들어간다
         self.walkers = {}          # D73(09-14) 마을 행인 — 피처 id → {'region': 구역 이름, 'rate': 틱당 걸음 확률}. build_town 이 채운다
         self.walk_rng = None       # D73 행인 걸음 전용 RNG(시드 파생) — 판정용 self.rng 를 안 건드린다(결정론은 그대로)
         self.graves = bool(graves) # D22 묘 스위치 — 기본 꺼짐(기존 verify 비트 동일). 러너가
@@ -1224,7 +1223,6 @@ class Dungeon:
         d.parties = None                               # D84 파티 장부 — 손그림 장면도 기본 없음(호출측이 건다, __new__ 경유라 명시 초기화)
         d.expedition_returned = False                  # D69 원정 귀환 상태 — 러너가 켠다
         d.town_hear = None                             # D70 마을 사람 지각(구역) — 손그림 장면도 기본 없음(build_town 이 켠다)
-        d.rumor = None                                 # D71 소문 재료 — 러너가 채운다
         d.walkers, d.walk_rng = {}, None               # D73 마을 행인 — build_town 이 채운다(__new__ 경유라 명시 초기화)
                                    #   ⚠️ from_ascii 는 __new__ 경유라 __init__ 을 안 탄다 —
                                    #   새 스위치는 여기 명시 초기화가 필수(D21·D22·솔로 때 밟은 함정.
@@ -1405,7 +1403,7 @@ class Dungeon:
     def _place_plus(self):
         """D92(2026-09-20 파트너 "던전에 추가 오브젝트나 몬스터 혹은 이벤트를 넣는 것만 하면 될 것 같아" · 메모 §4-3 "요구하는 대응이
         다른 종류 — 원거리형·무리형·상태형"): 새 몬스터 풀(정의 ai.spawn.pool 'plus')을 **기본 배치가 끝난 자리 위에** 얹는다.
-        · 1층은 그대로다(PLUS_MIN_DEPTH — 의뢰 goblin_cull 과 주점 소문이 1층의 실측에 걸려 있다). 굴림도 하지 않는다.
+        · 1층은 그대로다(PLUS_MIN_DEPTH — 의뢰 goblin_cull 이 1층 고블린에 걸려 있다). 굴림도 하지 않는다.
         · 2층부터: 이 층의 고블린(매복자·보스 제외) 가운데 절반(올림, 하나는 남긴다)이 같은 칸·같은 번호로 새 종이 된다 —
           총 몹 수는 기존 공식 그대로이고, 늘어나는 건 묶음(pack)뿐이다(층당 묶음 하나 = +pack-1 마리).
         · 종 고르기: 풀을 한 번 섞어 차례로(한 층에 여러 종이 섞이게). 묶음 종은 방 안의 자리를 먼저 받고, 나머지 개체는 그 곁
@@ -1568,7 +1566,7 @@ class Dungeon:
         return all(abs(f.x - x) + abs(f.y - y) >= gap for f in self.features.values())
 
     def _tablet_facts(self):
-        """석판에 적을 수 있는 '이 층의 참인 사실' — 세계가 실제로 센 수(주점 소문 D71 과 같은 재료).
+        """석판에 적을 수 있는 '이 층의 참인 사실' — 세계가 실제로 센 수(던전 안의 정보 — 마을 NPC 에게는 가지 않는다, p0.5.17).
         쓰러뜨릴 수 있는 것은 현재형으로 말하지 않는다(몹은 죽는다) · 계단의 방향·위치는 말하지 않는다(D19 '층 지도 안 줌'). ⚠️문구 임시"""
         out = ['이 층에 놓인 함정은 %d개다.' % len(self.traps),
                '이 층은 방 %d개로 이루어져 있다.' % len(self.rooms)]
@@ -3755,8 +3753,8 @@ class Dungeon:
         """이 틱에 NPC 가 먼저 건네는 인사 [(npc_name, char, line, x, y, key)] — 캐릭터당 NPC 당 방문(봇 dict 수명)당 한 번(`bot['npc_hailed']`).
         조건: 마을 · NPC 정의에 hail 문장 · 같은 구역(hears, D70) · NPC_HAIL_RANGE 안 · 아직 그 NPC 와 말한 적도 인사 받은 적도 없음.
         문장 = 정의의 상황별 인사(0콜): 접수원 = 돌아온 파티면 hail_return / 물약 0 이면 hail_no_potion / 안 맡은 의뢰가 있으면 hail_board /
-        기본 hail · 주점 주인 = 소문 재료(rumor)가 있으면 hail_rumor(실측 수 채움) / hail · 성직자 = 신의 요청이 걸려 있으면 hail_oracle / hail.
-        자리 채움 {name}{quests}{monsters}{traps}{treasure}. 러너가 잡담으로 배달한다(정지·뼈 없음 — 콜 0). 판정 무접촉."""
+        기본 hail · 성직자 = 신의 요청이 걸려 있으면 hail_oracle / hail. (p0.5.17: 주점 주인의 소문 인사 hail_rumor — 지하 1층 실측 수 — 는 거뒀다)
+        자리 채움 {name}{party_need}{quests}. 러너가 잡담으로 배달한다(정지·뼈 없음 — 콜 0). 판정 무접촉."""
         if not self.town:
             return []
         defs = getattr(self, 'npc_defs', None) or {}
@@ -3798,19 +3796,13 @@ class Dungeon:
         elif nd.get('report') and q is not None and nd.get('hail_board') and \
                 any(qid not in q['accepted'] for qid in (getattr(self, 'quest_ids', None) or {}).values()):
             key = 'hail_board'
-        elif nd.get('hail_rumor') and getattr(self, 'rumor', None):
-            key = 'hail_rumor'
         elif nd.get('hail_oracle') and (getattr(self, 'oracle', None) or {}).get('text'):
             key = 'hail_oracle'
         elif nd.get('hail_blessed') and self.offer_on and bot.get('blessed'):
             key = 'hail_blessed'                           # D95(09-20): 공물 판에서 축복은 판당 한 번 — 이미 받은 사람에게 "축복을 받아 갈 수 있어요"는 거짓이다
         line = nd.get(key) or nd.get('hail') or ''
-        r = getattr(self, 'rumor', None) or {}
-        mons = ', '.join('%s %d마리' % (k, v) for k, v in (r.get('monsters') or {}).items()) or '몬스터'
-        fe = r.get('features') or {}
         n_open = sum(1 for qid in (getattr(self, 'quest_ids', None) or {}).values() if q is not None and qid not in q['accepted'])
-        line = (line.replace('{name}', name).replace('{party_need}', str(PARTY_ENTRY_SIZE)).replace('{quests}', str(n_open)).replace('{monsters}', mons)
-                .replace('{traps}', str(r.get('traps', 0))).replace('{treasure}', str(fe.get('treasure', 0))))
+        line = line.replace('{name}', name).replace('{party_need}', str(PARTY_ENTRY_SIZE)).replace('{quests}', str(n_open))
         return key, line.strip()
 
     def _town_guide_once(self, bot, bots):
