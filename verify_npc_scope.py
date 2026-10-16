@@ -3,10 +3,13 @@
 (2026-10-16 민옥 결정 "마을 NPC 는 마을에 대한 이야기를 한다. 던전 상세 정보는 아예 없앤다" · 단 NPC 자신의 과거사는 괜찮다.
  근거: 0.5.15 Haiku 판 — 주점 주인의 '1층 고블린 4·그림자거미 1·함정 3개'를 듣고 마을 길에서 함정을 찾아 헤맸다.)
 게이트:
-  ① 정의·말: 어느 NPC 정의(마을 생활 두 판)에도 소문 인사 칸 hail_rumor·숫자 자리({monsters}{traps}{treasure})·'N층' 이 없다 ·
+  ① 정의·말: 어느 NPC 정의(마을 생활 두 판)에도 소문 인사 칸 hail_rumor 가 없다 ·
+     p0519c(Codex p0519rr · 관리자 방향 — 자연어 낱말 판정 대신 사람이 확인한 목록): 사람이 쓴 NPC 글(정의의 모든 글 칸·이야기 두 판 · npc_prompt 줄) 중
+     '던전'·'층'을 말하는 칸은 허용 목록 ALLOWED(칸·글자 그대로 · 줄마다 이유)에 있어야 한다 — 목록에 없는 새 글·글자가 바뀐 글은 실패(사람이 보고 올린다) · 쓰이지 않는 목록 줄 없음 ·
      주점 주인·떠돌이 모험자·주점 건물의 역할·성격·대사·특징·이야기에 '소문'·'2층 거미'·'던전 얘기는 정확하게' 가 없다 · 키 목록·말 설명표에 hail_rumor 없음 ·
      과거사 글은 남는다(은퇴한 모험자의 옛이야기·'지금 던전 안은 모른다')
-  ② NPC 지침: 'NPC 의 앎의 범위' 한 줄(지금 던전 안이 어떤지는 모른다)이 NPC 프롬프트에 실린다 · 모험가 지침에는 없다
+  ② NPC 지침: 'NPC 의 앎의 범위' 한 줄(지금 던전 안이 어떤지는 모른다)이 NPC 프롬프트에 실린다 · 모험가 지침에는 없다 ·
+     p0519: 공통 줄의 '던전에 내려간 적은 없다.'가 없다(과거사를 단 NPC 의 요청에 어긋나는 단정 없음 · 개인 이야기의 같은 말은 그대로)
   ③ 엔진 인사: 마을의 NPC 마다 곁에 선 사람에게 거는 인사 — hail_rumor 없음·숫자 없음 · 옛 피클의 소문 재료(d.rumor)와 정의 사본의 hail_rumor 가
      남아 있어도 엔진은 읽지 않는다(기본 hail)
   ④ 러너 사실(npc_facts): 마을의 모든 NPC 의 사실 묶음에 소문·몬스터 수·함정·'지하 N층' 이 없다 · 의뢰 사실은 남는다(접수원 게시판 ·
@@ -117,6 +120,90 @@ def leaks(s):
     return [p for p in PROBES1 if p in str(s)]
 
 
+# p0519c(Codex p0519rr 필수 · 관리자 방향): 사람이 쓴 NPC 글 중 '던전'·'층'을 말하는 칸은 이 목록에 칸·글자 그대로 있어야 한다.
+#   옛 판정('N층' 전면 금지 → 때말 낱말 판정)은 과거사를 막거나('젊을 때 3층까지 내려갔고 지금은 은퇴했다') 지금 정보를 통과시켰다('예전과 달리 2층에는 …').
+#   자연어를 낱말로 가르지 않는다 — 새 글·바뀐 글은 실패하고, 사람이 읽어 지금 층 정보가 아님(과거사·마을 설정·일반 상식)을 확인한 뒤 이유와 함께 올린다.
+#   칸 = '<NPC 정의 id>.<칸>'(이야기는 story.<칸> · 마을 생활 두 판의 글이 같으면 한 줄) · 'npc_prompt.md'(공통 지침의 한 줄 — 주석을 걷은 글).
+ALLOWED = (
+    ("apprentice_adventurer.story.history", "길드에 등록은 했지만 아직 아무 파티도 받아주지 않았다. 남의 장비를 오래 쳐다보고, 던전 얘기가 나오면 눈이 커진다.",
+     "던전에 가 본 적 없는 사람의 설렘 — 층·지금 사정 없음"),
+    ("flower_elder.persona", "느리고 다정하다. 평생 이 마을에서 살았고 던전에는 한 번도 내려가지 않았다. 꽃과 날씨와 이웃 이야기를 좋아하고, 젊은 사람에게는 밥은 먹었느냐고 묻는다. 던전 얘기가 나오면 자기는 모른다며 웃는다.",
+     "던전에 내려가지 않은 마을 사람(개인사) · 모른다고 한다"),
+    ("flower_elder.story.history", "평생 이 마을에서 살았고 던전에는 한 번도 내려가지 않았다. 볕 좋은 날엔 의자를 골목에 내놓고 앉아 있다.",
+     "던전에 내려가지 않은 마을 사람(개인사)"),
+    ("fountain_child.persona", "겁이 없고 질문이 많다. 잡화점 집 막내로, 분수에 빠져서 혼난 적이 여러 번이다. 모험가를 보면 뭘 들고 있는지, 어디 다녀왔는지 묻는다. 던전에는 가 본 적이 없고 가면 안 된다는 말만 들었다.",
+     "던전에 가 본 적 없는 아이(개인사)"),
+    ("gear_merchant.line", "좋은 검을 찾나? 장비점 진열대에 값을 붙여 놨어 — 던전에선 맨손이 제일 비싸.",
+     "장비 권유 — 일반 상식, 층·지금 사정 없음"),
+    ("gear_merchant.persona", "물건 자랑을 좋아한다. 값은 진열대에 붙인 그대로이고 깎아 주지 않는다. 빈손으로 던전에 가는 사람을 보면 단검부터 권한다.",
+     "장비 권유 성격(마을 생활 판) — 층·지금 사정 없음"),
+    ("guild_receptionist.hail_party", "{name} 님, 어서 오세요. 던전 입구는 {party_need}명이 맺은 파티만 지나갈 수 있어요 — 파티는 여기 길드나 주점에서 맺어요. 원정 물품도 나눠 드려요.",
+     "입구 규정(파티 인원 — 세계 규칙, 층 정보 아님)"),
+    ("guild_receptionist.line_party", "참, 던전 입구는 {party_need}명이 맺은 파티만 지나갈 수 있어요. 파티는 여기 길드나 주점에서 맺어요.",
+     "입구 규정(파티 인원 — 세계 규칙, 층 정보 아님)"),
+    ("guild_receptionist.story.history", "길드 장부를 혼자 다 쓴다. 규정엔 까다롭지만 살아 돌아온 사람에게는 누구보다 먼저 웃는다. 던전엔 한 번도 내려간 적이 없다.",
+     "던전에 내려간 적 없는 사람(개인사)"),
+    ("item_merchant.line", "물약이 필요하면 잡화점에서 사 가게 — 던전에선 그게 목숨값이지.",
+     "물약 권유 — 일반 상식, 층·지금 사정 없음"),
+    ("retired_adventurer.persona", "느긋하고 말끝이 길다. 젊어서 던전에 다녔지만 무릎을 다친 뒤로 그만뒀다. 자기 옛이야기(같이 다니던 동료, 처음 마을에 온 날, 무릎을 다친 날)는 기꺼이 하지만, 지금 던전 안이 어떤지는 모른다고 분명히 말한다 — 내려간 지 너무 오래됐다. 남에게 이래라저래라 하지 않는다.",
+     "과거사(옛 원정) · 지금 던전 안은 모른다"),
+    ("retired_adventurer.story.trait", "주점 바깥 탁자의 단골. 예전에 던전에 다녔다",
+     "과거사"),
+    ("retired_adventurer.story.history", "무릎을 다친 뒤로 내려가지 않는다. 지금 던전이 어떤지는 모른다고 말한다 — 아는 건 제 옛이야기뿐이다. 낮에는 거의 늘 이 탁자에 있다.",
+     "과거사 · 지금 던전은 모른다"),
+    ("street_vendor.line", "구경하고 가세요! 던전에서 나온 잡동사니예요. 파는 물건은 아니에요.",
+     "물건 출처 주장(잡동사니) — 층·지금 사정 없음"),
+    ("street_vendor.hail", "{name} 님, 구경만 해도 돼요! 던전 잡동사니 있어요~",
+     "물건 출처 주장(잡동사니) — 층·지금 사정 없음"),
+    ("street_vendor.story.history", "던전에서 나온 물건이라며 파는 것 대부분이 마을에서 만든 것이다. 목소리가 커서 번화가 어디서든 알아볼 수 있다.",
+     "물건 출처 주장(잡동사니) — 층·지금 사정 없음"),
+    ("temple_attendant.line", "기도를 들었어요. 신의 축복이 담긴 물약이에요 — 마시면 몸이 한 단계 강해져요. 던전에서 돌아오면 또 들르세요.",
+     "다시 들르라는 인사 — 층·지금 사정 없음"),
+    ("town_resident.persona", "수더분하고 바쁘다. 빨래와 장보기와 이웃 소식이 하루의 전부다. 모험가에게는 공손하지만 던전 얘기는 무서워서 듣기 싫어한다.",
+     "던전을 꺼리는 마을 사람(성격)"),
+    ("town_resident.story.history", "이 마을에서 태어났다. 던전 입구 쪽으로는 볼일이 없어 거의 가지 않는다.",
+     "던전 입구 쪽에 가지 않는 마을 사람(개인사)"),
+    ("npc_prompt.md", "- 여기는 모험가들이 던전으로 내려갔다가 돌아오는 마을이다. 너는 이 마을에서 산다.",
+     "마을 설정(p0519 — 단정 '던전에 내려간 적은 없다'를 뺀 공통 줄)"),
+    ("npc_prompt.md", "- 지금 던전 안이 어떤지(어느 층에 무엇이 얼마나 있는지)는 모른다.",
+     "앎의 범위(p0.5.17) — 지금 던전은 모른다"),
+)
+
+
+def mentions(s):
+    """'던전'·'층'을 말하는 글인가(글자 그대로 — 뜻은 사람이 목록에서 판단한다)."""
+    return "던전" in s or "층" in s
+
+
+def npc_writing():
+    """사람이 쓴 NPC 글 전부 → [(칸, 글)] — NPC 정의의 모든 글 칸(안쪽 dict·list 까지)·이야기 칸(마을 생활 두 판, 같은 글은 한 번) · npc_prompt 줄(주석을 걷은 글)."""
+    out = []
+
+    def walk(eid, path, v):
+        if isinstance(v, str):
+            if (eid + "." + path, v) not in out:
+                out.append((eid + "." + path, v))
+        elif isinstance(v, dict):
+            for k, x in v.items():
+                walk(eid, (path + "." if path else "") + str(k), x)
+        elif isinstance(v, list):
+            for i, x in enumerate(v):
+                walk(eid, "%s[%d]" % (path, i), x)
+    for eid in sorted(e for e, dd in ENT.load().items() if dd["kind"] == "npc"):
+        for life in (False, True):
+            walk(eid, "", ENT.npc(eid, life=life))
+            walk(eid, "story", (ENT.comps_of(eid, life) or {}).get("story") or {})
+    out += [("npc_prompt.md", ln) for ln in brains._npc_prompt_raw().split("\n")]
+    return out
+
+
+def unlisted(items, allowed=ALLOWED):
+    """목록에 없는 '던전'·'층' 글 → [(칸, 글)] · 쓰이지 않는 목록 줄 → [(칸, 글)]."""
+    keys = {(w, t) for w, t, _ in allowed}
+    seen = {(w, t) for w, t in items if mentions(t)}
+    return sorted(seen - keys), sorted(keys - seen)
+
+
 print("── ① 정의·말")
 npc_ids = sorted(e for e, dd in ENT.load().items() if dd["kind"] == "npc")
 texts = []                                           # (정의 id, 판, 칸, 글)
@@ -128,8 +215,29 @@ for eid in npc_ids:
 check("① 어느 NPC 정의(마을 생활 두 판)에도 소문 인사 칸이 없다 — ENT.npc 가 내는 칸에 hail_rumor 없음 · 키 목록·말 설명표에도 없음",
       len(npc_ids) >= 10 and not any("hail_rumor" in ENT.npc(e, life=lf) for e in npc_ids for lf in (False, True))
       and "hail_rumor" not in ENT.LIFE_NPC_KEYS and not any(k == "hail_rumor" for k, _ in W.DESC), len(npc_ids))
-bad1 = [(e, lf, k, v) for e, lf, k, v in texts if any(p in v for p in ("{monsters}", "{traps}", "{treasure}")) or floor_words(v)]
-check("① 마을 NPC 의 말·성격·소개 어디에도 층 실측 자리({monsters}{traps}{treasure})와 'N층' 이 없다", texts and not bad1, bad1[:3])
+W1 = npc_writing()
+new1, stale1 = unlisted(W1)
+check("① 사람이 쓴 NPC 글(정의의 모든 글 칸·이야기 두 판 · npc_prompt 줄)에서 '던전'·'층'을 말하는 칸 %d개가 전부 허용 목록(칸·글자 그대로 · 줄마다 이유)에 있다 · "
+      "쓰이지 않는 목록 줄 없음 · 실측 자리({monsters}{traps}{treasure})·이 판 1층 실측 글자 없음(p0519c — 낱말 판정 대신 사람이 확인한 목록)"
+      % sum(1 for _w, t in W1 if mentions(t)),
+      not new1 and not stale1 and len(ALLOWED) == len({(w, t) for w, t, _ in ALLOWED}) and all(why for _w, _t, why in ALLOWED)
+      and not any(any(p in t for p in ("{monsters}", "{traps}", "{treasure}")) or leaks(t) for _w, t in W1), (new1[:3], stale1[:3]))
+RA_P = next(t for w, t, _ in ALLOWED if w == "retired_adventurer.persona")
+NOW_INFO = ("2층에는 거미가 매복해 있다.", "오늘 2층에는 고블린이 많다.", "예전과 달리 2층에는 거미가 매복해 있다.")   # Codex p0519r·p0519rr 반례 — 지금 정보
+PAST_LINE = "젊을 때 3층까지 내려갔고 지금은 은퇴했다."                                                   # Codex p0519r 반례 — 과거사
+caught_ = [unlisted(W1 + [("retired_adventurer.persona", RA_P + " " + s)])[0] == [("retired_adventurer.persona", RA_P + " " + s)] for s in NOW_INFO]
+past_new = [("retired_adventurer.persona", RA_P + " " + PAST_LINE)]
+past_list = tuple(x for x in ALLOWED if x[0] != "retired_adventurer.persona") + (("retired_adventurer.persona", RA_P + " " + PAST_LINE, "과거사(시험)"),)
+W1p = [x for x in W1 if x != ("retired_adventurer.persona", RA_P)] + past_new
+check("① 허용 목록 판정(p0519c — Codex p0519rr · 관리자 방향): 지금 정보 %d개(리뷰 반례 — 때말 없음·'오늘'·'예전과 달리')를 정의에 붙이면 목록에 없어 잡힌다 · "
+      "과거사 '%s'도 목록에 오르기 전엔 잡히고 사람이 올리면 통과 · 허용된 줄의 글자가 바뀌면 잡힌다 · 새 프롬프트 줄도 잡힌다 · 목록에만 남은 줄은 '쓰이지 않음'"
+      % (len(NOW_INFO), PAST_LINE),
+      all(caught_) and unlisted(W1p)[0] == past_new and unlisted(W1p, past_list) == ([], [])
+      and unlisted([(w, t + " ") if w == "street_vendor.hail" else (w, t) for w, t in W1])[0] == [("street_vendor.hail", next(t for w, t in W1 if w == "street_vendor.hail") + " ")]
+      and unlisted(W1 + [("npc_prompt.md", "- 요즘 2층엔 거미가 많다.")])[0] == [("npc_prompt.md", "- 요즘 2층엔 거미가 많다.")]
+      and unlisted(W1, ALLOWED + (("tavern_keeper.persona", "없는 줄의 던전", "시험"),))[1] == [("tavern_keeper.persona", "없는 줄의 던전")]
+      and unlisted([("x.line", "마을 이야기")])[0] == [],
+      (caught_, unlisted(W1p)[0][:1]))
 mine = [(e, lf, k, v) for e, lf, k, v in texts if e in ("tavern_keeper", "wandering_adventurer")]
 bad1b = [(e, k, v) for e, lf, k, v in mine if any(p in v for p in ("소문", "거미", "정확하게", "몬스터", "함정"))]
 tv_texts = [ENT.comps_of("tavern", lf)["building"]["role"] for lf in (False, True)] + \
@@ -150,6 +258,18 @@ brains._call_claude = lambda prompt, model="haiku": ""
 check("② NPC 프롬프트(npc_prompt.md — 주석은 빠진다)에 앎의 범위 한 줄 · 모험가 지침 파일에는 없다(모험가 쪽은 건드리지 않는다)",
       KNOW in brains._npc_prompt_raw() and KNOW in seen2.get("p", "") and "p0.5.17" not in seen2.get("p", "")
       and "지금 던전 안이 어떤지" not in src("prompts", "adventurer_prompt.md"))
+TOWN_LINE = "- 여기는 모험가들이 던전으로 내려갔다가 돌아오는 마을이다. 너는 이 마을에서 산다."
+RA_PAST = "젊을 때 동료들과 3층까지 내려갔지. 거기서 다리를 다쳐 그만뒀다."
+RA2 = {**RA, "persona": RA["persona"] + " " + RA_PAST}            # 과거사에 'N층'을 단 은퇴한 모험자(사본 — 정의 파일은 그대로)
+brains._call_claude = lambda p, m="haiku": (seen2.__setitem__("ra", p), ('{"line": "옛날 얘기지."}', None))[1]
+brains.npc_reply(mkbot("1", 0, 0), {"result": "npc_talk", "npc": "은퇴한 모험자", "line": "정해진 대사"}, "던전에 가 보셨어요?", ["파티: 두란"], npc=RA2)
+brains._call_claude = lambda prompt, model="haiku": ""
+check("② p0519 공통 줄의 '던전에 내려간 적은 없다.'를 지웠다(앞 문장 그대로 · Codex p0517r 권장) — 과거사('3층까지 내려갔지')를 성격에 단 은퇴한 모험자의 요청에 "
+      "그 과거사와 앎의 범위 줄이 함께 실리고 어긋나는 단정이 없다 · 길드 접수원 자기 이야기의 '내려간 적이 없다'는 그대로(그 사람의 이야기)",
+      TOWN_LINE in brains._npc_prompt_raw().split("\n") and "내려간 적은 없다" not in brains._npc_prompt_raw() and "내려간 적" not in seen2.get("p", "")
+      and RA_PAST in seen2.get("ra", "") and KNOW in seen2.get("ra", "") and "내려간 적은 없다" not in seen2.get("ra", "")
+      and "던전엔 한 번도 내려간 적이 없다" in ENT.comps_of("guild_receptionist", False)["story"]["history"],
+      [ln for ln in seen2.get("ra", "").split("\n") if "던전" in ln])
 
 print("── ③ 엔진 인사")
 Q3 = G.new_quests()

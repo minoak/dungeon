@@ -8,7 +8,9 @@
   ② '달라진 것'(단위): 몸(골드·HP·물약·장비·상태·의뢰) · 대상의 상태(몬스터·사람 HP · 보이다 안 보임 · 등 돌림) · 같은 동사의 결과(결과 기록 원문 —
      읽은 글 뒷부분까지) · 한 번뿐인 결과(새 정보) · 대사 내용 · 발견 · 내게 한 남의 말 — 하나라도 있으면 SAME 없음 ·
      goto·use 를 섞어도 동사마다 같은 결과가 되풀이되면 SAME · 장부·자리 칸(틱·행동 번호·걸음 수·좌표)·걸음·행동 시작·도착 꼬리표·상태 남은 틱·
-     피처의 오브젝트 태그 횟수·거리·내게 하지 않은 남의 말은 보지 않는다(p0515b — Codex p0515r 필수 ①)
+     피처의 오브젝트 태그 횟수·거리·내게 하지 않은 남의 말은 보지 않는다(p0515b — Codex p0515r 필수 ①) ·
+     p0519: 궤적의 생략 표식(gap)·내가 한 말(said)·굴림 수치(빗나감·스킬 내성)·작정 표식·내 몸짓 서술도 보지 않는다(석상 장면 — 긴 접근 + 말하며 같은 search) ·
+     그래도 결과 원문·성패·대상의 대답·남이 내게 한 몸짓은 맞댄다
   ③ 렌더: 관측 꼬리표 한 줄(무발견 신호와 같은 절) — p0515d 민옥 문구 '반복 중: <대상> ×N · 변화 없음'(대상/제자리/기다리기 · 곁 여부는 안 나온다) ·
      이름 층(아는 이름 · 낯선 사람) · 몬스터는 관측의 이름(도감이 가린 그대로) ·
      안 보이면 ID · 지시·권유 문장 없음(신호 문장·지침 두 줄) · _WIRE_KEYS 등록(미등록 관측 키 0)
@@ -328,6 +330,61 @@ check("② 읽은 글이 앞 30자는 같고 뒷부분만 다르다 — 꼬리�
       r_ == {"n": 5, "target": "f5"} and len(TXT) > 30, r_)
 r_ = drive([(D_READ, ob(last=stamp(READ("북쪽 문을 가리킨다."), i))) for i in range(5)])[0][5]
 check("② 같은 글을 다섯 번 읽었다(장부·자리 칸만 다르다) — SAME", r_ == {"n": 5, "target": "f5", "same": True}, r_)
+# p0519(c16 run_metrics_v0 §5 — 0.5.13 수나 석상 search 26연속에 '변화 없음'이 한 번도 안 붙었다 · Codex p0515rr 권장): 결과가 아닌 궤적 칸
+#   (생략 표식 gap · 내가 한 말 said) · 굴림 수치 · 작정 표식 · 내 몸짓 서술은 맞대지 않는다 — 실제 결과·대상의 말·남이 내게 한 몸짓은 그대로 본다
+F25 = {"features": [{"id": "f25", "name": "석상", "type": "statue", "dist": 1}]}
+MISS25 = {"type": "search", "target": "f25", "result": "no_effect", "found": [], "reason_code": "no_new_information"}
+D_S25 = {"type": "search", "target": "f25"}
+GAP = {"type": "gap", "n": 9}
+CAME = {"type": "walk", "target": "f25", "result": "arrived"}
+SAID = lambda t, to="all": {"type": "said", "to": to, "kind": "잡담", "heard": ["2"], "text": t[:40]}
+TALKS = ("석상아, 무슨 비밀을 숨겼니?", "여기 뭔가 더 있을 것 같아요~", "한 번만 더 볼게요!", "이상하네, 분명 뭔가 있는데", "포기 못 해요",
+         "다들 이리 와 봐요!", "석상 뒤쪽은요?", "손잡이 같은 건 없네", "조금만 더요", "역시 아무것도 없나")
+r_ = drive([(D_S25, ob(trail=([GAP, dict(CAME)] if i == 0 else []) + [stamp(MISS25, i)], sights=F25)) for i in range(5)], first=ob(last=None, sights=F25))[0][5]
+check("② 긴 접근 뒤 첫 결과에만 생략 표식(gap)이 붙고 같은 허탕이 이어진다 — 생략 표식은 결과가 아니다 = SAME",
+      r_ == {"n": 5, "target": "f25", "same": True}, r_)
+r_ = drive([(D_USE, ob(trail=[stamp(TALK, i), SAID(TALKS[i], "npc:주점 주인")], messages=[LINE("어서 오게")])) for i in range(5)])[0][5]
+check("② 말만 바꿔 가며 같은 대상에 되풀이(내가 한 말 said 의 글이 매번 다르다 · 대상의 대답·결과는 그대로) — SAME",
+      r_ == {"n": 5, "target": "f3", "same": True}, r_)
+r_ = drive([(D_USE, ob(trail=[stamp(TALK, i), SAID(TALKS[i], "npc:주점 주인")], messages=[LINE("어서 오게" if i < 3 else "무엇을 찾나")])) for i in range(5)])[0][5]
+check("② 말만 바꿔 되풀이해도 대상의 대답이 바뀌면 달라짐(내가 한 말만 뺀다)", r_ == {"n": 5, "target": "f3"}, r_)
+reps_, _ = drive([(D_S25, ob(trail=([GAP, dict(CAME)] if i == 0 else []) + [stamp(MISS25, i), SAID(TALKS[i])], sights=F25)) for i in range(10)],
+                 first=ob(last=None, sights=F25))
+check("② 석상 장면(0.5.13 수나): 긴 접근 + 동료에게 말하며 같은 search 허탕 ×10 — 5번째·10번째 둘 다 SAME",
+      [r for r in reps_ if r] == [{"n": 5, "target": "f25", "same": True}, {"n": 10, "target": "f25", "same": True}], reps_)
+r_ = drive([(D_READ, ob(trail=([GAP] if i == 0 else []) + [stamp(READ("북쪽 문을 가리킨다." if i != 3 else "남쪽 우물을 가리킨다."), i), SAID(TALKS[i])]))
+            for i in range(5)])[0][5]
+check("② 생략 표식·내가 한 말이 붙어도 결과 원문은 맞댄다 — 넷째에 읽은 글 뒷부분이 다르다 = 달라짐", r_ == {"n": 5, "target": "f5"}, r_)
+MISS_R = lambda i: {**MISSED, "roll": 2 + i, "mod": 3, "total": 5 + i, "ac": 13,
+                    "combat_roll": {"rolls": [2 + i], "mode": "normal", "roll": 2 + i, "mod": 3, "total": 5 + i, "dc": 13, "success": False}}
+r_ = drive([(D_ATK, ob(last=stamp(MISS_R(i), i), sights=MON(15))) for i in range(5)], first=ob(last=None, sights=MON(15)))[0][5]
+check("② 굴림 수치(굴린 눈·합·굴림 기록)만 다른 빗나감 ×5 — 같은 빗나감 = SAME(Codex p0515rr 권장)", r_ == {"n": 5, "target": "m1", "same": True}, r_)
+r_ = drive([(D_ATK, ob(last=stamp({**MISS_R(i), "hit": True} if i == 3 else MISS_R(i), i), sights=MON(15))) for i in range(5)],
+           first=ob(last=None, sights=MON(15)))[0][5]
+check("② 굴림 수치는 빼도 성패는 맞댄다 — 빗나감 사이에 한 번 명중(결과 기록의 성패 칸만 다르다 · 피해·대상 HP 는 그대로 둔 단위 사례) = 달라짐",
+      r_ == {"n": 5, "target": "m1"}, r_)
+SK_SAVED = lambda i: {"type": "s_fire", "target": "m1", "result": "skill", "skill_id": "s_fire", "skill_name": "불꽃", "skill_cost": 1, "hit": True,
+                      "skill_dc": 12, "skill_roll": {"rolls": [9 + i], "mode": "normal", "roll": 9 + i, "mod": 0, "total": 9 + i, "dc": 12, "success": True},
+                      "effects": [{"type": "damage", "save": {"rolls": [9 + i], "roll": 9 + i, "mod": 0, "total": 9 + i, "dc": 12, "success": True},
+                                   "dice": "1d6", "rolls": [1 + i], "value": 1 + i, "mode": "dice", "applied": False, "reason": "saved"}],
+                      "penalties": [], "skill_spent": True}
+r_ = drive([({"type": "s_fire", "target": "m1"}, ob(last=stamp(SK_SAVED(i), i), sights=MON(15))) for i in range(5)], first=ob(last=None, sights=MON(15)))[0][5]
+check("② 스킬: 대상이 매번 내성으로 버텼다 — 스킬 굴림·효과 칸의 내성 굴림·주사위 눈만 다르다 = SAME", r_ == {"n": 5, "target": "m1", "same": True}, r_)
+r_ = drive([(D_S25, ob(trail=[stamp(MISS25, i)] + ([{**stamp(MISS25, i), "plan": True}] if i % 2 else []), sights=F25)) for i in range(5)],
+           first=ob(last=None, sights=F25))[0][5]
+check("② 작정 수로 한 같은 허탕(궤적의 plan 표식)도 같은 결과 = SAME", r_ == {"n": 5, "target": "f25", "same": True}, r_)
+FORMS = ("어깨를 두드린다", "손을 흔든다", "하이파이브", "등을 토닥인다", "웃어 보인다")
+BOND = lambda i: {"type": "bond", "target": "b2", "form": FORMS[i], "result": "done", "to": "2"}
+D_BOND = {"type": "bond", "target": "b2"}
+r_ = drive([(D_BOND, ob(last=None, trail=[stamp(BOND(i), i)], sights=SB2(True))) for i in range(5)], first=ob(last=None, sights=SB2(True)))[0][5]
+check("② 같은 사람에게 몸짓만 바꿔 친목 ×5(내 몸짓 서술 = 판단의 메아리) — SAME", r_ == {"n": 5, "target": "b2", "same": True}, r_)
+BONDED = lambda f: {"type": "bonded", "from": "2", "form": f}
+r_ = drive([(D_BOND, ob(last=None, trail=[stamp(BOND(i), i), BONDED("손을 마주 잡는다")], sights=SB2(True))) for i in range(5)],
+           first=ob(last=None, sights=SB2(True)))[0][5]
+r2_ = drive([(D_BOND, ob(last=None, trail=[stamp(BOND(i), i), BONDED("손을 마주 잡는다" if i < 3 else "고개를 돌린다")], sights=SB2(True))) for i in range(5)],
+            first=ob(last=None, sights=SB2(True)))[0][5]
+check("② 상대가 내게 한 몸짓(bonded)의 글은 본다 — 같은 몸짓이 되풀이되면 SAME · 상대의 몸짓이 바뀌면 달라짐",
+      r_ == {"n": 5, "target": "b2", "same": True} and r2_ == {"n": 5, "target": "b2"}, (r_, r2_))
 
 print("── ③ 렌더 — 관측 꼬리표 한 줄(무발견 신호와 같은 절)")
 

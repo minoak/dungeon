@@ -10,8 +10,9 @@ p0515d DECISIONS 10-15 '0.5.15 문장 간소화' 민옥 문구: 문장 대신 �
 ' · 변화 없음'(SAME)은 그 연속 동안 아래가 하나도 없었을 때만 붙는다(하나라도 있으면 `반복 중: {대상} ×{n}`까지):
   · 몸이 바뀜 — HP·최대 HP·골드·보물·물약·축복 물약·장비·상태 태그·맡은 의뢰·파티원(연속 첫 판단 때의 관측과 맞댄다)
   · 대상이 바뀜 — 관측에 보이는 대상의 상태(몬스터 HP·상태 · 사람 HP·상태 태그 · 피처의 이름·종류·등 돌림 · 계단의 봉인)나, 보이다가 안 보임(p0515b)
-  · 같은 동사의 결과가 바뀜 — 결과 기록 원문(장부·자리 칸 _VOLATILE 만 뺀다 — 읽은 글 전문·굴림·피해 그대로, p0515b: 꼬리표 요약이 아니라)과
-    들린 말(대상이 한 말·내게 한 말)을 그 동사의 첫 결과와 맞댄다(goto 와 use 를 섞어도 동사마다 처음과 같으면 '같다'). 걸음·행동 시작·도착만 있는 기록은 결과가 아니다
+  · 같은 동사의 결과가 바뀜 — 결과 기록 원문(장부·자리 칸 _VOLATILE 등 아래 p0519 칸만 뺀다 — 읽은 글 전문·피해 그대로, p0515b: 꼬리표 요약이 아니라)과
+    들린 말(대상이 한 말·내게 한 말)을 그 동사의 첫 결과와 맞댄다(goto 와 use 를 섞어도 동사마다 처음과 같으면 '같다'). 걸음·행동 시작·도착만 있는 기록은 결과가 아니다.
+    p0519: 궤적의 생략 표식(gap)·내가 한 말(said)도 결과가 아니고, 굴림 수치(_ROLL — 빗나감의 굴린 눈)와 내 몸짓 서술(_ECHO)은 맞대지 않는다
   · 한 번뿐인 결과 — 빈 결과가 아닌데 그 연속에서 한 번만 나온 동사의 결과는 새 정보다(되풀이돼야 '같다' — p0515b: goto 4번 뒤 첫 use)
   · 새로 발견함 — 발견 꼬리표(spot) · 찾아낸 것이 있는 search
 엔진·판정 무접촉 · 0콜. 상태는 몸의 bot['repeat']{key, n, verb, body, base, cnt, npc?, moved?, due?}(봇 dict 수명 — 층 전이 = 새 몸이면 새로 센다 ·
@@ -33,8 +34,14 @@ SAME = " · 변화 없음"             # 위 '달라진 것' 판정이 하나도
 _QUIET = ("move", "start")       # 결과 비교에서 빼는 꼬리표 — 걸음 수(N걸음·N틱 곁)와 행동의 시작(접근 시작·대기 시작 — 판단의 메아리)
 _ARRIVED = ("arrive", "도착")     #   + 도착(가려던 자리·곁에 닿음) — 걸어서 닿으면 'f3 곁', 이미 곁이면 'f3 — 이미 곁'으로 글만 갈린다(판단의 메아리)
 _BODY = ("hp", "maxhp", "gold", "inventory", "potions", "boons", "gear", "quests")
-_VOLATILE = ("turn", "parent_action_id", "interrupted_action_id", "resolution", "char", "job",   # 결과 기록에서 비교하지 않는 칸 — 장부(틱·행동 번호·판정 요약)
+_VOLATILE = ("turn", "parent_action_id", "interrupted_action_id", "resolution", "char", "job",   # 결과 기록에서 비교하지 않는 칸 — 장부(틱·행동 번호·판정 요약
+             "plan",                                                                              #   · p0519 작정 수로 한 행동 표식 — 같은 결과가 작정으로 나와도 같다)
              "len", "to", "bearing", "source_xy", "target_xy", "paced", "approach_status", "required_range", "action_type")   #   와 자리(걸음 수·좌표·방위·접근 단계)
+_NOT_RESULT = ("gap", "said")    # p0519 결과가 아닌 궤적 칸 — 생략 표식(12칸 상한에 잘린 앞부분 수 — 긴 걸음 뒤 첫 관측에만 붙는다)과 내가 한 말(러너가 지목한 말마다
+                                 #   남긴다 — 판단의 메아리, 행동 시작·도착을 뺀 것과 같은 이유). 대상이 한 말·내게 한 말(들린 말)은 그대로 본다
+_ROLL = ("roll", "mod", "total", "combat_roll", "damage_roll", "skill_roll")   # p0519 굴림 수치 — 결과는 형태(종류·대상·성패)로 맞댄다: 빗나감은 굴린 눈이 달라도
+_EFFECT_ROLL = ("save", "rolls", "value")   #   같은 빗나감(Codex p0515rr 권장). 스킬 효과 칸(effects[])은 내성 굴림·주사위 눈·굴린 값만 뺀다(실제 피해·회복·HP 는 남는다)
+_ECHO = {"bond": ("form",)}      # p0519 내 행동 기록 속 내 판단의 자유 글(몸짓 서술 — 말과 같은 판단의 메아리). 남이 내게 한 몸짓(bonded)의 글은 본다
 _NONE = json.dumps([[], []])     # 빈 결과(결과 기록도 들린 말도 없음)
 
 
@@ -86,14 +93,23 @@ def _npc_name(obs, key):
     return None
 
 
+def _shape(e):
+    """결과 기록 → 맞댈 원문: 장부·자리 칸(_VOLATILE)·굴림 수치(_ROLL · 스킬 효과 칸의 _EFFECT_ROLL)·내 판단의 자유 글(_ECHO)을 뺀 나머지 그대로(p0519)."""
+    drop = _VOLATILE + _ROLL + _ECHO.get(str(e.get("type")), ())
+    out = {k: v for k, v in e.items() if k not in drop}
+    if isinstance(out.get("effects"), list):
+        out["effects"] = [{k: v for k, v in x.items() if k not in _EFFECT_ROLL} if isinstance(x, dict) else x for x in out["effects"]]
+    return out
+
+
 def _outcome(obs, ch):
-    """이 관측에 온 직전 판단의 결과 → (결과 지문 JSON, 새로 발견했나). 결과 = 궤적(있으면) 또는 직전 결과의 기록 원문(_VOLATILE 칸만 뺀다 —
-    p0515b: 꼬리표는 요약이라 읽은 글 뒷부분 같은 변화를 놓친다. 꼬리표가 걸음·행동 시작·도착뿐인 기록은 결과가 아니다) +
-    들린 말 중 연속의 대상이 한 말·내게 한 말(누가·무엇을)."""
+    """이 관측에 온 직전 판단의 결과 → (결과 지문 JSON, 새로 발견했나). 결과 = 궤적(있으면) 또는 직전 결과의 기록 원문(_shape — 장부·자리·굴림 수치·
+    내 몸짓 서술만 뺀다 — p0515b: 꼬리표는 요약이라 읽은 글 뒷부분 같은 변화를 놓친다. 꼬리표가 걸음·행동 시작·도착뿐인 기록과
+    생략 표식·내가 한 말(_NOT_RESULT)은 결과가 아니다) + 들린 말 중 연속의 대상이 한 말·내게 한 말(누가·무엇을)."""
     evs = obs["trail"] if "trail" in obs else ([obs["last"]] if isinstance(obs.get("last"), dict) else [])
     tags, found = set(), False
     for e in evs:
-        if not isinstance(e, dict):
+        if not isinstance(e, dict) or e.get("type") in _NOT_RESULT:
             continue
         if e.get("type") == "search" and e.get("found"):
             found = True
@@ -101,7 +117,7 @@ def _outcome(obs, ch):
         if any(t[0] == "spot" for t in loud):
             found = True
         if loud:
-            tags.add(json.dumps({k: v for k, v in e.items() if k not in _VOLATILE}, ensure_ascii=False, sort_keys=True, default=str))
+            tags.add(json.dumps(_shape(e), ensure_ascii=False, sort_keys=True, default=str))
     key = str(ch.get("key") or "")
     who = {key[1:]} if ID.is_bot_key(key) else set()
     if ch.get("npc"):
