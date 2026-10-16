@@ -120,7 +120,8 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 ## 욕구와 배고픔 — 2026-10-16 p0.5.16 경제 1b additive (스위치 없음 — 모든 판 · DECISIONS 2026-10-14·10-15)
 
 - 몸: `tick.bots[].needs` = `{욕구 id: 충족도 0~100}`(**늘 실린다** — 옛 판엔 없다. 0.5.16 의 욕구는 배고픔 `hunger` 하나) · `moods` = 살아 있는 기분 조각
-  `[{src: 욕구 id, size: like|plain|dislike, line: 문장, until: 끝나는 틱}]`(있을 때만 — 같은 욕구의 조각은 새것이 덮는다 · `until` 틱부터 없다) · `rations` = 휴대식 개수(있을 때만).
+  `[{src: 욕구 id, size: like|plain|dislike, line: 문장, until: 끝나는 틱}]`(있을 때만 — 같은 욕구의 조각은 새것이 덮는다 · `until` 틱부터 없다 ·
+  **p0.5.18 부터 `line` 대신 `what`(먹은 것 이름, 있을 때만)** — 아래 '몸·기분 줄' 절) · `rations` = 휴대식 개수(있을 때만).
   `level.party[]` 도 같은 스냅샷이다. 새 몸은 정의의 `start`(배고픔 70), 층 전이·원정은 충족도·기분 조각을 그대로 옮기고, 부활은 시작값으로 되돌린다(기분 조각은 걷힌다).
 - `run_meta.need_defs` = `{욕구 id: {name, start, decay, full_at, full_blocks, stages{단계 id: {min, word, effects?}}, weights?, mood?{갈래: {time}}, from_events?, tastes?}}`(늘 —
   그 판이 알던 숫자. 단계·효과를 스트림만으로 다시 센다) · `run_meta.party[].needs`(`{욕구: {level, why?, src?}}`)·`taste`(`{likes, dislikes}`) — 시트에 있을 때만(0.5.16 은 없다 = 모두 보통).
@@ -139,13 +140,32 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
   REST_MIN 틱 뒤 `walk` 결과 `rested{ticks, healed, cleared[], no_regen}`(만피를 기다리지 않는다) · 쉬는 도중 굶주림에 들면 몸 상태가 없을 때만 그 틱 `walk` 결과 `no_regen{need, hp, ticks, healed}`(깨어남).
   물약·샘·스킬 회복은 그대로다.
 - 관측(모델 입력): `need_lines`(지금 단계의 상태 문장 + 살아 있는 기분 조각 — **문장** 수 `needs.LINE_CAP` 2개까지(조각 하나가 두 문장이면 그것만으로 찬다 · 남은 자리보다 긴 조각은 앞 문장만) ·
-  가장 낮은 충족도부터 — 보통 단계면 칸이 없다) → '네 상태' 절 `- 몸과 기분: …`(`brains.NEED_HEAD`) ·
+  가장 낮은 충족도부터 — 보통 단계면 칸이 없다) → '네 상태' 절 `- 몸과 기분: …`(`brains.NEED_HEAD`) — **p0.5.18 에 바뀌었다(아래 '몸·기분 줄' 절: 몸 문장만 `- 몸:` · 기분은 `need_mood` → `- 기분:`)** ·
   `rations` → `- 휴대식 N개` · 소지품 `i9`. 굶주린 몸 몫의 쉬는 자리 사실은 회복 수치를 걷는다(`use.heal` 없음 · 묵기 `use.no_regen` → '묵으면 몸 상태가 낫는다') ·
   메뉴형 '쉰다' 줄은 몸 상태가 있을 때만(HP 말 없이 '한동안 쉬면 몸 상태(…)가 낫는다').
   먹을 것의 대상 줄에 취향 꼬리표(`taste` — '[g1] 식사 — 고기·따뜻한 것'). **숫자는 안 간다**: 공개 투영(`IG.NEED_NUM_KEYS`)이 욕구 결과의 `before`·`after`·`tol`·`from`·`to` 를 걷고,
   몸의 `needs`·`moods`·`need_w`·`taste` 는 관전 칸(`IG.SPECTATOR_KEYS`). 남의 관측에는 내 욕구가 없다 — 곁의 사람은 '휴대식 … 먹었다'·'식사를 사 먹었다'(`ally_use`)만 본다.
 - events.log: `봇N 배고픔: 보통 → 배고픔` · `봇N 배고픔 — 기운이 빠졌다 (HP 9/14)` · 먹은 행동 줄에 충족도 전후·기분 갈래(관전용).
 - 저장 판 8 → 9(`snapshot._m8_needs`): 옛 몸에 시작 충족도·빈 기분 조각·휴대식 0 · 식사·햇사과를 팔게 된 주점 주인·주점·채소 좌판의 말을 지금 정의로. 세계의 욕구 사건 버퍼(`need_log`)는 피클에 없어도 된다.
+
+## 몸·기분 줄 — 2026-10-16 p0.5.18 (스위치 없음 — 모든 판 · DECISIONS 2026-10-16 '문장 대원칙'·'몸·기분 줄')
+
+- 관측(모델 입력): `need_lines` = 보통이 아닌 단계의 **몸 문장만**(가장 낮은 충족도부터 · 같으면 욕구 id 순 · 문장 수 `needs.LINE_CAP` 2개까지 — 기분 조각은 더 이상 여기 없다) →
+  '네 상태' 절 `- 몸: …`(`brains.BODY_HEAD`). `need_mood` = 기분 합산의 글 `"좋지 않다 (이유: 배고픔)"`(0 근처면 칸이 없다) → 바로 아래 `- 기분: …`(`brains.MOOD_HEAD`).
+  보통이고 조각이 없으면 두 칸 다 없다. 숫자(충족도·기분 값·합)는 어느 쪽에도 없다.
+- 기분 합산(`needs.mood_of`): 살아 있는 기분 조각 = 욕구 단계가 주는 것(정의 `stages.<단계>.mood`·`why` — 배고픔 −10 '배고픔' · 굶주림 −20 '굶주림' · 배부름·보통 없음) +
+  먹은 뒤 조각(정의 `mood.<갈래>.mood`·`why` — 좋아함 +15 '좋아하는 {what:을} 먹음' · 기본 +8 '배불리 먹음' · 싫어함 −5 '입에 맞지 않는 음식'). 값은 전부 임시.
+  합의 절댓값이 `needs.MOOD_EDGE`(3) 보다 작으면 줄 없음, 아니면 좋은 쪽 `good` / 나쁜 쪽 `bad` — 낱말은 `prompts/world/mood.md`(`good` 좋다 · `bad` 좋지 않다 · `why` 이유).
+  이유 = 합과 **같은 쪽** 조각만, 값의 크기가 큰 것부터 `needs.WHY_CAP`(2)개 · 동점은 단계 조각 먼저(낮은 충족도 먼저 · 같으면 욕구 id 순) 다음 먹은 뒤 조각(새것 먼저) · 같은 낱말은 한 번.
+- 몸: 기분 조각 `moods[]` = `{src, size: like|plain|dislike, what?: 먹은 것 이름, until}`(옛 `line` 칸 없음 — 값과 이유 낱말은 그릴 때 정의에서 읽는다).
+- 봇 스냅샷(관전, additive): `tick.bots[]` 의 `mood_now` = `{key: good|bad, sum: 합, why: [이유 낱말 ≤ 2]}` — 0 근처가 아닐 때만(`level.party[]` 도 같다). `IG.SPECTATOR_KEYS` 에 든다.
+- 욕구 사건(`type:"need"`, `bot`): `need_mood{bot, from: good|bad|null, to: good|bad|null, sum?, why?}` — 기분 합산의 결과(낱말 또는 이유)가 바뀐 그 자리에 한 줄
+  (틱 머리: 줄기·조각 끝남 — 전 = 지난 틱 끝의 몸 · 행동: 먹기·from_events 채움 — 그 행동 전후). `to:null` 이면 `sum`·`why` 가 없다. 값만 바뀌고 낱말·이유가 그대로면 없다.
+  `run_meta.need_defs` 의 단계에 `mood`(있을 때만) · `mood.<갈래>` 에 `mood`(값)가 더해졌다. 공개 투영은 욕구 결과의 `sum` 도 걷는다(`IG.NEED_NUM_KEYS`).
+- 결과 문장(먹기): `'휴대식을 먹었다 (남은 휴대식 1개)'` · 싫어한 음식이면 `' — 입에 맞지 않았다'`(정의 `mood.dislike.line` — 궤적 꼬리표에도) · 사 먹기 `'주점에서 식사를 사 먹었다 — 3골드를 냈다(남은 골드 2)'` ·
+  배가 불러 못 먹음 `'휴대식을 먹지 못했다 — 배가 부르다'` / `'주점에서 식사를 사지 않았다 — 배가 부르다'`(가득 참 단계의 몸 문장) · 꼬리표 `'[헛손질] 휴대식 — 배가 부르다'`. 결과 dict 의 칸은 그대로다.
+- events.log: `봇N 기분: 없음 → 좋지 않다 (배고픔 · 합 -10)` · `봇N 기분: 좋다 → 없음`(관전용 — 합을 싣는다).
+- 저장 판 10 → 11(`snapshot._m10_moods`): 옛 꼴 기분 조각(`line` 칸이 있는 것)은 걷는다(이유 낱말을 채울 먹은 것 이름이 없고, 길어야 120틱 남는 조각). 충족도·새 꼴 조각은 그대로.
 
 ## 반복 신호 + 목표 칸 — 2026-10-15 p0.5.15 (모든 판 · DECISIONS 2026-10-15)
 
@@ -571,7 +591,7 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 | `monster_join` | `id monster ally(m<n>) ally_kind state(HUNTING|WANDERING)` | (2026-09-11 D51 additive) 도주하던 몹이 근처 다른 몹 곁에 닿아 합류 — 보이는 봇이 있으면 함께 문다(HUNTING), 없으면 곁에서 진정. 합류 전 이동은 `monster_move`에 `fleeing:true, joining:true` |
 | `monster_attack` | `id monster target roll mod total ac hit`, `surprise? from_hiding? dmg? hp? down? grave? status?` | 몹의 공격. surprise=몹 기습(they-ambush), from_hiding=매복자가 정체 드러내는 일격. **hit 이면 피격 인터럽트**(D1 개정): 당한 봇의 진행 중 order 가 그 자리에서 비워진다(다음 틱 스냅샷 `order:null` + 그 봇 재결정으로 관측 가능). 피격은 시드 RNG 결정론이므로 리플레이 무해. `status`(2026-09-06 D34 additive, `run_meta.status` 판만) = 몹의 특수로 붙은 태그(그림자거미=둔화, 생존 시). `ac` 는 중독이면 −2 된 값 그대로. `grave`(2026-07-20 D22 additive, `DUNGEON_GRAVES` 판만) = down 과 함께 `{id,name,x,y}` — 쓰러진 자리에 선 '~의 묘' 피처(글리프 `T`). trap/chest_trap/fountain_harm 의 down 에도 같은 문법으로 병기 |
 | `monster_move` | `id monster to=[x,y]`, `fleeing?`, `door?` | 몹 이동 — **봇 시야에 들어온 이동만** 기록(시야 밖 배회는 무음. 전체 위치는 스냅샷 monsters 로 시킹) |
-| `need` | `bot`(char 대신 — 몸의 변화), `need`, `result=need_stage(from,to)/need_drain(hp,maxhp)/need_fill(via:event,src_key,tol,before,after,mood?)/need_none(why:full,via:event,src_key)` | (2026-10-16 p0.5.16 additive) 욕구 사건 — '욕구와 배고픔' 절. 먹기(휴대식·사 먹기)는 이 type 이 아니라 그 행동의 결과(`need_fill`/`need_none` + `char`)다 |
+| `need` | `bot`(char 대신 — 몸의 변화), `need`, `result=need_stage(from,to)/need_drain(hp,maxhp)/need_fill(via:event,src_key,tol,before,after,mood?)/need_none(why:full,via:event,src_key)/need_mood(from,to,sum?,why?)` | (2026-10-16 p0.5.16 additive) 욕구 사건 — '욕구와 배고픔' 절. 먹기(휴대식·사 먹기)는 이 type 이 아니라 그 행동의 결과(`need_fill`/`need_none` + `char`)다. `need_mood`(`need` 칸 없음)는 p0.5.18 '몸·기분 줄' 절 |
 | `npc_move` | `id(f<n>) npc to=[x,y]` | (2026-09-14 D73 additive, `run_meta.town_walkers` 마을 판만) 행인 NPC 의 한 걸음 — 전부 기록(마을은 지형이 다 보인다). 관전 로그엔 안 싣고 지도가 보여 준다 |
 
 ### 2026-10-11 t13: 전투 표시용 선택 필드

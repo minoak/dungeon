@@ -63,6 +63,7 @@ export interface Bot {
   rations?: number;                              // p0.5.16 휴대식 개수 — 있을 때만
   needs?: Record<string, number>;                // p0.5.16 욕구 충족도 {욕구 id: 0~100} — 0.5.16 부터 늘 실린다(관전용 — 단계·숫자는 run_meta.need_defs 로 읽는다)
   moods?: NeedMood[];                            // p0.5.16 살아 있는 기분 조각(있을 때만)
+  mood_now?: NeedMoodNow;                        // p0.5.18 기분 합산(0 근처가 아닐 때만 — 관전용, 합 숫자가 든다)
   weapon?: Gear | null; armor?: Gear | null;
   order?: string | null;                         // 'm0' 'b1' 'f2' 'exit' '@x,y' 'follow:b1' 'rest' …
   status?: string[] | null;                      // 상태 태그(둔화·출혈·중독 …)
@@ -71,8 +72,12 @@ export interface Bot {
   [k: string]: unknown;
 }
 
-/** p0.5.16 기분 조각 — src = 욕구 id · size = like|plain|dislike · until = 끝나는 틱(그 틱부터 없다). */
-export interface NeedMood { src: string; size: string; line: string; until: number }
+/** p0.5.16 기분 조각 — src = 욕구 id · size = like|plain|dislike · until = 끝나는 틱(그 틱부터 없다).
+ *  p0.5.18 부터 line(문장) 대신 what(먹은 것 이름, 있을 때만) — 값·이유 낱말은 정의에 있다. 옛 스트림(0.5.16~0.5.17)에는 line 이 있다. */
+export interface NeedMood { src: string; size: string; what?: string; line?: string; until: number }
+
+/** p0.5.18 봇 스냅샷의 기분 합산 — key = good|bad · sum = 조각 값의 합 · why = 이유 낱말(합과 같은 쪽, 큰 것부터 최대 2). */
+export interface NeedMoodNow { key: 'good' | 'bad'; sum: number; why: string[] }
 
 export interface Monster {
   id: number; kind: string; x: number; y: number; hp: number; maxhp: number;

@@ -25,6 +25,7 @@ import json
 import os
 import pickle
 import re
+import shutil
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -314,8 +315,8 @@ up6 = S.upgrade(pickle.loads(pickle.dumps(snap6)))   # 이 프로세스가 방�
 u6 = up6["d"]
 TKd, WAd = ENT.npc("tavern_keeper"), ENT.npc("wandering_adventurer")
 tvc = ENT.comps_of("tavern", False)
-check("⑥ 판 10 · 이관 9→10 등록 · 옛 세계의 소문 재료 칸을 걷는다",
-      S.STATE_VERSION == 10 and S.MIGRATIONS[9] is S._m9_rumor and up6["state_version"] == 10 and "rumor" not in vars(u6))
+check("⑥ 판 10 이상(p0.5.18: 판 11 — 기분 조각 꼴) · 이관 9→10 등록 · 옛 세계의 소문 재료 칸을 걷는다",
+      S.STATE_VERSION >= 10 and S.MIGRATIONS[9] is S._m9_rumor and up6["state_version"] == S.STATE_VERSION and "rumor" not in vars(u6))
 check("⑥ 주점 주인: 정의 사본에서 hail_rumor 가 빠지고 역할·성격이 지금 정의로 · 피처 역할 줄·특징도",
       "hail_rumor" not in u6.npc_defs[TK] and u6.npc_defs[TK]["role"] == TKd["role"] and u6.npc_defs[TK]["persona"] == TKd["persona"]
       and u6.feature_roles[tkf.id] == TKd["role"] and u6.place_story[tkf.id]["trait"] == ENT.comps_of("tavern_keeper", False)["story"]["trait"]
@@ -346,10 +347,11 @@ check("⑦ 엔진: 소문 칸 초기화·소문 인사 고르기·숫자 자리 
       and "'{treasure}'" not in gs and not hasattr(G.Dungeon, "rumor"))
 gates = src("_run_gates.sh")
 check("⑦ _run_gates.sh 에 등록(낱말 경계)", re.search(r"(?<![\w])verify_npc_scope(?![\w])", gates) is not None)
-check("⑦ 문서: STREAM_FORMAT(hail_rumor 거둠) · PATCH_NOTES 0.5.17 · CHANGELOG p0.5.17 · VERSION 0.5.17",
+check("⑦ 문서: STREAM_FORMAT(hail_rumor 거둠) · PATCH_NOTES 0.5.17 · CHANGELOG p0.5.17 · VERSION 0.5.17 이상(p0.5.18: 다음 판에서 깨지지 않게)",
       "p0.5.17" in src("STREAM_FORMAT.md") and "## 0.5.17" in src("docs", "PATCH_NOTES.md") and "p0.5.17" in src("docs", "CHANGELOG.md")
-      and src("VERSION").strip() == "0.5.17")
+      and tuple(int(x) for x in src("VERSION").strip().split(".")) >= (0, 5, 17))
 
+shutil.rmtree(ROOT, ignore_errors=True)   # p0.5.18(게시판 10-16 codex): 임시 폴더를 남기지 않는다(반복 실행 산출)
 print("ALL PASS — verify_npc_scope (p0.5.17 마을 NPC 는 마을 이야기만: 층 실측 경로 없음·의뢰 사실 유지·과거사 유지·앎의 범위 한 줄·저장 판 10, 실 LLM 0콜)"
       if C.failed == 0 else "FAIL %d" % C.failed)
 raise SystemExit(1 if C.failed else 0)

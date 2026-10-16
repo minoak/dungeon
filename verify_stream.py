@@ -66,7 +66,8 @@ BOT_FIELDS = {"char", "job", "sex", "x", "y", "hp", "maxhp", "bag", "potions",
               "gold",                # p0.5.13 골드(additive, 늘 실린다) — STREAM_FORMAT '골드와 가게' 절과 한 몸
               "needs",               # p0.5.16 욕구 충족도(additive, 늘 실린다) — STREAM_FORMAT '욕구와 배고픔' 절과 한 몸
               "alive", "won", "order", "aware_of"}
-BOT_OPT = {"moods", "rations"}       # p0.5.16 있을 때만 실리는 칸(살아 있는 기분 조각 · 휴대식) — 이 게이트의 판(메뉴형 던전)엔 먹을 길이 없어 보통 안 나온다
+BOT_OPT = {"moods", "rations",       # p0.5.16 있을 때만 실리는 칸(살아 있는 기분 조각 · 휴대식) — 이 게이트의 판(메뉴형 던전)엔 먹을 길이 없어 보통 안 나온다
+           "mood_now"}               # p0.5.18 기분 합산(0 근처가 아닐 때만 — 배고픔 단계부터)
 MON_FIELDS = {"id", "kind", "x", "y", "hp", "maxhp", "ac", "atk", "dmg",
               "alive", "state", "concealed", "target", "desperate"}
 TRAP_FIELDS = {"x", "y", "kind", "name", "dc", "dmg", "hidden", "sprung"}

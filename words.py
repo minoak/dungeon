@@ -35,7 +35,8 @@ _HEAD = re.compile(r"^## `([^`]+)`")
 _WORD_KEYS = {"role", "persona", "trait", "history", "brief", "deep", "text", "texts", "wares", "goal", "reward", "client",
               "overheard", "speech", "background",
               "desc", "lore",                       # p0.5.6 아이템 — item.desc(물건 설명) · item.lore(속 — 자리만)
-              "about"}                              # p0.5.16 욕구 — need.about(한 줄 뜻). 단계·기분 문장은 끝 키가 line 이라 이미 말 칸이다
+              "about",                              # p0.5.16 욕구 — need.about(한 줄 뜻). 단계 몸 문장·결과 꼬리는 끝 키가 line 이라 이미 말 칸이다
+              "why"}                                # p0.5.18 욕구 — 단계·기분 조각의 기분 이유 낱말(need.stages.<단계>.why · need.mood.<갈래>.why)
 _NOT_WORDS = ("space.",)                            # 이 접두의 경로는 말이 아니다(구역 종류 id)
 
 # 사람용 설명 — (경로 끝 맞춤, 설명). 앞의 것이 이긴다. life.* 는 describe 가 꼬리를 붙인다. 말 파일 제목 줄의 줄표 뒤에 찍힌다.
@@ -84,8 +85,11 @@ def describe(kind, path):
     base = path[5:] if path.startswith("life.") else path
     if kind == "need":                              # p0.5.16 욕구 — 단계 id·기분 갈래가 경로 가운데에 든다(끝 맞춤으로는 못 가른다)
         return ("욕구의 한 줄 뜻 — 캐릭터를 만들 때 무게를 정하는 데 쓴다(게임 프롬프트엔 안 나간다)" if base == "need.about"
-                else "상태 문장 — 그 단계에 있는 동안 '몸과 기분' 줄에 뜬다(몸과 마음의 보고 · 지시·권유 없이)" if ".stages." in base
-                else "기분 조각 — 채운 뒤 정해진 틱 동안 '몸과 기분' 줄에 뜬다({what} = 먹은 것 · {what:을} = 이름 + 조사)" if ".mood." in base
+                else "몸 문장 — 그 단계에 있는 동안 '몸:' 줄에 뜬다(상태 그대로 · 지시·권유 없이)" if ".stages." in base and base.endswith(".line")
+                else "기분 이유 — 그 단계에 있는 동안 '기분:' 줄의 이유에 든다(짧은 명사구)" if ".stages." in base and base.endswith(".why")
+                else "기분 이유 — 채운 뒤 정해진 틱 동안 '기분:' 줄의 이유에 든다(짧은 명사구 · {what} = 먹은 것 · {what:을} = 이름 + 조사)"
+                if ".mood." in base and base.endswith(".why")
+                else "결과 꼬리 — 먹은 순간의 결과 문장에 덧붙는다(사실 한 마디 · {what} 자리 가능)" if ".mood." in base and base.endswith(".line")
                 else "")
     d = next((txt for tail, txt in DESC if base == tail or base.endswith("." + tail)), "")
     if kind == "companion" and path.startswith(("npc.", "story.")):
@@ -247,8 +251,16 @@ def action_words(name, root=ACTIONS_ROOT):
     """p0.5.5 행동 말 파일 prompts/actions/<name>.md → {칸: 문장}. 꼴은 세계 말 파일과 같다(`## \\`칸\\` — 설명` · 주석 무시).
     엔티티 정의가 없으니 칸 이름이 곧 열쇠다 — 어느 칸이 있어야 하는지는 쓰는 쪽(composed_actions 등록부)이 정하고 check_words 가 대조한다.
     문장 칸은 한 줄이어야 한다(관측 블록의 한 줄이 된다). 문제가 있으면 WordsError."""
-    path = os.path.join(root, name + ".md")
-    rel = "prompts/actions/%s.md" % name
+    return _flat_words(os.path.join(root, name + ".md"), "prompts/actions/%s.md" % name)
+
+
+def world_words(name, root=WORDS_ROOT):
+    """p0.5.18 세계 말 폴더 맨 위의 낱말 파일 prompts/world/<name>.md → {칸: 문장}(꼴·검사는 action_words 와 같다).
+    모든 행동 방식의 관측에 실리는 낱말 — 종류 폴더(엔티티 정의의 짝)가 아니라 폴더 맨 위에 둔다(지문 'prompts/world/' 에 든다 · mood = '기분:' 줄)."""
+    return _flat_words(os.path.join(root, name + ".md"), "prompts/world/%s.md" % name)
+
+
+def _flat_words(path, rel):
     try:
         with open(path, encoding="utf-8") as f:
             items, problems = parse(f.read())

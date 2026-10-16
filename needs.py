@@ -5,13 +5,18 @@
 이 고리 하나를 **데이터로** 정의한다(entities/need/<id>.json 의 comps.need + 말 파일 prompts/world/need/<id>.md). 배고픔이 첫 사례이고,
 다음 욕구는 같은 틀에 정의 한 장을 더한다(코드 무수정 — verify_needs 가 시험용 정의 한 장으로 고리 전체를 돌려 본다).
 
-  · 몸: bot['needs'] = {욕구: 충족도 0~100} · bot['moods'] = [{src, size, line, until}](같은 욕구의 조각은 새것이 덮는다) ·
+  · 몸: bot['needs'] = {욕구: 충족도 0~100} · bot['moods'] = [{src, size, what?, until}](같은 욕구의 조각은 새것이 덮는다 — p0.5.18: 문장 대신 먹은 것 이름 ·
+    값과 이유 낱말은 그릴 때 정의에서 읽는다) ·
     무게 bot['need_w'] = {욕구: 낮음|높음}(보통이 아닌 것만 — 시트 needs 칸에서, 0.5.16 은 시트에 칸이 없어 모두 보통) ·
     취향 bot['taste'] = {likes, dislikes}(시트 taste 칸 — 있을 때만). 무게·취향은 스폰이 시트에서 다시 읽는다(이월할 것이 없다).
   · 엔진 공용 지점 셋: 틱마다 줄이기(tick) · 채우기(eat — 먹을 것의 satisfies / on_result — 정의의 from_events) · 단계 판정(문장·효과·사건).
-  · 숫자는 에이전트에게 보이지 않는다(§3.8.6) — 관측은 '몸과 기분' 줄(지금 단계의 상태 문장 + 살아 있는 기분 조각, 한 번에 문장 LINE_CAP 개,
-    가장 낮은 단계부터)과 결과 사실 문장뿐. 보통 단계는 문장이 없어 줄이 안 생긴다. 충족도·단계 이름·무게·채운 양은 결과 dict 에서도
-    공개 투영이 걷는다(info_guard.NEED_NUM_KEYS). 스트림(관전)은 원본을 싣는다 — tick.bots[].needs·moods, 사건 need_fill·need_none·need_stage·need_drain.
+  · 숫자는 에이전트에게 보이지 않는다(§3.8.6) — p0.5.18(DECISIONS 10-16 '몸·기분 줄') 관측은 두 줄과 결과 사실 문장뿐:
+      '몸:' = 보통이 아닌 단계의 몸 문장(가장 낮은 충족도부터, 한 번에 문장 LINE_CAP 개) ·
+      '기분:' = 살아 있는 기분 조각(욕구 단계가 주는 것 + 먹은 뒤 조각)의 값을 엔진이 합해 좋다 / 좋지 않다 둘 중 하나와 이유(합에 가장 크게
+      기여한 조각부터 WHY_CAP 개) — 합이 0 근처(|합| < MOOD_EDGE)면 줄이 없다(림월드 생각 → 기분 합산, 경제 설계 §1.4).
+    보통 단계·조각 없음이면 두 줄 다 없다. 낱말(좋다·좋지 않다·이유)은 prompts/world/mood.md, 몸 문장·이유 낱말은 욕구 말 파일. 충족도·단계 이름·무게·채운 양·
+    기분 합은 결과 dict 에서도 공개 투영이 걷는다(info_guard.NEED_NUM_KEYS). 스트림(관전)은 원본을 싣는다 — tick.bots[].needs·moods·mood_now,
+    사건 need_fill·need_none·need_stage·need_drain·need_mood.
   · 효과 어휘는 코드에 있는 둘뿐(entities.NEED_EFFECTS) — no_regen(쉬기·앉기·마시기·불 쬐기·묵기로 HP 가 차지 않음 — 물약·샘·스킬은 그대로) ·
     hp_drain{every, floor}(every 틱마다 HP −1, 최대 HP 의 floor% 에서 멈춘다 — 굶어 죽지 않는다).
   · 욕구 사건(type 'need' — 단계 변화·기운 빠짐·from_events 채움)은 행위가 아니라 몸의 변화라 `char` 대신 `bot`(그 몸의 번호)을 싣는다 —
@@ -25,12 +30,15 @@ import re
 
 import entities as ENT
 
-LINE_CAP = 2                 # §10-20 '몸과 기분' 줄 상한 — 한 번에 문장 2개(조각 수가 아니라 문장 수), 가장 낮은 단계의 상태 문장부터 · 그다음 새 기분 조각부터
+LINE_CAP = 2                 # §10-20 '몸:' 줄 상한 — 한 번에 문장 2개(문장 묶음 수가 아니라 문장 수), 가장 낮은 충족도의 몸 문장부터
+MOOD_EDGE = 3                # p0.5.18 기분 합의 절댓값이 이것보다 작으면(0 근처) '기분:' 줄이 없다 — 문턱은 여기 한 곳 ⚠️임시(값은 정의의 mood 칸들과 함께 교정)
+WHY_CAP = 2                  # p0.5.18 '기분:' 줄의 이유 — 합에 가장 크게 기여한 조각부터 최대 2개(DECISIONS 10-16)
 DEFAULT_LEVEL = '보통'       # 시트에 무게가 없으면(0.5.16 은 모두) 보통 = 정의의 decay · 채움 100% · 기분 시간 100%
 TOL_FULL = 100               # 내성 배율 자리(%) — 내성이 없는 동안 늘 100
 WHY_MAX = 40                 # 시트 needs[].why(생성 근거 — 론처에만) 상한. 엔진은 읽지 않는다
 LIKES_MAX, DISLIKES_MAX = 2, 1   # §3.6 취향 — 좋아함 0~2 · 싫어함 0~1
-NEED_RESULTS = ('need_fill', 'need_none', 'need_stage', 'need_drain')   # 이 모듈이 내는 결과·사건 이름(§10-19 — ate·full 이름은 쓰지 않는다)
+NEED_RESULTS = ('need_fill', 'need_none', 'need_stage', 'need_drain',   # 이 모듈이 내는 결과·사건 이름(§10-19 — ate·full 이름은 쓰지 않는다)
+                'need_mood')     # p0.5.18 기분 합산의 결과(좋다·좋지 않다·없음과 이유)가 바뀐 사건(관전·측정용)
 MOOD_SIZE = {'like': '아주 좋음', 'plain': '좋음', 'dislike': '별로'}   # 관전·측정용 말(관측엔 안 나간다 — 기분은 문장으로만)
 
 # ⚠️ 엔진 문장(임시 — 민옥 교정 대기). 결과 사실만: 무엇을 먹었고 몸이 어떻게 받았나. 숫자(충족도)는 없다.
@@ -225,11 +233,13 @@ def no_regen(bot):
 
 def tick(d, bots, turn):
     """한 세계의 한 틱 — 산 몸마다 줄기(every 틱마다 1) · hp_drain(every 틱마다 HP −1, 최대 HP 의 floor% 에서 멈춤) · 끝난 기분 조각 걷기.
-    단계가 바뀌면 need_stage, HP 를 깎으면 need_drain(사건) + 그 몸의 궤적 한 칸(엔진 사실 — 관측의 HP 가 왜 줄었나). 판정 rng 무접촉."""
+    단계가 바뀌면 need_stage, HP 를 깎으면 need_drain(사건) + 그 몸의 궤적 한 칸(엔진 사실 — 관측의 HP 가 왜 줄었나).
+    p0.5.18: 줄기·조각 끝남으로 기분 합산의 결과가 바뀌면 need_mood(전 = 지난 틱 끝의 몸). 판정 rng 무접촉."""
     specs = live()
     for b in bots:
         if not b.get('alive', True) or b.get('won'):
             continue
+        m0 = _mood_key(b, int(turn) - 1)
         needs = b.setdefault('needs', {})
         for nid, sp in specs:
             if nid not in needs:                   # 판 중에 정의가 더해졌다(새 욕구 = 데이터 한 장) — 시작값부터
@@ -248,6 +258,7 @@ def tick(d, bots, turn):
                         d._trail_add(b, rec)
         if b.get('moods'):
             b['moods'] = [m for m in b['moods'] if int(m.get('until', 0)) > turn]
+        _mood_event(d, b, m0, turn)
 
 
 def _mood(sp, bot, tags):
@@ -260,7 +271,8 @@ def _mood(sp, bot, tags):
 
 
 def _fill(d, bot, nid, amount, turn, what=None, tags=(), via='eat', src_key=None):
-    """한 욕구를 채운다 → need_fill 칸(dict). 무게의 fill% 를 곱하고(올림 없이 반올림) 100 에서 자른다 · 기분 조각을 붙인다(같은 욕구의 조각은 덮는다)."""
+    """한 욕구를 채운다 → need_fill 칸(dict). 무게의 fill% 를 곱하고(올림 없이 반올림) 100 에서 자른다 · 기분 조각을 붙인다(같은 욕구의 조각은 덮는다 —
+    p0.5.18: 조각엔 갈래·먹은 것 이름·끝나는 틱만, 값과 이유 낱말은 그릴 때 정의에서)."""
     sp = spec(nid)
     w = weight(sp, level(bot, nid))
     gain = max(1, int(round(int(amount) * int(w['fill']) / 100.0)))
@@ -272,7 +284,7 @@ def _fill(d, bot, nid, amount, turn, what=None, tags=(), via='eat', src_key=None
         m = sp['mood'][mk]
         until = int(turn) + max(1, int(round(int(m['time']) * int(w['mood_time']) / 100.0)))
         moods = [x for x in (bot.get('moods') or []) if x.get('src') != nid]
-        moods.append({'src': nid, 'size': mk, 'line': fill_line(m['line'], what), 'until': until})
+        moods.append({'src': nid, 'size': mk, **({'what': what} if what else {}), 'until': until})
         bot['moods'] = moods
         rec['mood'] = mk
     return rec
@@ -301,9 +313,11 @@ def eat(d, bot, df, turn, via='eat'):
     if blk:
         return {'result': 'need_none', 'need': blk, 'why': 'full', 'via': via, 'what': what, 'src_key': df['id']}
     tags = ((df.get('comps') or {}).get('taste')) or []
+    m0 = _mood_key(bot, turn)
     rows = [_fill(d, bot, nid, amt, turn, what=what, tags=tags, via=via, src_key=df['id']) for nid, amt in food_of(df)]
     for extra in rows[1:]:
         _log(d).append({'type': 'need', 'bot': bot['char'], **extra})
+    _mood_event(d, bot, m0, turn)                  # p0.5.18 먹어서 바뀐 기분(단계·새 조각) — 행동이 낳은 사건
     return rows[0]
 
 
@@ -314,6 +328,7 @@ def on_result(d, bot, res, turn):
     r = (res or {}).get('result')
     if not r or r in NEED_RESULTS:
         return
+    m0 = _mood_key(bot, turn)
     for nid, sp in live():
         for e in sp.get('from_events') or ():
             if e.get('event') != r:
@@ -325,6 +340,7 @@ def on_result(d, bot, res, turn):
                                 **({'what': what} if what else {})})
             else:
                 _log(d).append({'type': 'need', 'bot': bot['char'], **_fill(d, bot, nid, e['amount'], turn, what=what, via='event', src_key=r)})
+    _mood_event(d, bot, m0, turn)
 
 
 # ── 관측 · 스트림 ───────────────────────────────────────────────────
@@ -334,9 +350,10 @@ def sentences(text):
     return [s for s in _SENT_RE.split(str(text or '').strip()) if s]
 
 
-def lines(bot, turn):
-    """'몸과 기분' 줄의 조각들 — 지금 단계의 상태 문장(가장 낮은 충족도부터) 다음 살아 있는 기분 조각(새것부터). 없으면 [].
-    상한은 **문장 수**(LINE_CAP) — 조각 하나가 문장 둘이면(굶주림) 그것만으로 찬다. 남은 자리보다 긴 조각은 앞 문장만 남긴다(뒤의 것은 밀린다)."""
+def lines(bot):
+    """'몸:' 줄의 문장들 — 보통이 아닌 단계의 몸 문장(가장 낮은 충족도부터 · 같으면 욕구 id 순). 없으면 [](보통이면 줄이 없다).
+    상한은 **문장 수**(LINE_CAP) — 문장이 둘인 단계(굶주림)는 그것만으로 찬다. 남은 자리보다 긴 묶음은 앞 문장만 남긴다(뒤의 것은 밀린다).
+    p0.5.18: 기분 조각은 여기 없다 — '기분:' 줄(mood_line)이 합산해 말한다."""
     rows = []
     for nid, sp in live():
         v = (bot.get('needs') or {}).get(nid)
@@ -345,10 +362,8 @@ def lines(bot, turn):
         ln = stage(sp, v).get('line')
         if ln:
             rows.append((v, nid, ln))
-    pieces = [ln for _v, _n, ln in sorted(rows)]
-    pieces += [m['line'] for m in reversed(bot.get('moods') or []) if int(m.get('until', 0)) > int(turn) and m.get('line')]
     out, left = [], LINE_CAP
-    for ln in pieces:
+    for _v, _n, ln in sorted(rows):
         ss = sentences(ln)
         if left <= 0:
             break
@@ -358,24 +373,88 @@ def lines(bot, turn):
     return out
 
 
+def _parts(bot, turn=None):
+    """p0.5.18 살아 있는 기분 조각 [(값, 이유 낱말)] — 욕구 단계가 주는 것(그 단계의 mood·why — 가장 낮은 충족도부터, 같으면 욕구 id 순) 다음
+    먹은 뒤 조각(정의의 mood.<갈래>.mood·why — 새것부터). 이 순서가 이유 정렬의 동점 순서다. turn 이 있으면 그 틱에 끝난 조각(until ≤ turn)은 뺀다
+    (관측과 같은 자르기 — 없으면 몸의 목록 그대로: 틱 머리가 이미 걷었다). 정의에 값이 없는 조각(지운 욕구·지운 갈래)은 세지 않는다."""
+    rows = []
+    for nid, sp in live():
+        v = (bot.get('needs') or {}).get(nid)
+        if v is None:
+            continue
+        st = stage(sp, v)
+        if st.get('mood'):
+            rows.append((v, nid, int(st['mood']), st['why']))
+    out = [(m, w) for _v, _n, m, w in sorted(rows, key=lambda r: (r[0], r[1]))]
+    for p in reversed(bot.get('moods') or []):
+        if turn is not None and int(p.get('until', 0)) <= int(turn):
+            continue
+        mv = (((spec(p.get('src')) or {}).get('mood') or {}).get(p.get('size'))) or {}
+        if mv.get('mood'):
+            out.append((int(mv['mood']), fill_line(mv['why'], p.get('what'))))
+    return out
+
+
+def mood_of(bot, turn=None):
+    """p0.5.18 기분 합산(림월드 생각 → 기분) — 조각 값의 합이 0 근처(|합| < MOOD_EDGE)면 None, 아니면 {key: good|bad, sum, why[이유 ≤ WHY_CAP]}.
+    이유 = 합과 같은 쪽 조각만(반대쪽은 합에 기여하지 않았다), 값의 크기가 큰 것부터 · 같으면 _parts 순서(단계 먼저 · 낮은 충족도 먼저 · 조각은 새것 먼저) ·
+    같은 낱말은 한 번. 숫자(sum)는 관전·측정용 — 관측엔 mood_line 의 낱말만 간다."""
+    parts = _parts(bot, turn)
+    s = sum(m for m, _w in parts)
+    if abs(s) < MOOD_EDGE:
+        return None
+    why = []
+    for _m, w in sorted((p for p in parts if (p[0] > 0) == (s > 0)), key=lambda p: -abs(p[0])):
+        if w not in why:
+            why.append(w)
+    return {'key': 'good' if s > 0 else 'bad', 'sum': s, 'why': why[:WHY_CAP]}
+
+
+def mood_line(bot, turn=None):
+    """p0.5.18 관측의 '기분:' 줄 글 — '좋지 않다 (이유: 배고픔)'(낱말은 prompts/world/mood.md — ENT.mood_words · 숫자 없음). 0 근처면 None."""
+    m = mood_of(bot, turn)
+    if not m:
+        return None
+    w = ENT.mood_words()
+    return '%s (%s: %s)' % (w[m['key']], w['why'], ', '.join(m['why'])) if m['why'] else w[m['key']]
+
+
+def _mood_key(bot, turn):
+    m = mood_of(bot, turn)
+    return (m['key'], tuple(m['why'])) if m else None
+
+
+def _mood_event(d, bot, before, turn):
+    """p0.5.18 기분 합산의 결과(좋다·좋지 않다·없음과 이유)가 before 와 다르면 need_mood 사건 한 줄 — {from, to}(good|bad|None) + 새 결과의 sum·why.
+    값만 바뀌고 낱말·이유가 그대로면 사건이 없다(관측의 '기분:' 줄이 그대로다)."""
+    m = mood_of(bot, turn)
+    if ((m['key'], tuple(m['why'])) if m else None) != before:
+        _log(d).append({'type': 'need', 'bot': bot['char'], 'result': 'need_mood', 'from': before[0] if before else None,
+                        'to': m['key'] if m else None, **({'sum': m['sum'], 'why': list(m['why'])} if m else {})})
+
+
 def snap(bot):
-    """봇 스냅샷(스트림 tick.bots[]·level.party[])에 얹을 칸 — 충족도 · 살아 있는 기분 조각(있을 때만). 관전용(관측엔 안 나간다)."""
+    """봇 스냅샷(스트림 tick.bots[]·level.party[])에 얹을 칸 — 충족도 · 살아 있는 기분 조각(있을 때만) · 기분 합산 mood_now{key, sum, why}(0 근처가 아닐 때만).
+    관전용(관측엔 안 나간다)."""
     if bot.get('needs') is None:
         return {}
     out = {'needs': dict(bot['needs'])}
     if bot.get('moods'):
         out['moods'] = [dict(m) for m in bot['moods']]
+    m = mood_of(bot)
+    if m:
+        out['mood_now'] = m
     return out
 
 
 def defs_meta():
-    """run_meta.need_defs — 단계가 있는 욕구 정의(단계·효과·무게 숫자·기분 시간·취향 어휘). 측정 도구가 스트림만으로 단계를 다시 셀 수 있게(bestiary_defs 와 같은 꼴)."""
+    """run_meta.need_defs — 단계가 있는 욕구 정의(단계·효과·무게 숫자·기분 값·기분 시간·취향 어휘). 측정 도구가 스트림만으로 단계·기분 합을 다시 셀 수 있게(bestiary_defs 와 같은 꼴)."""
     out = {}
     for nid, sp in live():
         out[nid] = {'name': name_of(nid), 'start': sp['start'], 'decay': sp['decay'], 'full_at': sp['full_at'], 'full_blocks': sp['full_blocks'],
-                    'stages': {k: {kk: v[kk] for kk in ('min', 'word', 'effects') if kk in v} for k, v in sp['stages'].items()},
+                    'stages': {k: {kk: v[kk] for kk in ('min', 'word', 'effects', 'mood') if kk in v} for k, v in sp['stages'].items()},
                     **({'weights': sp['weights']} if sp.get('weights') else {}),
-                    **({'mood': {k: {'time': v['time']} for k, v in sp['mood'].items()}} if sp.get('mood') else {}),
+                    **({'mood': {k: {kk: v[kk] for kk in ('time', 'mood')} for k, v in sp['mood'].items()}} if sp.get('mood') else {}),
                     **({'from_events': sp['from_events']} if sp.get('from_events') else {}),
                     **({'tastes': list(sp['tastes'])} if sp.get('tastes') else {})}
     return out
@@ -389,32 +468,43 @@ def _full_tail(nid):
     return (ln or FULL_FALLBACK).rstrip('.')
 
 
+def _fill_tail(last):
+    """p0.5.18 먹은 순간 결과의 덧붙임 — 그 갈래(결과의 mood)의 결과 꼬리(정의의 mood.<갈래>.line, 끝 마침표 없이 · 배고픔은 싫어함만 '입에 맞지 않았다'). 없으면 None."""
+    mv = (((spec(last.get('need')) or {}).get('mood') or {}).get(last.get('mood'))) or {}
+    return fill_line(mv['line'], last.get('what')).rstrip('.') if mv.get('line') else None
+
+
 def prose(last):
-    """need_fill·need_none 결과의 1인칭 사실 문장 — 모르는 결과면 None. 숫자(충족도)는 없다 — 기분은 '몸과 기분' 줄이 말한다."""
+    """need_fill·need_none 결과의 1인칭 사실 문장 — 모르는 결과면 None. 숫자(충족도)는 없다 — 몸과 기분은 '몸:'·'기분:' 줄이 말한다.
+    p0.5.18(문장 대원칙 '간결하고 명확하게'): '휴대식을 먹었다' · '휴대식을 먹지 못했다 — 배가 부르다'(가득 참의 몸 문장) · 싫어한 음식이면 '— 입에 맞지 않았다'."""
     r, what = last.get('result'), last.get('what') or '그것'
-    shop = last.get('shop')
+    shop, obj = last.get('shop'), what + josa(what, '을')
     if r == 'need_fill':
+        bits = [b for b in (_fill_tail(last),) if b]
         if last.get('via') == 'buy':
-            return '%s에서 %s 사서 그 자리에서 먹었다 — %d골드를 냈다(남은 골드 %d)' % (
-                shop or '가게', what + josa(what, '을'), last.get('price', 0), last.get('gold', 0))
+            bits.append('%d골드를 냈다(남은 골드 %d)' % (last.get('price', 0), last.get('gold', 0)))
+            return '%s에서 %s 사 먹었다 — %s' % (shop or '가게', obj, ' · '.join(bits))
         tail = (' (남은 휴대식 %d개)' % last['rations']) if 'rations' in last else ''
-        return '%s 먹었다%s' % (what + josa(what, '을'), tail)
+        return '%s 먹었다%s%s' % (obj, (' — ' + ' · '.join(bits)) if bits else '', tail)
     if r == 'need_none':
         if last.get('via') == 'buy':
-            return '%s에서 %s 사 먹으려 했다 — %s(사지 않았다)' % (shop or '가게', what + josa(what, '을'), _full_tail(last.get('need')))
-        return '%s 먹으려 했다 — %s(그대로 남았다)' % (what + josa(what, '을'), _full_tail(last.get('need')))
+            return '%s에서 %s 사지 않았다 — %s' % (shop or '가게', obj, _full_tail(last.get('need')))
+        return '%s 먹지 못했다 — %s' % (obj, _full_tail(last.get('need')))
     return None
 
 
 def event_tags(rec):
-    """궤적 꼬리표(D40 사건 사전) — 새 키를 만들지 않는다(use·loot·misc·hurt 재사용 → EVENT_KINDS 무수정). 모르는 결과면 None."""
+    """궤적 꼬리표(D40 사건 사전) — 새 키를 만들지 않는다(use·loot·misc·hurt 재사용 → EVENT_KINDS 무수정). 모르는 결과면 None.
+    p0.5.18: 먹은 꼬리표에도 결과 꼬리('입에 맞지 않았다') · 못 먹은 꼬리표는 가득 참의 몸 문장(욕구마다 — 옛 '배가 불러 못 먹음' 고정 글 대신)."""
     r, what = rec.get('result'), rec.get('what') or '?'
+    ft = _fill_tail(rec) if r == 'need_fill' else None
     if r == 'need_fill':
         if rec.get('via') == 'buy':
-            return [('use', '사 먹음', '%s ← %s %d골드 (남은 %d)' % (what, rec.get('shop') or '가게', rec.get('price', 0), rec.get('gold', 0)))]
-        return [('use', '먹음', what + ((' (남은 %d)' % rec['rations']) if 'rations' in rec else ''))]
+            return [('use', '사 먹음', '%s ← %s %d골드 (남은 %d)%s' % (what, rec.get('shop') or '가게', rec.get('price', 0), rec.get('gold', 0),
+                                                                     (' · ' + ft) if ft else ''))]
+        return [('use', '먹음', what + ((' — ' + ft) if ft else '') + ((' (남은 %d)' % rec['rations']) if 'rations' in rec else ''))]
     if r == 'need_none':
-        return [('misc', '헛손질', '%s — 배가 불러 못 먹음' % what)]
+        return [('misc', '헛손질', '%s — %s' % (what, _full_tail(rec.get('need'))))]
     if r == 'need_drain':
         return [('hurt', '허기', '%s (HP %d/%d)' % (DRAIN_LINE, rec.get('hp', 0), rec.get('maxhp', 0)))]
     return None
@@ -436,6 +526,10 @@ def summary(res, names=None):
         return '%s: %s → %s' % (nm, (st.get(res.get('from')) or {}).get('word', res.get('from')), (st.get(res.get('to')) or {}).get('word', res.get('to')))
     if r == 'need_drain':
         return '%s — %s (HP %d/%d)' % (nm, DRAIN_LINE, res.get('hp', 0), res.get('maxhp', 0))
+    if r == 'need_mood':                           # p0.5.18 기분 합산 결과 변화 — 관전 로그(합·이유를 싣는다)
+        w = ENT.mood_words()
+        return '기분: %s → %s%s' % (w.get(res.get('from'), '없음'), w.get(res.get('to'), '없음'),
+                                   (' (%s · 합 %+d)' % (', '.join(res.get('why') or ()), res.get('sum', 0))) if res.get('to') else '')
     return None
 
 

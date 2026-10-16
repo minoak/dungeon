@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 """p0.5.16 욕구 틀 + 배고픔(경제 1b — .orch/drafts/economy_design.md §3·§4.1·§5.2·§7·§8.1, DECISIONS 10-14·10-15) — 헤들리스 검증. LLM 0콜.
+p0.5.18 몸·기분 줄(DECISIONS 10-16 '문장 대원칙'·'몸·기분 줄'): 관측 두 줄 '- 몸: …'(보통이 아닌 단계의 몸 문장) · '- 기분: 좋다 / 좋지 않다 (이유: …)'
+(기분 조각 합산 — 0 근처면 없음 · 이유는 같은 쪽 큰 것부터 2개 · 동점은 낮은 충족도·단계 먼저) · 새 문장 글자 그대로 · 결과 문장 간결 · need_mood 사건 ·
+mood_now 관전 칸 · 이관 10→11 · 시험용 욕구로 기분까지 데이터만으로.
 게이트:
   ① 정의·검증기: 배고픔 정의(시작 70 · 4틱마다 1 · 81 가득 참 · 단계 넷 · 굶주림 효과 둘 · 기분 셋 · 무게 둘 · 취향 어휘 8) · 음식 셋(휴대식 i9·식사·햇사과) ·
      가게(주점 식사 3 · 잡화점 휴대식 2 · 채소 좌판 햇사과 1) · 뒤지기 표에 휴대식 · 검증기가 잘못된 욕구·먹을 것을 한 번에 거절한다 ·
@@ -155,6 +158,16 @@ check("① 문장은 보통 단계에만 없다(§3.2 — 대부분의 시간에
       and HUNGER["stages"]["starving"]["effects"] == {"no_regen": True, "hp_drain": {"every": 60, "floor": 50}}
       and not any(HUNGER["stages"][k].get("effects") for k in ("full", "normal", "hungry"))
       and {k: v["time"] for k, v in HUNGER["mood"].items()} == {"like": 120, "plain": 60, "dislike": 60})
+LINE = {k: (HUNGER["stages"][k].get("line")) for k in HUNGER["stages"]}
+check("① p0.5.18 몸 문장 글자 그대로(문장 대원칙 — 꾸밈 없이 상태): 배부름 '배가 부르다.' · 배고픔 '배가 고프다.' · 굶주림 '몹시 배고프다. 쉬어도 기운이 돌아오지 않는다.' · 보통 없음",
+      LINE == {"full": "배가 부르다.", "normal": None, "hungry": "배가 고프다.", "starving": "몹시 배고프다. 쉬어도 기운이 돌아오지 않는다."}, LINE)
+check("① p0.5.18 기분 값(임시)·이유 낱말 글자 그대로: 배고픔 −10 '배고픔' · 굶주림 −20 '굶주림' · 배부름·보통 칸 없음 · 좋아함 +15 '좋아하는 {what:을} 먹음' · "
+      "기본 +8 '배불리 먹음' · 싫어함 −5 '입에 맞지 않는 음식' + 결과 꼬리 '입에 맞지 않았다.' · 문턱 3 · 이유 2개 · 기분 낱말 좋다·좋지 않다·이유",
+      {k: (v.get("mood"), v.get("why")) for k, v in HUNGER["stages"].items()} == {"full": (None, None), "normal": (None, None), "hungry": (-10, "배고픔"), "starving": (-20, "굶주림")}
+      and {k: (v["mood"], v["why"], v.get("line")) for k, v in HUNGER["mood"].items()} == {"like": (15, "좋아하는 {what:을} 먹음", None), "plain": (8, "배불리 먹음", None),
+                                                                                         "dislike": (-5, "입에 맞지 않는 음식", "입에 맞지 않았다.")}
+      and NE.MOOD_EDGE == 3 and NE.WHY_CAP == 2 and ENT.mood_words() == {"good": "좋다", "bad": "좋지 않다", "why": "이유"},
+      ({k: (v.get("mood"), v.get("why")) for k, v in HUNGER["stages"].items()}, HUNGER["mood"], ENT.mood_words()))
 check("① 무게(§3.8.2 — 등급 하나가 셋을 함께): 낮음 6틱·150%·50% · 높음 3틱·70%·150% · 보통 = decay·100·100(적지 않는다) · 취향 어휘 8(§3.6)",
       HUNGER["weights"] == {"낮음": {"every": 6, "fill": 150, "mood_time": 50}, "높음": {"every": 3, "fill": 70, "mood_time": 150}}
       and NE.weight(HUNGER, "보통") == {"every": 4, "fill": 100, "mood_time": 100}
@@ -196,11 +209,19 @@ bad["comps"]["need"]["stages"]["starving"]["effects"]["sleep"] = True           
 bad["comps"]["need"]["stages"]["hungry"]["effects"] = {"hp_drain": {"every": 0, "floor": 50}}   # d hp_drain 꼴
 bad["comps"]["need"]["weights"]["보통"] = {"every": 4, "fill": 100, "mood_time": 100}            # e 보통을 적음
 bad["comps"]["need"]["from_events"] = [{"event": "drank", "amount": 0}]          # f 채움 0
+bad["comps"]["need"]["stages"]["hungry"]["mood"] = 0                             # l p0.5.18 단계 기분 값 0(값·이유는 짝 — 0 이면 칸을 두지 않는다)
+bad["comps"]["need"]["mood"]["dislike"]["mood"] = 500                            # m p0.5.18 기분 값 범위 밖
 jw(os.path.join(eroot, "need", "hunger.json"), bad)
 with io.open(os.path.join(wroot, "need", "hunger.md"), encoding="utf-8") as f:
     hmd = f.read()
+assert "\n좋아하는 {what:을} 먹음\n" in hmd                                       # 바꿀 자리가 주석이 아니라 값 줄인지(빨간불 거짓 통과 방지)
 with io.open(os.path.join(wroot, "need", "hunger.md"), "w", encoding="utf-8", newline="\n") as f:
-    f.write(hmd.replace("좋아하는 {what:을} 먹어", "좋아하는 {thing} 먹어"))          # g 모르는 자리
+    f.write(hmd.replace("\n좋아하는 {what:을} 먹음\n", "\n좋아하는 {thing} 먹음\n"))   # g 모르는 자리(기분 이유)
+with io.open(os.path.join(wroot, "mood.md"), encoding="utf-8") as f:
+    mmd = f.read()
+assert "\n## `bad`" in mmd
+with io.open(os.path.join(wroot, "mood.md"), "w", encoding="utf-8", newline="\n") as f:
+    f.write(mmd.replace("\n## `bad`", "\n## `worse`"))                           # n·o p0.5.18 기분 낱말 칸 빠짐·모르는 칸
 eff = jr(os.path.join(eroot, "need", "hunger.json"))
 r_ = jr(os.path.join(eroot, "object", "ration.json"))
 r_["comps"]["satisfies"] = {"thirst": 10}                                         # h 없는 욕구
@@ -218,10 +239,13 @@ try:
 except ENT.EntityError as e:
     msg = str(e)
 want = ("need 가 모르는 칸 ['wat']", "min 은 서로 달라야", "effects 는 {no_regen|hp_drain} 중에서", "effects.hp_drain 은",
-        "need.weights 는 {낮음|높음", "need.from_events 는", "{what}·{what:을|은|이|과} 뿐이다",
+        "need.weights 는 {낮음|높음", "need.from_events 는", "need.mood.like.why 의 자리는 {what}·{what:을|은|이|과} 뿐이다",
         "satisfies 의 'thirst' 는 단계가 있는 욕구 정의가 아니다", "taste 의 '초콜릿' 는 취향 어휘", "potion.json: type 'potion' — 먹는 type",
-        "meal.json: type 'food' — 먹는 type")
-check("① 검증기 거절 11종을 한 번에 나열 — 모르는 칸·min 겹침·모르는 효과·hp_drain 꼴·보통 무게·채움 0·모르는 자리·없는 욕구·어휘 밖 꼬리표·먹는 type 밖 satisfies·satisfies 없음",
+        "meal.json: type 'food' — 먹는 type",
+        "need.stages.hungry 의 mood·why 는 짝", "need.mood.dislike 는 {time: 정수≥1(틱), mood: 0 아닌 정수",
+        "prompts/world/mood.md: 칸 `bad` 가 없다", "prompts/world/mood.md: 칸 `worse` 는 기분 낱말이 아니다")
+check("① 검증기 거절 15종을 한 번에 나열 — 모르는 칸·min 겹침·모르는 효과·hp_drain 꼴·보통 무게·채움 0·모르는 자리(기분 이유)·없는 욕구·어휘 밖 꼬리표·먹는 type 밖 satisfies·satisfies 없음 · "
+      "p0.5.18 단계 기분 값 0·기분 값 범위 밖·기분 낱말 칸 빠짐·모르는 기분 낱말 칸",
       all(w_ in msg for w_ in want), [w_ for w_ in want if w_ not in msg] or msg[:300])
 shutil.rmtree(TMP, ignore_errors=True)
 
@@ -231,12 +255,12 @@ TEST_DEF = {"id": "test_thirst", "name": "목마름", "kind": "need", "tags": ["
             "comps": {"need": {"about": "@prompts", "start": 50, "decay": 2, "full_at": 90, "full_blocks": False,
                                "stages": {"full": {"min": 90, "word": "개운함", "line": "@prompts"},
                                           "normal": {"min": 30, "word": "보통"},
-                                          "dry": {"min": 0, "word": "목마름", "line": "@prompts"}},
-                               "mood": {"plain": {"time": 10, "line": "@prompts"}},
+                                          "dry": {"min": 0, "word": "목마름", "line": "@prompts", "mood": -6, "why": "@prompts"}},   # p0.5.18 단계 기분
+                               "mood": {"plain": {"time": 10, "mood": 4, "why": "@prompts"}},                                       # p0.5.18 마신 뒤 조각
                                "from_events": [{"event": "drank", "amount": 30}],
                                "tolerance": {"key": "item", "on": "mood", "steps": [100, 50]}}}}   # 내성은 자리만(엔진이 아직 읽지 않는다)
 TEST_MD = ("# 목마름 · test_thirst\n\n## `need.about`\n마실 것이 필요한 정도\n\n## `need.stages.full.line`\n목이 시원하다.\n\n"
-           "## `need.stages.dry.line`\n목이 탄다.\n\n## `need.mood.plain.line`\n물을 마셔 개운하다.\n")
+           "## `need.stages.dry.line`\n목이 탄다.\n\n## `need.stages.dry.why`\n목마름\n\n## `need.mood.plain.why`\n물을 마심\n")
 IDLE_DEF = {"id": "test_idle", "name": "호기심(시험)", "kind": "need", "tags": ["need"], "comps": {"need": {"about": "@prompts"}}}
 IDLE_MD = "# 호기심(시험) · test_idle\n\n## `need.about`\n새로운 것을 알고 싶은 정도\n"
 TMP2 = tempfile.mkdtemp(prefix="defs2_", dir=ROOT)
@@ -271,8 +295,11 @@ try:
           and all("char" not in e for e in evT) and aT["needs"]["hunger"] == 69, evT)
     oT = dT.view(aT, botsT)
     wT = brains._wire(oT, NAMES, compose=True)
-    check("② 단계 문장: '몸과 기분' 줄에 '목이 탄다.' — 숫자 없이",
-          oT.get("need_lines") == ["목이 탄다."] and "- 몸과 기분: 목이 탄다." in wT)
+    check("② 단계 문장·기분(데이터만으로): '- 몸: 목이 탄다.' · '- 기분: 좋지 않다 (이유: 목마름)'(목마름 −6 · 배고픔 보통) — 숫자 없이 · 그 틱 need_mood(없음 → 좋지 않다)",
+          oT.get("need_lines") == ["목이 탄다."] and oT.get("need_mood") == "좋지 않다 (이유: 목마름)"
+          and "\n- 몸: 목이 탄다.\n- 기분: 좋지 않다 (이유: 목마름)\n" in wT
+          and {"type": "need", "bot": aT["char"], "result": "need_mood", "from": None, "to": "bad", "sum": -6, "why": ["목마름"]} in evT,
+          (oT.get("need_lines"), oT.get("need_mood"), [e for e in evT if e.get("result") == "need_mood"]))
     well = by_name(dT, "우물")
     put(aT, stand_by(dT, well, botsT))
     aT["hp"] = aT["maxhp"] - 2
@@ -283,9 +310,17 @@ try:
           rT["result"] == "drank" and rT["heal"] == 1 and aT["needs"]["test_thirst"] == 59 and fillT
           and fillT["via"] == "event" and fillT["src_key"] == "drank" and fillT["before"] == 29 and fillT["after"] == 59 and fillT["bot"] == aT["char"]
           and any(e.get("result") == "need_stage" and e.get("to") == "normal" for e in evT), (rT.get("result"), evT))
-    check("② 기분 조각: '물을 마셔 개운하다.'(10틱) — 그 틱의 '몸과 기분' 줄에 · 10틱 뒤 걷힌다",
-          dT.view(aT, botsT).get("need_lines") == ["물을 마셔 개운하다."] and aT["moods"][-1]["until"] == dT.turn + 10
-          and not NE.tick(dT, botsT, dT.turn + 10) and NE.lines(aT, dT.turn + 10) == [] and aT["moods"] == [])
+    oT2 = dT.view(aT, botsT)
+    check("② 기분 조각(데이터만으로): 마신 뒤 +4(10틱) — 몸 줄 없음(보통) · '기분: 좋다 (이유: 물을 마심)' · need_mood(좋지 않다 → 좋다) · 조각 = {src, size, what: 결과의 what(우물), until}",
+          "need_lines" not in oT2 and oT2.get("need_mood") == "좋다 (이유: 물을 마심)"
+          and aT["moods"] == [{"src": "test_thirst", "size": "plain", "what": "우물", "until": dT.turn + 10}]
+          and {"type": "need", "bot": aT["char"], "result": "need_mood", "from": "bad", "to": "good", "sum": 4, "why": ["물을 마심"]} in evT,
+          (oT2.get("need_mood"), aT["moods"], [e for e in evT if e.get("result") == "need_mood"]))
+    NE.tick(dT, botsT, dT.turn + 10)
+    evT3 = NE.drain(dT)
+    check("② 10틱 뒤 조각이 걷힌다 — 기분 줄 없음(합 0) · need_mood(좋다 → 없음 · 합·이유 칸 없음)",
+          NE.lines(aT) == [] and NE.mood_line(aT, dT.turn + 10) is None and aT["moods"] == []
+          and {"type": "need", "bot": aT["char"], "result": "need_mood", "from": "good", "to": None} in evT3, evT3)
     NE.drain(dT)
     aT["needs"]["test_thirst"] = 95
     rT2 = act(dT, aT, botsT, {"type": "use", "target": "f%d" % well.id})
@@ -297,7 +332,7 @@ try:
     snapT = G.bot_snapshot(aT)
     check("② 스트림: 봇 스냅샷 needs 에 새 욕구 · run_meta.need_defs 에 새 욕구(단계·효과·기분 시간) — 이름·뜻만 있는 욕구는 없다",
           snapT["needs"].get("test_thirst") == 95 and "test_thirst" in NE.defs_meta() and "test_idle" not in NE.defs_meta()
-          and NE.defs_meta()["test_thirst"]["stages"]["dry"] == {"min": 0, "word": "목마름"} and NE.defs_meta()["test_thirst"]["mood"] == {"plain": {"time": 10}})
+          and NE.defs_meta()["test_thirst"]["stages"]["dry"] == {"min": 0, "word": "목마름", "mood": -6} and NE.defs_meta()["test_thirst"]["mood"] == {"plain": {"time": 10, "mood": 4}})
 finally:
     ENT._DEFS = DEFS0
 check("② 시험 정의를 걷으면 엔진도 걷는다(정의 사전이 곧 욕구 목록)", [i for i, _ in NE.live()] == ["hunger"])
@@ -311,31 +346,43 @@ print("── ③ 배고픔 단계 경계")
 check("③ 경계: 100·81 배부름 / 80·41 보통 / 40·16 배고픔 / 15·0 굶주림 · 81 부터 가득 참",
       [NE.stage_key(HUNGER, v) for v in (100, 81, 80, 41, 40, 16, 15, 0)] == ["full", "full", "normal", "normal", "hungry", "hungry", "starving", "starving"]
       and NE.is_full(HUNGER, 81) and not NE.is_full(HUNGER, 80))
-LINE = {k: (HUNGER["stages"][k].get("line")) for k in HUNGER["stages"]}
 dB, botsB = town(on=True)
 aB = botsB[0]
-rows = []
+rows, moods_, wires_ = [], [], []
 for v in (100, 80, 40, 15):
     aB["needs"]["hunger"] = v
-    rows.append(dB.view(aB, botsB).get("need_lines"))
+    oB_ = dB.view(aB, botsB)
+    rows.append(oB_.get("need_lines"))
+    moods_.append(oB_.get("need_mood"))
+    sec_ = brains._wire(oB_, NAMES, compose=True).split("## 네 상태\n")[1].split("\n## ")[0]
+    wires_.append([ln for ln in sec_.split("\n") if ln.startswith(("- 몸", "- 기분"))])
 check("③ 단계 문장: 배부름·배고픔·굶주림은 제 문장 한 줄 · 보통은 줄이 없다(관측 칸도 없다)",
       rows == [[LINE["full"]], None, [LINE["hungry"]], [LINE["starving"]]], rows)
+check("③ 관측 꼴 글자 그대로(p0.5.18): 100 '- 몸: 배가 부르다.'(기분 줄 없음 — 배부름 0) · 80 아무 줄도 없다 · "
+      "40 '- 몸: 배가 고프다.' + '- 기분: 좋지 않다 (이유: 배고픔)' · 15 '- 몸: 몹시 배고프다. 쉬어도 기운이 돌아오지 않는다.' + '- 기분: 좋지 않다 (이유: 굶주림)'",
+      wires_ == [["- 몸: 배가 부르다."], [], ["- 몸: 배가 고프다.", "- 기분: 좋지 않다 (이유: 배고픔)"],
+                 ["- 몸: 몹시 배고프다. 쉬어도 기운이 돌아오지 않는다.", "- 기분: 좋지 않다 (이유: 굶주림)"]]
+      and moods_ == [None, None, "좋지 않다 (이유: 배고픔)", "좋지 않다 (이유: 굶주림)"], (wires_, moods_))
 dC, botsC = town(on=True)
 aC = botsC[0]
-st_at = {}
+st_at, md_at = {}, []
 for t in range(1, 221):
     dC.turn = t
     NE.tick(dC, botsC, t)
     for e in NE.drain(dC):
         if e.get("bot") == aC["char"] and e.get("result") == "need_stage":
             st_at[e["to"]] = t
+        if e.get("bot") == aC["char"] and e.get("result") == "need_mood":
+            md_at.append((t, e["from"], e["to"], e.get("sum"), e.get("why")))
 check("③ 판 시작 70 → t120 배고픔(40) · t220 굶주림(15) — 그 틱에 need_stage 한 줄씩(§3.4 — 400틱 한 바퀴)",
       st_at == {"hungry": 120, "starving": 220} and hun(aC) == 15, st_at)
+check("③ 기분 변화 사건 need_mood: t120 없음 → 좋지 않다(−10 · 배고픔) · t220 좋지 않다 → 좋지 않다(−20 · 굶주림 — 이유가 바뀌어도 사건) · 그 밖의 틱엔 없다",
+      md_at == [(120, None, "bad", -10, ["배고픔"]), (220, "bad", "bad", -20, ["굶주림"])], md_at)
 
 # ─────────────────────────────────────────────────────────────────────────────
 print("── ④ 굶주림 효과(쉬어도 기운이 돌아오지 않는다 · HP 가 천천히 줄다 절반에서 멈춘다)")
-check("④ 굶주림 문장이 약속하는 것 = 엔진 효과 — '쉬어도 기운이 돌아오지 않는다'(no_regen) · 배부름 문장 '더는 들어가지 않는다'(먹기 거절)",
-      "쉬어도 기운이 돌아오지 않는다" in LINE["starving"] and "들어가지 않는다" in LINE["full"])
+check("④ 굶주림 문장이 약속하는 것 = 엔진 효과 — '쉬어도 기운이 돌아오지 않는다'(no_regen) · 배부름 문장은 상태만('배가 부르다.' — 먹기 거절은 결과 문장이 말한다)",
+      "쉬어도 기운이 돌아오지 않는다" in LINE["starving"] and LINE["full"] == "배가 부르다.")
 dE, botsE = town(on=True)
 aE, bE = botsE[0], botsE[1]
 aE["needs"]["hunger"] = 10
@@ -464,12 +511,21 @@ check("⑤ 휴대식 use(i9 → 나) = need_fill{via eat} · 배고픔 40 → 90
       rF["result"] == "need_fill" and rF["via"] == "eat" and rF["before"] == 40 and rF["after"] == 90 and hun(aF) == 90 and aF["rations"] == 1
       and rF["resolution"]["status"] == "success" and brains._last_prose(rF) == "휴대식을 먹었다 (남은 휴대식 1개)"
       and any(e.get("result") == "need_stage" and e.get("to") == "full" for e in evF), (rF, brains._last_prose(rF)))
-check("⑤ 먹은 뒤 '몸과 기분': 배부름 문장 + 기분 조각 '배불리 먹어 기분이 좋다.'(취향 없는 몸 = 기본) — 두 줄",
-      dF.view(aF, botsF).get("need_lines") == [LINE["full"], "배불리 먹어 기분이 좋다."] and aF["moods"][0]["size"] == "plain")
+oF = dF.view(aF, botsF)
+wF = brains._wire(oF, NAMES, compose=True)
+check("⑤ 먹은 뒤(배고픔 40 → 90): '- 몸: 배가 부르다.' · '- 기분: 좋다 (이유: 배불리 먹음)'(취향 없는 몸 = 기본 +8 · 배부름 0) · 조각 {src, size plain, what 휴대식, until} · "
+      "need_mood(좋지 않다 → 좋다 — 행동이 낳은 사건)",
+      oF.get("need_lines") == [LINE["full"]] and oF.get("need_mood") == "좋다 (이유: 배불리 먹음)"
+      and "\n- 몸: 배가 부르다.\n- 기분: 좋다 (이유: 배불리 먹음)\n" in wF
+      and aF["moods"] == [{"src": "hunger", "size": "plain", "what": "휴대식", "until": dF.turn + 60}]
+      and {"type": "need", "bot": aF["char"], "result": "need_mood", "from": "bad", "to": "good", "sum": 8, "why": ["배불리 먹음"]} in evF,
+      (oF.get("need_lines"), oF.get("need_mood"), aF["moods"], [e for e in evF if e.get("result") == "need_mood"]))
 rF2 = act(dF, aF, botsF, {"type": "use", "target": "i9"})
-check("⑤ 배가 불렀는데 또 먹으면(대상 i9 꼴도) = need_none{why full} · 휴대식 그대로 1 · 배고픔 그대로 · 실패 · 문장 '…먹으려 했다 — 배가 불러 더는 들어가지 않는다(그대로 남았다)'",
+check("⑤ 배가 불렀는데 또 먹으면(대상 i9 꼴도) = need_none{why full} · 휴대식 그대로 1 · 배고픔 그대로 · 실패 · 문장 '휴대식을 먹지 못했다 — 배가 부르다'(p0.5.18 간결) · "
+      "꼬리표 '휴대식 — 배가 부르다' · 기분 사건 없음",
       rF2.get("result") == "need_none" and rF2.get("why") == "full" and rF2.get("via") == "eat" and aF["rations"] == 1 and hun(aF) == 90 and (rF2.get("resolution") or {}).get("status") == "failed"
-      and brains._last_prose(rF2) == "휴대식을 먹으려 했다 — 배가 불러 더는 들어가지 않는다(그대로 남았다)", (rF2, brains._last_prose(rF2)))
+      and brains._last_prose(rF2) == "휴대식을 먹지 못했다 — 배가 부르다" and G.event_tags(rF2) == [("misc", "헛손질", "휴대식 — 배가 부르다")]
+      and not [e for e in NE.drain(dF) if e.get("result") == "need_mood"], (rF2, brains._last_prose(rF2), G.event_tags(rF2)))
 put(bF, stand_by(dF, by_name(dF, "우물"), botsF))
 put(aF, beside(dF, bF, botsF))
 rF3 = act(dF, aF, botsF, {"type": "use", "target": "b%s" % bF["char"], "item": "i9"})
@@ -513,15 +569,15 @@ for o in botsH:
 put(bH, beside(dH, aH, botsH))
 rH = act(dH, aH, botsH, {"type": "use", "target": gm})
 seenH = [x for x in (bH.get("witnessed") or []) if x.get("kind") == "ally_use" and x.get("char") == aH["char"]]
-check("⑤ 주점 식사 사기 = 그 자리에서 먹는다 — need_fill{via buy} · 골드 2 · 배고픔 40 → 100 · 문장 '주점에서 식사를 사서 그 자리에서 먹었다 — 3골드를 냈다(남은 골드 2)' · 목격 '식사를 사 먹었다'",
+check("⑤ 주점 식사 사기 = 그 자리에서 먹는다 — need_fill{via buy} · 골드 2 · 배고픔 40 → 100 · 문장 '주점에서 식사를 사 먹었다 — 3골드를 냈다(남은 골드 2)'(p0.5.18 간결) · 목격 '식사를 사 먹었다'",
       rH["result"] == "need_fill" and rH["via"] == "buy" and aH["gold"] == 2 and hun(aH) == 100 and rH["price"] == 3 and rH["gold"] == 2
-      and brains._last_prose(rH) == "주점에서 식사를 사서 그 자리에서 먹었다 — 3골드를 냈다(남은 골드 2)" and seenH and seenH[-1].get("result") == "식사를 사 먹었다",
+      and brains._last_prose(rH) == "주점에서 식사를 사 먹었다 — 3골드를 냈다(남은 골드 2)" and seenH and seenH[-1].get("result") == "식사를 사 먹었다",
       (rH, brains._last_prose(rH), seenH))
 aH["gold"] = 10
 rH2 = act(dH, aH, botsH, {"type": "use", "target": gm})
-check("⑤ 배가 부르면 사지 않는다 — need_none{why full, via buy} · 골드 그대로 10 · 실패 · 문장 '…사 먹으려 했다 — 배가 불러 더는 들어가지 않는다(사지 않았다)'",
+check("⑤ 배가 부르면 사지 않는다 — need_none{why full, via buy} · 골드 그대로 10 · 실패 · 문장 '주점에서 식사를 사지 않았다 — 배가 부르다'(p0.5.18 간결)",
       rH2.get("result") == "need_none" and rH2.get("via") == "buy" and aH["gold"] == 10 and (rH2.get("resolution") or {}).get("status") == "failed"
-      and brains._last_prose(rH2) == "주점에서 식사를 사 먹으려 했다 — 배가 불러 더는 들어가지 않는다(사지 않았다)", (rH2, brains._last_prose(rH2)))
+      and brains._last_prose(rH2) == "주점에서 식사를 사지 않았다 — 배가 부르다", (rH2, brains._last_prose(rH2)))
 aH["gold"], aH["needs"]["hunger"] = 2, 30
 rH3 = act(dH, aH, botsH, {"type": "use", "target": gm})
 check("⑤ 배고픈데 골드가 모자라면 too_poor(값 3 · 지닌 2) — 배고픔·골드 그대로",
@@ -581,15 +637,26 @@ mood_lines = {}
 for food_, e_ in (("meal", "like"), ("apple", "dislike"), ("ration", "plain")):
     bw_hi["needs"]["hunger"], bw_hi["moods"] = 10, []
     rr_ = NE.eat(dW, bw_hi, ENT.get(food_), dW.turn)
-    mood_lines[food_] = (rr_["mood"], bw_hi["moods"][0]["line"])
-check("⑤ 취향(§3.6 — 싫어함을 먼저 본다): 좋아함(고기) 식사 → '좋아하는 식사를 먹어 기분이 아주 좋다.' · 싫어함(과일) 햇사과 → '배는 찼지만 햇사과는 입에 맞지 않았다.' · 맞는 게 없는 휴대식 → 기본 · 배는 취향과 무관하게 찬다",
-      mood_lines == {"meal": ("like", "좋아하는 식사를 먹어 기분이 아주 좋다."), "apple": ("dislike", "배는 찼지만 햇사과는 입에 맞지 않았다."),
-                     "ration": ("plain", "배불리 먹어 기분이 좋다.")}, mood_lines)
+    mood_lines[food_] = (rr_["mood"], hun(bw_hi), NE.mood_line(bw_hi, dW.turn), NE.prose(rr_), G.event_tags(rr_))
+check("⑤ 취향(§3.6 — 싫어함을 먼저 본다 · 무게 높음 70%): 좋아함(고기) 식사 10→59 '좋다 (이유: 좋아하는 식사를 먹음)' · "
+      "싫어함(과일) 햇사과 10→24 '좋지 않다 (이유: 배고픔, 입에 맞지 않는 음식)' + 결과 '햇사과를 먹었다 — 입에 맞지 않았다' · 맞는 게 없는 휴대식 10→45 '좋다 (이유: 배불리 먹음)' · 배는 취향과 무관하게 찬다",
+      mood_lines == {"meal": ("like", 59, "좋다 (이유: 좋아하는 식사를 먹음)", "식사를 먹었다", [("use", "먹음", "식사")]),
+                     "apple": ("dislike", 24, "좋지 않다 (이유: 배고픔, 입에 맞지 않는 음식)", "햇사과를 먹었다 — 입에 맞지 않았다", [("use", "먹음", "햇사과 — 입에 맞지 않았다")]),
+                     "ration": ("plain", 45, "좋다 (이유: 배불리 먹음)", "휴대식을 먹었다", [("use", "먹음", "휴대식")])}, mood_lines)
 both_ = G.spawn(dW, "1", [], sheet=dict(SHEETS["1"], taste={"likes": ["고기"], "dislikes": ["따뜻한 것"]}))
 both_["needs"]["hunger"] = 10
 rb_ = NE.eat(dW, both_, ENT.get("meal"), dW.turn)
-check("⑤ 취향 — 한 음식이 좋아함(고기)·싫어함(따뜻한 것)에 다 맞으면 싫어함이 이긴다(§3.6 '좋아함보다 먼저 본다')",
-      rb_["mood"] == "dislike" and both_["moods"][0]["line"] == "배는 찼지만 식사는 입에 맞지 않았다.", (rb_, both_.get("moods")))
+check("⑤ 취향 — 한 음식이 좋아함(고기)·싫어함(따뜻한 것)에 다 맞으면 싫어함이 이긴다(§3.6 '좋아함보다 먼저 본다') — 10→80 보통 · '좋지 않다 (이유: 입에 맞지 않는 음식)'",
+      rb_["mood"] == "dislike" and both_["moods"] == [{"src": "hunger", "size": "dislike", "what": "식사", "until": dW.turn + 60}]
+      and NE.mood_line(both_, dW.turn) == "좋지 않다 (이유: 입에 맞지 않는 음식)", (rb_, both_.get("moods")))
+put(aH, stand_by(dH, STALL, botsH))
+aH.update(gold=1, taste={"likes": [], "dislikes": ["과일"]}, moods=[])
+aH["needs"]["hunger"] = 30
+rH7 = act(dH, aH, botsH, {"type": "use", "target": ga})
+check("⑤ 싫어하는 음식을 사 먹으면 결과 문장 '채소 좌판에서 햇사과를 사 먹었다 — 입에 맞지 않았다 · 1골드를 냈다(남은 골드 0)' · 꼬리표에도 '· 입에 맞지 않았다'",
+      rH7["result"] == "need_fill" and rH7.get("mood") == "dislike"
+      and brains._last_prose(aH["last"]) == "채소 좌판에서 햇사과를 사 먹었다 — 입에 맞지 않았다 · 1골드를 냈다(남은 골드 0)"
+      and G.event_tags(rH7) == [("use", "사 먹음", "햇사과 ← 채소 좌판 1골드 (남은 0) · 입에 맞지 않았다")], (rH7, brains._last_prose(aH["last"]), G.event_tags(rH7)))
 sf_ = NE.sheet_fields({"needs": {"hunger": {"level": "높음", "why": "가" * 60, "src": "model"}, "nope": {"level": "높음"}, "test_x": {"level": "엄청"}},
                        "taste": {"likes": ["고기", "단것", "빵", "초콜릿"], "dislikes": ["고기", "생선", "채소"]}})
 check("⑤ 시트 칸 거르기(판을 막지 않는다): 모르는 욕구·등급이 아닌 값은 그 칸만 버린다 · why 40자 · 좋아함 2 · 싫어함 1(겹치면 싫어함에서 뺀다) · 어휘 밖 꼬리표 버림",
@@ -601,32 +668,71 @@ with contextlib.redirect_stderr(io.StringIO()) as err_:
 check("⑤ load_party 가 needs·taste 칸을 받는다(폴백 없음 · 시트에 그대로) · 칸이 없는 시트는 칸도 없다",
       not err_.getvalue() and lp["1"].get("needs") == {"hunger": {"level": "낮음"}} and lp["1"].get("taste") == {"likes": ["빵"], "dislikes": []}
       and "needs" not in lp["2"] and "taste" not in lp["2"], (err_.getvalue()[:200], lp.get("1")))
-# 줄 상한 — 두 욕구가 낮고 기분 조각이 있어도 두 줄, 가장 낮은 단계부터
+# 두 욕구 동시(시험용 목마름 −6 · 마신 뒤 +4) — 몸 줄 상한 · 기분 합산 · 이유 2개 · 문턱 · 동점
+PLAIN_H = {"src": "hunger", "size": "plain", "what": "휴대식", "until": 999}       # 먹은 뒤 기본 조각 +8
+DISLIKE_H = {"src": "hunger", "size": "dislike", "what": "휴대식", "until": 999}   # 싫어한 음식 −5
+PLAIN_T = {"src": "test_thirst", "size": "plain", "until": 999}                  # 마신 뒤 +4
+
+
+def body_mood(d_, b_, bots_, h_, t_, moods_):
+    b_["needs"]["hunger"], b_["needs"]["test_thirst"], b_["moods"] = h_, t_, [dict(m) for m in moods_]
+    o_ = d_.view(b_, bots_)
+    return o_.get("need_lines"), o_.get("need_mood")
+
+
 ENT._DEFS = DEFS_T
 try:
     dL, botsL = town(on=True)
     aL = botsL[0]
-    aL["needs"]["hunger"], aL["needs"]["test_thirst"] = 12, 5
-    aL["moods"] = [{"src": "hunger", "size": "plain", "line": "배불리 먹어 기분이 좋다.", "until": dL.turn + 50}]
-    lnL = dL.view(aL, botsL).get("need_lines")
-    aL["needs"]["hunger"], aL["needs"]["test_thirst"] = 5, 20
-    lnL2 = dL.view(aL, botsL).get("need_lines")
-    aL["needs"]["hunger"], aL["needs"]["test_thirst"] = 30, 50
-    lnL3 = dL.view(aL, botsL).get("need_lines")
+    lnL = body_mood(dL, aL, botsL, 12, 5, [PLAIN_H])
+    lnL2 = body_mood(dL, aL, botsL, 5, 20, [PLAIN_H])
+    lnL3 = body_mood(dL, aL, botsL, 30, 50, [PLAIN_H])
+    lnL4 = body_mood(dL, aL, botsL, 10, 5, [DISLIKE_H])
+    lnL5 = body_mood(dL, aL, botsL, 60, 5, [PLAIN_H])
+    lnL6 = body_mood(dL, aL, botsL, 60, 5, [PLAIN_H, PLAIN_T])
+    wL6 = brains._wire(dL.view(aL, botsL), NAMES, compose=True)
     combos_ = []
     for h_ in (100, 60, 30, 5):
         for t_ in (95, 50, 5):
-            for md_ in (False, True):
-                aL["needs"]["hunger"], aL["needs"]["test_thirst"] = h_, t_
-                aL["moods"] = [{"src": "hunger", "size": "plain", "line": "배불리 먹어 기분이 좋다.", "until": dL.turn + 50}] if md_ else []
-                combos_.append(len(NE.sentences(" ".join(dL.view(aL, botsL).get("need_lines") or []))))
+            for md_ in ([], [PLAIN_H], [DISLIKE_H], [PLAIN_H, PLAIN_T]):
+                ln_, nm_ = body_mood(dL, aL, botsL, h_, t_, md_)
+                s_ = sum(m for m, _w in NE._parts(aL, dL.turn))
+                why_ = (NE.mood_of(aL, dL.turn) or {}).get("why") or []
+                combos_.append((len(NE.sentences(" ".join(ln_ or []))), (nm_ is None) == (abs(s_) < NE.MOOD_EDGE), len(why_)))
+    body_mood(dL, aL, botsL, 60, 60, [dict(PLAIN_H, until=dL.turn + 5)])
+    cut_ = (NE.mood_line(aL, dL.turn + 4), NE.mood_line(aL, dL.turn + 5), (NE.mood_of(aL) or {}).get("key"))   # 틱 머리가 걷기 전에도 관측은 until 에서 자른다
+    TIE = copy.deepcopy(DEFS_T)
+    TIE["test_thirst"]["comps"]["need"]["stages"]["dry"]["mood"] = -10       # 목마름도 −10 — 배고픔과 동점
+    ENT._DEFS = TIE
+    tie1 = body_mood(dL, aL, botsL, 30, 5, [])                               # 목마름 5 < 배고픔 30 — 낮은 충족도 먼저
+    tie2 = body_mood(dL, aL, botsL, 20, 25, [])                              # 배고픔 20 < 목마름 25
+    tie3 = body_mood(dL, aL, botsL, 20, 20, [])                              # 같은 충족도 — 욕구 id 순(hunger < test_thirst)
+    SAME = copy.deepcopy(DEFS_T)
+    SAME["test_thirst"]["comps"]["need"]["stages"]["dry"]["why"] = "배고픔"  # 두 조각이 같은 이유 낱말
+    ENT._DEFS = SAME
+    same1 = body_mood(dL, aL, botsL, 30, 5, [DISLIKE_H])                     # −10(배고픔) −6(배고픔) −5(입에 맞지 않는 음식)
 finally:
     ENT._DEFS = DEFS0
 st1_ = NE.sentences(LINE["starving"])
-check("⑤ '몸과 기분' 줄 상한 = 문장 2개(§10-20 — 조각 수가 아니라 문장 수): 굶주림 문장(두 문장)이면 그것만으로 찬다(목마름·기분은 밀린다) · "
-      "목마름이 더 낮으면 '목이 탄다.' + 굶주림의 앞 문장 · 배고픔(한 문장) + 기분 = 두 문장 · 욕구 둘 × 기분 24경우 모두 2문장 이하",
-      len(st1_) == 2 and lnL == ["목이 탄다.", st1_[0]] and lnL2 == [LINE["starving"]] and lnL3 == [LINE["hungry"], "배불리 먹어 기분이 좋다."]
-      and max(combos_) == 2 and len(combos_) == 24, (lnL, lnL2, lnL3, combos_))
+check("⑤ '몸:' 줄 상한 = 문장 2개(§10-20 — 문장 수): 굶주림(두 문장)이면 그것만으로 찬다(목마름은 밀린다) · 목마름이 더 낮으면 '목이 탄다.' + 굶주림의 앞 문장 · "
+      "기분 조각은 몸 줄에 없다 · 욕구 둘 × 조각 4가지 48경우 모두 2문장 이하",
+      len(st1_) == 2 and lnL[0] == ["목이 탄다.", st1_[0]] and lnL2[0] == [LINE["starving"]] and lnL3[0] == [LINE["hungry"]]
+      and max(c_[0] for c_ in combos_) == 2 and len(combos_) == 48, (lnL, lnL2, lnL3, combos_))
+check("⑤ 기분 합산(두 욕구): 굶주림 −20 + 목마름 −6 + 기본 +8 = −18 '좋지 않다 (이유: 굶주림, 목마름)'(같은 쪽만 · 큰 것부터) · "
+      "배고픔 −10 + 기본 +8 = −2 → 문턱(3) 아래 기분 줄 없음 · 굶주림 −20·목마름 −6·싫어함 −5 셋이어도 이유 2개 '굶주림, 목마름'",
+      lnL[1] == "좋지 않다 (이유: 굶주림, 목마름)" and lnL2[1] == "좋지 않다 (이유: 굶주림, 목마름)" and lnL3[1] is None
+      and lnL4[1] == "좋지 않다 (이유: 굶주림, 목마름)", (lnL, lnL2, lnL3, lnL4))
+check("⑤ 반대쪽 조각은 이유가 아니다: 목마름 −6 + 기본 +8 = +2 → 줄 없음 · 여기에 마신 뒤 +4 = +6 '좋다 (이유: 배불리 먹음, 물을 마심)' — 프롬프트 '- 몸: 목이 탄다.' 다음 줄 '- 기분: 좋다 (이유: 배불리 먹음, 물을 마심)' · "
+      "48경우 모두 '줄 없음 ⇔ |합| < 문턱' · 이유 ≤ 2",
+      lnL5 == (["목이 탄다."], None) and lnL6 == (["목이 탄다."], "좋다 (이유: 배불리 먹음, 물을 마심)")
+      and "\n- 몸: 목이 탄다.\n- 기분: 좋다 (이유: 배불리 먹음, 물을 마심)\n" in wL6
+      and all(c_[1] for c_ in combos_) and max(c_[2] for c_ in combos_) == 2, (lnL5, lnL6, [c_ for c_ in combos_ if not c_[1]]))
+check("⑤ 동점(배고픔 −10 = 목마름 −10): 낮은 충족도 먼저 — 목마름 5·배고픔 30 '목마름, 배고픔' · 배고픔 20·목마름 25 '배고픔, 목마름' · 같은 충족도 20 은 욕구 id 순 '배고픔, 목마름'",
+      tie1[1] == "좋지 않다 (이유: 목마름, 배고픔)" and tie2[1] == "좋지 않다 (이유: 배고픔, 목마름)" and tie3[1] == "좋지 않다 (이유: 배고픔, 목마름)",
+      (tie1, tie2, tie3))
+check("⑤ 같은 이유 낱말은 한 번('배고픔, 입에 맞지 않는 음식' — '배고픔, 배고픔'이 아니다) · 조각은 until 틱부터 관측에 없다(틱 머리가 걷기 전에도 — t+4 '좋다 (이유: 배불리 먹음)' · t+5 없음 · "
+      "관전 스냅샷은 몸의 목록 그대로)",
+      same1[1] == "좋지 않다 (이유: 배고픔, 입에 맞지 않는 음식)" and cut_ == ("좋다 (이유: 배불리 먹음)", None, "good"), (same1, cut_))
 
 # ─────────────────────────────────────────────────────────────────────────────
 print("── ⑥ 저장·이어가기")
@@ -636,7 +742,7 @@ wake_src = rsrc.split("def _wake(")[1].split("\n    def ")[0]
 check("⑥ 층 이월(_carry): 휴대식·충족도·기분 조각이 그 몸을 따라간다 · 부활(_wake): 판 시작과 같은 값(G.NE.reset — _carry 뒤)",
       'n["rations"] = b.get("rations", 0)' in carry_src and "G.NE.carry(b, n)" in carry_src
       and "G.NE.reset(n)" in wake_src and wake_src.index("_carry(") < wake_src.index("G.NE.reset(n)"))
-o_ = {"needs": {"hunger": 33}, "moods": [{"src": "hunger", "size": "plain", "line": "x", "until": 99}]}
+o_ = {"needs": {"hunger": 33}, "moods": [{"src": "hunger", "size": "plain", "what": "x", "until": 99}]}
 n_ = G.spawn(dB, "1", [], sheet=dict(SHEETS["1"]))
 NE.carry(o_, n_)
 n2_ = dict(n_)
@@ -666,13 +772,29 @@ check("⑥ 이관 8→9: 피클에 얼어 있던 주점 주인의 '안은 아직
 again = S.upgrade(copy.deepcopy({**snap9, "state_version": 8}))
 check("⑥ 이관은 제자리·한 번 — 이미 칸이 있는 몸은 그대로(다시 올려도 같다)",
       [b_.get("needs") for b_ in again["bots"]] == [b_.get("needs") for b_ in snap9["bots"]] and all(b_.get("needs") for b_ in again["bots"]))
+dS10, botsS10 = town(on=True)
+OLD_PIECE = {"src": "hunger", "size": "like", "line": "좋아하는 식사를 먹어 기분이 아주 좋다.", "until": 300}   # 0.5.16~0.5.17 꼴(문장)
+NEW_PIECE = {"src": "hunger", "size": "plain", "what": "휴대식", "until": 300}
+botsS10[0]["needs"]["hunger"], botsS10[0]["moods"] = 33, [dict(OLD_PIECE)]
+botsS10[1]["moods"] = [dict(NEW_PIECE)]
+snap10 = {"version": 2, "state_version": 10, "d": dS10, "bots": botsS10, "sheets": SHEETS,
+          "waiting": {"3": {**copy.deepcopy(botsS10[2]), "moods": [dict(OLD_PIECE), dict(NEW_PIECE)]}}}
+up10 = S.upgrade(pickle.loads(pickle.dumps(snap10)))   # 이 프로세스가 방금 만든 바이트만 되읽는다
+w10 = up10["waiting"]["3"]
+check("⑥ 이관 10→11(p0.5.18): 판 11 이상 · 옛 꼴 기분 조각(문장 line)은 걷는다 · 새 꼴 조각·충족도는 그대로 · 부활 대기 몸도 · 다시 올려도 같다",
+      S.STATE_VERSION >= 11 and S.MIGRATIONS[10] is S._m10_moods and up10["state_version"] == S.STATE_VERSION
+      and up10["bots"][0]["moods"] == [] and up10["bots"][0]["needs"] == {"hunger": 33} and up10["bots"][1]["moods"] == [NEW_PIECE]
+      and w10["moods"] == [NEW_PIECE] and S.upgrade(copy.deepcopy({**up10, "state_version": 10}))["bots"] == up10["bots"],
+      ([b_.get("moods") for b_ in up10["bots"]], w10.get("moods")))
 aP = botsF[0]
-aP["needs"]["hunger"], aP["moods"] = 30, [{"src": "hunger", "size": "plain", "line": "배불리 먹어 기분이 좋다.", "until": dF.turn + 40}]
-before_p = dF.view(aP, botsF).get("need_lines")
+aP["needs"]["hunger"], aP["moods"] = 30, [{"src": "hunger", "size": "like", "what": "식사", "until": dF.turn + 40}]
+oP0 = dF.view(aP, botsF)
+before_p = (oP0.get("need_lines"), oP0.get("need_mood"))
 dP, botsP = pickle.loads(pickle.dumps((dF, botsF)))   # 이 프로세스가 방금 만든 바이트만 되읽는다(이어가기 스냅샷과 같은 길 — 밖에서 온 데이터가 아니다)
-check("⑥ 피클 왕복 뒤 같은 '몸과 기분' · 세계의 욕구 사건 버퍼(need_log)는 옛 피클에 없어도 된다(getattr)",
-      dP.view(botsP[0], botsP).get("need_lines") == before_p == [LINE["hungry"], "배불리 먹어 기분이 좋다."]
-      and NE.drain(type("OldWorld", (), {})()) == [])
+oP1 = dP.view(botsP[0], botsP)
+check("⑥ 피클 왕복 뒤 같은 '몸:'·'기분:'(배고픔 −10 + 좋아함 +15 = '좋다 (이유: 좋아하는 식사를 먹음)') · 세계의 욕구 사건 버퍼(need_log)는 옛 피클에 없어도 된다(getattr)",
+      (oP1.get("need_lines"), oP1.get("need_mood")) == before_p == ([LINE["hungry"]], "좋다 (이유: 좋아하는 식사를 먹음)")
+      and NE.drain(type("OldWorld", (), {})()) == [], (before_p, oP1.get("need_mood")))
 aP2 = botsP[0]
 aP2["rations"] = 1
 if hasattr(dP, "need_log"):
@@ -680,10 +802,12 @@ if hasattr(dP, "need_log"):
 NE.drain(dP)
 rP = act(dP, aP2, botsP, {"type": "use", "target": "self", "item": "i9"})
 evP = NE.drain(dP)
-check("⑥ 이어간 세계(피클 왕복 · 사건 버퍼 없음)에서 먹기 — need_fill 30 → 80 · 휴대식 0 · 단계 사건(배고픔 → 보통)이 버퍼에 생긴다 · 새 기분 조각이 옛 것을 덮는다",
+check("⑥ 이어간 세계(피클 왕복 · 사건 버퍼 없음)에서 먹기 — need_fill 30 → 80 · 휴대식 0 · 단계 사건(배고픔 → 보통)·기분 사건(좋다 → 좋다, 이유가 '배불리 먹음'으로)이 버퍼에 생긴다 · "
+      "새 기분 조각이 옛 것을 덮는다",
       rP["result"] == "need_fill" and rP["before"] == 30 and rP["after"] == 80 and aP2["rations"] == 0
-      and [(e["result"], e["bot"], e["to"]) for e in evP] == [("need_stage", aP2["char"], "normal")]
-      and len(aP2["moods"]) == 1 and aP2["moods"][0]["until"] == dP.turn + 60, (rP, evP, aP2.get("moods")))
+      and [(e["result"], e["bot"], e["to"]) for e in evP] == [("need_stage", aP2["char"], "normal"), ("need_mood", aP2["char"], "good")]
+      and evP[1]["why"] == ["배불리 먹음"] and evP[1]["from"] == "good"
+      and aP2["moods"] == [{"src": "hunger", "size": "plain", "what": "휴대식", "until": dP.turn + 60}], (rP, evP, aP2.get("moods")))
 
 # ─────────────────────────────────────────────────────────────────────────────
 print("── ⑦ 남에게 안 보임")
@@ -694,23 +818,28 @@ put(bV, stand_by(dV, by_name(dV, "우물"), botsV))
 put(aV, stand_by(dV, by_name(dV, "우물"), botsV, skip=[(bV["x"], bV["y"])]))
 oB = dV.view(bV, botsV)
 wB = brains._wire(oB, NAMES, compose=True)
-check("⑦ 곁의 사람(봇2)의 관측·프롬프트에 봇1 의 욕구·문장이 없다(보통인 자기 몸은 '몸과 기분' 줄도 없다)",
-      "need_lines" not in oB and LINE["hungry"] not in wB and "needs" not in json.dumps(oB.get("sights"), ensure_ascii=False)
-      and "몸과 기분" not in wB)
+check("⑦ 곁의 사람(봇2)의 관측·프롬프트에 봇1 의 욕구·기분이 없다(보통인 자기 몸은 '몸:'·'기분:' 줄도 없다) · 시야에 needs·mood_now 칸 없음",
+      "need_lines" not in oB and "need_mood" not in oB and LINE["hungry"] not in wB and "배고픔" not in wB
+      and not re.search(r"\n- (몸|기분): ", wB)
+      and not any(k_ in json.dumps(oB.get("sights"), ensure_ascii=False) for k_ in ("needs", "mood_now", "moods")))
 wA = wire(dV, aV, botsV)
-check("⑦ 내 프롬프트: '몸과 기분: 배가 고파 신경이 날카로워졌다.' 한 줄 — 충족도 숫자·단계 이름(배고픔·굶주림·배부름 낱말)·무게 등급이 없다",
-      ("- 몸과 기분: " + LINE["hungry"]) in wA and not re.search(r"몸과 기분:[^\n]*\d", wA)
-      and "굶주림" not in wA and "배부름" not in wA and "충족" not in wA and "보통" not in wA.split("## 네 상태")[1].split("##")[0])
+st_sec = wA.split("## 네 상태")[1].split("##")[0]
+check("⑦ 내 프롬프트: '- 몸: 배가 고프다.' · '- 기분: 좋지 않다 (이유: 배고픔)' 두 줄 — 숫자(충족도·기분 합)·단계 id·다른 단계 이름(굶주림·배부름)·무게 등급이 없다 "
+      "(이유 낱말 '배고픔'은 말 파일의 why)",
+      "\n- 몸: 배가 고프다.\n- 기분: 좋지 않다 (이유: 배고픔)\n" in wA and not re.search(r"\n- (몸|기분):[^\n]*\d", wA)
+      and "굶주림" not in wA and "배부름" not in wA and "충족" not in wA and "보통" not in st_sec and "hungry" not in wA and "-10" not in st_sec)
 aV["rations"] = 1
 rV = act(dV, aV, botsV, {"type": "use", "target": "self", "item": "i9"})
 lastV = aV["last"]
-check("⑦ 내 결과의 숫자는 공개 투영이 걷는다 — last·궤적에 before·after·tol 이 없다(스트림 원본엔 있다)",
+check("⑦ 내 결과의 숫자는 공개 투영이 걷는다 — last·궤적에 before·after·tol 이 없다(스트림 원본엔 있다) · 기분 사건(need_mood)의 from·to·sum 도 걷는다",
       all(k in rV for k in ("before", "after", "tol")) and not any(k in lastV for k in ("before", "after", "tol"))
       and lastV.get("result") == "need_fill" and lastV.get("what") == "휴대식"
-      and not any(k in IG.public({"result": "need_stage", "need": "hunger", "from": "normal", "to": "hungry", "before": 1}) for k in ("from", "to", "before")))
-check("⑦ 관전 칸: 몸의 needs·moods·need_w·taste 는 공개 투영의 관전 칸(SPECTATOR_KEYS — 어느 깊이든 걷는다)",
-      {"needs", "moods", "need_w", "taste"} <= set(IG.SPECTATOR_KEYS)
-      and IG.public({"result": "x", "deep": {"needs": {"hunger": 3}, "moods": [1], "taste": {"likes": ["빵"]}}}) == {"result": "x", "deep": {}})
+      and not any(k in IG.public({"result": "need_stage", "need": "hunger", "from": "normal", "to": "hungry", "before": 1}) for k in ("from", "to", "before"))
+      and IG.public({"result": "need_mood", "from": None, "to": "bad", "sum": -10, "why": ["배고픔"]}) == {"result": "need_mood", "why": ["배고픔"]})
+check("⑦ 관전 칸: 몸의 needs·moods·need_w·taste · 봇 스냅샷의 mood_now 는 공개 투영의 관전 칸(SPECTATOR_KEYS — 어느 깊이든 걷는다)",
+      {"needs", "moods", "need_w", "taste", "mood_now"} <= set(IG.SPECTATOR_KEYS)
+      and IG.public({"result": "x", "deep": {"needs": {"hunger": 3}, "moods": [1], "taste": {"likes": ["빵"]}, "mood_now": {"key": "bad", "sum": -10}}})
+      == {"result": "x", "deep": {}})
 facts_tk = " ".join(R.npc_facts(dV, "주점 주인", botsV, [], None))
 check("⑦ NPC 두뇌 사실(주점 주인): 맡은 가게의 값 '판다: 식사 3골드' · 손님의 배고픔·기분은 없다",
       "판다: 식사 3골드" in facts_tk and LINE["hungry"] not in facts_tk and "배고" not in facts_tk, facts_tk)
@@ -725,8 +854,10 @@ for p_ in need_md:
 texts += [ENT.item_rule("ration"), ENT.item_rule("food")] + [ENT.get(e)["comps"]["item"]["desc"] for e in ("ration", "meal", "apple")]
 texts += [NE.NO_REGEN_TAIL, NE.FULL_FALLBACK, NE.DRAIN_LINE, brains._last_prose(rF), brains._last_prose(rF2), brains._last_prose(rH), brains._last_prose(rH2),
           brains._last_prose(r_r), brains._last_prose(r_l), ENT.get("produce_stall")["comps"]["story"]["trait"]]
+texts += list(ENT.mood_words().values()) + [brains._last_prose(aH["last"]), "좋지 않다 (이유: 배고픔, 입에 맞지 않는 음식)"]   # p0.5.18 기분 낱말·싫어한 음식 결과·기분 줄
 probs = [p for t_ in texts for p in NE.order_problems(t_)]
-check("⑧ 욕구 말 파일(상태·기분 문장) · 음식 설명·규칙 · 엔진 문장 · 결과 문장 %d개 — 명령·의무·청유 꼴로 끝나는 문장 0" % len(texts), not probs and len(texts) >= 20, probs)
+check("⑧ 욕구 말 파일(몸 문장·이유 낱말·결과 꼬리) · 기분 낱말 · 음식 설명·규칙 · 엔진 문장 · 결과 문장 %d개 — 명령·의무·청유 꼴로 끝나는 문장 0" % len(texts),
+      not probs and len(texts) >= 25, probs)
 red = ["배가 고프면 주점에 가야 한다.", "먹어야 한다.", "식사를 하자.", "주점에 가라.", "휴대식을 먹어라."]
 check("⑧ 문장 게이트 빨간불 표본 5개는 전부 잡는다(말끝 꼴)", all(NE.order_problems(t_) for t_ in red), [t_ for t_ in red if not NE.order_problems(t_)])
 sv = ENT.npc("street_vendor")
@@ -734,9 +865,13 @@ check("⑧ 가게가 생겨 거짓이 된 말(§7): 노점 상인의 '아직 값
       not any("아직" in (sv.get(k) or "") for k in ("line", "line_again", "role")) and "아직" not in ENT.get("street_vendor")["comps"]["story"]["trait"]
       and "준비 중" not in ENT.npc("tavern_keeper", life=True)["line"] and "준비 중" not in ENT.npc("tavern_keeper", life=True)["line_again"])
 cp = brains.COMPOSE_PROMPT
-check("⑧ 지침: 기능 설명 한 줄 '`몸과 기분`은 지금 네 몸과 마음의 상태다.' · use 설명에 '먹기' · '먹어라'·'유지하라'·'채워라' 없음 · 상태 줄 머리 = 지침의 낱말",
-      "`몸과 기분`은 지금 네 몸과 마음의 상태다." in cp and "먹기" in cp and not any(w_ in cp for w_ in ("먹어라", "유지하라", "채워라", "먹어야"))
-      and brains.NEED_HEAD == "몸과 기분" and "need_lines" in brains._WIRE_KEYS and "rations" in brains._WIRE_KEYS)
+gl_ = [ln for ln in cp.split("\n") if ln.startswith(("- `몸", "- `기분"))]
+check("⑧ 지침(p0.5.18): 기능 설명 두 줄 그대로 '- `몸:`은 지금 몸 상태다.' · '- `기분:`은 지금 기분과 그 이유다.'(권유 없음) · 옛 '몸과 기분' 없음 · use 설명에 '먹기' · "
+      "'먹어라'·'유지하라'·'채워라' 없음 · 상태 줄 머리 = 지침의 낱말(몸·기분)",
+      gl_ == ["- `몸:`은 지금 몸 상태다.", "- `기분:`은 지금 기분과 그 이유다."] and "몸과 기분" not in cp and not any(NE.order_problems(ln[2:]) for ln in gl_)
+      and "먹기" in cp and not any(w_ in cp for w_ in ("먹어라", "유지하라", "채워라", "먹어야"))
+      and (brains.BODY_HEAD, brains.MOOD_HEAD) == ("몸", "기분") and not hasattr(brains, "NEED_HEAD")
+      and {"need_lines", "need_mood", "rations"} <= brains._WIRE_KEYS, gl_)
 
 # ─────────────────────────────────────────────────────────────────────────────
 print("── ⑨ 러너 판(더미 · 임시 state)")
@@ -747,7 +882,7 @@ def wait_brain(obs, char="?"):
 
 
 def eat_brain(obs, char="?"):
-    """각본 두뇌 — '몸과 기분' 줄이 있고 휴대식을 지녔으면 먹는다(use i9 → 나), 아니면 기다린다."""
+    """각본 두뇌 — '몸:' 줄(need_lines)이 있고 휴대식을 지녔으면 먹는다(use i9 → 나), 아니면 기다린다."""
     return {"type": "use", "target": "self", "item": "i9"} if obs.get("need_lines") and obs.get("rations") else {"type": "wait"}
 
 
@@ -805,12 +940,24 @@ for r_ in ticks9:
             eat9.setdefault(e["char"], []).append((r_["turn"], e, evs_[j_] if j_ is not None else None, sb_))
 ok_eat9 = sorted(eat9) == ["1", "2", "3"] and all(len(v_) == 1 for v_ in eat9.values())
 check("⑨ 각본 두뇌가 배고파진 뒤 휴대식을 먹는다(셋 다 한 번) — 행동 사건 use·need_fill(char) 뒤에 같은 틱 그 몸의 need_stage 배고픔 → 배부름(bot · 행동이 낳은 사건이 틱 기록에 실린다) · "
-      "그 틱 tick.bots[] 의 needs = 먹은 뒤 값 · moods = 기본 기분 조각(60틱) · 관전 로그 '🍞 휴대식을 먹었다'",
+      "그 틱 tick.bots[] 의 needs = 먹은 뒤 값 · moods = 기본 기분 조각(60틱 · 먹은 것 이름) · mood_now = 좋다(+8 · 배불리 먹음) · 관전 로그 '🍞 휴대식을 먹었다'",
       ok_eat9 and all(T_ > 120 and e["before"] < 41 and e["after"] == e["before"] + 50 and st_ and (st_["from"], st_["to"]) == ("hungry", "full")
                       and sb_["needs"]["hunger"] == e["after"] and sb_.get("rations", 0) == 0
-                      and sb_.get("moods") == [{"src": "hunger", "size": "plain", "line": "배불리 먹어 기분이 좋다.", "until": T_ + 60}]
+                      and sb_.get("moods") == [{"src": "hunger", "size": "plain", "what": "휴대식", "until": T_ + 60}]
+                      and sb_.get("mood_now") == {"key": "good", "sum": 8, "why": ["배불리 먹음"]}
                       for (T_, e, st_, sb_), in eat9.values())
-      and "🍞 휴대식을 먹었다" in ev9, {c: [(T_, e.get("before"), e.get("after"), st_, sb_.get("moods")) for T_, e, st_, sb_ in v_] for c, v_ in eat9.items()})
+      and "🍞 휴대식을 먹었다" in ev9, {c: [(T_, e.get("before"), e.get("after"), st_, sb_.get("moods"), sb_.get("mood_now")) for T_, e, st_, sb_ in v_]
+                                        for c, v_ in eat9.items()})
+md9 = {c: [(r_["turn"], e["from"], e["to"], e.get("sum"), e.get("why")) for r_ in ticks9 for e in r_.get("events") or []
+           if e.get("result") == "need_mood" and e.get("bot") == c] for c in ("1", "2", "3")}
+now9 = {c: {r_["turn"]: next(b_ for b_ in r_["bots"] if b_["char"] == c).get("mood_now") for r_ in ticks9} for c in ("1", "2", "3")}
+check("⑨ 기분 사건(스트림 need_mood · bot): t120 없음 → 좋지 않다(−10 · 배고픔) · 먹은 틱 좋지 않다 → 좋다(+8 · 배불리 먹음) · 60틱 뒤 조각이 끝나 좋다 → 없음 — 셋 다 · "
+      "tick.bots[].mood_now 는 t119 없음 · t120 좋지 않다 · 조각이 끝난 틱 없음 · 관전 로그 '기분: 없음 → 좋지 않다 (배고픔 · 합 -10)'",
+      ok_eat9 and all(md9[c] == [(120, None, "bad", -10, ["배고픔"]), (eat9[c][0][0], "bad", "good", 8, ["배불리 먹음"]), (eat9[c][0][0] + 60, "good", None, None, None)]
+                      and now9[c][119] is None and now9[c][120] == {"key": "bad", "sum": -10, "why": ["배고픔"]} and now9[c][eat9[c][0][0] + 60] is None
+                      for c in md9)
+      and "기분: 없음 → 좋지 않다 (배고픔 · 합 -10)" in ev9 and "기분: 좋지 않다 → 좋다 (배불리 먹음 · 합 +8)" in ev9 and "기분: 좋다 → 없음" in ev9,
+      (md9, [ln for ln in ev9.split("\n") if "기분:" in ln][:6]))
 exp9 = {c: [(r_["turn"], bool(next(b_ for b_ in r_["bots"] if b_["char"] == c).get("moods"))) for r_ in ticks9 if v_[0][0] <= r_["turn"] < v_[0][0] + 70]
         for c, v_ in eat9.items()} if ok_eat9 else {}
 check("⑨ 기분 조각 만료(스트림): 먹은 틱부터 60틱 동안 tick.bots[].moods 가 있고 그 틱(until)부터 없다 — 셋 다",
@@ -822,20 +969,25 @@ check("⑨ 러너 틱 순서(소스): 판단 전 줄기(G.NE.tick) → 틱 머�
       < tw_src.find("turn_events += _need_events(G.NE.drain(d))") < tw_src.find("tick_rec = {"))
 rowsT, evT_ = run(45, defs=DEFS_T)
 stT = [(r_["turn"], e["bot"], e["need"], e["to"]) for r_ in rowsT if r_["kind"] == "tick" for e in r_.get("events") or [] if e.get("result") == "need_stage"]
-check("⑨ 시험용 욕구를 더한 판(코드 그대로): t42 에 셋 다 보통 → 목마름 · run_meta.need_defs 에 test_thirst · 배고픔은 제 박자(t44 에 59)",
+mdT = [(r_["turn"], e["bot"], e["from"], e["to"], e.get("why")) for r_ in rowsT if r_["kind"] == "tick" for e in r_.get("events") or [] if e.get("result") == "need_mood"]
+check("⑨ 시험용 욕구를 더한 판(코드 그대로): t42 에 셋 다 보통 → 목마름 · 같은 틱 기분 없음 → 좋지 않다(목마름) · run_meta.need_defs 에 test_thirst(기분 값 −6) · 배고픔은 제 박자(t44 에 59)",
       sorted(stT) == [(42, c, "test_thirst", "dry") for c in ("1", "2", "3")] and "test_thirst" in rowsT[0]["need_defs"]
-      and [(b_.get("needs") or {}).get("hunger") for b_ in [r_ for r_ in rowsT if r_["kind"] == "tick"][43]["bots"]] == [59, 59, 59], stT)
+      and sorted(mdT) == [(42, c, None, "bad", ["목마름"]) for c in ("1", "2", "3")] and rowsT[0]["need_defs"]["test_thirst"]["stages"]["dry"]["mood"] == -6
+      and [(b_.get("needs") or {}).get("hunger") for b_ in [r_ for r_ in rowsT if r_["kind"] == "tick"][43]["bots"]] == [59, 59, 59], (stT, mdT))
 
 # ─────────────────────────────────────────────────────────────────────────────
 print("── ⑩ 배선")
 sf = src("STREAM_FORMAT.md")
-check("⑩ STREAM_FORMAT: 욕구 절(tick.bots[].needs·moods · need_fill · need_none · need_stage · need_drain · bot · run_meta.need_defs · rations)",
+check("⑩ STREAM_FORMAT: 욕구 절(tick.bots[].needs·moods · need_fill · need_none · need_stage · need_drain · bot · run_meta.need_defs · rations) · "
+      "p0.5.18 몸·기분 줄(need_mood 사건 · mood_now · 관측 need_mood · 저장 판 11)",
       "## 욕구와 배고픔" in sf and all(k in sf for k in ("`tick.bots[].needs`", "need_fill{", "need_none{", "need_stage{", "need_drain{", "`run_meta.need_defs`",
-                                                     "`moods`", "`rations`", "char` 대신 `bot`", "| `need` |")))
-check("⑩ _run_gates.sh 에 verify_needs 등록 · VERSION 0.5.16 이상(p0.5.17: 다음 판에서 깨지지 않게)", "verify_needs" in src("_run_gates.sh")
-      and tuple(int(x) for x in src("VERSION").strip().split(".")) >= (0, 5, 16))
+                                                     "`moods`", "`rations`", "char` 대신 `bot`", "| `need` |",
+                                                     "need_mood{", "`mood_now`", "`need_mood`", "_m10_moods")))
+check("⑩ _run_gates.sh 에 verify_needs 등록 · VERSION 0.5.18 이상 · 말 파일 검사 도구가 기분 낱말을 센다", "verify_needs" in src("_run_gates.sh")
+      and tuple(int(x) for x in src("VERSION").strip().split(".")) >= (0, 5, 18) and "MOOD_WORDS" in src("tools", "check_words.py"))
 
 shutil.rmtree(ROOT, ignore_errors=True)
-print("ALL PASS — verify_needs (p0.5.16 욕구 틀 + 배고픔: %d checks · 정의·검증기 · 데이터만으로 새 욕구 · 단계 경계 · 굶주림 효과 · 먹기 끝까지 · 저장 · 남에게 안 보임 · 문장 · 러너 · 배선, 실 LLM 0콜)" % C.n
+print("ALL PASS — verify_needs (p0.5.16 욕구 틀 + 배고픔 · p0.5.18 몸·기분 줄: %d checks · 정의·검증기 · 데이터만으로 새 욕구(기분까지) · 단계 경계 · 굶주림 효과 · 먹기 끝까지 · "
+      "기분 합산·이유·문턱·동점 · 저장 · 남에게 안 보임 · 문장 · 러너 · 배선, 실 LLM 0콜)" % C.n
       if not C.failed else "FAIL %d — verify_needs" % C.failed)
 raise SystemExit(1 if C.failed else 0)

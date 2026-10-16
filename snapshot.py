@@ -35,6 +35,8 @@
                    주점 주인·주점·채소 좌판·노점 상인의 말을 지금 정의로 다시 읽는다(_m8_needs). 세계의 욕구 사건 버퍼(need_log)는 getattr 기본값으로 받는다.
       9→10(p0.5.17 마을 NPC 는 마을 이야기만): 던전마다 옛 소문 재료 칸 rumor(지하 1층 실측)를 걷고, 던전 소문을 거둔 주점 주인·떠돌이 모험자·주점의 말
                    (정의 사본의 소문 인사 칸·역할·성격·대사·특징·이야기)을 지금 정의로 다시 읽는다(_m9_rumor).
+      10→11(p0.5.18 몸·기분 줄): 기분 조각의 꼴이 바뀌었다(문장 line → 먹은 것 이름 what — 값·이유 낱말은 그릴 때 정의에서). 옛 꼴 조각(line 칸)은 걷는다
+                   (_m10_moods — 이유를 다시 쓸 재료인 먹은 것 이름이 옛 조각에 없고, 길어야 120틱 남는 조각이다). 충족도는 그대로.
 LLM 0콜 · 순수 파일(이관 함수만 몸 dict·반응 원장을 고친다 — 그때 judge 를 늦게 import).
 """
 import io
@@ -46,7 +48,7 @@ import time
 
 VERSION = 2                  # 판형(위 머리글) — 옛 코드(version 1 만 읽음)가 새 스냅샷을 거절하게 하는 문
 READS = (1, 2)               # 이 코드가 읽는 판형. 1 = p0.5.2 까지(내용 판 0)
-STATE_VERSION = 10           # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
+STATE_VERSION = 11           # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
 PKL = "snapshot.pkl"
 META = "snapshot.json"
 
@@ -307,8 +309,18 @@ def _m9_rumor(snap):
     return snap
 
 
+def _m10_moods(snap):
+    """10→11(p0.5.18 몸·기분 줄 — DECISIONS 10-16): 기분 조각이 문장(line)을 들던 꼴에서 먹은 것 이름(what)만 드는 꼴로 바뀌었다(값과 이유 낱말은
+    '기분:' 줄을 그릴 때 정의에서 읽는다). 옛 꼴 조각(line 칸이 있는 것)은 걷는다 — 이유 낱말의 {what} 을 채울 먹은 것 이름이 옛 조각에 없고,
+    길어야 120틱 남는 조각이라 지어내지 않는다. 충족도·새 꼴 조각은 그대로(제자리·한 번 — 다시 올려도 같다)."""
+    for b in _bodies(snap):
+        if isinstance(b.get("moods"), list):
+            b["moods"] = [m for m in b["moods"] if not (isinstance(m, dict) and "line" in m)]
+    return snap
+
+
 MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore, 5: _m5_gold, 6: _m6_away, 7: _m7_repeat, 8: _m8_needs,
-              9: _m9_rumor}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
+              9: _m9_rumor, 10: _m10_moods}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
 
 
 def state_version_of(doc):

@@ -2102,7 +2102,7 @@ def main():
                            for x in worlds if x is not w for b in x["bots"] if b["alive"]]
         d.turn = turn       # 장부(D17) 목격 스탬프 — 판정 무관여, "언제 봤나"의 단일 원천
         away_ev = npc_away_expire(bots, turn)  # p0.5.14 등 돌림 풀림(NPC_AWAY_TICKS — 관측·인사보다 먼저) [{npc,char,ev:'end'}] — 스트림 tick.npc_away
-        G.NE.tick(d, bots, turn)               # p0.5.16 욕구 — 틱마다 줄기·굶주림의 HP 깎임·끝난 기분 조각(판단 전 — 관측의 '몸과 기분'이 이 틱의 몸)
+        G.NE.tick(d, bots, turn)               # p0.5.16 욕구 — 틱마다 줄기·굶주림의 HP 깎임·끝난 기분 조각(판단 전 — 관측의 '몸:'·'기분:'이 이 틱의 몸 · p0.5.18 기분 변화 need_mood)
         need_pre = G.NE.drain(d)               #   단계 변화·기운 빠짐 사건 — 이 틱 events 의 맨 앞(행동보다 먼저 일어났다 · 관전 로그는 틱 머리 줄 다음에)
         if PENDING_ON:                        # D47 배관: 걷는 동안 들은(안 세운) 말을 이번 결정에 함께 읽힌다
             inbox = merge_inbox(pending, inbox)

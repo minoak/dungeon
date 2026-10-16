@@ -2953,7 +2953,8 @@ class Dungeon:
                 'potions': bot.get('potions', 0),   # 소지 회복 물약(07-17) — 자기 몸의 사실
                 **({'boons': bot['boons']} if bot.get('boons') else {}),   # D74(09-15) 축복의 물약 — 있을 때만(additive)
                 **({'rations': bot['rations']} if bot.get('rations') else {}),   # p0.5.16 휴대식 — 있을 때만(additive)
-                **({'need_lines': nl_} if (nl_ := NE.lines(bot, getattr(self, 'turn', 0))) else {}),   # p0.5.16 '몸과 기분' — 지금 단계의 상태 문장·기분 조각(숫자 없음, 보통 단계엔 없다)
+                **({'need_lines': nl_} if (nl_ := NE.lines(bot)) else {}),   # p0.5.16 '몸:' — 보통이 아닌 단계의 몸 문장(숫자 없음, 보통 단계엔 없다 · p0.5.18 기분 조각은 빠졌다)
+                **({'need_mood': nm_} if (nm_ := NE.mood_line(bot, getattr(self, 'turn', 0))) else {}),   # p0.5.18 '기분:' — 기분 조각 합산의 낱말과 이유(0 근처면 없다)
                 'gear': {'weapon': _no_uid(bot.get('weapon')), 'armor': _no_uid(bot.get('armor'))},   # p0511b: 장비 고유 번호(안쪽 열쇠)는 관측에 안 나간다(기록 안 된 장비 = 옛 그대로)
                 **({'town': True} if self.town else {}),   # 마을(D29) — 층의 사실(던전 obs 무변경)
                 **({'town_zone': tz} if (self.town and (tz := self._town_zone(bot['x'], bot['y'])))   # D60(09-12) 지금 있는 구역 이름
@@ -6662,7 +6663,7 @@ def bot_snapshot(b):
             'potions': b.get('potions', 0),   # 회복 물약 소지(07-17 additive)
             **({'boons': b['boons']} if b.get('boons') else {}),   # 축복의 물약(D74 09-15 additive, 있을 때만)
             **({'rations': b['rations']} if b.get('rations') else {}),   # p0.5.16 휴대식(additive, 있을 때만)
-            **NE.snap(b),                     # p0.5.16 욕구 needs{욕구: 충족도}·moods(있을 때만) — 관전·측정용(관측엔 '몸과 기분' 문장만 간다)
+            **NE.snap(b),                     # p0.5.16 욕구 needs{욕구: 충족도}·moods(있을 때만) · p0.5.18 mood_now(기분 합산 — 0 근처가 아닐 때만) — 관전·측정용(관측엔 '몸:'·'기분:' 낱말만 간다)
             'weapon': b.get('weapon'), 'armor': b.get('armor'),   # 장비(07-30 additive)
             'order': b.get('order'),
             **({'approach': dict(b['approach'])} if b.get('approach') and b.get('order') else {}),

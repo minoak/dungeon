@@ -436,7 +436,8 @@ NOTE_MAX = 5             # 유지 줄 수(합의 5~7 하한) — 넘치면 오�
 NOTE_LEN = 80            # 한 줄 상한 — 수필 방지(say 160 의 절반: 기억은 말보다 압축된다)
 TODO_LEN = 80            # p0.5.15 목표 칸(응답 JSON 의 todo — 지금 하려는 일) 상한 — 넘으면 자른다(자른 사실은 남기지 않는다)
 TODO_HEAD = "할 일"      # p0.5.15 목표 칸이 관측 맨 위에 뜨는 줄의 머리 — p0515d 민옥 문구(DECISIONS 10-15 '0.5.15 문장 간소화')
-NEED_HEAD = "몸과 기분"  # p0.5.16 욕구 — '네 상태' 절의 한 줄 머리(지금 단계의 상태 문장·기분 조각). 지침의 기능 설명 한 줄과 같은 낱말 ⚠️임시(민옥 교정 대기)
+BODY_HEAD = "몸"         # p0.5.18 욕구 — '네 상태' 절 '몸:' 줄 머리(보통이 아닌 단계의 몸 문장). 지침의 기능 설명 '`몸:`은 …'과 같은 낱말(DECISIONS 10-16 '몸·기분 줄')
+MOOD_HEAD = "기분"       # p0.5.18 '기분:' 줄 머리(기분 조각 합산의 좋다 / 좋지 않다와 이유 — 낱말은 prompts/world/mood.md). 지침 '`기분:`은 …'과 같은 낱말
 REASON_LEN = 2000        # 속마음(reason) 안전 상한 — 지침에 없다(10-11 민옥: 속마음은 동기, 길이를 강제하지 않는다 → 160 폐지).
                          #   폭주·반복 출력 방지용: 직전 속마음이 다음 판단 프롬프트('이유:')에 되실려 한 번의 폭주가 대물림되지 않게
 
@@ -1571,7 +1572,8 @@ def _trail_prose(trail, names=None):
 _WIRE_KEYS = frozenset((
     "pos", "hp", "maxhp", "job", "sex", "str", "dex", "inventory", "potions",
     "gold",    # p0.5.13 골드(경제 1a): '네 상태' 첫 줄
-    "rations", "need_lines",   # p0.5.16 휴대식 · 몸과 기분(경제 1b): '네 상태' 첫 줄 아래 한 줄씩
+    "rations", "need_lines",   # p0.5.16 휴대식 · 몸(경제 1b): '네 상태' 첫 줄 아래 한 줄씩
+    "need_mood",               # p0.5.18 기분(기분 조각 합산의 낱말·이유): '몸:' 줄 아래 한 줄
     "depth", "turn",
     "zone", "known", "witnessed", "memories", "dry", "last", "trail", "floor", "floors", "history", "dialogue",
     "order", "ascii_view", "legend",
@@ -1684,8 +1686,10 @@ def _wire(obs, names=None, compose=False):
                 obs.get("depth", 1)))
     if obs.get("rations"):                       # p0.5.16 휴대식 — 있을 때만(물약 줄과 따로: 옛 첫 줄 글자를 그대로 둔다)
         L.append("- 휴대식 %d개" % obs["rations"])
-    if obs.get("need_lines"):                    # p0.5.16 몸과 기분 — 지금 몸과 마음의 상태(상태 문장·기분 조각, 사실만 · 숫자 없음). 보통이면 줄이 없다
-        L.append("- %s: %s" % (NEED_HEAD, " ".join(obs["need_lines"])))
+    if obs.get("need_lines"):                    # p0.5.16 몸 — 보통이 아닌 단계의 몸 문장(사실만 · 숫자 없음). 보통이면 줄이 없다
+        L.append("- %s: %s" % (BODY_HEAD, " ".join(obs["need_lines"])))
+    if obs.get("need_mood"):                     # p0.5.18 기분 — '좋지 않다 (이유: 배고픔)'(엔진이 조각을 합산한 낱말 · 숫자 없음). 0 근처면 줄이 없다
+        L.append("- %s: %s" % (MOOD_HEAD, obs["need_mood"]))
     if obs.get("town"):
         # 마을(D29) — 사실만: 안전·전체 가시. 여기서 뭘 할지는 캐릭터 몫(추천 안 싣는다).
         # D70(09-14 파트너 "구역 단위로 가자"): 장소는 다 알고, 사람과 목소리는 같은 구역 안에서만 — 세계의 사실(⚠️문구 임시)
