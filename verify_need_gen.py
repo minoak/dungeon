@@ -7,7 +7,9 @@ LLM 0콜: 모델 호출은 need_gen.call_model 한 곳이고 이 게이트는 �
   ② 프롬프트: prompts/launcher/need_gen.md(주석은 안 간다) · 시트 글 자리 · 배경 「…」 한 줄(표식 걷음) · 빈 배경은 줄째 빠짐 · 욕구 목록·꼬리표 ·
      해시 — 프롬프트 글·욕구 뜻이 바뀌면 prompt, 시트 글(이름·직업·성별·성격·배경)이 바뀌면 of(외형·욕구 칸·말투는 아니다)
   ③ 검증 규칙(가짜 답): 정상 · 코드 울타리 · 등급 밖 → 그 욕구만 보통(fallback) · 목록 밖 id 버림 · 빠진 욕구 보통 · why 40자·정제 · 입맛 어휘·중복·겹침·개수·꼴 ·
-     JSON 아님 → 전부 보통 + 빈 입맛 + ok false
+     JSON 아님 → 전부 보통 + 빈 입맛 + ok false ·
+     (p0.5.21) 근거 없음 표시는 한 곳(NG.NO_WHY → 프롬프트 {no_why} 자리 · 검증) · 근거 없는 낮음·높음 → 보통 fallback(why 그대로 · 공백·따옴표·마침표 꼴 변형) ·
+     보통 + 근거 없음·낮음/높음 + 근거 있음은 그대로 · 0.5.20 동료 3명 실제 답(.orch/drafts/need_gen_v1/)의 꼴 재현
   ④ 실패 분기: 시간 초과·서버 오류·속도 제한 → 한 번 다시 · 두 번이면 실패 · 키 없음·인증 → 다시 안 부르고 실패 · 거절·빈 답 → 전부 보통 ok false(실패 아님) ·
      dummy → 0콜 · 전부 보통 · by dummy(정한 것으로 치지 않는다) · needs_meta 칸
   ⑤ 저장 칸: needs_meta 검증 · build_sheet·build_party·normalize_slot 통과(없으면 칸 없음 — 옛 슬롯 7칸) · 틀린 칸만 버림 · 저장소 왕복 · 저장 판 presets 1 → 2(.v1.bak) ·
@@ -225,10 +227,63 @@ check("③ 등급 밖('엄청')·꼴 틀림(문자열) → 그 욕구만 보통 
       ok and nd["social"] == {"level": "보통", "src": "fallback"} and nd["affection"] == {"level": "보통", "src": "fallback"} and "lust" not in nd
       and nd["curiosity"]["why"] == "가" * 40 and nd["hunger"] == {"level": "낮음", "src": "model", "why": "줄 바꿈 b표식/b 링크"}
       and sorted(nd) == sorted(IDS) and tt == {"likes": ["단것"], "dislikes": ["채소"]}, (nd, tt))
-nd, tt, ok = NG.parse(json.dumps({"needs": {"hunger": {"level": "높음"}}}))
+nd, tt, ok = NG.parse(json.dumps({"needs": {"hunger": {"level": "보통"}}}))   # p0.5.21: 근거 없는 높음은 보통으로 내려가므로 보통으로 본다(아래 칸이 내림을 본다)
 check("③ 빠진 욕구는 보통 fallback · 근거 없는 칸은 why 없이 · 입맛이 없으면 빈 입맛",
-      ok and nd["hunger"] == {"level": "높음", "src": "model"} and all(nd[i] == {"level": "보통", "src": "fallback"} for i in IDS if i != "hunger")
+      ok and nd["hunger"] == {"level": "보통", "src": "model"} and all(nd[i] == {"level": "보통", "src": "fallback"} for i in IDS if i != "hunger")
       and tt == {"likes": [], "dislikes": []})
+# p0.5.21 근거 없는 낮음·높음 → 보통. 근거 없음 표시는 NG.NO_WHY 한 곳 — 프롬프트 파일은 {no_why} 자리만 들고, 검증이 같은 값을 쓴다
+TPL_RAW = src("prompts", "launcher", "need_gen.md")
+with mock.patch.object(NG, "NO_WHY", "근거 모름"):
+    p_alt, h_alt = NG.build_prompt(MINA_SHEET), NG.prompt_hash()
+    alt = NG.parse(json.dumps({"needs": {"social": {"level": "낮음", "why": "근거 모름"}, "curiosity": {"level": "높음", "why": "글에 없다"}}}, ensure_ascii=False))[0]
+check("③ 근거 없음 표시는 한 곳(NG.NO_WHY): 프롬프트 파일엔 {no_why} 자리만(글자로 안 적힘) · need_gen.py 에도 한 번 · 모델이 받는 글에 '근거가 없으면 \"표시\".' · "
+      "표시를 바꾸면 프롬프트 글·해시·검증이 같이 따라간다",
+      "{no_why}" in NG.template() and NG.NO_WHY not in TPL_RAW and src("need_gen.py").count('"%s"' % NG.NO_WHY) == 1
+      and '근거가 없으면 "%s".' % NG.NO_WHY in P1 and '근거가 없으면 "근거 모름".' in p_alt and h_alt != H0
+      and alt["social"] == {"level": "보통", "src": "fallback", "why": "근거 모름"} and alt["curiosity"] == {"level": "높음", "src": "model", "why": "글에 없다"}, alt)
+NOB = [None, "", "   ", NG.NO_WHY, '  "%s"  ' % NG.NO_WHY, "“%s”" % NG.NO_WHY, "「%s」" % NG.NO_WHY, "'%s'." % NG.NO_WHY, NG.NO_WHY + ".",
+       NG.NO_WHY.replace(" ", ""), " \n%s\n " % NG.NO_WHY, '""', 42]
+
+
+def one(level, why):
+    """욕구 하나(사교)만 든 답 → 검증을 지난 그 칸(why=None 이면 why 칸을 아예 안 둔다)."""
+    e = {"level": level, **({} if why is None else {"why": why})}
+    return NG.parse(json.dumps({"needs": {"social": e}}, ensure_ascii=False))[0]["social"]
+
+
+def row(level, src_, why):
+    w = NG.clean_why(why)
+    return {"level": level, "src": src_, **({"why": w} if w else {})}
+
+
+down = {(lv, repr(w)): one(lv, w) for lv in ("낮음", "높음") for w in NOB}
+check("③ 근거 없는 낮음·높음 → 그 욕구만 보통 fallback(why 는 정제한 그대로): why 없음·빈 글·공백·표시 그대로·앞뒤 공백+따옴표·둥근 따옴표·「」·작은따옴표+마침표·"
+      "마침표·붙여 쓴 꼴·앞뒤 개행·따옴표만·문자열 아님 — 낮음·높음 각각 13가지",
+      len(down) == 26 and all(down[(lv, repr(w))] == row("보통", "fallback", w) for lv in ("낮음", "높음") for w in NOB),
+      {k: v for k, v in down.items() if v.get("src") != "fallback"})
+KEEP = [("보통", w) for w in NOB] + [(lv, w) for lv in ("낮음", "높음") for w in ("과묵하다", '"말수가 적다"', NG.NO_WHY + "고 보기 어렵다", "글에 없다시피 한 과묵함")]
+keep = {(lv, repr(w)): one(lv, w) for lv, w in KEEP}
+check("③ 그대로 두는 것: 보통 + 근거 없음(13가지 — 보통 model · why 그대로) · 낮음·높음 + 근거 있음(따옴표 든 구절 · 표시를 품은 다른 글 포함 — 통째로 같을 때만 내린다)",
+      len(keep) == 21 and all(keep[(lv, repr(w))] == row(lv, "model", w) for lv, w in KEEP), {k: v for k, v in keep.items() if v.get("src") != "model"})
+# 0.5.20 동료 3명 실제 답(claude-haiku-5-5 · .orch/drafts/need_gen_v1/)의 꼴 그대로 — 입맛은 셋 다 빈 칸, 근거 없는 칸은 "글에 없다"
+V1_NO = "글에 없다"
+V1 = {"duran": {"affection": "낮음", "curiosity": "보통", "hunger": "보통", "social": "낮음"},
+      "kaya": {"affection": "낮음", "curiosity": "보통", "hunger": "보통", "social": "낮음"},
+      "pirn": {"affection": "보통", "curiosity": "높음", "hunger": "보통", "social": "보통"}}
+V1_WHY = {("pirn", "curiosity"): "호기심이 많고 궁금한 건 일단 봐야 직성이 풀려"}
+v1 = {}
+for c, lv in V1.items():
+    raw = json.dumps({"needs": {k: {"level": v, "why": V1_WHY.get((c, k), V1_NO)} for k, v in lv.items()}, "taste": {"likes": [], "dislikes": []}}, ensure_ascii=False)
+    v1[c] = gen(sheetkit.build_companion_sheet(ENT.companions()[c]), "anthropic_api", (raw, "", "claude-haiku-5-5"))
+    v1[c]["_calls"] = [next((ln for ln in x["prompt"].split("\n") if ln.startswith("- 이름: ")), "") for x in CALLS]
+FB, MD = {"level": "보통", "src": "fallback", "why": V1_NO}, {"level": "보통", "src": "model", "why": V1_NO}
+check("③ 0.5.20 실제 답 재현(0콜 가짜 응답 · generate 길): 두란·카야 애정·사교 '낮음 · 글에 없다' → 보통 fallback(why 그대로) · 호기심·배고픔 '보통 · 글에 없다'는 그대로(model) · "
+      "피른 호기심 높음(근거 구절)은 그대로 · 나머지 보통 model · 셋 다 1콜 · ok · 빈 입맛",
+      all(v1[c]["needs"] == {"affection": FB, "curiosity": MD, "hunger": MD, "social": FB} for c in ("duran", "kaya"))
+      and v1["pirn"]["needs"] == {"affection": MD, "curiosity": {"level": "높음", "src": "model", "why": V1_WHY[("pirn", "curiosity")]}, "hunger": MD, "social": MD}
+      and all(v1[c]["needs_meta"].get("ok") is True and v1[c]["taste"] == {"likes": [], "dislikes": []} and len(v1[c]["_calls"]) == 1 for c in V1)
+      and [v1[c]["_calls"][0] for c in V1] == ["- 이름: 두란", "- 이름: 카야", "- 이름: 피른"],
+      {c: (v1[c]["needs"], v1[c].get("_calls")) for c in V1})
 bad_t = [NG.clean_taste(t) for t in ({"likes": ["단것", "빵", "고기"]}, {"likes": [], "dislikes": ["빵", "고기"]}, {"likes": "단것"}, ["단것"],
                                      {"likes": [1]}, None)]
 check("③ 입맛이 틀리면 빈 입맛: 좋아함 3개 · 싫어함 2개 · 목록이 아님 · 객체가 아님 · 문자열이 아닌 꼬리표 · 없음",
@@ -781,6 +836,8 @@ check("⑫ _run_gates.sh 에 verify_need_gen · VERSION 0.5.20 이상 · PATCH_N
       "verify_need_gen" in src("_run_gates.sh") and tuple(int(x) for x in src("VERSION").strip().split(".")) >= (0, 5, 20)
       and "## 0.5.20" in src("docs", "PATCH_NOTES.md") and "p0.5.20" in src("docs", "CHANGELOG.md") and "needs_meta" in src("STREAM_FORMAT.md")
       and '"need_gen.py"' in src("verify_needs.py"))
+check("⑫ p0.5.21: VERSION 0.5.21 이상 · PATCH_NOTES '## 0.5.21' · CHANGELOG 'p0.5.21'",
+      tuple(int(x) for x in src("VERSION").strip().split(".")) >= (0, 5, 21) and "## 0.5.21" in src("docs", "PATCH_NOTES.md") and "p0.5.21" in src("docs", "CHANGELOG.md"))
 
 NG.call_model = REAL_CALL
 shutil.rmtree(ROOT, ignore_errors=True)

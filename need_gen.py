@@ -10,7 +10,9 @@
   · 낡음: of(시트 글 해시)가 지금 글과 다르거나, prompt(이 프롬프트 + 욕구 뜻·어휘 해시)가 다르면 낡은 것. 출발 때는 표시만 한다(§10-25).
   · 검증(0콜 — 모델 답의 꼴만 본다, 성격 해석 규칙은 없다): 등급 셋 밖 → 그 욕구만 보통(fallback) · 목록 밖 id 는 버린다 · 빠진 욕구는 보통(fallback) ·
     why 는 sanitize_freetext 뒤 한 줄 needs.WHY_MAX 자 · 꼬리표는 어휘 안의 것만 받고 겹치면 싫어함에서 뺀다 · 좋아함 2·싫어함 1을 넘거나 꼴이 틀리면 빈 입맛 ·
-    JSON 이 아니면 전부 보통 + 빈 입맛 + ok:false.
+    JSON 이 아니면 전부 보통 + 빈 입맛 + ok:false ·
+    (p0.5.21) 보통이 아닌데 why 가 비었거나 근거 없음 표시(NO_WHY — 프롬프트 {no_why} 자리와 같은 값, 앞뒤 공백·따옴표·마침표와 낱말 사이 공백은 빼고 맞댄다)면
+    그 욕구만 보통(fallback — why 는 그대로 둔다. 화면에 '보통 · 글에 없다'로 보여 모델이 스스로 보통이라 한 줄과 같은 꼴이다).
   · 호출: 그 판(화면에서 고른) 두뇌·모델 그대로(§10-24). 러너와 같은 brains._call_claude 를 **자식 프로세스**에서 부른다 — 키는 그 프로세스 env 에만
     있고 론처·공개 서버 프로세스의 환경에 섞이지 않는다(러너와 같은 규칙). dummy 두뇌는 부르지 않고 전부 보통(by:'dummy' — '정한 것'으로 치지 않는다).
   · 실패(§3.8.2 표): 키 없음·인증·연결 실패 → NeedGenError(출발이면 출발을 멈춘다 · 저장이면 needs 없이 저장한다) · 시간 초과·서버 오류 → 한 번 다시 ·
@@ -37,8 +39,10 @@ SHEET_KEYS = ("name", "job", "sex", "persona", "background")   # 생성 호출�
 HASH_LEN = 16
 CALL_TIMEOUT = 180       # 자식 프로세스 상한(초) — 안쪽 HTTP·CLI 는 brains 의 제 상한(기본 60초)이 먼저 끊는다. 한 번 다시 부르기는 generate 가 한다
 EMPTY_TASTE = {"likes": [], "dislikes": []}
+NO_WHY = "글에 없다"      # 근거 없음 표시 — 이 값 하나를 프롬프트 {no_why} 자리(모델에게 시키는 글)와 검증(no_basis)이 같이 쓴다
+_NO_WHY_EDGE = " \"'“”‘’「」『』.。"   # no_basis 가 맞대기 전에 앞뒤에서 걷는 글자(공백·따옴표·마침표)
 _COMMENT = re.compile(r"<!--.*?-->", re.S)
-_SLOT = re.compile(r"\{(name|job|sex|persona|background|needs|tastes|likes_max|dislikes_max|why_max)\}")   # 프롬프트의 자리(그 밖 중괄호 — JSON 예시 — 는 그대로)
+_SLOT = re.compile(r"\{(name|job|sex|persona|background|needs|tastes|likes_max|dislikes_max|why_max|no_why)\}")   # 프롬프트의 자리(그 밖 중괄호 — JSON 예시 — 는 그대로)
 _JSON = re.compile(r"\{.*\}", re.S)
 _RC = re.compile(r"rc=(\d+)")
 
@@ -79,9 +83,9 @@ def _hash(obj):
 
 
 def prompt_hash():
-    """needs_meta.prompt — 프롬프트 글(주석 걷은 것) + 욕구 목록의 뜻(id·이름·about) + 입맛 어휘 + 등급. 하나라도 바뀌면 정한 욕구가 낡는다."""
+    """needs_meta.prompt — 프롬프트 글(주석 걷은 것) + 욕구 목록의 뜻(id·이름·about) + 입맛 어휘 + 등급 + 근거 없음 표시. 하나라도 바뀌면 정한 욕구가 낡는다."""
     return _hash({"prompt": template(), "needs": [[n["id"], n["name"], n["about"]] for n in need_list()],
-                  "tastes": NE.tastes(), "levels": list(ENT.NEED_LEVELS)})
+                  "tastes": NE.tastes(), "levels": list(ENT.NEED_LEVELS), "no_why": NO_WHY})
 
 
 def sheet_text(sheet):
@@ -102,7 +106,8 @@ def build_prompt(sheet):
     """시트 하나 → 생성 호출 프롬프트. 값이 빈 자리가 든 줄은 빠진다(배경이 없으면 배경 줄이 없다)."""
     vals = dict(sheet_text(sheet),
                 needs="\n".join("- %s(%s): %s" % (n["id"], n["name"], n["about"]) for n in need_list()),
-                tastes=" · ".join(NE.tastes()), likes_max=str(NE.LIKES_MAX), dislikes_max=str(NE.DISLIKES_MAX), why_max=str(NE.WHY_MAX))
+                tastes=" · ".join(NE.tastes()), likes_max=str(NE.LIKES_MAX), dislikes_max=str(NE.DISLIKES_MAX), why_max=str(NE.WHY_MAX),
+                no_why=NO_WHY)
     out = []
     for ln in template().split("\n"):
         if any(not vals[k] for k in _SLOT.findall(ln)):
@@ -123,6 +128,13 @@ def clean_why(v):
         return None
     s = sheetkit.sanitize_freetext(v, sheetkit.BACKGROUND_MAX)
     return s[:NE.WHY_MAX] if s else None
+
+
+def no_basis(why):
+    """근거가 없나 — 정제한 근거(clean_why 의 값)가 비었거나, 앞뒤 공백·따옴표·마침표를 걷고 낱말 사이 공백을 빼면 비거나 NO_WHY 와 같다.
+    '글에 없다고 보기 어렵다'처럼 표시를 품은 다른 글은 근거로 친다(통째로 같을 때만)."""
+    s = "".join((why or "").strip(_NO_WHY_EDGE).split())
+    return not s or s == "".join(NO_WHY.split())
 
 
 def clean_taste(t):
@@ -158,6 +170,8 @@ def parse(raw):
             why = clean_why(e.get("why"))
             if why:
                 row["why"] = why
+            if row["level"] != NE.DEFAULT_LEVEL and no_basis(why):    # 근거 없는 낮음·높음 — 프롬프트 규칙 '근거를 찾지 못하면 보통'(why 는 그대로)
+                row.update(level=NE.DEFAULT_LEVEL, src="fallback")
         else:
             row = {"level": NE.DEFAULT_LEVEL, "src": "fallback"}
         out[n["id"]] = row
