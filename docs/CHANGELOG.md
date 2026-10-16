@@ -1,5 +1,50 @@
 # 변경 기록
 
+## 2026-10-16 — p0.5.20 욕구 생성 호출 + 론처 '욕구와 입맛'
+
+근거: `.orch/drafts/economy_design.md` §3.8.2(정하는 길·입력/출력·검증·저장 칸·언제 부르나·실패 처리·론처 화면)·§3.8.6 · §10-12·16·22·24·25(DECISIONS 10-15 관리자 추천안) ·
+DECISIONS 10-16 문장 대원칙 · 0.5.20 = 이것.
+
+- **생성 호출**(`need_gen.py`, 새): 시트 글(이름·직업·성별·성격·배경 — 배경은 「…」 한 줄) + 욕구 목록(`entities/need` 전부의 id·이름·about) + 입맛 어휘 → 프롬프트
+  `prompts/launcher/need_gen.md`(임시). 검증(0콜): 등급 셋 밖 → 그 욕구만 보통 `fallback` · 목록 밖 id 버림 · 빠진 욕구 보통 · why `sanitize_freetext` 뒤 40자 ·
+  입맛은 어휘 안만(중복 없이 · 겹치면 싫어함에서 뺌) · 좋아함 2·싫어함 1을 넘거나 꼴이 틀리면 빈 입맛 · JSON 아님 → 전부 보통 + `ok:false`.
+  호출은 러너와 같은 `brains._call_claude` 를 **자식 프로세스**에서(`need_gen.py --call` — 키는 그 env 에만, 대체 두뇌 없음). 실패: 시간 초과·5xx·429 → 한 번 더 ·
+  키 없음·인증·연결 → `NeedGenError` · rc=200 빈 답·거절 → 전부 보통 `ok:false`. dummy 두뇌는 부르지 않고 전부 보통 `by:"dummy"`(정한 것으로 치지 않는다 — `has`).
+  낡음 `state`: `needs_meta.of`(시트 글 해시) · `prompt`(프롬프트 + 욕구 뜻·어휘·등급 해시).
+- **욕구 목록**: `entities/need/{curiosity,social,affection}.json` — about 만(단계 없음 → 엔진은 건너뛴다, 검증기는 0.5.16 부터 그 꼴을 받는다) + 말 파일(뜻 한 줄, 임시).
+- **저장 칸**: `needs.sheet_fields` 가 `needs_meta`(by·model·at·ok·prompt·of — 꼴만, by 없으면 버림)도 거른다 → `sheetkit.build_sheet`(needs·taste·needs_meta 인자, 있을 때만) ·
+  `build_party` · `build_companion_sheet`(`COMPANION_SHEET_KEYS` 에 셋 — 검증기를 지나 달라지면 거절) · `character_presets.normalize_slot`(있을 때만 — 옛 슬롯 7칸 그대로) ·
+  `PresetStore.set_needs`(출발 때 정한 것을 옛 저장본에 한 번) · `show_runner.load_party` · `run_meta.party[].needs_meta`. `savedata` presets 1 → 2(`_p1_needs`, 내용 그대로 —
+  되돌린 코드가 덮기 전 `.v2.bak`). `words._NOT_WORDS` 에 `sheet.needs.`(동료 데이터의 근거는 말 칸이 아니다).
+- **론처**(`launcher.py`): `/api/presets.needs_ui` · `POST /api/needs/gen`(화면의 두뇌·모델·키) · `POST /api/needs/check`(0콜) · `/api/characters` 에 두뇌가 실려 오면
+  없거나 낡을 때만 부름(응답 `needs_gen{ok, error?}` — 못 닿으면 슬롯 그대로 저장, 두뇌 없는 옛 요청은 옛 동작) · `/api/start` 앞 `fill_party_needs`: 내 파티 파일에서
+  정한 욕구가 없는 사람만(동료 프리셋 그대로인 칸·기본 파티·이어가기·낡은 칸 제외) — 못 닿으면 400(러너 안 띄움, 앞사람은 남김). `companions_payload` 에 욕구 칸(있을 때만).
+  공개 서버(`server.py`): `PublicHandler._gen_plan` — 요청의 키만(`_key_env` — 러너와 같은 키 칸 비우기를 함수로 뺐다) · 주소당 시간 상한(로그인과 같은 수) · 키 없는 저장은 부르지 않음 ·
+  `/api/start` 는 키 생존 확인 뒤·`start_lock` 밖에서 부른다.
+- **화면**(`launcher/index.html`): 배경 칸 아래 '욕구와 입맛' 접힘(욕구마다 이름 · 고르기 · 근거 / '(준비 중)' / 고치면 '직접 고침' · 입맛 좋아함·싫어함 칩 · '정한 모델: … · 날짜' ·
+  [다시 정하기]·[지금 정하기] · 낡음 문장) · 저장 요청에 두뇌·모델·키 · 동료 칸 한 줄 요약 · 출발 버튼 '출발 준비 중…'. 화면 확인은 관리자.
+- **도구**(`tools/need_gen.py`, 새): 동료 프리셋 3·기본 파티 3에 같은 호출을 돌려 데이터에 적는다(party.json 은 'name' 줄 뒤에 세 줄씩 — 줄 배치 유지). 기본 0콜, `--run` 이어야 부른다.
+  **실행하지 않았다**(민옥 확인 뒤 관리자가 돌린다).
+- 게이트: verify_need_gen(새, 69칸 — 목록·프롬프트·해시·검증 규칙·실패 분기·저장 칸·낡음·론처 HTTP·공개 서버·판 기록·누설·실제 호출 배선(키 없음 0콜)·화면 구조·도구) ·
+  verify_needs(② 욕구 목록에 셋 · 코드 목록에 need_gen·launcher·sheetkit — 93칸 그대로) · verify_patch(presets 판 2).
+- 검증: 게이트 105/105(_run_gates.sh 104 + tools/check_words — 기준선 '후' 산출 p0520-after). 빨간불 64종(`ab_runs/p0520/redlight.py`, 로컬 — 고친 자리를 리포 사본에서
+  줄 전체로 하나씩 망가뜨리면 verify_need_gen·verify_patch 가 FAIL) 놓침 0 · 깨짐 0. 기준선(전 = 0e81086 v0.5.19 104/104, 후 = 이 작업 트리, 판 3 × 120틱 · 게이트 전부):
+  **(나) 0** — 21건 전부 전후 원문 고정 규칙(`ab_runs/baseline/p0520-rules.py`, 로컬 — 정규식 없음 · 탐침: 두 사본의 VERSION · `prompts/world/` 지문(후에서 새 말 파일 셋을 빼면 전과 같다) ·
+  정의·말 파일·말 칸 수 +3 · 소스의 검사명 · 반례 4건 거부). 차이 = 버전(판 셋·verify_patch·verify_public) · prompts/world 지문(판 셋) · 말 칸 수(check_words·verify_words 셋·verify_needs ⑧ 30→33) ·
+  검사명(verify_needs ② · verify_patch ④) · 새 게이트 · verify_house '하루' 날짜 5건(잡음 — 전·후를 뜬 사이 한국 자정을 넘김). 판의 관측·프롬프트·피클·요약은 전후 같다(기본 파티 판이라 욕구 칸이 없다).
+- 생성 도구·LLM 실호출은 하지 않았다(가짜 응답 · 자식 프로세스 경로는 키 없음 라벨까지만).
+- p0520b(Codex p0520r 필수 3건 · 권장 2건): ① 출발 때 저장본의 욕구를 가져온 사람은 저장본에 다시 쓰지 않고, 쓸 때도 있는 칸만(빈 입맛 저장본은 taste 칸이 없어
+  `KeyError('taste')` → 500 이었다) ② `save_party` 가 욕구 칸 없이 온 시트에 지난 파티 파일의 **같은 글** 시트(`need_gen.sheet_hash`)가 정한 욕구를 잇는다(`_carry_needs` —
+  출발이 중간에 실패해 다시 누르거나 론처로 돌아와 다시 출발할 때 화면이 빈 칸으로 덮어 다시 부르던 것 · 화면이 실어 온 칸이 이긴다 · dummy 결과는 잇지 않는다)
+  ③ 화면의 욕구 상자 클래스 `needBox`, 저장 처리는 `[data-preset-box]` 를 잠근다(첫 `.presetBox` 가 욕구 상자라 저장 중에 저장 버튼이 살아 있었다) ·
+  권장: `needs_meta` 를 공개 투영 관전 칸(`IG.SPECTATOR_KEYS`)에 · 세 경로 회귀 검사(verify_need_gen 69 → 76칸).
+  재검증: 게이트 105/105(기준선 '후' p0520-after 를 조각으로 다시 떴다) · 빨간불 71종(6조각 — 위 수정 자리 7종 더함) 놓침 0 · 깨짐 0 ·
+  기준선 (나) 0 — 22건(위 21건 + verify_public ⑨ 상세 `str(obj)[:120]` 의 pid 자릿수로 자르는 자리가 한 글자 밀린 잡음 1 — 소스 줄 같음·한쪽이 다른 쪽의 앞부분) · 반례 4건 거부.
+- p0520c(Codex p0520rr 필수 1 · 권장 1): `_carry_needs` 가 화면 값이 **아직 정하지 않은 것**(`_placeholder` — 칸 없음 · dummy 임시값이고 사람이 고친 칸 없음)이면 같은 글의 실제 생성분을 잇는다
+  (화면에 [지금 정하기]를 규칙 두뇌로 눌러 둔 전부 보통이 남아 있으면 출발 재시도 때 앞사람까지 다시 불렀다) · `src:user` 칸이 든 화면 값은 그대로 ·
+  저장 캐릭터 id 가 양쪽에 다 있으면 같을 때만 잇는다(그래서 잇기를 id 를 붙인 뒤로 옮겼다). 회귀 검사 3칸(verify_need_gen 76 → 79칸).
+  재검증: 게이트 105/105(기준선 '후' p0520-after 조각 산출) · 빨간불 p0520c 5종 + 잇기 3종 놓침 0 · 깨짐 0 · 기준선 (나) 0(22건 · 반례 4건 거부).
+
 ## 2026-10-16 — p0.5.19 작은 수정 묶음(반복 신호 '변화 없음' · NPC 공통 줄)
 
 근거: 민옥 10-16 '작은 수정 묶음 먼저'. ① c16 `run_metrics_v0.md` §5 · `run_0515_haiku_analysis.md` 결함 후보 1 — 0.5.13 판 재생에서 반복 신호 33개 중 '변화 없음' 0개

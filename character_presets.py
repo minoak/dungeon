@@ -13,19 +13,23 @@ import sheetkit
 
 
 def normalize_slot(slot, data=None):
-    """기존 시트 검증을 통과한 생성 입력만 저장한다. 수치·자동 목표는 저장 대상이 아니다."""
+    """기존 시트 검증을 통과한 생성 입력만 저장한다. 수치·자동 목표는 저장 대상이 아니다.
+    p0.5.20 욕구 칸 셋(needs·taste·needs_meta — 생성 호출이 채우고 사람이 고친 것)은 시트 검증기를 거친 것만, 있을 때만 남는다
+    (없는 옛 슬롯은 생성 입력 7칸 그대로). 부르기(생성 호출)는 저장소가 아니라 론처 처리부가 한다 — 저장소는 담기만 한다."""
     if not isinstance(slot, dict):
         raise ValueError("캐릭터 설정은 객체여야 한다")
     try:
         sheet = sheetkit.build_sheet(slot.get("job"), slot.get("traits") or [],
                                     slot.get("name", ""), slot.get("sex"), slot.get("background"),
-                                    data=data, persona_text=slot.get("persona"), look=slot.get("look"))
+                                    data=data, persona_text=slot.get("persona"), look=slot.get("look"),
+                                    **{k: slot.get(k) for k in sheetkit.NEED_FIELDS})
     except (TypeError, KeyError) as e:
         raise ValueError("캐릭터 설정 형식이 올바르지 않다") from e
     return {"name": sheet["name"], "sex": sheet["sex"], "job": sheet["job"],
             "traits": sheet["traits"],
             "persona": sheetkit.sanitize_freetext(slot.get("persona"), sheetkit.PERSONA_MAX) or "",
-            "background": sheet.get("background", ""), "look": sheet.get("look")}
+            "background": sheet.get("background", ""), "look": sheet.get("look"),
+            **{k: sheet[k] for k in sheetkit.NEED_FIELDS if k in sheet}}
 
 
 def normalize_label(label, fallback):
@@ -92,6 +96,22 @@ class PresetStore:
                 entry.update(label=label, slot=slot)
             self._write(entries)
             return entry
+
+    def set_needs(self, preset_id, fields, of):
+        """p0.5.20 출발 때 정한 욕구를 옛 저장본에 한 번 적어 둔다(다음 출발에 다시 부르지 않게 — 판마다 같은 무게).
+        그 저장본이 아직 정한 욕구가 없고(dummy 결과는 없는 것) 지금 글이 정할 때의 글(of)과 같을 때만. 적었으면 True."""
+        import need_gen                                  # 지연 import — 저장소는 욕구 모듈 없이도 읽는다
+        with self.lock:
+            entries = self._read()
+            entry = next((e for e in entries if e["id"] == preset_id), None)
+            if entry is None:
+                return False
+            sheet = need_gen.sheet_of_slot(entry["slot"], self.data)
+            if need_gen.has(sheet) or need_gen.sheet_hash(sheet) != of:
+                return False
+            entry["slot"] = normalize_slot({**entry["slot"], **fields}, self.data)
+            self._write(entries)
+            return True
 
     def delete(self, preset_id):
         with self.lock:

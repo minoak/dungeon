@@ -1,0 +1,14 @@
+{
+  "id": "curiosity",
+  "name": "호기심",
+  "kind": "need",
+  "tags": [
+    "need"
+  ],
+  "comps": {
+    "need": {
+      "about": "@prompts"
+    }
+  },
+  "note": "p0.5.20(.orch/drafts/economy_design.md §3.2 끝·§3.8.2) 아직 엔진에 단계가 없는 욕구 — 이름과 뜻(about)만 둔다. 엔진은 건너뛰고(needs.live 에 없다) 론처의 생성 호출만 이 목록을 읽어 무게를 미리 채운다. 단계·숫자는 이 욕구를 넣는 패치에서 더한다(다음 욕구 순서 호기심 → 사교 → 애정, DECISIONS 10-15). 이름·뜻 문장은 임시(민옥 교정 대기)."
+}

@@ -167,6 +167,15 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 - events.log: `봇N 기분: 없음 → 좋지 않다 (배고픔 · 합 -10)` · `봇N 기분: 좋다 → 없음`(관전용 — 합을 싣는다).
 - 저장 판 10 → 11(`snapshot._m10_moods`): 옛 꼴 기분 조각(`line` 칸이 있는 것)은 걷는다(이유 낱말을 채울 먹은 것 이름이 없고, 길어야 120틱 남는 조각). 충족도·새 꼴 조각은 그대로.
 
+## 욕구 생성 호출 — 2026-10-16 p0.5.20 additive (스위치 없음 — 론처·공개 서버 · 설계 §3.8.2)
+
+- `run_meta.party[].needs_meta` = `{by: 두뇌(anthropic_api|gemini_api|openai_api|claude_cli|dummy), model?: 모델 id, at: 정한 시각, ok: 모델 답을 읽었나,
+  prompt: 프롬프트·욕구 뜻 해시, of: 시트 글 해시}` — 시트에 있을 때만(`needs`·`taste` 와 같은 자리). 론처가 출발 앞에 정한 사람은 늘 있다(dummy 두뇌 판은 `by:"dummy"` · 전부 보통).
+- `run_meta.party[].needs` 의 열쇠는 `entities/need` 전부다 — 단계가 없는 욕구(호기심 `curiosity`·사교 `social`·애정 `affection`)도 등급이 미리 실린다.
+  `run_meta.need_defs`·`tick.bots[].needs`·`need_w` 는 단계가 있는 욕구(배고픔)뿐이다(엔진이 쓰는 것). `src` = `model` | `user`(사람이 고침) | `fallback`(모델 답이 틀려 보통).
+- 관측·프롬프트·틱 기록에는 등급·근거(`why`)·해시가 없다(§3.8.6). 몸에는 지금처럼 `need_w`(보통이 아닌 단계 있는 욕구만)·`taste` 만.
+- 저장 캐릭터 파일(`character_presets.json`) 판 1 → 2: 슬롯에 `needs`·`taste`·`needs_meta`(있을 때만). 내용 이관 없음.
+
 ## 반복 신호 + 목표 칸 — 2026-10-15 p0.5.15 (모든 판 · DECISIONS 2026-10-15)
 
 - **목표 칸(응답 `todo`, 선택)**: 지금 하려는 일 — 글이면 몸의 `todo`(글 하나)를 덮어쓰고, 빈 글(`""`)이면 지운다. 칸이 없거나 `null`·글이 아니면 그대로.

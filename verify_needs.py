@@ -278,8 +278,9 @@ check("② 시험용 정의 둘(단계 있는 목마름 · 이름·뜻만 있는
       and {k: v for k, v in DEFS_T.items() if not k.startswith("test_")} == DEFS0)
 ENT._DEFS = DEFS_T                                     # 주입 — 코드는 하나도 안 고친다(정의 사전만 바뀐다 · needs._index 가 다시 짓는다)
 try:
-    check("② 엔진이 쓰는 욕구 = 단계가 있는 것만(배고픔·목마름) · 이름·뜻만 있는 것은 건너뛴다(시트 needs 칸의 열쇠로는 받는다)",
-          [i for i, _ in NE.live()] == ["hunger", "test_thirst"] and [d_["id"] for d_ in NE.all_defs()] == ["hunger", "test_idle", "test_thirst"]
+    check("② 엔진이 쓰는 욕구 = 단계가 있는 것만(배고픔·목마름) · 이름·뜻만 있는 것은 건너뛴다(시트 needs 칸의 열쇠로는 받는다 — p0.5.20 리포의 애정·호기심·사교도 그 꼴)",
+          [i for i, _ in NE.live()] == ["hunger", "test_thirst"]
+          and [d_["id"] for d_ in NE.all_defs()] == ["affection", "curiosity", "hunger", "social", "test_idle", "test_thirst"]
           and "test_idle" in (NE.sheet_fields({"needs": {"test_idle": {"level": "높음"}}}).get("needs") or {}))
     dT, botsT = town(on=True)
     aT, bT = botsT[0], botsT[1]
@@ -336,7 +337,8 @@ try:
 finally:
     ENT._DEFS = DEFS0
 check("② 시험 정의를 걷으면 엔진도 걷는다(정의 사전이 곧 욕구 목록)", [i for i, _ in NE.live()] == ["hunger"])
-CODE = ("needs.py", "dungeon_gm.py", "interactables.py", "composed_actions.py", "brains.py", "show_runner.py", "snapshot.py", "info_guard.py", "entities.py")
+CODE = ("needs.py", "dungeon_gm.py", "interactables.py", "composed_actions.py", "brains.py", "show_runner.py", "snapshot.py", "info_guard.py", "entities.py",
+        "need_gen.py", "launcher.py", "sheetkit.py")   # p0.5.20 생성 호출·론처·시트 조립도 욕구 id 를 모른다(목록은 정의에서)
 check("② 코드에 욕구 id 글자('hunger')가 없다 — 욕구는 정의(데이터)로만 들어온다(이 게이트가 코드 길을 숨기지 않는다)",
       not [f for f in CODE if re.search(r"['\"]hunger['\"]", src(f))], [f for f in CODE if re.search(r"['\"]hunger['\"]", src(f))])
 shutil.rmtree(TMP2, ignore_errors=True)

@@ -7,7 +7,8 @@
 
   · 몸: bot['needs'] = {욕구: 충족도 0~100} · bot['moods'] = [{src, size, what?, until}](같은 욕구의 조각은 새것이 덮는다 — p0.5.18: 문장 대신 먹은 것 이름 ·
     값과 이유 낱말은 그릴 때 정의에서 읽는다) ·
-    무게 bot['need_w'] = {욕구: 낮음|높음}(보통이 아닌 것만 — 시트 needs 칸에서, 0.5.16 은 시트에 칸이 없어 모두 보통) ·
+    무게 bot['need_w'] = {욕구: 낮음|높음}(보통이 아닌 것만 — 시트 needs 칸에서, 0.5.16 은 시트에 칸이 없어 모두 보통 · p0.5.20 부터 론처의
+    생성 호출(need_gen.py)이 칸을 채우고 사람이 고친다 — 엔진은 칸만 읽는다, 성격 해석 규칙 없음) ·
     취향 bot['taste'] = {likes, dislikes}(시트 taste 칸 — 있을 때만). 무게·취향은 스폰이 시트에서 다시 읽는다(이월할 것이 없다).
   · 엔진 공용 지점 셋: 틱마다 줄이기(tick) · 채우기(eat — 먹을 것의 satisfies / on_result — 정의의 from_events) · 단계 판정(문장·효과·사건).
   · 숫자는 에이전트에게 보이지 않는다(§3.8.6) — p0.5.18(DECISIONS 10-16 '몸·기분 줄') 관측은 두 줄과 결과 사실 문장뿐:
@@ -48,6 +49,10 @@ DRAIN_LINE = '기운이 빠졌다'                        # hp_drain 이 HP 를 
 
 _IDX = {'src': None, 'n': -1, 'all': [], 'live': []}
 _SENT_RE = re.compile(r'(?<=[.!?…])\s+')            # 문장 자르기 — 줄 상한(lines)·문장 게이트(order_problems) 공용
+_META_RE = {'by': re.compile(r'[A-Za-z_]{1,24}\Z'),                        # p0.5.20 needs_meta(생성 호출의 기록 — 론처·판 기록용, 엔진은 읽지 않는다) — 두뇌 이름
+            'model': re.compile(r'[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}\Z'),  #   모델 id(brain_config.clean_model 과 같은 글자)
+            'at': re.compile(r'[0-9T:\-]{1,32}\Z'),                         #   정한 시각
+            'prompt': re.compile(r'[0-9a-f]{8,64}\Z'), 'of': re.compile(r'[0-9a-f]{8,64}\Z')}   # 프롬프트·욕구 뜻 해시 · 시트 글 해시(낡음 판정 — need_gen.state)
 _JOSA = {'을': ('을', '를'), '은': ('은', '는'), '이': ('이', '가'), '과': ('과', '와')}
 
 
@@ -118,14 +123,16 @@ def fill_line(line, what):
 
 # ── 몸 ──────────────────────────────────────────────────────────────
 
-def sheet_fields(s):
-    """시트(파티 파일의 한 칸) → 몸에 걸 칸만 거른 {needs?, taste?} — load_party 가 부른다. **판을 막지 않는다**: 모르는 욕구·등급이 아닌 값은
-    그 칸만 버린다(그 욕구는 보통 — 설계 §3.8.2 검증 '그 욕구만 보통'), 취향은 어휘 안의 꼬리표만 · 좋아함 2·싫어함 1까지 · 겹치면 싫어함에서 뺀다.
-    why 는 한 줄 WHY_MAX 자(론처용 — 게임 프롬프트에 안 나간다). 칸이 없거나 남는 것이 없으면 그 칸을 만들지 않는다."""
+def sheet_fields(s, ids=None, vocab=None):
+    """시트(파티 파일의 한 칸 · 저장 캐릭터 슬롯) → 거른 {needs?, taste?, needs_meta?} — load_party·sheetkit.build_sheet 가 부른다. **판을 막지 않는다**:
+    모르는 욕구·등급이 아닌 값은 그 칸만 버린다(그 욕구는 보통 — 설계 §3.8.2 검증 '그 욕구만 보통'), 취향은 어휘 안의 꼬리표만 · 좋아함 2·싫어함 1까지 ·
+    겹치면 싫어함에서 뺀다. why 는 한 줄 WHY_MAX 자(론처용 — 게임 프롬프트에 안 나간다). p0.5.20 needs_meta(생성 호출의 기록)는 아는 칸·꼴만 남기고
+    by(두뇌)가 없으면 버린다 — 몸에는 걸리지 않는다(fields 는 needs·taste 만 읽는다). 칸이 없거나 남는 것이 없으면 그 칸을 만들지 않는다.
+    ids·vocab(욕구 id 묶음·입맛 어휘)을 주면 정의를 읽지 않는다 — 정의를 읽는 도중의 검증기(entities 의 동료 시트)가 쓴다(다시 읽기 재귀를 막는다)."""
     out = {}
     nd = s.get('needs')
-    ids = {d['id'] for d in all_defs()}
     if isinstance(nd, dict):
+        ids = {d['id'] for d in all_defs()} if ids is None else ids
         keep = {}
         for nid, e in sorted(nd.items()):
             if nid not in ids or not isinstance(e, dict) or e.get('level') not in ENT.NEED_LEVELS:
@@ -140,11 +147,18 @@ def sheet_fields(s):
             out['needs'] = keep
     tt = s.get('taste')
     if isinstance(tt, dict):
-        vocab = tastes()
+        vocab = tastes() if vocab is None else vocab
         likes = [t for t in (tt.get('likes') or []) if isinstance(t, str) and t in vocab][:LIKES_MAX] if isinstance(tt.get('likes'), list) else []
         dis = [t for t in (tt.get('dislikes') or []) if isinstance(t, str) and t in vocab and t not in likes][:DISLIKES_MAX] if isinstance(tt.get('dislikes'), list) else []
         if likes or dis:
             out['taste'] = {'likes': likes, 'dislikes': dis}
+    mt = s.get('needs_meta')
+    if isinstance(mt, dict):
+        keep = {k: mt[k] for k, rx in _META_RE.items() if isinstance(mt.get(k), str) and rx.match(mt[k])}
+        if type(mt.get('ok')) is bool:
+            keep['ok'] = mt['ok']
+        if keep.get('by'):
+            out['needs_meta'] = keep
     return out
 
 

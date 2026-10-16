@@ -37,7 +37,8 @@ _WORD_KEYS = {"role", "persona", "trait", "history", "brief", "deep", "text", "t
               "desc", "lore",                       # p0.5.6 아이템 — item.desc(물건 설명) · item.lore(속 — 자리만)
               "about",                              # p0.5.16 욕구 — need.about(한 줄 뜻). 단계 몸 문장·결과 꼬리는 끝 키가 line 이라 이미 말 칸이다
               "why"}                                # p0.5.18 욕구 — 단계·기분 조각의 기분 이유 낱말(need.stages.<단계>.why · need.mood.<갈래>.why)
-_NOT_WORDS = ("space.",)                            # 이 접두의 경로는 말이 아니다(구역 종류 id)
+_NOT_WORDS = ("space.",                             # 이 접두의 경로는 말이 아니다(구역 종류 id)
+              "sheet.needs.")                       # p0.5.20 동료 시트의 욕구 무게 — why 는 생성 호출이 단 근거(론처에만 보이는 데이터 · tools/need_gen.py 가 적는다)
 
 # 사람용 설명 — (경로 끝 맞춤, 설명). 앞의 것이 이긴다. life.* 는 describe 가 꼬리를 붙인다. 말 파일 제목 줄의 줄표 뒤에 찍힌다.
 DESC = [

@@ -410,6 +410,7 @@ def _problems(pairs, root):
     boards, kinds_by_id = [], {}                     # D61 2차 검사 재료
     quest_mons = []                                  # D69 2차 검사 재료(처치형 의뢰의 몬스터 id)
     companion_names = []                             # D81 2차 검사 재료(동료 이름 — 파티 안에서 이름이 곧 열쇠라 서로 달라야 한다)
+    companion_needs = []                             # p0.5.20 2차 검사 재료(동료 시트의 욕구 칸 — 욕구 정의를 다 읽은 뒤 대조)
     gift_weapons, weapon_names = [], set()           # p0.5.6 G6 2차 검사 재료(마을 인물이 건네는 무기 이름 · 무기 정의 이름)
     shops, npc_shops = [], []                        # p0.5.13 2차 검사 재료(가게의 상품 · NPC 가 맡은 가게)
     foods = []                                       # p0.5.16 2차 검사 재료(먹을 것의 satisfies·taste)
@@ -527,10 +528,14 @@ def _problems(pairs, root):
             out.append('%s: npc.line 필요' % rel)
         if kind == 'companion':                              # D81 동료 프리셋 — 시트 칸은 시트 조립기가 그대로 검증한다(직업·키워드·상한·외형)
             import sheetkit                                  # 지연 import — 엔진 import 경로에 시트 도구를 끌어들이지 않는다(표준 라이브러리만 쓰는 모듈)
-            try:
-                sheetkit.build_companion_sheet(d)
+            sh = comps.get('sheet') if isinstance(comps.get('sheet'), dict) else None
+            need_sub = {k: sh[k] for k in sheetkit.NEED_FIELDS if k in sh} if sh else {}
+            try:                                             # p0.5.20 욕구 칸은 떼고 조립한다 — 조립기의 욕구 검증은 정의를 읽는데, 지금이 그 읽는 도중이다(재귀)
+                sheetkit.build_companion_sheet({**d, 'comps': {**comps, 'sheet': {k: v for k, v in sh.items() if k not in need_sub}}} if need_sub else d)
             except (ValueError, OSError) as e:
                 out.append('%s: sheet — %s' % (rel, e))
+            if need_sub:
+                companion_needs.append((rel, need_sub))     # 2차: 지금 읽는 욕구 정의·입맛 어휘로 대조(아래)
             if comps.get('npc') is not None and not (comps.get('npc') or {}).get('line'):
                 out.append('%s: npc 부품이 있으면 npc.line 필요' % rel)
             companion_names.append((rel, d.get('name')))
@@ -625,6 +630,13 @@ def _problems(pairs, root):
         for t in (comps.get('taste') if isinstance(comps.get('taste'), list) else ()):
             if t not in tastes_:
                 out.append('%s: taste 의 %r 는 취향 어휘(욕구 정의의 tastes)에 없다' % (rel, t))
+    if companion_needs:                              # 2차(p0.5.20): 동료 시트의 욕구 무게·입맛·생성 기록 — 시트 검증기(needs.sheet_fields)를 지나도 그대로여야 한다(데이터는 깐깐하게)
+        import needs as NE                           # 지연 import(needs 가 이 모듈을 import 한다) — 욕구 목록·어휘는 지금 읽는 정의에서 준다(정의를 다시 읽지 않는다)
+        for rel, sub in companion_needs:
+            got = NE.sheet_fields(sub, ids=set(needs_), vocab=tastes_)
+            bad = [k for k in sub if got.get(k) != sub[k]]
+            if bad:
+                out.append('%s: sheet — %s 칸이 검증기를 지나며 달라진다(모르는 욕구·등급·꼬리표·꼴)' % (rel, ', '.join(bad)))
     return out
 
 

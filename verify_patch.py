@@ -165,13 +165,13 @@ store = PresetStore(PR, data)
 lst = store.list()
 store.save(dict(slot, name="두란", job="전사"), "두란")
 doc = jload(PR)
-check("④ presets: 옛 파일(판 번호 없음)을 읽고 · 저장하면 _schema_version 1 · .v0.bak = 원본 · v0.5.0 의 읽기 조건(version 1·presets 목록) 그대로",
-      [e["id"] for e in lst] == ["pid1"] and doc.get(K) == 1 and raw(PR + ".v0.bak") == pr0
+check("④ presets: 옛 파일(판 번호 없음)을 읽고 · 저장하면 지금 판(_schema_version 2 — p0.5.20 슬롯의 욕구 칸) · .v0.bak = 원본 · v0.5.0 의 읽기 조건(version 1·presets 목록) 그대로",
+      [e["id"] for e in lst] == ["pid1"] and doc.get(K) == savedata.CURRENT["presets"] == 2 and raw(PR + ".v0.bak") == pr0
       and doc.get("version") == 1 and isinstance(doc.get("presets"), list) and len(doc["presets"]) == 2, doc.get(K))
 jdump(PR, {K: 7, "version": 1, "presets": [{"id": "pid9", "label": "카야", "slot": slot}]})
 pr7 = raw(PR)
 check("④ presets: 더 새 판 파일도 읽히고(모르는 칸 무시) 덮기 전에 .v7.bak",
-      [e["id"] for e in store.list()] == ["pid9"] and store.save(slot, "카야2") and raw(PR + ".v7.bak") == pr7 and jload(PR).get(K) == 1)
+      [e["id"] for e in store.list()] == ["pid9"] and store.save(slot, "카야2") and raw(PR + ".v7.bak") == pr7 and jload(PR).get(K) == savedata.CURRENT["presets"])
 # party
 PP = os.path.join(TMP, "party_custom.json")
 sheets = sheetkit.build_party([slot, dict(slot, name="두란", job="전사")], data=data)

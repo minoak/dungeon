@@ -283,7 +283,8 @@ def random_look(rng, sex, data=None):
             "colors": {k: rng.choice(list(data["swatches"][k])) for k in LOOK_KEYS}}
 
 
-def build_sheet(job, traits, name, sex, background=None, data=None, persona_text=None, look=None):
+def build_sheet(job, traits, name, sex, background=None, data=None, persona_text=None, look=None,
+                needs=None, taste=None, needs_meta=None):
     """커스터마이징 입력 → party 시트 dict(load_party 계약 형태).
     job: traits.json jobs 키 / traits: 키워드 0~max_traits / name: 자유 입력(한 줄) /
     sex: '남'|'여' / background: 자유 입력(정제·상한) 또는 None /
@@ -291,7 +292,9 @@ def build_sheet(job, traits, name, sex, background=None, data=None, persona_text
     키워드와 자유 서술 중 하나는 있어야 한다. 합계가 PERSONA_TOTAL_MAX 를 넘으면 거부(조용한 절단 금지).
     persona = 키워드 그대로(2026-09-12 개정, 파트너 메모 §3-3): "신중한, 겁 많은" · 자유 서술이 있으면
     "신중한, 겁 많은. <서술>" — 문장 템플릿 없음. speech 는 만들지 않는다(손 시트의 speech 만 산다).
-    반환 시트에는 원본 키워드도 `traits` 로 남긴다 — run_meta 기록(부검)·론처 복원에 쓴다."""
+    반환 시트에는 원본 키워드도 `traits` 로 남긴다 — run_meta 기록(부검)·론처 복원에 쓴다.
+    p0.5.20 needs·taste·needs_meta(욕구 무게·입맛·생성 호출 기록 — need_gen.py): 러너와 같은 검증기(needs.sheet_fields)로 거른다 —
+    틀린 칸만 버리고 저장을 막지 않는다(옛 저장본의 욕구 id 가 나중에 없어져도 목록을 읽을 수 있게). 셋 다 없으면 시트에 칸이 안 생긴다(옛 슬롯 꼴 그대로)."""
     data = data or load_traits()
     jobs, keywords = data["jobs"], data["traits"]
     if job not in jobs:
@@ -334,18 +337,24 @@ def build_sheet(job, traits, name, sex, background=None, data=None, persona_text
     lk = sanitize_look(look)                     # D37 외형 — 없으면 필드 없음(러너가 랜덤)
     if lk:
         sheet["look"] = lk
+    if needs is not None or taste is not None or needs_meta is not None:
+        import needs as NE                       # 지연 import — 욕구 칸이 있을 때만 정의(entities)를 읽는다
+        sheet.update(NE.sheet_fields({"needs": needs, "taste": taste, "needs_meta": needs_meta}))
     return sheet
 
 
 COMPANION_TEXT_MAX = 300   # 동료 프리셋의 말투·목표 상한 — 러너 load_party 의 FREETEXT_MAX 와 같은 값
-COMPANION_SHEET_KEYS = ("job", "sex", "traits", "persona", "speech", "goal", "background", "look")
+COMPANION_SHEET_KEYS = ("job", "sex", "traits", "persona", "speech", "goal", "background", "look",
+                        "needs", "taste", "needs_meta")   # p0.5.20 욕구 무게·입맛·생성 기록 — tools/need_gen.py 가 적는다(민옥 확인 뒤 커밋)
+NEED_FIELDS = ("needs", "taste", "needs_meta")
 
 
 def build_companion_sheet(defn, data=None):
     """동료 프리셋 정의(entities/companion/<id>.json, D81) → party 시트.
     정의의 comps.sheet 는 '파티 시트 칸'만 든다(job·sex·traits·persona·speech·goal·background·look) — 능력치는 적지 않고
     직업에서 온다(build_sheet 그대로). 말투·목표는 손 시트(party.json)처럼 그대로 싣는다(같은 정제·상한).
-    이름은 정의의 name — 정제 뒤에 달라지는 이름은 거부한다(화면에 보인 이름 = 판에 선 이름)."""
+    이름은 정의의 name — 정제 뒤에 달라지는 이름은 거부한다(화면에 보인 이름 = 판에 선 이름).
+    p0.5.20 needs·taste·needs_meta 는 데이터라 깐깐하게 — 검증기를 지나며 달라지는 칸은 거부한다(엔티티 게이트가 잡는다)."""
     if not isinstance(defn, dict) or not isinstance((defn.get("comps") or {}).get("sheet"), dict):
         raise ValueError("동료 프리셋에 sheet 부품이 없다")
     comp = defn["comps"]["sheet"]
@@ -353,9 +362,13 @@ def build_companion_sheet(defn, data=None):
     if extra:
         raise ValueError("sheet 부품이 모르는 칸: %s" % ", ".join(extra))
     sheet = build_sheet(comp.get("job"), comp.get("traits") or [], defn.get("name", ""), comp.get("sex"),
-                        comp.get("background"), data=data, persona_text=comp.get("persona"), look=comp.get("look"))
+                        comp.get("background"), data=data, persona_text=comp.get("persona"), look=comp.get("look"),
+                        **{k: comp.get(k) for k in NEED_FIELDS})
     if sheet["name"] != defn.get("name"):
         raise ValueError("이름이 정제 뒤 달라진다: %r → %r" % (defn.get("name"), sheet["name"]))
+    bad = [k for k in NEED_FIELDS if comp.get(k) is not None and sheet.get(k) != comp[k]]
+    if bad:
+        raise ValueError("%s 칸이 검증기를 지나며 달라진다(모르는 욕구·등급·꼬리표·꼴)" % ", ".join(bad))
     for k in ("speech", "goal"):
         v = comp.get(k)
         if v is None:
@@ -392,7 +405,8 @@ def build_party(slots, data=None, companions=None):
             continue
         sheet = build_sheet(s.get("job"), s.get("traits") or [], s.get("name", ""),
                             s.get("sex"), s.get("background"), data=data,
-                            persona_text=s.get("persona"), look=s.get("look"))
+                            persona_text=s.get("persona"), look=s.get("look"),
+                            **{k: s.get(k) for k in NEED_FIELDS})   # p0.5.20 화면 칸의 욕구 무게·입맛·생성 기록(있을 때만)
         if sheet["name"] in names:
             raise ValueError("이름 중복: %s" % sheet["name"])
         names.add(sheet["name"])

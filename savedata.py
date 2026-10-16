@@ -19,7 +19,7 @@
   · 더 새 판(되돌린 코드가 새 패치의 파일을 읽음)은 내용을 손대지 않고 돌려준다 — 모르는 칸은 저장소가 버릴 수 있으므로 덮어쓰기 전 백업이 지킨다.
 대상과 빠진 것(p0.5.1 목록 — 새 저장 파일이 생기면 여기에 종류를 더한다):
   party     party_custom.json(론처가 쓰는 내 파티) · party*.json(저장소 기본 파티, 읽기만)   — sheetkit.write_party / show_runner.load_party
-  presets   character_presets.json(저장 캐릭터)                                              — character_presets.PresetStore
+  presets   character_presets.json(저장 캐릭터 · p0.5.20 판 2 — 슬롯의 욕구 칸)                — character_presets.PresetStore
   campaign  campaign.json(저장 캐릭터별 원정 기록, 판 기록의 투영)                             — campaign.Book
   bestiary  bestiary.json(도감 원장 — 죽어도 남는 지식)                                        — bestiary.Issuer
   account   accounts/<id>/account.json(공개 서버 계정 — 열쇠 지문·별명)                       — accounts.Accounts
@@ -37,7 +37,7 @@ import time
 
 KEY = "_schema_version"
 
-CURRENT = {"party": 1, "presets": 1, "campaign": 1, "bestiary": 1, "account": 1}
+CURRENT = {"party": 1, "presets": 2, "campaign": 1, "bestiary": 1, "account": 1}
 
 
 def _stamp_only(doc):
@@ -45,7 +45,15 @@ def _stamp_only(doc):
     return doc
 
 
+def _p1_needs(doc):
+    """presets 1→2(p0.5.20 욕구 생성 호출): 슬롯에 needs·taste·needs_meta 칸이 생겼다(있을 때만). 옛 슬롯은 칸이 없다 = 아직 정하지 않았다 —
+    채워 넣을 것이 없어 내용은 그대로다(저장·출발 때 생성 호출이 채운다). 판을 올리는 까닭은 되돌린 코드(v0.5.19)가 이 파일을 덮기 전에
+    .v2.bak 을 남기게 하려는 것이다(옛 normalize_slot 은 모르는 칸을 버린다 — 정한 욕구·사람이 고친 칸을 잃지 않게)."""
+    return doc
+
+
 MIGRATIONS = {kind: {0: _stamp_only} for kind in CURRENT}
+MIGRATIONS["presets"][1] = _p1_needs
 
 
 def version_of(doc):

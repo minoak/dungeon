@@ -169,14 +169,21 @@
   .preview { font-size: 12.5px; color: var(--wl-dim); }
   .preview b { color: var(--wl-fg); }
   .muted { color: var(--wl-dim); font-size: 12px; }
-  .presetBox { padding-top: 4px; }
-  .presetBox .row { gap: 6px; margin-top: 6px; }
+  .presetBox, .needBox { padding-top: 4px; }
+  .presetBox .row, .needBox .row { gap: 6px; margin-top: 6px; }
   .presetFold { margin-top: 16px; border-top: 3px solid var(--wl-lo); padding-top: 10px; }
   .partyHead { margin-bottom: 18px; }
   .partyHead h2 { font-size: 33px; margin: 8px 0 14px; text-shadow: 0 3px 0 var(--wl-gold-lo), 0 6px 0 var(--wl-ink); }
   .partyHead .muted { max-width: 720px; line-height: 1.7; font-size: 13px; }
   .presetMessage { min-height: 18px; margin-top: 5px; font-size: 12px; color: #9fd98a; overflow-wrap: anywhere; }
   .presetMessage.error { color: var(--wl-red); }
+  /* p0.5.20 욕구와 입맛 — 욕구마다 한 줄(이름 · 고르기 · 근거), 입맛 꼬리표 두 줄, 맨 아래 정한 모델과 [다시 정하기] */
+  .needRow { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .needName { width: 96px; flex: none; font: 400 11px/1.4 var(--wl-px); }
+  .needRow select { width: auto; flex: none; }
+  .needWhy { flex: 1; min-width: 120px; overflow-wrap: anywhere; }
+  .needStale { color: var(--wl-gold); font-size: 12px; margin-top: 8px; }
+  .needStale[hidden] { display: none; }
   /* D81 내 캐릭터 + 동료 칸 — 왼쪽은 편집 카드 하나, 오른쪽은 고르기만 하는 동료 둘. 좁은 화면은 한 줄로 */
   .partyGrid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 22px; align-items: start; }
   .partyGrid[hidden] { display: none; }
@@ -973,9 +980,13 @@ function renderCards() {
       <div class="hint" data-persona>${esc(personaOf(s))}</div>
       <label class="f">배경 (이 캐릭터의 과거) <span class="cnt" data-cnt="bg">${s.background.length}/${textLimits.background}</span></label>
       <textarea maxlength="${textLimits.background}" data-k="background" placeholder="자란 곳, 중요한 사람, 잊지 못할 사건, 모험을 시작한 이유.">${esc(s.background)}</textarea>
+      <details class="presetFold" data-needs-fold ${presets.needs_ui ? '' : 'hidden'}>
+        <summary>욕구와 입맛</summary>
+        <div class="needBox" data-needs-box></div>
+      </details>
       <details class="presetFold">
         <summary>이 캐릭터 저장하기, 저장해 둔 캐릭터 불러오기</summary>
-        <div class="presetBox">
+        <div class="presetBox" data-preset-box>
           <label class="f" for="preset-${i}">저장해 둔 캐릭터</label>
           <select id="preset-${i}" data-preset-select><option value="">고르기</option></select>
           <div class="row"><button class="small" data-preset-load disabled>불러오기</button><button class="small danger" data-preset-delete disabled>삭제</button></div>
@@ -1014,9 +1025,12 @@ function defaultMates() {                        // 첫 화면의 기본 동료 
 }
 function mateInfo(m) {
   const row = (k, t) => t ? `<div><span class="muted">${k}</span> ${esc(t)}</div>` : '';
+  const src = m.kind === 'p' ? m.slot : m;                             // p0.5.20 욕구와 입맛 — 동료 칸은 한 줄 요약만(고르기만 하는 칸)
+  const nd = needsSummary(src.needs, src.taste, src.needs_meta);
   return `<div class="look"><canvas class="lookPrev" width="16" height="16"></canvas><div class="lookBody">
       <div><b>${esc(m.name)}</b> · ${esc(m.job)}(${esc(m.sex)})${m.kind === 'p' ? ' · 내가 저장한 캐릭터' + esc(campaignLine(m.preset)) : ''}</div>
       ${m.kind === 'c' && m.about ? `<div class="hint">${esc(m.about)}</div>` : ''}
+      ${nd ? `<div class="hint" data-mate-needs>${esc(nd)}</div>` : ''}
     </div></div>` + row('성격', m.persona) + row('말투', m.speech) + row('목표', m.goal);
 }
 function renderMates() {
@@ -1084,6 +1098,98 @@ function paintHistory() {
   };
 }
 
+/* ═══ 욕구와 입맛(p0.5.20) — 생성 호출(서버 need_gen.py)이 시트 글을 읽고 정한다. 사람이 고치면 그 칸은 '직접 고침'. 게임 프롬프트엔 안 나간다 ═══ */
+const NEED_FIELDS = ['needs', 'taste', 'needs_meta'];
+const needsUi = () => presets && presets.needs_ui;
+const needsSet = s => !!(s && s.needs && Object.keys(s.needs).length && !(s.needs_meta && s.needs_meta.by === 'dummy'));   // need_gen.has 와 같은 규칙
+function brainChoice() {                         // 생성 호출도 판과 같은 두뇌·모델·키로(설계 §10-24) — 고급 설정의 칸 그대로
+  const b = { brain: $('brain').value, provider: $('brain').value, model: chosenModel('brainModel') };
+  if ($('brain').value in modelDefaults) b.key = $('apiKey').value.trim();
+  return b;
+}
+function needsSummary(nd, tt, meta) {            // 동료 칸의 한 줄 요약(읽기만) — 보통이 아닌 욕구와 입맛
+  const ui = needsUi();
+  if (!ui) return '';
+  if (!needsSet({ needs: nd, needs_meta: meta })) return '욕구: 아직 정하지 않음';
+  const odd = ui.needs.filter(n => nd[n.id] && nd[n.id].level !== ui.default).map(n => `${n.name} ${nd[n.id].level}`);
+  const t = [...((tt && tt.likes) || []), ...((tt && tt.dislikes) || []).map(x => x + ' 싫음')];
+  return '욕구: ' + (odd.length ? odd.join(' · ') : '모두 보통') + (t.length ? ` · 입맛: ${t.join(', ')}` : '');
+}
+function needsMessage(i, text, error=false) {
+  const el = $('cards').querySelector(`[data-i="${i}"] [data-needs-msg]`);
+  if (el) { el.textContent = text; el.classList.toggle('error', error); }
+}
+function paintNeeds(i) {
+  const card = $('cards').querySelector(`[data-i="${i}"]`), ui = needsUi();
+  const box = card && card.querySelector('[data-needs-box]');
+  if (!box || !ui) return;
+  const s = slots[i], m = s.needs_meta || {};
+  let html;
+  if (!needsSet(s)) {
+    html = `<div class="hint">${m.by === 'dummy' ? '규칙 두뇌로는 정하지 않는다. 지금은 모두 보통이다.' : '아직 정하지 않았다. 저장하거나 출발할 때 고른 두뇌가 정한다.'}</div>
+      <div class="row"><button class="small" data-needs-gen>지금 정하기</button></div>`;
+  } else {
+    const rows = ui.needs.map(n => {
+      const e = s.needs[n.id] || { level: ui.default, src: 'fallback' };
+      return `<div class="needRow"><span class="needName">${esc(n.name)}${n.ready ? '' : ' <span class="muted">(준비 중)</span>'}</span>
+        <select data-need="${esc(n.id)}" aria-label="${esc(n.name)}" title="${esc(n.about)}">${ui.levels.map(l => `<option${l === e.level ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>
+        <span class="needWhy muted">${e.src === 'user' ? '직접 고침' : esc(e.why || '')}</span></div>`;
+    }).join('');
+    const tt = s.taste || { likes: [], dislikes: [] };
+    const chips = (kind, max) => `<div class="traits" data-taste="${kind}">${ui.tastes.map(t =>
+      `<label class="${(tt[kind] || []).includes(t) ? 'on' : ((tt[kind] || []).length >= max ? 'off' : '')}"><input type="checkbox" value="${esc(t)}">${esc(t)}</label>`).join('')}</div>`;
+    html = rows
+      + `<label class="f">좋아하는 맛 <span class="cnt">${(tt.likes || []).length}/${ui.likes_max}</span></label>${chips('likes', ui.likes_max)}`
+      + `<label class="f">싫어하는 맛 <span class="cnt">${(tt.dislikes || []).length}/${ui.dislikes_max}</span></label>${chips('dislikes', ui.dislikes_max)}`
+      + `<div class="needStale" data-needs-stale hidden></div>`
+      + `<div class="hint">정한 모델: ${esc(m.model || m.by || '?')}${m.at ? ' · ' + esc(String(m.at).slice(5, 10)) : ''}${m.ok === false ? ' · 답을 읽지 못해 모두 보통' : ''}</div>`
+      + `<div class="row"><button class="small" data-needs-gen>다시 정하기</button></div>`;
+  }
+  box.innerHTML = html + '<div class="presetMessage" data-needs-msg role="status"></div>';
+  bindNeeds(box, i);
+  if (needsSet(s)) checkNeeds(i);
+}
+function bindNeeds(box, i) {
+  const s = slots[i], ui = needsUi();
+  const gen = box.querySelector('[data-needs-gen]');
+  if (gen) gen.onclick = async () => {                               // 사람이 고친 칸도 덮는다(누른 사람의 뜻) — 저장은 저장 버튼이 한다
+    gen.disabled = true; needsMessage(i, '정하는 중…');
+    try {
+      const r = await api('/api/needs/gen', { slot: slots[i], ...brainChoice() });
+      for (const k of NEED_FIELDS) slots[i][k] = r[k];
+      paintNeeds(i); renderMates();
+      needsMessage(i, r.needs_meta && r.needs_meta.ok === false ? '모델의 답을 읽지 못해 모두 보통으로 두었다.' : '정했다. 저장하면 이 캐릭터에 남는다.');
+    } catch (e) { needsMessage(i, e.message, true); gen.disabled = false; }
+  };
+  for (const sel of box.querySelectorAll('[data-need]')) sel.onchange = () => {
+    s.needs[sel.dataset.need] = { level: sel.value, src: 'user' };
+    sel.parentElement.querySelector('.needWhy').textContent = '직접 고침';
+  };
+  for (const row of box.querySelectorAll('[data-taste]')) {
+    const kind = row.dataset.taste, other = kind === 'likes' ? 'dislikes' : 'likes', max = kind === 'likes' ? ui.likes_max : ui.dislikes_max;
+    for (const lab of row.querySelectorAll('label')) lab.onclick = e => {
+      e.preventDefault();                                              // 칩 = 이중 발화 차단(성격 키워드와 같은 관례)
+      const v = lab.querySelector('input').value;
+      s.taste = { likes: [...((s.taste && s.taste.likes) || [])], dislikes: [...((s.taste && s.taste.dislikes) || [])] };
+      if (s.taste[kind].includes(v)) s.taste[kind] = s.taste[kind].filter(x => x !== v);
+      else if (s.taste[kind].length < max) { s.taste[kind].push(v); s.taste[other] = s.taste[other].filter(x => x !== v); }
+      paintNeeds(i);
+    };
+  }
+}
+let needsTimer = null;
+async function checkNeeds(i) {                   // 낡음 — 정할 때의 글·프롬프트 해시를 서버가 지금과 맞댄다(0콜). 표시만 한다(설계 §10-25)
+  const card = $('cards').querySelector(`[data-i="${i}"]`);
+  const el = card && card.querySelector('[data-needs-stale]');
+  if (!el || !needsSet(slots[i])) return;
+  try {
+    const r = await api('/api/needs/check', { slot: slots[i] });
+    el.hidden = r.state !== 'stale';
+    el.textContent = (r.why || []).includes('sheet') ? '성격 글이 바뀌었다 — 다시 정할 수 있다.' : '욕구 뜻이 바뀌었다 — 다시 정할 수 있다.';
+  } catch (e) { el.hidden = true; }
+}
+function scheduleNeedsCheck(i) { clearTimeout(needsTimer); needsTimer = setTimeout(() => checkNeeds(i), 600); }
+
 async function refreshCharacters() {
   try {
     const result = await api('/api/characters');
@@ -1141,7 +1247,7 @@ function bindPresetControls(card, i) {
       const chosen = characterPresets.find(p => p.id === selectedPresets[i]);
       if (action !== 'save' && !chosen) return;
       if (action === 'delete' && !confirm(`“${chosen.label}” 프리셋을 삭제할까요?`)) return;
-      const box = card.querySelector('.presetBox');
+      const box = card.querySelector('[data-preset-box]');            // p0.5.20 저장 상자를 이름으로(욕구와 입맛 상자가 앞에 있다)
       box.querySelectorAll('button, input, select').forEach(el => { el.disabled = true; });
       try {
         if (action === 'delete') {
@@ -1150,12 +1256,15 @@ function bindPresetControls(card, i) {
           card.querySelector('[data-preset-label]').value = '';
           presetMessage(i, '프리셋 삭제됨');
         } else {
-          const body = {label: presetLabels[i], slot: slots[i]};
+          const body = {label: presetLabels[i], slot: slots[i], ...brainChoice()};   // p0.5.20 두뇌를 실어 보낸다 — 정한 욕구가 없거나 낡았으면 서버가 정한다
           if (action === 'update') body.id = chosen.id;
           const result = await api('/api/characters', body);
           selectedPresets[i] = result.preset.id; presetLabels[i] = result.preset.label; slotFrom[i] = result.preset.id;
           card.querySelector('[data-preset-label]').value = result.preset.label;
-          presetMessage(i, action === 'update' ? '프리셋 수정 저장됨' : '새 프리셋 저장됨');
+          for (const k of NEED_FIELDS) { if (result.preset.slot[k]) slots[i][k] = result.preset.slot[k]; else delete slots[i][k]; }
+          paintNeeds(i);
+          const ng = result.needs_gen;
+          presetMessage(i, (action === 'update' ? '프리셋 수정 저장됨' : '새 프리셋 저장됨') + (ng && !ng.ok ? ' · ' + ng.error + ' 출발할 때 다시 정한다.' : ''), !!(ng && !ng.ok));
         }
         await refreshCharacters();
       } catch (e) { presetMessage(i, e.message, true); }
@@ -1230,6 +1339,11 @@ function bindCard(card, i) {
     lookEl.querySelector('[data-lk-rand]').onclick = () => { s.look = randomLook(s.sex); paintLook(); };
     paintLook();
   }
+  const needsFold = card.querySelector('[data-needs-fold]');           // p0.5.20 욕구와 입맛 — 글을 고치면 낡음을 다시 본다(표시만)
+  if (needsFold) needsFold.ontoggle = () => { if (needsFold.open) checkNeeds(i); };
+  card.addEventListener('input', e => { if (e.target.matches('[data-k=name], [data-k=persona], [data-k=background]')) scheduleNeedsCheck(i); });
+  card.addEventListener('click', e => { if (e.target.closest('[data-k=traits], [data-k=job], [data-k=sex]')) scheduleNeedsCheck(i); });
+  paintNeeds(i);
   const tl = card.querySelector('[data-k=traits]');
   const paint = () => {
     for (const lab of tl.querySelectorAll('label')) {
@@ -1347,6 +1461,8 @@ $('bStart').onclick = async () => {
     }
   }
   $('bStart').disabled = true;
+  $('err2').style.color = '#8a8f9c';
+  $('err2').textContent = '출발 준비 중…';                              // p0.5.20 욕구를 아직 정하지 않은 사람이 있으면 서버가 여기서 정한다(몇 초)
   try {
     if (partyMode === 'custom') await api('/api/party', partyPayload());   // D81 '다음' 없이 출발 버튼이 파티를 저장하고 연다(D78 칸의 출처 id 동봉 — 서버는 이 저장소의 id 만 받는다)
     await api('/api/start', body);

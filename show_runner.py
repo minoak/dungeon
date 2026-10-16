@@ -428,7 +428,7 @@ def load_party(path):
                     raise ValueError("봇%s relationships 는 객체여야 함" % char)
                 out["relationships"] = {str(o): str(t)[:FREETEXT_MAX] for o, t in rel.items()}
             out.update(G.NE.sheet_fields(s))     # p0.5.16 욕구 무게(needs{욕구: {level, why?, src?}})·취향(taste{likes, dislikes}) — 있을 때만, 틀린 칸만 버린다(판을 막지 않는다 —
-                                                #   그 욕구는 보통). 게임 프롬프트엔 안 나간다(엔진만 읽는다 · run_meta.party 에 기록)
+                                                #   그 욕구는 보통). 게임 프롬프트엔 안 나간다(엔진만 읽는다 · run_meta.party 에 기록) · p0.5.20 needs_meta(생성 기록 — 몸에 안 걸린다)
             lk = s.get("look")                  # D37(09-06) 외형 — 뷰어 전용(엔진·프롬프트 무접촉).
             if lk is not None:                  #   미등재 파츠·hex 아님 = ValueError = 폴백 경로 그대로
                 out["look"] = sheetkit.sanitize_look(lk)
@@ -1930,7 +1930,7 @@ def main():
                         **{k: b[k] for k in ("speech", "goal", "background")   # D31(09-05) additive —
                            if b.get(k)},                                       #   커스텀 시트 원문(있을 때만)
                         **({"traits": list(b["traits"])} if b.get("traits") else {}),   # 키워드 원본
-                        **{k: sheets[b["char"]][k] for k in ("needs", "taste") if (sheets.get(b["char"]) or {}).get(k)},   # p0.5.16(additive) 시트의 욕구 무게(level·why·src)·취향 — 있을 때만(0.5.16 은 생성 호출이 없어 비어 있다 = 모두 보통)
+                        **{k: sheets[b["char"]][k] for k in ("needs", "taste", "needs_meta") if (sheets.get(b["char"]) or {}).get(k)},   # p0.5.16(additive) 시트의 욕구 무게(level·why·src)·취향 — 있을 때만 · p0.5.20 needs_meta(누가·언제 정했나·해시 — 론처 생성 호출)
                         **({"look": b["look"]} if b.get("look") else {}),   # D37(09-06) 외형 — 뷰어 전용
                         **({"looks": lk_} if (STRANGERS_ON and (lk_ := sheetkit.looks_line({"look": b.get("look")}))) else {})}   # p0.5.12(additive, 켠 판에만) 겉모습 한 줄의 그림 부분 — 무기·갑옷은 틱의 bots 에서 잇는다(looks_line 과 같은 ' · ')
                        for b in bots])
