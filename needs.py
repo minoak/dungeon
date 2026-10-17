@@ -539,6 +539,8 @@ def prose(last):
     shop, obj = last.get('shop'), what + josa(what, '을')
     if r == 'need_fill':
         bits = [b for b in (_fill_tail(last),) if b]
+        if last.get('via') == 'buy' and last.get('free_line'):   # p0.5.25 무료 끼니 — 가게 정의의 무료 결과 문장(말 파일 · 남은 횟수가 든다) 뒤에 결과 꼬리
+            return last['free_line'] + ((' — ' + ' · '.join(bits)) if bits else '')
         if last.get('via') == 'buy':
             bits.append('%d골드를 냈다(남은 골드 %d)' % (last.get('price', 0), last.get('gold', 0)))
             return '%s에서 %s 사 먹었다 — %s' % (shop or '가게', obj, ' · '.join(bits))
@@ -557,6 +559,8 @@ def event_tags(rec):
     r, what = rec.get('result'), rec.get('what') or '?'
     ft = _fill_tail(rec) if r == 'need_fill' else None
     if r == 'need_fill':
+        if rec.get('via') == 'buy' and rec.get('free_line'):   # p0.5.25 무료 끼니 — 궤적 판(러너 기본)에선 이 꼬리표가 곧 에이전트가 보는 결과 문장이다:
+            return [('use', '받아 먹음', rec['free_line'] + ((' · ' + ft) if ft else ''))]   #   가게 정의의 무료 결과 문장(남은 횟수가 든다) 그대로 + 결과 꼬리
         if rec.get('via') == 'buy':
             return [('use', '사 먹음', '%s ← %s %d골드 (남은 %d)%s' % (what, rec.get('shop') or '가게', rec.get('price', 0), rec.get('gold', 0),
                                                                      (' · ' + ft) if ft else ''))]

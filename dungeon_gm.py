@@ -6605,6 +6605,7 @@ def spawn(dungeon, char, bots, min_exit_dist=8, cluster=4, sheet=None, apart=Fal
                                             # 러너 재스폰이 담당(bag 이월 선례)
             'boons': 0,                     # 축복의 물약(D74, 09-15) — 신전 기도의 답. 마시면 공격 능력치 +1. 층 이월=러너 재스폰(str/dex 도 함께)
             'rations': 0,                   # p0.5.16 휴대식(소지 칸 i9) — 사기·뒤지기·받기. 층 이월=러너 _carry(물약 선례)
+            'free': IA.free_start(),        # p0.5.25 무료 끼니 {물건 정의 id: 남은 횟수} — 판 시작 때 가게 정의의 free. 층 이월·부활=러너 _carry(판 시작에만 받는다)
             **NE.fields(sheet),             # p0.5.16 욕구 — needs{욕구: 충족도}·moods[기분 조각](+시트의 무게 need_w·취향 taste 가 있을 때만). 층 이월=러너 _carry, 부활=시작값
             'status': {},                   # 상태 태그(D34, 09-06): 태그→{n, by, since}. 몹·함정의 특수가
                                             # 붙이고 휴식(D35)만 지운다. 층 이월=러너 재스폰(물약 선례)

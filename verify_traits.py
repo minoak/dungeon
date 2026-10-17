@@ -468,7 +468,7 @@ up11, _m = snapshot.load(os.path.join(SD, snapshot.PKL))
 U = {b_["char"]: b_ for b_ in snapshot._bodies(up11)}
 check("⑨ p0522b 스냅샷 11→12: 몸마다 무게·배율을 특성으로 다시 — 대식가·미식가 = 배율만(옛 무게 낮음 걷힘) · 특성 없음 = 칸 없음(옛 높음 걷힘) · 소박한(다른 세계) · "
       "수다스러운(부활 대기 — 준비 중이라 칸 없음) · 특성 칸 없는 몸은 그 판의 시트(대식가)로",
-      up11["state_version"] == snapshot.STATE_VERSION == 12 and snapshot.MIGRATIONS[11] is snapshot._m11_traits
+      up11["state_version"] == snapshot.STATE_VERSION >= 12 and snapshot.MIGRATIONS[11] is snapshot._m11_traits   # p0.5.25: 판이 오를 때마다 깨지지 않게(12 → 지금 판)
       and "need_w" not in U["1"] and U["1"].get("trait_fx") == {"hunger": {"fill": 70, "mood": {"dislike": 150, "like": 150}}}
       and not ({"need_w", "trait_fx"} & set(U["2"])) and U["3"].get("trait_fx") == {"hunger": {"mood": {"dislike": 50, "like": 50, "plain": 50}}}
       and not ({"need_w", "trait_fx"} & set(U["4"])) and U["5"].get("trait_fx") == {"hunger": {"fill": 70}}, {c: (b_.get("need_w"), b_.get("trait_fx")) for c, b_ in U.items()})
@@ -593,8 +593,8 @@ with open(os.path.join(SD12, snapshot.PKL), "wb") as f:
 snapshot.write_meta(SD12, {"run_id": "12@x"})
 up12, _m12 = snapshot.load(os.path.join(SD12, snapshot.PKL))
 b12 = up12["bots"][0]
-check("⑫ 이어가기: v0.5.22 판(내용 판 12)은 그대로 읽힌다(판 번호를 올리지 않았다 — 몸에 새 칸이 없다) · 이어간 몸도 기본값이 든 합(배고픔 −10 + 낙천 5 = −5)",
-      up12["state_version"] == snapshot.STATE_VERSION == 12 and b12.get("traits") == ["낙천적인"]
+check("⑫ 이어가기: v0.5.22 판(내용 판 12)이 읽힌다(p0.5.23 은 판 번호를 올리지 않았다 — 기분 기본값은 몸에 칸이 없다 · p0.5.25 무료 끼니 이관 12→13 만 지난다) · 이어간 몸도 기본값이 든 합(배고픔 −10 + 낙천 5 = −5)",
+      up12["state_version"] == snapshot.STATE_VERSION >= 13 and b12.get("traits") == ["낙천적인"]
       and (NE.mood_of(b12, 51) or {}).get("sum") == -5 and NE.mood_line(b12, 51) == "좋지 않다 (이유: 배고픔)", (up12["state_version"], NE.mood_of(b12, 51)))
 check("⑫ 배선: VERSION 0.5.23 이상 · PATCH_NOTES 0.5.23 · STREAM_FORMAT(기분 합에 특성 기본값) · CHANGELOG p0.5.23",
       tuple(int(x) for x in src("VERSION").strip().split(".")) >= (0, 5, 23) and "## 0.5.23" in src("docs", "PATCH_NOTES.md")
