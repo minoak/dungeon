@@ -195,6 +195,8 @@ def _estimate_full(obs, char, meta, party):
             ins = ins.replace('매 판단에 제시되는 COMMON에서 행동 이름을 고른다.', '매 판단에 제시되는 COMMON 또는 SKILL에서 행동 이름을 고른다.')
     else:                                              # 메뉴형 — 선택지 목록은 빠진다(추정)
         ins = br.MENU_PROMPT_SOLO if solo else br.MENU_PROMPT
+    if hasattr(br, "_town_guide"):                     # p0.5.23 마을에 있으면 지침 세계 절 끝에 마을 규칙 한 줄(claude_brain 과 같다 — --src 의 옛 코드엔 없다)
+        ins = br._town_guide(ins, obs)
     full = br._sheet(me, roster) + "\n" + ins + "\n\n" + wire + "\n\n" + TAIL
     if meta.get("prompt_context", True):
         full = br.CONTEXT_LINE + "\n\n" + full

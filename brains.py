@@ -67,13 +67,61 @@ def _load_prompt(fname, required=True):
         if required:
             raise
         return "", ""
+    raw = _TOWN_BLOCK.sub("", raw)               # p0.5.23 마을 규칙 블록은 지침 본문에서 걷는다 — 마을에 있는 판단에만 _town_guide 가 끼운다
     return _strip_comments(_variant(raw, False)), _strip_comments(_variant(raw, True))
+
+
+# p0.5.23(DECISIONS 10-17 '현재 위치 줄 정리') 마을의 규칙 — 옛 관측 마을 줄('여기는 마을이다 — 위험한 것이 없고 …')에서 지침 '네가 아는 세계'로 옮겼다.
+#   글은 조합형 지침 파일의 <!--TOWN:갈래--> 블록(zone = 구역 시야 · hear = 구역 청각 · all = 전체 가시 — 옛 줄의 세 갈래 그대로). 지침을 읽을 때 블록은
+#   걷고(마을 밖·마을 없는 판의 지침은 옛 바이트 그대로), 마을에 있는 판단에서만 그 판의 갈래 하나를 지침의 세계 절 끝에 끼운다. 관측 dict 는 그대로다.
+_TOWN_BLOCK = re.compile(r"<!--TOWN:(\w+)-->\n?(.*?)<!--/TOWN:\1-->\n?", re.S)
+TOWN_KINDS = ("zone", "hear", "all")
+# 지침의 세계 절 머리 — 조합형 · 옛 메뉴형 · 옛 자유서술(바이트 보존 백업이라 파일은 못 고친다 — 같은 자리에 끼운다). 절 끝 = 다음 '## ' 앞
+_WORLD_HEAD = re.compile(r"^## (?:네가 아는 세계|네가 아는 것과 모르는 것|세계의 물리)[^\n]*$", re.M)
+
+
+def _load_town_rules(fname):
+    """조합형 지침 파일의 마을 규칙 블록 → {갈래: 글(주석 걷음, 앞뒤 줄바꿈 없이)}. 파일이 없으면 {}(지침 로더가 이미 죽는다)."""
+    try:
+        with open(os.path.join(HERE, fname), encoding="utf-8") as f:
+            raw = f.read()
+    except OSError:
+        return {}
+    return {m.group(1): _strip_comments(m.group(2)).strip("\n") for m in _TOWN_BLOCK.finditer(raw) if m.group(1) in TOWN_KINDS}
+
+
+def _town_kind(obs):
+    """관측 → 마을 규칙 갈래(마을에 있을 때만 — 아니면 None). 갈래 고르기는 옛 관측 마을 줄과 같은 순서: 구역 시야 → 구역 청각 → 전체 가시."""
+    if not obs.get("town"):
+        return None
+    return "zone" if obs.get("town_sight") == "zone" else "hear" if obs.get("town_hear") == "zone" else "all"
+
+
+def _town_guide(text, obs):
+    """지침 text 에 마을 규칙 한 줄을 끼운다 — 마을에 있는 판단이면 그 갈래의 글을 세계 절('## 네가 아는 세계' 등) 끝에. 마을 밖이면 그대로.
+    세계 절이 없는 지침(사교 콜 — p0523b)은 조합형 지침의 세계 절 머리(WORLD_HEAD_LINE)로 절 하나를 지어 첫 '## ' 절 앞에 둔다(절이 없으면 끝에).
+    지침 문자열을 부를 때마다 읽으므로 게이트·벤치가 바꿔 끼운 지침(patch)에도 같은 자리에 붙는다."""
+    rule = TOWN_RULES.get(_town_kind(obs) or "")
+    if not rule:
+        return text
+    m = _WORLD_HEAD.search(text)
+    if not m:
+        if not WORLD_HEAD_LINE:
+            return text
+        sec = WORLD_HEAD_LINE + "\n\n" + rule
+        first = re.search(r"^## ", text, re.M)
+        return (text[:first.start()] + sec + "\n\n" + text[first.start():]) if first else (text.rstrip("\n") + "\n\n" + sec)
+    end = text.find("\n\n## ", m.end())
+    end = len(text.rstrip("\n")) if end < 0 else end
+    return text[:end] + "\n" + rule + text[end:]
 
 
 LEGACY_PROMPT_DIR = os.path.join("prompts", "legacy", "2026-09-10")   # 2026-09-13 정리: backups/prompts → prompts/legacy
 ADV_PROMPT, ADV_PROMPT_SOLO = _load_prompt(os.path.join(LEGACY_PROMPT_DIR, "adventurer_prompt.md"), required=False)
 MENU_PROMPT, MENU_PROMPT_SOLO = _load_prompt(os.path.join(LEGACY_PROMPT_DIR, "adventurer_prompt_menu.md"), required=False)
 COMPOSE_PROMPT, COMPOSE_PROMPT_SOLO = _load_prompt(os.path.join("prompts", "adventurer_prompt.md"))   # 2026-09-13 정리: prompts/
+TOWN_RULES = _load_town_rules(os.path.join("prompts", "adventurer_prompt.md"))   # p0.5.23 마을 규칙 {갈래: 글} — 세 행동 방식·사교 콜 공용(_town_guide)
+WORLD_HEAD_LINE = (lambda m_: m_.group(0) if m_ else "")(_WORLD_HEAD.search(COMPOSE_PROMPT))   # p0523b 세계 절 머리 줄(조합형 지침에서) — 세계 절이 없는 지침에 절을 지을 때
 # 사교 콜 프롬프트(채널 분리 2026-07-26) — 없으면 사교 채널이 통째로 꺼진다(안전망)
 SOCIAL_PROMPT, SOCIAL_PROMPT_SOLO = _load_prompt(os.path.join("prompts", "social_prompt.md"), required=False)
 
@@ -1463,6 +1511,21 @@ def _floor_name(depth):
     return "마을" if d == 0 else "%d층" % d
 
 
+def _place_lines(obs):
+    """p0.5.23(DECISIONS 10-17 '현재 위치 줄 정리') '네 상태' 절 맨 앞의 위치 줄 — 낱말은 prompts/world/place.md(ENT.place_words).
+    마을: '- 현재 위치: 마을 > 신전 지구' + 구역 특징이 있으면 다음 줄 '- 구역: …' · 구역 이름이 없는 옛 마을: '- 현재 위치: 마을' ·
+    던전: '- 현재 위치: 던전 > 지하 1층'(층 = 관측 depth, 칸이 없으면 옛 HP 줄과 같은 1). 마을의 규칙은 지침이 말한다(_town_guide)."""
+    w = G.ENT.place_words()
+    if obs.get("town"):
+        at = [w["town"]] + ([obs["town_zone"]] if obs.get("town_zone") else [])
+    else:
+        at = [w["dungeon"], w["floor"].replace("{n}", str(int(obs.get("depth", 1))))]
+    out = ["- %s: %s" % (w["head"], " > ".join(at))]
+    if obs.get("town") and obs.get("town_zone") and obs.get("town_zone_about"):   # 구역 특징(D75)은 구역 이름이 있을 때만 — 옛 줄과 같다
+        out.append("- %s: %s" % (w["zone"], obs["town_zone_about"]))
+    return out
+
+
 def _clean_form(raw):
     """친목의 몸짓(D47 ② 응답 `form`, 2026-09-09 파트너 "['대화' '친목' '머리를 쓰다듬기']") — 한 줄·따옴표 제거·BOND_LEN 자.
     목록이 아니라 자유 문구(파트너 결정 09-09: 기계는 횟수만, 형태는 기록으로). 비면 엔진이 '몸짓'으로 적는다."""
@@ -1675,34 +1738,25 @@ def _wire(obs, names=None, compose=False):
 
     L = ["## 네 상태"]
     M = []          # (09-08 D44) 기억 절 모음 — 관측(L)과 따로 모아 조립 때 갈래 순서를 정한다
+    L += _place_lines(obs)                       # p0.5.23 현재 위치 — 절 맨 앞(마을 > 구역 · 던전 > 지하 N층 · 구역 특징). 옛 HP 줄 끝 '— 지금 N층'과 마을 줄을 대신한다
+    if obs.get("town"):
+        L += recl("zone")                       # p0.5.11 지금 선 마을 구역에 대한 내 기록(구역 줄 아래)
     # (09-08 D44) 직업·성별·힘·민첩은 '나는 누구'라 시트만 말한다 — 여기는 지금의 몸(관측)만. 파트너 "시트는 나는 누구인가를,
     #   관측은 뭘 보고 있는지를". HP 는 x/y 그대로(비율=위급 감각의 재료 — 최대치가 시트에 있어도 읽는 값은 관측이다).
-    L.append("- HP %d/%d, %s모은 보물 %d개%s%s — 지금 %d층"
+    L.append("- HP %d/%d, %s모은 보물 %d개%s%s"
              % (obs.get("hp", 0), obs.get("maxhp", 0),
                 ("골드 %d, " % obs["gold"]) if "gold" in obs else "",   # p0.5.13 골드 — 관측에 칸이 있으면 0 도 그린다(빈 지갑도 사실). 옛 관측(칸 없음)은 옛 줄 그대로
                 obs.get("inventory", 0),
                 (", 회복 물약 %d병" % obs["potions"]) if obs.get("potions") else "",
-                (", 축복의 물약 %d병" % obs["boons"]) if obs.get("boons") else "",   # D74(09-15) 있을 때만
-                obs.get("depth", 1)))
+                (", 축복의 물약 %d병" % obs["boons"]) if obs.get("boons") else ""))   # D74(09-15) 있을 때만
     if obs.get("rations"):                       # p0.5.16 휴대식 — 있을 때만(물약 줄과 따로: 옛 첫 줄 글자를 그대로 둔다)
         L.append("- 휴대식 %d개" % obs["rations"])
     if obs.get("need_lines"):                    # p0.5.16 몸 — 보통이 아닌 단계의 몸 문장(사실만 · 숫자 없음). 보통이면 줄이 없다
         L.append("- %s: %s" % (BODY_HEAD, " ".join(obs["need_lines"])))
     if obs.get("need_mood"):                     # p0.5.18 기분 — '좋지 않다 (이유: 배고픔)'(엔진이 조각을 합산한 낱말 · 숫자 없음). 0 근처면 줄이 없다
         L.append("- %s: %s" % (MOOD_HEAD, obs["need_mood"]))
-    if obs.get("town"):
-        # 마을(D29) — 사실만: 안전·전체 가시. 여기서 뭘 할지는 캐릭터 몫(추천 안 싣는다).
-        # D70(09-14 파트너 "구역 단위로 가자"): 장소는 다 알고, 사람과 목소리는 같은 구역 안에서만 — 세계의 사실(⚠️문구 임시)
-        L.append(("- 여기는 마을이다 — 위험한 것이 없고, 어디에 어떤 건물이 있는지는 안다. 보이고 들리는 것은 지금 서 있는 구역 안뿐이다 — "
-                  "다른 구역에 누가 있고 무슨 일이 있는지는 가 봐야 안다"          # D86(09-19 파트너 "구역 내에서는 시야를 전부 주고 이동도 거기에 맞게") ⚠️문구 임시
-                  if obs.get("town_sight") == "zone" else
-                  "- 여기는 마을이다 — 위험한 것이 없고, 길과 건물이 어디 있는지는 다 안다. 사람과 목소리는 같은 구역 안에서만 보이고 들린다"
-                  if obs.get("town_hear") == "zone" else
-                  "- 여기는 마을이다 — 위험한 것이 없고, 마을 전체가 한눈에 보인다")
-                 + ((" · 지금 있는 곳: %s%s" % (obs["town_zone"], (" — %s" % obs["town_zone_about"]) if obs.get("town_zone_about") else ""))
-                    if obs.get("town_zone") else ""))   # D60(09-12) 구역 이름 · D75 구역 특징 한 줄
-        L += recl("zone")                       # p0.5.11 지금 선 마을 구역에 대한 내 기록
-    elif compose:
+    # 마을(D29·D70·D86)의 규칙(위험 없음 · 보이고 들리는 범위)은 p0.5.23 부터 지침 '네가 아는 세계'가 말한다(_town_guide) — 위치는 맨 앞 줄(_place_lines)
+    if not obs.get("town") and compose:
         # D83(09-18 파트너 "승리조건을 두지말자 … 굳이 규칙을 주지 않아도 하고싶은 것 > 하고 싶은 것의 규칙이 따라 붙을거야"):
         #   지침(세계 설명)에서 뺀 원정의 규칙은 원정 중의 관측에 붙는다 — 문장은 옛 지침의 것 그대로. 마을의 관측에는 없다.
         #   계단 모임 규칙은 이미 계단 줄에 붙어 있다(D66 _exit_gather), 보스층의 문은 워프게이트 줄이 말한다(D65).
@@ -2502,7 +2556,7 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
     # options 는 _wire 가 렌더하지 않는다: 메뉴 모드=아래 번호 목록이 그것, 자유서술=비노출(순수성).
     names = _names_for(bot, roster)          # D85: 인물 기록이 걸린 몸은 보는 사람 기준(옛 판은 실명 그대로)
     if COMPOSE:
-        instructions = COMPOSE_PROMPT_SOLO if solo else COMPOSE_PROMPT
+        instructions = _town_guide(COMPOSE_PROMPT_SOLO if solo else COMPOSE_PROMPT, obs)   # p0.5.23 마을에 있으면 마을 규칙 한 줄(세계 절 끝)
         if obs.get('skills'):
             instructions = instructions.replace('매 판단에 제시되는 COMMON에서 행동 이름을 고른다.',
                                                 '매 판단에 제시되는 COMMON 또는 SKILL에서 행동 이름을 고른다.')
@@ -2514,12 +2568,12 @@ def claude_brain(obs, char="?", bot=None, roster=None, solo=False):
     elif MENU:
         menu = "\n".join("%d. %s" % (o["n"], o["label"])
                          for o in (obs.get("options") or []))
-        prompt = (_sheet(bot, roster) + "\n" + (MENU_PROMPT_SOLO if solo else MENU_PROMPT)
+        prompt = (_sheet(bot, roster) + "\n" + _town_guide(MENU_PROMPT_SOLO if solo else MENU_PROMPT, obs)
                   + "\n\n" + _wire(obs, names)
                   + "\n\n# 선택지 — 이 중 번호 하나를 골라라\n" + menu   # (09-08 D44) 갈래 머리글
                   + "\n\n오직 JSON 한 줄로만 답하라.")
     else:
-        prompt = (_sheet(bot, roster) + "\n" + (ADV_PROMPT_SOLO if solo else ADV_PROMPT)
+        prompt = (_sheet(bot, roster) + "\n" + _town_guide(ADV_PROMPT_SOLO if solo else ADV_PROMPT, obs)
                   + "\n\n" + _wire(obs, names)
                   + "\n\n오직 JSON 한 줄로만 답하라.")
     prompt = _with_context(prompt)                    # D54 맥락 한 줄(세 조립 공통) — 재시도·대체 두뇌도 같은 요청
@@ -2759,7 +2813,7 @@ def social_all(d, bots, inbox=None):
 
     def ask(b):
         prompt = _with_context(_sheet(b, roster) + "\n"
-                               + (SOCIAL_PROMPT_SOLO if getattr(d, 'solo', False) else SOCIAL_PROMPT)
+                               + _town_guide(SOCIAL_PROMPT_SOLO if getattr(d, 'solo', False) else SOCIAL_PROMPT, obss[b['char']])   # p0523b 마을이면 마을 규칙(세계 절)
                                + "\n\n" + _wire(obss[b['char']], _names_for(b, roster, real=names))   # D85: 보는 사람 기준 호칭
                                + "\n\n오직 JSON 한 줄로만 답하라.")
         raw, why = _call_claude(prompt, "haiku")

@@ -6,7 +6,8 @@
 빈 입력도 통과시키기 때문이다. 정의가 없는 말 파일은 경고로만 찍는다(초안을 먼저 써 둘 수 있다). 실 LLM 0콜.
 p0.5.5: 행동 말 파일(prompts/actions/common_extra.md — 관측 '추가 행동' 블록)도 읽어 행동 등록부와 칸을 대조한다.
 p0.5.6: 아이템의 다루는 규칙(prompts/actions/item_rules.md)은 정의 읽기(ENT.read)가 아이템 type 과 대조한다 — 여기서는 밟은 양을 찍는다.
-p0.5.18: 기분 낱말(prompts/world/mood.md — '기분:' 줄의 좋다·좋지 않다·이유)도 정의 읽기가 칸을 대조한다 — 여기서는 밟은 양을 찍는다."""
+p0.5.18: 기분 낱말(prompts/world/mood.md — '기분:' 줄의 좋다·좋지 않다·이유)도 정의 읽기가 칸을 대조한다 — 여기서는 밟은 양을 찍는다.
+p0.5.23: 위치 낱말(prompts/world/place.md — '현재 위치:' 줄)도 같다."""
 import glob
 import os
 import sys
@@ -40,6 +41,7 @@ def main():
           % (len(items), sum(1 for d in items if d["comps"]["item"].get("desc")), ENT.ITEM_RULES,
              len(WD.action_words(ENT.ITEM_RULES)), "·".join(ENT.ITEM_TYPES)))
     print("기분 낱말 prompts/world/%s.md — 칸 %d개(%s)" % (ENT.MOOD_WORDS, len(WD.world_words(ENT.MOOD_WORDS)), "·".join(ENT.MOOD_WORD_KEYS)))   # p0.5.18 — 꼴은 ENT.read 가 이미 봤다
+    print("위치 낱말 prompts/world/%s.md — 칸 %d개(%s)" % (ENT.PLACE_WORDS, len(WD.world_words(ENT.PLACE_WORDS)), "·".join(ENT.PLACE_WORD_KEYS)))   # p0.5.23 — 꼴은 ENT.read 가 이미 봤다
     return check_actions()
 
 

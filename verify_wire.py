@@ -276,8 +276,10 @@ def layout_checks():
           w.find("# 기억") < w.find("## 파티 명단") < w.find("# 관측")
           and "카야(봇2), 도적 — 죽었다 — 이번 원정에는 돌아오지 않는다" in w)
     st = [l for l in w.split("\n") if l.startswith("- HP ")]
-    check("⑨ '네 상태'=지금의 몸만(HP·보물·층 — 직업·성별·힘·민첩 없음)",
-          len(st) == 1 and "전사" not in st[0] and "힘 +" not in st[0] and "층" in st[0])
+    sec = w.split("## 네 상태\n")[1].split("\n")
+    check("⑨ '네 상태'=지금의 몸만(HP·보물 — 직업·성별·힘·민첩 없음) · p0.5.23 층은 HP 줄이 아니라 절 맨 앞 '현재 위치: 던전 > 지하 N층'",
+          len(st) == 1 and "전사" not in st[0] and "힘 +" not in st[0] and "층" not in st[0]
+          and sec[0] == "- 현재 위치: 던전 > 지하 %d층" % o.get("depth", 1) and sec[1] == st[0])
     ig, io_ = w.find("# 기억 — 무엇을 기억하나"), w.find("# 관측 — 지금 보고 듣는 것")
     check("⑨ 갈래 순서: 기억 → 관측(선택지는 claude_brain 이 뒤에 붙인다)", 0 <= ig < io_ and "# 선택지" not in w)
     check("⑨ '동료가 한 말'은 관측 쪽(기억 뒤 — 선택지 바로 위 자리)", w.find("## 동료가 한 말") > io_)
@@ -343,8 +345,8 @@ def town_checks():
     check("⑩ 여덟 전부 _WIRE_KEYS 에 등재", want <= brains._WIRE_KEYS)
     d, bots, a = scene(True, returned=True)
     first = brains._wire(d.view(a, bots), NAMES, compose=True)
-    check("⑩ 문장은 그대로 그린다: 구역·특징 · 축복의 물약 · 맡은 의뢰 · 귀환 · 진입 한마디 · 마을 안내",
-          all(s in first for s in ("지금 있는 곳: ", "축복의 물약 1병", "- 맡은 의뢰: ", "원정에서 돌아온 참이다",
+    check("⑩ 문장은 그대로 그린다: 구역·특징(p0.5.23 '현재 위치: 마을 > …'·'구역: …') · 축복의 물약 · 맡은 의뢰 · 귀환 · 진입 한마디 · 마을 안내",
+          all(s in first for s in ("## 네 상태\n- 현재 위치: 마을 > ", "\n- 구역: ", "축복의 물약 1병", "- 맡은 의뢰: ", "원정에서 돌아온 참이다",
                                    "## 마을에 들어서며", "## 마을 안내 (처음 한 번만 들린다)")))
 
 

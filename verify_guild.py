@@ -362,8 +362,10 @@ check("⑨ 흩어진 출발 = 서로 다른 구역 · 지형은 전부 보이지
       za and zb and za != zb and len(d9.visible_cells(a9["x"], a9["y"])) > 500 and not o9a["sights"]["bots"]
       and o9a["party"][0]["visible"] is False and d9._resolve_target("b2", [a9, b9], a9) is None)
 w9 = brains._wire(o9a, {"1": "두란", "2": "카야"}, compose=True)
-check("⑨ 관측 문장: '같은 구역 안에서만 보이고 들린다' + '지금 있는 곳' · 옛 문장('한눈에') 없음",
-      "같은 구역 안에서만 보이고 들린다" in w9 and "지금 있는 곳:" in w9 and "한눈에" not in w9)
+g9 = brains._town_guide(brains.COMPOSE_PROMPT, o9a)             # p0.5.23 마을 규칙은 지침 '네가 아는 세계'(구역 청각 갈래) · 위치는 관측 맨 앞 줄
+check("⑨ 지침 문장: '같은 구역 안에서만 보이고 들린다'(p0.5.23 — 관측에서 지침으로) · 관측은 '현재 위치: 마을 > <구역>' · 옛 문장('한눈에') 없음",
+      "같은 구역 안에서만 보이고 들린다" in g9 and "한눈에" not in g9 and ("- 현재 위치: 마을 > %s\n" % za) in w9
+      and "같은 구역 안에서만" not in w9 and "한눈에" not in w9)
 a9l = {**mkbot("1", *s9["1"]), "ledger": G.new_ledger()}       # 09-19 수선: 마을은 지형 전체가 보여도 사람은 같은 구역에서만 — 장부(마지막 본 자리)도 같은 자
 d9.view(a9l, [a9l, b9])
 far9 = "b2" in a9l["ledger"]["moving"]
@@ -387,8 +389,8 @@ check("⑨ 게시판 앞에서 맡는 걸 다른 구역의 동료는 못 본다(
       not b9.get("witnessed") and d9._zone_label(a9["x"], a9["y"]) == za)
 d9.town_hear = None
 o9c = d9.view(a9, [a9, b9])
-check("⑨ 옛 규칙(town_hear None): 다른 구역도 보인다 · 옛 문장", [x["char"] for x in o9c["sights"]["bots"]] == ["2"]
-      and "한눈에" in brains._wire(o9c, {"1": "두란", "2": "카야"}, compose=True))
+check("⑨ 옛 규칙(town_hear None): 다른 구역도 보인다 · 옛 문장(지침 — 전체 가시 갈래)", [x["char"] for x in o9c["sights"]["bots"]] == ["2"]
+      and "한눈에" in brains._town_guide(brains.COMPOSE_PROMPT, o9c))
 
 print("── ⑩ NPC 가 먼저 말을 건다(D71, 09-14 파트너 'npc 가 먼저 말을 걸게 하면 어때?')")
 Q10 = G.new_quests()
@@ -642,7 +644,7 @@ fpr = next(f for f in o14["sights"]["features"] if f["id"] == "f%d" % pr14.id)
 check("⑭ 멀리서: 피처 about=trait · 프롬프트 '성직자 f<n> (역할) — … — <trait>' · 구역 특징 한 줄 · 마을 진입 한마디(헤더 '마을에 들어서며', 한 번만) · place notice 없음",
       fpr.get("about") == d14.place_story[pr14.id]["trait"] and ("성직자 f%d (" % pr14.id) in w14 and (" — " + d14.place_story[pr14.id]["trait"]) in w14
       and o14.get("town_zone_about") == d14.zone_story[o14["town_zone"]]["trait"]
-      and ("지금 있는 곳: %s — %s" % (o14["town_zone"], o14["town_zone_about"])) in w14
+      and ("- 현재 위치: 마을 > %s\n- 구역: %s\n" % (o14["town_zone"], o14["town_zone_about"])) in w14   # p0.5.23 위치 줄 + 구역 특징 줄(옛 '지금 있는 곳: 구역 — 특징')
       and o14.get("floor_notice") == d14.town_notice and "## 마을에 들어서며" in w14 and d14.town_notice in w14
       and not any(n.get("kind") == "place" for n in (o14.get("notices") or []))
       and not d14.view(a14, [a14]).get("floor_notice"))

@@ -2,7 +2,7 @@
 """p0.5.22 성격 키워드 → 캐릭터 특성(DECISIONS 10-17 '특성 격상'·'두 기능'·'대식가 = 덜 찬다' · 설계 초안 .orch/drafts/trait_design_v0.md) — 헤들리스 검증. LLM 0콜.
 게이트:
   ① 저장소 꼴: entities/trait 31장(초안 §4 전부 — 옛 키워드 12 + 새 19) · 이름 = 옛 키워드 글자 그대로 · 반대 짝 8쌍(서로 가리킨다) · 효과는 대식가(fill)·미식가·소박한(기분 조각 %)·
-     수다스러운↔과묵한·호기심 많은·충직한(준비 중 욕구 등급)뿐 · 낙천적인↔냉소적인은 글만 · traits.json 은 직업만 · 시트 조립 표(가나다순·반대 짝·최대 3) ·
+     수다스러운↔과묵한·호기심 많은·충직한(준비 중 욕구 등급) · p0.5.23 낙천적인↔냉소적인(기분 기본값 ±5)뿐 · traits.json 은 직업만 · 시트 조립 표(가나다순·반대 짝·최대 3) ·
      동료 프리셋·기본 파티의 특성은 그대로(비어 있다) · 검증기가 잘못된 특성 정의를 한 번에 거절한다
   ② 반대 짝 거절: 시트 조립(8쌍 × 양 순서)·파티 조립·저장 캐릭터 · 반대가 아닌 조합은 받는다 · 화면(반대 짝 잠금 · 이름 '특성' · '입맛' 상자)
   ③ 이름 바이트 동일: 옛 키워드 시트의 성격 줄 = 이름 그대로(', ' · '. ' 규칙) · 러너 판의 완성 프롬프트에 그 줄이 그대로 · 특성 id·배율은 어디에도 없다
@@ -15,6 +15,9 @@
      p0522b 스냅샷 11→12(시트의 needs·needs_meta 걷음 · 몸마다 무게·배율을 특성으로 다시 — 지금 세계·다른 세계·부활 대기 · 다시 올려도 같다)
   ⑪ p0522b 동료 프리셋의 입맛(p0.5.20 칸): 검증기가 받고(어휘 밖이면 거절) 시트·론처 동료 목록·파티 조립에 실린다
   ⑩ 배선: 욕구 생성 호출(need_gen)은 없다 · _run_gates.sh · VERSION · STREAM_FORMAT · PATCH_NOTES
+  ⑫ p0.5.23 낙천적인 ↔ 냉소적인(DECISIONS 10-17 '림월드식 B'): 기분 기본값만이면 '기분:' 줄 없음 · 다른 이유와 합산(문턱 그대로 — 줄이 생기고·사라지고·뒤집힌다) ·
+     이유 낱말에 안 나온다(이유는 조각에서만) · 겹침(같은 이름 한 번 · 여러 특성 더함) · 검증기(0·참거짓·상한 밖) · 관전 합(mood_now·need_mood sum)엔 들어간다 ·
+     숫자 누설 없음(관측 낱말·공개 투영) · 몸에 칸이 없다(이어간 v0.5.22 판도 이관 없이 같은 합) · 배선(VERSION·PATCH_NOTES·STREAM_FORMAT)
 """
 import contextlib
 import copy
@@ -22,6 +25,7 @@ import io
 import json
 import os
 import pickle
+import re
 import shutil
 import sys
 import tempfile
@@ -115,12 +119,14 @@ if C.failed:                                         # 저장소·조립 표가 
     print("\nFAIL — %d/%d (특성 저장소·조립 표가 틀려 뒤 검사를 건너뛴다)" % (C.failed, C.n))
     sys.exit(1)
 EFF = {n: comp(n).get("effects") for n in BY if comp(n).get("effects")}
-check("① 효과: 대식가 배고픔 fill 70 · 미식가 좋아함·싫어함 150 · 소박한 셋 다 50 · 수다스러운 사교 높음 ↔ 과묵한 낮음 · 호기심 많은 호기심 높음 · 충직한 애정 높음 — 그 밖(낙천적인↔냉소적인 포함)은 글만",
+check("① 효과: 대식가 배고픔 fill 70 · 미식가 좋아함·싫어함 150 · 소박한 셋 다 50 · 수다스러운 사교 높음 ↔ 과묵한 낮음 · 호기심 많은 호기심 높음 · 충직한 애정 높음 · "
+      "p0.5.23 낙천적인 기분 기본값 +5 ↔ 냉소적인 −5 — 그 밖은 글만",
       EFF == {"대식가": {"need": {"hunger": {"fill": 70}}},
               "미식가": {"need": {"hunger": {"mood": {"like": 150, "dislike": 150}}}},
               "소박한": {"need": {"hunger": {"mood": {"like": 50, "plain": 50, "dislike": 50}}}},
               "수다스러운": {"need": {"social": {"level": "높음"}}}, "과묵한": {"need": {"social": {"level": "낮음"}}},
-              "호기심 많은": {"need": {"curiosity": {"level": "높음"}}}, "충직한": {"need": {"affection": {"level": "높음"}}}}, EFF)
+              "호기심 많은": {"need": {"curiosity": {"level": "높음"}}}, "충직한": {"need": {"affection": {"level": "높음"}}},
+              "낙천적인": {"mood": 5}, "냉소적인": {"mood": -5}}, EFF)
 tj = json.loads(src("traits.json"))
 check("① traits.json 은 직업만(옛 traits·max_traits 칸 없음) · 시트 조립 표 = 특성 이름 가나다순 · 반대 짝 · 최대 3(sheetkit.MAX_TRAITS) · 이름→id",
       "traits" not in tj and "max_traits" not in tj and set(tj) == {"_readme", "jobs"}
@@ -142,9 +148,11 @@ BAD = {"t_key": {"trait": {"wat": 1}}, "t_lvl": {"trait": {"effects": {"need": {
        "t_eff": {"trait": {"effects": {"combat": {"atk": 1}}}}, "t_ghost": {"trait": {"opposite": "nope"}},
        "t_oneway": {"trait": {"opposite": "brave"}}, "t_self": {"trait": {"opposite": "t_self"}},
        "t_need": {"trait": {"effects": {"need": {"thirst": {"level": "높음"}}}}}, "t_ready": {"trait": {"effects": {"need": {"social": {"fill": 50}}}}},
-       "t_branch": {"trait": {"effects": {"need": {"test_thirst": {"mood": {"like": 150}}}}}}, "t_none": {"story": {"trait": "x"}}}
+       "t_branch": {"trait": {"effects": {"need": {"test_thirst": {"mood": {"like": 150}}}}}}, "t_none": {"story": {"trait": "x"}},
+       "t_m0": {"trait": {"effects": {"mood": 0}}}, "t_mbool": {"trait": {"effects": {"mood": True}}}, "t_mbig": {"trait": {"effects": {"mood": -101}}},   # p0.5.23 기분 기본값
+       "t_mstr": {"trait": {"effects": {"mood": "5"}}}, "t_empty": {"trait": {"effects": {}}}}
 NAMES_V = {"t_key": "가", "t_lvl": "나", "t_fill": "다", "t_mood": "라", "t_eff": "마", "t_ghost": "바", "t_oneway": "사", "t_self": "아",
-           "t_need": "자", "t_ready": "차", "t_branch": "카", "t_none": "타"}
+           "t_need": "자", "t_ready": "차", "t_branch": "카", "t_none": "타", "t_m0": "파", "t_mbool": "하", "t_mbig": "거", "t_mstr": "너", "t_empty": "더"}
 for tid, cps in BAD.items():
     jw(os.path.join(ROOT_V, "trait", tid + ".json"), {"id": tid, "name": NAMES_V[tid], "kind": "trait", "tags": ["trait"], "comps": cps})
 for tid, nm in (("t_comma", "용감하고, 착한"), ("t_long", "가" * 21), ("t_dup", "신중한")):
@@ -169,9 +177,11 @@ WANT = ("t_key.json: trait 가 모르는 칸 ['wat']", "t_lvl.json: trait.effect
         "t_oneway.json: trait.opposite 'brave' 는", "t_self.json: trait.opposite 't_self' 는", "t_need.json: trait.effects.need 의 'thirst' 는 욕구 정의가 아니다",
         "t_ready.json: trait.effects.need.social — 단계가 없는(준비 중) 욕구엔 level 만", "t_branch.json: trait.effects.need.test_thirst.mood 의 'like' 는",
         "t_none.json: 엔진이 모르는 부품 'story'", "t_none.json: trait 부품(객체)이 있어야 한다", "t_comma.json: 특성 이름은", "t_long.json: 특성 이름은",
-        "특성 이름 '신중한' 중복", "c_taste_bad.json: sheet — taste 칸이 검증기를 지나며 달라진다")
-check("① 검증기 거절 17종을 한 번에 — 모르는 칸·보통 등급·채움 0·모르는 갈래·모르는 효과·없는 반대·한쪽만 가리키는 반대·자기 자신·없는 욕구·준비 중 욕구의 fill·"
-      "그 욕구에 없는 갈래·trait 부품 없음·쉼표 이름·21자 이름·이름 중복 · p0522b 동료 입맛의 어휘 밖 꼬리표",
+        "특성 이름 '신중한' 중복", "c_taste_bad.json: sheet — taste 칸이 검증기를 지나며 달라진다",
+        "t_m0.json: trait.effects.mood 는 0 이 아닌 정수", "t_mbool.json: trait.effects.mood 는 0 이 아닌 정수", "t_mbig.json: trait.effects.mood 는 0 이 아닌 정수",
+        "t_mstr.json: trait.effects.mood 는 0 이 아닌 정수", "t_empty.json: trait.effects 는")
+check("① 검증기 거절 22종을 한 번에 — 모르는 칸·보통 등급·채움 0·모르는 갈래·모르는 효과·없는 반대·한쪽만 가리키는 반대·자기 자신·없는 욕구·준비 중 욕구의 fill·"
+      "그 욕구에 없는 갈래·trait 부품 없음·쉼표 이름·21자 이름·이름 중복 · p0522b 동료 입맛의 어휘 밖 꼬리표 · p0.5.23 기분 기본값 0·참거짓·상한 밖·글 · 빈 효과",
       all(w in msg for w in WANT), [w for w in WANT if w not in msg] or msg[:300])
 check("① p0522b 동료 프리셋의 입맛 칸(p0.5.20 — 어휘 안)은 받는다(그 정의의 오류 줄이 없다 · 특성 이름도 그대로)", "c_taste_ok.json" not in msg, msg[:300])
 check("① 정본 폴더는 그대로 읽힌다(나쁜 사본이 정본을 흔들지 않는다)", set(ENT.reload()) == set(DEFS0))
@@ -481,13 +491,105 @@ code_refs = [f for f in ("launcher.py", "server.py", "sheetkit.py", "character_p
 check("⑩ 욕구 생성 호출(0.5.20~21)은 없다 — 모듈·도구·프롬프트·게이트 파일 · 론처·공개 서버·저장소의 호출 자리",
       not gone and not code_refs and not any(hasattr(NE, a) for a in ("_META_RE", "WHY_MAX")) and not hasattr(sheetkit, "NEED_FIELDS"), (gone, code_refs))
 gates = src("_run_gates.sh")
-check("⑩ 배선: _run_gates.sh 에 verify_traits(verify_need_gen 없음) · VERSION 0.5.22 · STREAM_FORMAT(trait_ids) · PATCH_NOTES(0.5.22)",
-      "verify_traits" in gates and "verify_need_gen" not in gates and src("VERSION").strip() == "0.5.22"
+check("⑩ 배선: _run_gates.sh 에 verify_traits(verify_need_gen 없음) · VERSION 0.5.22 이상(p0.5.23: 다음 판에서 깨지지 않게) · STREAM_FORMAT(trait_ids) · PATCH_NOTES(0.5.22)",
+      "verify_traits" in gates and "verify_need_gen" not in gates and tuple(int(x) for x in src("VERSION").strip().split(".")) >= (0, 5, 22)
       and "trait_ids" in src("STREAM_FORMAT.md") and "## 0.5.22" in src("docs", "PATCH_NOTES.md"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+print("── ⑫ p0.5.23 낙천적인 ↔ 냉소적인 — 기분 기본값(림월드식 B)")
+D.turn = 50
+NE.drain(D)
+TR3 = {"없음": [], "낙천": ["낙천적인"], "냉소": ["냉소적인"]}
+
+
+def mood3(hunger, food=None):
+    """특성 셋(없음·낙천·냉소)의 몸 — 충족도 hunger, food 를 먹은 뒤 → {이름: (mood_line, sum 또는 None, 이유 목록)}."""
+    out = {}
+    for i, (k, tr) in enumerate(TR3.items()):
+        b = body(tr, str(i + 1), taste=TASTE)
+        b["needs"]["hunger"], b["moods"] = hunger, []
+        if food:
+            NE.eat(D, b, ENT.get(food), D.turn)
+            b["needs"]["hunger"] = hunger                # 먹어 오른 충족도를 되돌린다 — 단계는 hunger 그대로, 조각만 남긴다
+        m = NE.mood_of(b, D.turn)
+        out[k] = (NE.mood_line(b, D.turn), m["sum"] if m else None, m["why"] if m else None)
+    return out
+
+
+m_norm = mood3(60)
+check("⑫ 다른 이유가 없으면(보통 단계 · 조각 없음) 기본값만으로는 '기분:' 줄이 없다 — 낙천 +5·냉소 −5 가 문턱(3)을 넘어도",
+      all(v == (None, None, None) for v in m_norm.values()) and NE.trait_mood(["낙천적인"]) == 5 and NE.trait_mood(["냉소적인"]) == -5
+      and abs(NE.trait_mood(["낙천적인"])) >= NE.MOOD_EDGE, m_norm)
+m_hun = mood3(20)
+check("⑫ 다른 이유와 합산: 배고픔(−10) → 없음 −10 · 낙천 −5 · 냉소 −15 — 낱말·이유는 같다('좋지 않다 (이유: 배고픔)')",
+      m_hun == {"없음": ("좋지 않다 (이유: 배고픔)", -10, ["배고픔"]), "낙천": ("좋지 않다 (이유: 배고픔)", -5, ["배고픔"]),
+                "냉소": ("좋지 않다 (이유: 배고픔)", -15, ["배고픔"])}, m_hun)
+m_dis = mood3(60, "apple")
+check("⑫ 문턱으로 줄이 사라진다: 싫어하는 햇사과(−5) → 없음 '좋지 않다' · 낙천 합 0 → 줄 없음 · 냉소 −10",
+      m_dis == {"없음": ("좋지 않다 (이유: 입에 맞지 않는 음식)", -5, ["입에 맞지 않는 음식"]), "낙천": (None, None, None),
+                "냉소": ("좋지 않다 (이유: 입에 맞지 않는 음식)", -10, ["입에 맞지 않는 음식"])}, m_dis)
+m_mix = mood3(20, "ration")
+check("⑫ 줄이 생기고 뒤집힌다: 배고픔(−10) + 배불리 먹음(+8) = −2 → 없음은 줄 없음 · 낙천 +3 '좋다 (이유: 배불리 먹음)' · 냉소 −7 '좋지 않다 (이유: 배고픔)'",
+      m_mix == {"없음": (None, None, None), "낙천": ("좋다 (이유: 배불리 먹음)", 3, ["배불리 먹음"]),
+                "냉소": ("좋지 않다 (이유: 배고픔)", -7, ["배고픔"])}, m_mix)
+lines12 = [v[0] for m_ in (m_norm, m_hun, m_dis, m_mix) for v in m_.values() if v[0]]
+check("⑫ 이유 낱말에 특성이 안 나온다(이유는 조각에서만) · 기분 줄에 숫자 없음",
+      lines12 and not any(t in ln for ln in lines12 for t in ("낙천", "냉소", "특성", "성격")) and not any(re.search(r"\d", ln) for ln in lines12), lines12)
+BIG = {"test_sunny": {"id": "test_sunny", "name": "아주 밝은(시험)", "kind": "trait", "tags": ["trait"], "comps": {"trait": {"effects": {"mood": 20}}}},
+       "test_glad": {"id": "test_glad", "name": "명랑한(시험)", "kind": "trait", "tags": ["trait"], "comps": {"trait": {"effects": {"mood": 3}}}}}
+ENT._DEFS = {**DEFS0, **BIG}
+try:
+    sunny = body(["아주 밝은(시험)"], "4")
+    sunny["needs"]["hunger"], sunny["moods"] = 20, []
+    m_sun, l_sun = NE.mood_of(sunny, D.turn), NE.mood_line(sunny, D.turn)
+    t_sum = (NE.trait_mood(["낙천적인", "명랑한(시험)"]), NE.trait_mood(["낙천적인", "낙천적인"]), NE.trait_mood(["사악한", None, 3, "냉소적인"]), NE.trait_mood([]))
+finally:
+    ENT._DEFS = DEFS0
+check("⑫ 기본값이 합을 조각과 반대쪽으로 뒤집으면 이유 없이 낱말만(시험 특성 +20 · 배고픔 −10 → '좋다', 이유 칸 비움 — 배고픔은 좋은 쪽 이유가 아니다)",
+      m_sun == {"key": "good", "sum": 10, "why": []} and l_sun == "좋다", (m_sun, l_sun))
+check("⑫ 겹침(trait_effects 와 같은 자리): 여러 특성은 더한다(낙천 5 + 명랑한 3 = 8) · 같은 이름은 한 번 · 모르는 이름·글 아닌 것은 건너뛴다 · 없으면 0",
+      t_sum == (8, 5, -5, 0), t_sum)
+opt = body(["낙천적인"], "5", taste=TASTE)
+cyn = body(["냉소적인"], "6", taste=TASTE)
+check("⑫ 몸에 기분 기본값 칸이 없다(특성 이름 traits 에서 그릴 때 읽는다) · 무게·배율 칸도 없다 — 낙천·냉소는 기분 합에만 닿는다",
+      opt.get("traits") == ["낙천적인"] and not ({"need_w", "trait_fx", "trait_mood", "mood_base"} & set(opt))
+      and not ({"need_w", "trait_fx", "trait_mood", "mood_base"} & set(cyn)))
+NE.drain(D)
+cyn["needs"]["hunger"], cyn["moods"] = 60, []
+NE.eat(D, cyn, ENT.get("ration"), D.turn)            # 냉소 + 배불리 먹음 = +3 → 기분 없음 → 좋다
+ev12 = [e for e in NE.drain(D) if e.get("result") == "need_mood"]
+snap12 = NE.snap(cyn)
+check("⑫ 관전 합에는 들어간다: need_mood 사건 sum 3(+8 − 5) · 봇 스냅샷 mood_now.sum 3 · 관전 로그 '합 +3'",
+      ev12 == [{"type": "need", "bot": "6", "result": "need_mood", "from": None, "to": "good", "sum": 3, "why": ["배불리 먹음"]}]
+      and snap12.get("mood_now") == {"key": "good", "sum": 3, "why": ["배불리 먹음"]} and "합 +3" in (NE.summary(ev12[0]) if ev12 else ""), (ev12, snap12))
+o12 = D.view(cyn, [cyn])
+w12 = brains._wire(o12, {"6": "몸6"}, compose=True)
+check("⑫ 숫자 누설 없음: 관측 need_mood 는 낱말('좋다 (이유: 배불리 먹음)') · 프롬프트 '기분:' 줄에 숫자 없음 · 관측에 특성 효과 칸 없음 · 공개 투영은 sum·mood_now 를 걷는다",
+      o12.get("need_mood") == "좋다 (이유: 배불리 먹음)" and "- 기분: 좋다 (이유: 배불리 먹음)\n" in w12
+      and not any(k in json.dumps(o12, ensure_ascii=False) for k in ("trait", "mood_now", '"sum"'))
+      and IG.public(ev12[0] if ev12 else {"sum": 1}).get("sum") is None and IG.public({"r": 1, "mood_now": snap12.get("mood_now")}) == {"r": 1},
+      (o12.get("need_mood"), IG.public(ev12[0] if ev12 else {})))
+# v0.5.22 에서 멈춘 판(내용 판 12 — 몸에 새 칸 없음)을 이어간다: 이관 없이 몸의 특성 이름으로 같은 합
+o22 = body(["낙천적인"], "1")
+o22["needs"]["hunger"], o22["moods"] = 20, []
+SD12 = os.path.join(TMP, "snap12")
+os.makedirs(SD12)
+with open(os.path.join(SD12, snapshot.PKL), "wb") as f:
+    pickle.dump({"version": 2, "state_version": 12, "run_id": "12@x", "d": D, "bots": [o22], "sheets": {}, "next_turn": 51, "stream_pos": 0,
+                 "seed": 11, "started": "x"}, f)
+snapshot.write_meta(SD12, {"run_id": "12@x"})
+up12, _m12 = snapshot.load(os.path.join(SD12, snapshot.PKL))
+b12 = up12["bots"][0]
+check("⑫ 이어가기: v0.5.22 판(내용 판 12)은 그대로 읽힌다(판 번호를 올리지 않았다 — 몸에 새 칸이 없다) · 이어간 몸도 기본값이 든 합(배고픔 −10 + 낙천 5 = −5)",
+      up12["state_version"] == snapshot.STATE_VERSION == 12 and b12.get("traits") == ["낙천적인"]
+      and (NE.mood_of(b12, 51) or {}).get("sum") == -5 and NE.mood_line(b12, 51) == "좋지 않다 (이유: 배고픔)", (up12["state_version"], NE.mood_of(b12, 51)))
+check("⑫ 배선: VERSION 0.5.23 이상 · PATCH_NOTES 0.5.23 · STREAM_FORMAT(기분 합에 특성 기본값) · CHANGELOG p0.5.23",
+      tuple(int(x) for x in src("VERSION").strip().split(".")) >= (0, 5, 23) and "## 0.5.23" in src("docs", "PATCH_NOTES.md")
+      and "trait_mood" in src("STREAM_FORMAT.md") and "p0.5.23" in src("docs", "CHANGELOG.md"))
 
 shutil.rmtree(TMP, ignore_errors=True)
 print()
 if C.failed:
     print("FAIL — %d/%d" % (C.failed, C.n))
     sys.exit(1)
-print("ALL PASS — verify_traits (p0.5.22 성격 키워드 → 캐릭터 특성: %d checks · 저장소 꼴·검증기·반대 짝·이름 바이트·대식가·미식가·소박한·겹침·준비 중·누설·이관·배선, 실 LLM 0콜)" % C.n)
+print("ALL PASS — verify_traits (p0.5.22 성격 키워드 → 캐릭터 특성 · p0.5.23 낙천↔냉소 기분 기본값: %d checks · 저장소 꼴·검증기·반대 짝·이름 바이트·대식가·미식가·소박한·겹침·준비 중·누설·이관·배선·낙천·냉소, 실 LLM 0콜)" % C.n)

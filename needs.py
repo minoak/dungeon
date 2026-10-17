@@ -10,12 +10,14 @@
     무게 bot['need_w'] = {욕구: 낮음|높음}(보통이 아닌 것만 — p0.5.22 부터 시트의 특성이 정한다: 특성 정의의 effects.need.<욕구>.level ·
     0.5.20~21 의 생성 호출·시트 needs 칸은 거뒀다) · 특성 배율 bot['trait_fx'] = {욕구: {fill?: %, mood?: {갈래: %}}}(있을 때만 — 대식가의
     채움·미식가·소박한의 기분 조각 크기) · 취향 bot['taste'] = {likes, dislikes}(시트 taste 칸 — 있을 때만).
-    무게·배율·취향은 스폰이 시트에서 다시 읽는다(이월할 것이 없다).
+    무게·배율·취향은 스폰이 시트에서 다시 읽는다(이월할 것이 없다). p0.5.23 특성의 기분 기본값(낙천적인·냉소적인)은 몸에 싣지 않고
+    기분 합산이 몸의 특성 이름(bot['traits'])에서 읽는다(trait_mood).
   · 엔진 공용 지점 셋: 틱마다 줄이기(tick) · 채우기(eat — 먹을 것의 satisfies / on_result — 정의의 from_events) · 단계 판정(문장·효과·사건).
   · 숫자는 에이전트에게 보이지 않는다(§3.8.6) — p0.5.18(DECISIONS 10-16 '몸·기분 줄') 관측은 두 줄과 결과 사실 문장뿐:
       '몸:' = 보통이 아닌 단계의 몸 문장(가장 낮은 충족도부터, 한 번에 문장 LINE_CAP 개) ·
       '기분:' = 살아 있는 기분 조각(욕구 단계가 주는 것 + 먹은 뒤 조각)의 값을 엔진이 합해 좋다 / 좋지 않다 둘 중 하나와 이유(합에 가장 크게
       기여한 조각부터 WHY_CAP 개) — 합이 0 근처(|합| < MOOD_EDGE)면 줄이 없다(림월드 생각 → 기분 합산, 경제 설계 §1.4).
+      p0.5.23 합에는 특성의 기분 기본값이 더해진다(이유로는 안 보임 · 조각이 하나도 없으면 줄이 없다).
     보통 단계·조각 없음이면 두 줄 다 없다. 낱말(좋다·좋지 않다·이유)은 prompts/world/mood.md, 몸 문장·이유 낱말은 욕구 말 파일. 충족도·단계 이름·무게·채운 양·
     기분 합은 결과 dict 에서도 공개 투영이 걷는다(info_guard.NEED_NUM_KEYS). 스트림(관전)은 원본을 싣는다 — tick.bots[].needs·moods·mood_now,
     사건 need_fill·need_none·need_stage·need_drain·need_mood.
@@ -146,6 +148,15 @@ def trait_effects(names):
         else:
             fx.setdefault(nid, {}).setdefault('mood', {})[mk] = v
     return levels, fx
+
+
+def trait_mood(names):
+    """p0.5.23(DECISIONS 10-17 '낙천↔냉소 = 림월드식 B') 특성 이름들 → 기분 기본값의 합(특성 정의의 effects.mood — 낙천적인 +5 · 냉소적인 −5).
+    trait_effects 와 같은 겹침 자리: 모르는 이름은 건너뛰고 같은 이름은 한 번, 여러 특성이면 더한다(반대 짝은 같이 고를 수 없다). 없으면 0.
+    몸에 따로 싣지 않는다 — mood_of 가 몸의 특성 이름(traits — 스폰이 시트에서 옮긴 것)으로 그릴 때 읽는다(이어간 옛 판도 이관 없이 같다)."""
+    by = ENT.trait_by_name()
+    return sum(int((((((by.get(nm) or {}).get('comps') or {}).get('trait') or {}).get('effects') or {}).get('mood')) or 0)
+               for nm in dict.fromkeys(n for n in (names or ()) if isinstance(n, str)))
 
 
 def josa(word, mark):
@@ -441,9 +452,13 @@ def _parts(bot, turn=None):
 def mood_of(bot, turn=None):
     """p0.5.18 기분 합산(림월드 생각 → 기분) — 조각 값의 합이 0 근처(|합| < MOOD_EDGE)면 None, 아니면 {key: good|bad, sum, why[이유 ≤ WHY_CAP]}.
     이유 = 합과 같은 쪽 조각만(반대쪽은 합에 기여하지 않았다), 값의 크기가 큰 것부터 · 같으면 _parts 순서(단계 먼저 · 낮은 충족도 먼저 · 조각은 새것 먼저) ·
-    같은 낱말은 한 번. 숫자(sum)는 관전·측정용 — 관측엔 mood_line 의 낱말만 간다."""
+    같은 낱말은 한 번. 숫자(sum)는 관전·측정용 — 관측엔 mood_line 의 낱말만 간다.
+    p0.5.23 특성의 기분 기본값(trait_mood — 낙천적인·냉소적인)을 합에 더한다. 이유 낱말로는 보이지 않고(이유는 조각에서만 고른다),
+    다른 이유(조각)가 하나도 없으면 줄이 없다 — 기본값만으로는 뜨지 않는다. 합이 기본값 때문에 조각과 반대쪽이 되면 이유 없이 낱말만 남는다."""
     parts = _parts(bot, turn)
-    s = sum(m for m, _w in parts)
+    if not parts:
+        return None
+    s = sum(m for m, _w in parts) + trait_mood(bot.get('traits'))
     if abs(s) < MOOD_EDGE:
         return None
     why = []

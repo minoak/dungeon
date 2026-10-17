@@ -355,8 +355,8 @@ check("⑨ 출발 자리 관측: 건물이 방위·거리와 함께 보이고 to
       {f['name'] for f in bf} == set(blds) and o8.get('town_zone') == '번화가'
       and all(f.get('bearing') and isinstance(f.get('dist'), int) and f['dist'] > 0 for f in bf))
 w8 = _brains._wire(o8, {'1': '두란'})
-check("⑨ 렌더: '지금 있는 곳: 번화가' + '신전 f<n>' 줄",
-      '지금 있는 곳: 번화가' in w8 and any('신전 f' in ln for ln in w8.splitlines()))
+check("⑨ 렌더: '현재 위치: 마을 > 번화가'(p0.5.23 — 옛 '지금 있는 곳: 번화가') + '신전 f<n>' 줄",
+      '- 현재 위치: 마을 > 번화가\n' in w8 and '지금 있는 곳' not in w8 and any('신전 f' in ln for ln in w8.splitlines()))
 tid = 'f%d' % blds['신전'].id
 r8 = d8.act(b8, {'type': 'goto', 'target': tid}, [b8])
 check("⑨ goto 건물 = 문턱까지 경로(pathed) · 동료 관측 doing 이름 '신전'",

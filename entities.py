@@ -25,6 +25,8 @@
     p0.5.18: 단계·기분 조각의 mood(기분 합산 값)·why(이유 낱말) — '기분:' 줄의 좋다·좋지 않다·이유 머리는 prompts/world/mood.md(MOOD_WORDS).
   · 특성(p0.5.22 — 옛 traits.json 의 성격 키워드): kind trait 의 name(시트 '성격' 줄에 들어가는 글자 그대로) · comps.trait 의 opposite(반대 특성 id —
     같이 고를 수 없다) · effects.need{욕구: {level?, fill?, mood?}}(아래 TRAIT_*) → needs.trait_effects. 목록·반대 짝은 sheetkit.load_traits 가 시트 조립에 쓴다.
+    p0.5.23: effects.mood(기분 기본값 — 정수) → needs.trait_mood(기분 합에 더한다 · 이유로는 안 보인다).
+  · 위치 낱말(p0.5.23): '네 상태' 절 맨 앞 '현재 위치:' 줄의 낱말은 prompts/world/place.md(PLACE_WORDS).
 자리만 있고 아직 안 읽는 것: ai.start·ai.concealed(스폰 코드가 명시), item.lore(p0.5.6 — 물건의 속, 물건 search 를 설계할 때),
 loot·container·heal·consumable·exit 부품(메모 "부품은 필요할 때 하나씩"). 클라이언트 스프라이트 프레임 번호는
 game/src/assets/world.ts 가 소유 — sprite 필드는 텍스처 참조(wl-<이름>[#프레임])이고 검증은 텍스처 파일 존재까지.
@@ -121,13 +123,17 @@ NEED_MOOD_KEYS = ('time', 'mood', 'why', 'line')   # p0.5.18 기분 조각 한 �
 MOOD_MAX = 100     # p0.5.18 기분 값(단계·조각의 mood) 절댓값 상한 — 숫자는 엔진 안쪽 재료(관측엔 '좋다 / 좋지 않다'만 간다)
 MOOD_WORDS = 'mood'                 # p0.5.18 prompts/world/<이것>.md — '기분:' 줄의 낱말(모든 행동 방식의 관측에 실린다 — 세계 말 폴더 맨 위)
 MOOD_WORD_KEYS = ('good', 'bad', 'why')   # 좋은 쪽 · 나쁜 쪽 · 괄호 안 이유의 머리
+PLACE_WORDS = 'place'               # p0.5.23 prompts/world/<이것>.md — '네 상태' 절 맨 앞 위치 줄의 낱말(모든 행동 방식의 관측 — mood 와 같은 폴더 맨 위)
+PLACE_WORD_KEYS = ('head', 'town', 'dungeon', 'floor', 'zone')   # 줄 머리(현재 위치) · 마을 · 던전 · 던전의 층({n} = 층 번호) · 구역 특징 줄의 머리
+PLACE_FILLS = {'floor': ('{n}',)}   # 중괄호 자리가 있어도 되는 칸과 그 자리(나머지 칸은 중괄호 없음) — floor 는 {n} 이 꼭 있어야 한다
 NEED_LEVELS = ('낮음', '보통', '높음')      # 욕구 무게(§3.8.2) — 보통 = 정의의 decay·채움 100%·기분 시간 100%. weights 에는 낮음·높음만 적는다
 NEED_WEIGHT_KEYS = ('every', 'fill', 'mood_time')   # 등급 하나가 함께 바꾸는 셋(§10-13): 몇 틱마다 1 · 채움 % · 기분 조각 시간 %
 _NEED_FILL_RE = re.compile(r'\{what(?::(을|은|이|과))?\}')   # 기분 문장의 자리 — {what} 먹은 것 이름, {what:을} 이름 + 받침에 맞는 조사
 # p0.5.22(DECISIONS 10-17 '특성의 두 기능') 특성 정의(kind trait — entities/trait/<id>.json 의 comps.trait)의 어휘. 처리는 needs.trait_effects.
 #   에이전트에게는 이름만 간다(성격 줄) — 효과의 숫자는 엔진 안쪽 재료다(몸·기분 줄로만 느낀다).
 TRAIT_KEYS = ('opposite', 'effects')         # opposite = 반대 특성 id(서로 가리킨다 — 같이 고를 수 없다) · effects = 엔진이 읽는 값(없어도 된다 — 글만인 특성)
-TRAIT_EFFECTS = ('need',)                    # 효과가 닿는 고리 — 지금은 욕구뿐(need{욕구 id: {…}})
+TRAIT_EFFECTS = ('need', 'mood')             # 효과가 닿는 고리 — 욕구(need{욕구 id: {…}}) · p0.5.23 기분 기본값(mood = 0 이 아닌 정수 — 기분 합에 더한다,
+#   이유 낱말로는 안 보이고 다른 이유가 없으면 줄이 없다: needs.trait_mood·mood_of. 절댓값 상한은 MOOD_MAX)
 TRAIT_NEED_KEYS = ('level', 'fill', 'mood')  # level = 그 욕구의 무게 등급(낮음|높음 — 단계가 없는 준비 중 욕구도 적어 둔다, 엔진은 건너뛴다) ·
 #   fill = 채우는 양 %(무게 등급의 fill 에 곱한다 — 단계 있는 욕구만) · mood = 먹은 뒤 기분 조각 값의 크기 %{갈래: %}(단계 있는 욕구의 mood 갈래만)
 TRAIT_PCT_MAX = 1000                         # fill·mood % 상한(1~이것)
@@ -204,6 +210,27 @@ def _mood_word_problems(words_root=None):
     out = ['%s: 칸 `%s` 가 없다(기분 낱말 — %s)' % (rel, k, '·'.join(MOOD_WORD_KEYS)) for k in MOOD_WORD_KEYS if k not in items]
     out += ['%s: 칸 `%s` 는 기분 낱말이 아니다(entities.MOOD_WORD_KEYS)' % (rel, k) for k in items if k not in MOOD_WORD_KEYS]
     out += ['%s: `%s` 칸에 중괄호를 쓸 수 없다' % (rel, k) for k, v in items.items() if '{' in v or '}' in v]
+    return out
+
+
+def _place_word_problems(words_root=None):
+    """p0.5.23 위치 낱말 파일(prompts/world/place.md) — 칸은 꼭 PLACE_WORD_KEYS 다섯, 남는 칸 없음 · 중괄호는 PLACE_FILLS 의 자리만(floor 의 {n} 은 꼭)."""
+    rel = 'prompts/world/%s.md' % PLACE_WORDS
+    try:
+        items = words.world_words(PLACE_WORDS, words_root or words.WORDS_ROOT)
+    except words.WordsError as e:
+        return str(e).split('\n')
+    out = ['%s: 칸 `%s` 가 없다(위치 낱말 — %s)' % (rel, k, '·'.join(PLACE_WORD_KEYS)) for k in PLACE_WORD_KEYS if k not in items]
+    out += ['%s: 칸 `%s` 는 위치 낱말이 아니다(entities.PLACE_WORD_KEYS)' % (rel, k) for k in items if k not in PLACE_WORD_KEYS]
+    for k, v in items.items():
+        fills = PLACE_FILLS.get(k, ())
+        rest = v
+        for f in fills:
+            if f not in rest:
+                out.append('%s: `%s` 칸에 %s 자리가 있어야 한다' % (rel, k, f))
+            rest = rest.replace(f, '')
+        if '{' in rest or '}' in rest:
+            out.append('%s: `%s` 칸에 쓸 수 있는 중괄호 자리는 %s' % (rel, k, ' · '.join(fills) or '없다'))
     return out
 
 
@@ -403,10 +430,12 @@ def _trait_problems(rel, d, comps):
     ef = tr.get('effects')
     if ef is None:
         return out
-    if not (isinstance(ef, dict) and ef and set(ef) <= set(TRAIT_EFFECTS) and isinstance(ef.get('need'), dict) and ef['need']):
-        return out + ['%s: trait.effects 는 {%s: {욕구 id: {...}}}' % (rel, '|'.join(TRAIT_EFFECTS))]
+    if not (isinstance(ef, dict) and ef and set(ef) <= set(TRAIT_EFFECTS) and ('need' not in ef or (isinstance(ef['need'], dict) and ef['need']))):
+        return out + ['%s: trait.effects 는 {need?: {욕구 id: {...}}, mood?: 정수} 중 하나 이상' % rel]
+    if 'mood' in ef and not (isinstance(ef['mood'], int) and not isinstance(ef['mood'], bool) and ef['mood'] and abs(ef['mood']) <= MOOD_MAX):
+        out.append('%s: trait.effects.mood 는 0 이 아닌 정수(절댓값 %d 이하 — 기분 합에 더하는 기본값)' % (rel, MOOD_MAX))   # p0.5.23
     pct = lambda v: _pos_int(v, 1, TRAIT_PCT_MAX)   # noqa: E731
-    for nid, e in ef['need'].items():
+    for nid, e in (ef.get('need') or {}).items():
         if not (isinstance(e, dict) and e and set(e) <= set(TRAIT_NEED_KEYS)):
             out.append('%s: trait.effects.need.%s 는 {%s} 중 하나 이상' % (rel, nid, '|'.join(TRAIT_NEED_KEYS)))
             continue
@@ -727,7 +756,8 @@ def read(root=ROOT, words_root=None, rules_root=None):
     prompts/world 에서 읽는다(words_root 기본) — 게이트가 정의를 임시 폴더에 복사해 검사하는 관행 그대로, 복사본도 리포의 말로 읽힌다.
     정의와 말 파일이 어긋나면(자리는 있는데 칸이 없다 · 칸은 있는데 자리가 없다 · 말 파일이 없다) 그것도 정의 오류다.
     p0.5.6: 아이템의 다루는 규칙(prompts/actions/item_rules.md — rules_root 기본 = 리포의 prompts/actions)도 여기서 대조한다(G5).
-    p0.5.18: 기분 낱말(words_root 의 mood.md — '기분:' 줄의 좋다·좋지 않다·이유)도 여기서 본다."""
+    p0.5.18: 기분 낱말(words_root 의 mood.md — '기분:' 줄의 좋다·좋지 않다·이유)도 여기서 본다.
+    p0.5.23: 위치 낱말(words_root 의 place.md — '현재 위치:' 줄)도."""
     words_root = words_root or words.WORDS_ROOT
     files = sorted(glob.glob(os.path.join(root, '*', '*.json')))
     pairs, problems = [], []
@@ -740,6 +770,7 @@ def read(root=ROOT, words_root=None, rules_root=None):
     problems += _problems(pairs, root) if pairs else ['정의가 없다: %s' % root]
     problems += _rule_problems(rules_root)
     problems += _mood_word_problems(words_root)
+    problems += _place_word_problems(words_root)
     if problems:
         raise EntityError('\n'.join(problems))
     return {d['id']: d for _, d in pairs}
@@ -748,6 +779,7 @@ def read(root=ROOT, words_root=None, rules_root=None):
 _DEFS = None
 _RULES = None      # p0.5.6 다루는 규칙 {type: 문장} — item_rule() 이 처음 부를 때 읽는다(reload 가 비운다)
 _MOODW = None      # p0.5.18 기분 낱말 {good, bad, why} — mood_words() 가 처음 부를 때 읽는다(reload 가 비운다)
+_PLACEW = None     # p0.5.23 위치 낱말 {head, town, dungeon, floor, zone} — place_words() 가 처음 부를 때 읽는다(reload 가 비운다)
 
 
 def load():
@@ -759,8 +791,8 @@ def load():
 
 
 def reload():
-    global _DEFS, _RULES, _MOODW
-    _DEFS, _RULES, _MOODW = None, None, None
+    global _DEFS, _RULES, _MOODW, _PLACEW
+    _DEFS, _RULES, _MOODW, _PLACEW = None, None, None, None
     return load()
 
 
@@ -902,6 +934,14 @@ def mood_words():
     if _MOODW is None:
         _MOODW = words.world_words(MOOD_WORDS)
     return _MOODW
+
+
+def place_words():
+    """p0.5.23 '현재 위치:' 줄의 낱말 {head, town, dungeon, floor({n}), zone}(prompts/world/place.md). 꼴은 로드 단계(read)가 이미 봤다."""
+    global _PLACEW
+    if _PLACEW is None:
+        _PLACEW = words.world_words(PLACE_WORDS)
+    return _PLACEW
 
 
 def comps_of(eid, life=False):
