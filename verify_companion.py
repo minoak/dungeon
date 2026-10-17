@@ -2,7 +2,7 @@
 """D81(2026-09-17) 동료 프리셋 저장소 · 론처의 동료 칸 · 마을 안내 게이트 — 실 LLM 0콜, 라이브 데이터 무접촉(론처는 임시 폴더·포트 0).
 
   ① 저장소: entities/companion/*.json 로드 · sheet 부품에 능력치가 없다(직업에서 온다) · 조립한 시트의 몸 = traits.json 직업 수치 ·
-     말투·목표가 실린다 · 이름은 서로 다르다
+     말투·목표가 실린다 · 이름은 서로 다르다 · p0.5.24 특성(성격 줄 = '특성. 서술' — 자세히는 verify_traits ⑬)
   ② 검증기 거절: sheet 없음 · 모르는 직업 · sheet 의 모르는 칸(능력치를 적음) · 등재 안 된 키워드 · npc 부품에 line 없음 · walk 꼴 불량 ·
      동료 이름 중복을 한 번에 나열
   ③ 시트 → 러너: build_party 가 {"companion": id} 칸을 받아 조립 → write_party → show_runner.load_party 통과(말투·목표·사거리 보존) ·
@@ -63,6 +63,9 @@ check('① 시트에 이름·성격·말투·목표가 실린다 · 이름은 �
       all(s['name'] == comps[cid]['name'] and s['persona'] and s.get('speech') and s.get('goal') for cid, s in sheets.items())
       and len({s['name'] for s in sheets.values()}) == len(sheets)
       and all((s.get('look') is not None) == ('look' in comps[cid]['comps']['sheet']) for cid, s in sheets.items()))
+check('① p0.5.24 동료마다 특성이 있다(정의의 이름 그대로) · 성격 줄 = "특성, 특성. 서술"(서술 = 정의의 sheet.persona)',
+      all(s['traits'] and s['traits'] == comps[cid]['comps']['sheet']['traits']
+          and s['persona'] == ', '.join(s['traits']) + '. ' + comps[cid]['comps']['sheet']['persona'] for cid, s in sheets.items()))
 
 # ② 검증기 거절 — 임시 폴더의 나쁜 정의들
 with tempfile.TemporaryDirectory() as root:
@@ -137,9 +140,10 @@ def call(path, body=None):
 
 try:
     st, pl = call('/api/presets')
-    check('④ /api/presets.companions — 저장소의 동료 전부(id·이름·직업·성격·소개 한 줄·글자 수) · 옛 키들은 그대로',
+    check('④ /api/presets.companions — 저장소의 동료 전부(id·이름·직업·성격·특성 이름(p0.5.24)·소개 한 줄·글자 수) · 옛 키들은 그대로',
           st == 200 and [c['id'] for c in pl['companions']] == list(comps)
           and all(c['name'] == sheets[c['id']]['name'] and c['job'] == sheets[c['id']]['job'] and c['persona'] == sheets[c['id']]['persona']
+                  and c.get('traits') == sheets[c['id']]['traits']
                   and c['about'] == (comps[c['id']]['comps'].get('story') or {}).get('trait') and c['prompt_chars'] > 0 for c in pl['companions'])
           and all(k in pl for k in ('traits', 'jobs', 'default_party', 'model_ui_version', 'providers')) and pl.get('party_ui_version') == 1)
     st, res = call('/api/party', {'slots': [me, {'companion': two[0]}, {'companion': two[1]}], 'preset_ids': ['', 'made-up-id', '']})

@@ -6,12 +6,15 @@
     "companion",
     "adventurer"
   ],
-  "note": "동료 프리셋(D81, 2026-09-17) — comps.sheet 의 성격·말투·목표는 기본 파티(party.json)의 문장 그대로. comps.npc(line·hail)·comps.story(trait·history)는 SilenceBreaker 임시 문장(2단계 '안 뽑힌 프리셋 = 마을 주민' 재료) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). 능력치는 적지 않는다 — 직업(traits.json jobs)에서 온다. look 은 그림에만 닿는다(엔진·프롬프트 무접촉).",
+  "note": "동료 프리셋(D81, 2026-09-17) — comps.sheet 의 성격·말투·목표는 기본 파티(party.json)의 문장 그대로. comps.npc(line·hail)·comps.story(trait·history)는 SilenceBreaker 임시 문장(2단계 '안 뽑힌 프리셋 = 마을 주민' 재료) — 파트너 교정 대기(docs/wording_review_2026-09-15.md). 능력치는 적지 않는다 — 직업(traits.json jobs)에서 온다. look 은 그림에만 닿는다(엔진·프롬프트 무접촉). p0.5.24 특성(traits)은 DECISIONS 10-17 관리자 선택 — 성격·말투 글에 드러난 것만(조립한 성격 줄 = '특성. 서술' · 기본 파티도 같은 특성).",
   "comps": {
     "sheet": {
       "job": "도적",
       "sex": "여",
-      "traits": [],
+      "traits": [
+        "신중한",
+        "과묵한"
+      ],
       "persona": "@prompts",
       "speech": "@prompts",
       "goal": "@prompts",

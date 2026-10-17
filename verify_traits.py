@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """p0.5.22 성격 키워드 → 캐릭터 특성(DECISIONS 10-17 '특성 격상'·'두 기능'·'대식가 = 덜 찬다' · 설계 초안 .orch/drafts/trait_design_v0.md) — 헤들리스 검증. LLM 0콜.
 게이트:
-  ① 저장소 꼴: entities/trait 31장(초안 §4 전부 — 옛 키워드 12 + 새 19) · 이름 = 옛 키워드 글자 그대로 · 반대 짝 8쌍(서로 가리킨다) · 효과는 대식가(fill)·미식가·소박한(기분 조각 %)·
+  ① 저장소 꼴: entities/trait 31장(초안 §4 전부 — 옛 키워드 12 + 새 19) · 이름 = 옛 키워드 글자 그대로 · 반대 짝 9쌍(서로 가리킨다 — p0.5.24 미식가↔소박한) · 효과는 대식가(fill)·미식가·소박한(기분 조각 %)·
      수다스러운↔과묵한·호기심 많은·충직한(준비 중 욕구 등급) · p0.5.23 낙천적인↔냉소적인(기분 기본값 ±5)뿐 · traits.json 은 직업만 · 시트 조립 표(가나다순·반대 짝·최대 3) ·
-     동료 프리셋·기본 파티의 특성은 그대로(비어 있다) · 검증기가 잘못된 특성 정의를 한 번에 거절한다
+     동료 프리셋·기본 파티의 특성(p0.5.24 — ⑬) · 검증기가 잘못된 특성 정의를 한 번에 거절한다
   ② 반대 짝 거절: 시트 조립(8쌍 × 양 순서)·파티 조립·저장 캐릭터 · 반대가 아닌 조합은 받는다 · 화면(반대 짝 잠금 · 이름 '특성' · '입맛' 상자)
   ③ 이름 바이트 동일: 옛 키워드 시트의 성격 줄 = 이름 그대로(', ' · '. ' 규칙) · 러너 판의 완성 프롬프트에 그 줄이 그대로 · 특성 id·배율은 어디에도 없다
   ④ 대식가: 채우는 양만 70%(무게 등급 fill 과 같은 길 — 높음 70% 와 곱해 49%) · 배고파지는 빠르기·기분 시간은 그대로
@@ -18,6 +18,9 @@
   ⑫ p0.5.23 낙천적인 ↔ 냉소적인(DECISIONS 10-17 '림월드식 B'): 기분 기본값만이면 '기분:' 줄 없음 · 다른 이유와 합산(문턱 그대로 — 줄이 생기고·사라지고·뒤집힌다) ·
      이유 낱말에 안 나온다(이유는 조각에서만) · 겹침(같은 이름 한 번 · 여러 특성 더함) · 검증기(0·참거짓·상한 밖) · 관전 합(mood_now·need_mood sum)엔 들어간다 ·
      숫자 누설 없음(관측 낱말·공개 투영) · 몸에 칸이 없다(이어간 v0.5.22 판도 이관 없이 같은 합) · 배선(VERSION·PATCH_NOTES·STREAM_FORMAT)
+  ⑬ p0.5.24 미식가 ↔ 소박한 반대 짝 · 동료 특성(DECISIONS 10-17): 짝(정의·조립 표·조립 거절 양 순서) · presets 3→4(둘 다 고른 슬롯은 먼저 고른 쪽 · 옛 v3 파일을 저장소가 읽고
+     덮기 전 .v3.bak) · 동료 셋의 특성(두란 용맹한·충직한 · 카야 신중한·과묵한 · 피른 호기심 많은·수다스러운) · 성격 줄 = '특성. 서술'(서술은 말 파일 그대로) ·
+     기본 파티·솔로 시트 = 같은 특성·같은 성격 줄 · 완성 프롬프트의 시트 줄 · 엔진은 준비 중 등급만(몸에 칸 없음) · 론처 동료 목록·동료 칸(특성 줄 = 이름만) · 배선
 """
 import contextlib
 import copy
@@ -94,7 +97,8 @@ OLD_KEYWORDS = ["호기심 많은", "신중한", "용맹한", "과묵한", "수�
 NEW_NAMES = ["대식가", "미식가", "소박한", "근면한", "게으른", "친절한", "무뚝뚝한", "침착한", "성급한", "겸손한", "허영심 많은",   # 초안 §4 의 새 후보
              "강인한", "예민한", "고집 센", "질투 많은", "덜렁대는", "야행성", "외로움을 타는", "혼자가 편한"]
 PAIRS = [("수다스러운", "과묵한"), ("낙천적인", "냉소적인"), ("용맹한", "겁 많은"), ("근면한", "게으른"), ("친절한", "무뚝뚝한"),
-         ("침착한", "성급한"), ("겸손한", "허영심 많은"), ("외로움을 타는", "혼자가 편한")]
+         ("침착한", "성급한"), ("겸손한", "허영심 많은"), ("외로움을 타는", "혼자가 편한"),
+         ("미식가", "소박한")]                       # p0.5.24(DECISIONS 10-17 '미식가 ↔ 소박한 = 반대 짝')
 DATA = sheetkit.load_traits()
 DEFS0 = ENT.load()
 BY = ENT.trait_by_name()
@@ -111,10 +115,10 @@ check("① entities/trait 31장 = 옛 키워드 12(글자 그대로) + 초안 §
       and all(d["kind"] == "trait" and os.path.exists(os.path.join(ENT.ROOT, "trait", d["id"] + ".json")) for d in BY.values()),
       sorted(set(BY) ^ set(OLD_KEYWORDS + NEW_NAMES)))
 opp_got = sorted(tuple(sorted((n, DATA["opposites"][n]))) for n in DATA["opposites"])
-check("① 반대 짝 8쌍(↔ — 서로 가리킨다) · 나머지는 짝 없음",
+check("① 반대 짝 9쌍(↔ — 서로 가리킨다 · p0.5.24 미식가↔소박한) · 나머지는 짝 없음",
       set(OLD_KEYWORDS + NEW_NAMES) <= set(BY) and opp_got == sorted(tuple(sorted(p)) for p in PAIRS for _ in (0, 1))
       and all(BY[b]["id"] == comp(a).get("opposite") and BY[a]["id"] == comp(b).get("opposite") for a, b in PAIRS)
-      and sum(1 for n in BY if comp(n).get("opposite")) == 16, opp_got)
+      and sum(1 for n in BY if comp(n).get("opposite")) == 18, opp_got)
 if C.failed:                                         # 저장소·조립 표가 틀리면 뒤 검사는 뜻이 없다(이름으로 찾는 자리가 깨진다) — 여기서 멈춘다
     print("\nFAIL — %d/%d (특성 저장소·조립 표가 틀려 뒤 검사를 건너뛴다)" % (C.failed, C.n))
     sys.exit(1)
@@ -133,9 +137,11 @@ check("① traits.json 은 직업만(옛 traits·max_traits 칸 없음) · 시�
       and DATA["traits"] == sorted(BY) and DATA["max_traits"] == sheetkit.MAX_TRAITS == 3
       and DATA["trait_ids"] == {n: d["id"] for n, d in BY.items()} and list(DATA["jobs"]) == ["전사", "도적", "궁수", "마법사"])
 party_json = json.loads(src("party.json"))
-check("① 동료 프리셋 셋·기본 파티의 특성은 바꾸지 않았다(비어 있는 채로 — 민옥이 정함)",
-      all(d["comps"]["sheet"].get("traits") == [] for d in ENT.companions().values()) and len(ENT.companions()) == 3
-      and not any("traits" in s for k, s in party_json.items() if not k.startswith("_")))
+MATES = {"duran": ("두란", ["용맹한", "충직한"]), "kaya": ("카야", ["신중한", "과묵한"]), "pirn": ("피른", ["호기심 많은", "수다스러운"])}   # p0.5.24 DECISIONS 10-17(관리자 선택)
+check("① 동료 프리셋 셋·기본 파티의 특성 = p0.5.24 관리자 선택(두란 용맹한·충직한 · 카야 신중한·과묵한 · 피른 호기심 많은·수다스러운 — 자세히는 ⑬)",
+      {cid: (d["name"], d["comps"]["sheet"].get("traits")) for cid, d in ENT.companions().items()} == MATES
+      and {s.get("name"): s.get("traits") for k, s in party_json.items() if not k.startswith("_")} == dict(MATES.values()),
+      {cid: d["comps"]["sheet"].get("traits") for cid, d in ENT.companions().items()})
 # 검증기 거절 — 리포 정의 사본 + 나쁜 특성 정의들
 ROOT_V = os.path.join(TMP, "ents")
 shutil.copytree(ENT.ROOT, ROOT_V)
@@ -167,6 +173,9 @@ def mate(cid, name, taste):                          # p0522b 동료 프리셋�
 MATE_OK = mate("c_taste_ok", "맛보기", {"likes": ["고기", "빵"], "dislikes": ["과일"]})
 jw(os.path.join(ROOT_V, "companion", "c_taste_ok.json"), MATE_OK)
 jw(os.path.join(ROOT_V, "companion", "c_taste_bad.json"), mate("c_taste_bad", "쓴맛", {"likes": ["초콜릿"], "dislikes": []}))
+MATE_PAIR = mate("c_pair", "짝꿍", {"likes": ["고기"], "dislikes": []})
+MATE_PAIR["comps"]["sheet"]["traits"] = ["미식가", "소박한"]   # p0.5.24 반대 짝을 고른 동료 정의
+jw(os.path.join(ROOT_V, "companion", "c_pair.json"), MATE_PAIR)
 try:
     ENT.read(ROOT_V)
     msg = ""
@@ -179,9 +188,11 @@ WANT = ("t_key.json: trait 가 모르는 칸 ['wat']", "t_lvl.json: trait.effect
         "t_none.json: 엔진이 모르는 부품 'story'", "t_none.json: trait 부품(객체)이 있어야 한다", "t_comma.json: 특성 이름은", "t_long.json: 특성 이름은",
         "특성 이름 '신중한' 중복", "c_taste_bad.json: sheet — taste 칸이 검증기를 지나며 달라진다",
         "t_m0.json: trait.effects.mood 는 0 이 아닌 정수", "t_mbool.json: trait.effects.mood 는 0 이 아닌 정수", "t_mbig.json: trait.effects.mood 는 0 이 아닌 정수",
-        "t_mstr.json: trait.effects.mood 는 0 이 아닌 정수", "t_empty.json: trait.effects 는")
-check("① 검증기 거절 22종을 한 번에 — 모르는 칸·보통 등급·채움 0·모르는 갈래·모르는 효과·없는 반대·한쪽만 가리키는 반대·자기 자신·없는 욕구·준비 중 욕구의 fill·"
-      "그 욕구에 없는 갈래·trait 부품 없음·쉼표 이름·21자 이름·이름 중복 · p0522b 동료 입맛의 어휘 밖 꼬리표 · p0.5.23 기분 기본값 0·참거짓·상한 밖·글 · 빈 효과",
+        "t_mstr.json: trait.effects.mood 는 0 이 아닌 정수", "t_empty.json: trait.effects 는",
+        "c_pair.json: sheet — 반대 특성은 같이 고를 수 없다: 미식가 · 소박한")
+check("① 검증기 거절 23종을 한 번에 — 모르는 칸·보통 등급·채움 0·모르는 갈래·모르는 효과·없는 반대·한쪽만 가리키는 반대·자기 자신·없는 욕구·준비 중 욕구의 fill·"
+      "그 욕구에 없는 갈래·trait 부품 없음·쉼표 이름·21자 이름·이름 중복 · p0522b 동료 입맛의 어휘 밖 꼬리표 · p0.5.23 기분 기본값 0·참거짓·상한 밖·글 · 빈 효과 · "
+      "p0.5.24 반대 짝(미식가·소박한)을 고른 동료 정의",
       all(w in msg for w in WANT), [w for w in WANT if w not in msg] or msg[:300])
 check("① p0522b 동료 프리셋의 입맛 칸(p0.5.20 — 어휘 안)은 받는다(그 정의의 오류 줄이 없다 · 특성 이름도 그대로)", "c_taste_ok.json" not in msg, msg[:300])
 check("① 정본 폴더는 그대로 읽힌다(나쁜 사본이 정본을 흔들지 않는다)", set(ENT.reload()) == set(DEFS0))
@@ -191,12 +202,12 @@ DEFS0 = ENT.load()
 print("── ② 반대 짝 거절")
 bad_pairs = [(a, b) for a, b in PAIRS for x, y in ((a, b), (b, a))
              if not (rejects(lambda: sheetkit.build_sheet("전사", [x, y], "가", "남")) or "").startswith("반대 특성은 같이 고를 수 없다")]
-check("② 시트 조립: 반대 짝 8쌍 × 양 순서 전부 거절('반대 특성은 같이 고를 수 없다: …') · 사이에 다른 특성이 끼어도", not bad_pairs
+check("② 시트 조립: 반대 짝 9쌍 × 양 순서 전부 거절('반대 특성은 같이 고를 수 없다: …') · 사이에 다른 특성이 끼어도", not bad_pairs
       and (rejects(lambda: sheetkit.build_sheet("전사", ["수다스러운", "신중한", "과묵한"], "가", "남")) or "").endswith("수다스러운 · 과묵한"), bad_pairs)
-ok_combo = sheetkit.build_sheet("전사", ["미식가", "소박한", "대식가"], "가", "남")
-check("② 반대가 아닌 조합은 받는다(미식가·소박한은 짝이 아니다 — 겹침 규칙으로 합친다) · 최대 3 · 모르는 이름 거절",
-      ok_combo["traits"] == ["미식가", "소박한", "대식가"] and ok_combo["persona"] == "미식가, 소박한, 대식가"
-      and rejects(lambda: sheetkit.build_sheet("전사", ["미식가", "소박한", "대식가", "신중한"], "가", "남"))
+ok_combo = sheetkit.build_sheet("전사", ["미식가", "대식가", "신중한"], "가", "남")
+check("② 반대가 아닌 조합은 받는다(미식가·대식가 — 겹침 규칙으로 합친다) · 최대 3 · 모르는 이름 거절",
+      ok_combo["traits"] == ["미식가", "대식가", "신중한"] and ok_combo["persona"] == "미식가, 대식가, 신중한"
+      and rejects(lambda: sheetkit.build_sheet("전사", ["미식가", "대식가", "신중한", "용맹한"], "가", "남"))
       and (rejects(lambda: sheetkit.build_sheet("전사", ["사악한"], "가", "남")) or "").startswith("등재되지 않은 특성"))
 check("② 파티 조립·저장 캐릭터도 같은 검증(시트 조립기 하나) — 반대 짝은 거절",
       rejects(lambda: sheetkit.build_party([{"job": "도적", "traits": ["용맹한", "겁 많은"], "name": "가", "sex": "여"}]))
@@ -259,8 +270,10 @@ D, ST = G.Dungeon.from_ascii(["#########", "#123...>#", "#########"], seed=3)
 D.turn = 1
 
 
-def body(traits, char="1", taste=None):
+def body(traits, char="1", taste=None, raw=None):
     sh = sheetkit.build_sheet("전사", traits, "몸" + char, "남", persona_text="시험", taste=taste)
+    if raw is not None:                              # 옛 시트 — 조립기를 거치지 않은 특성(러너는 반대 짝을 막지 않는다 · p0.5.24 미식가+소박한)
+        sh = dict(sh, traits=list(raw))
     b = G.spawn(D, char, [], sheet=sh)
     b["moods"] = []
     return b
@@ -303,8 +316,8 @@ print("── ⑤ 미식가·소박한 — 기분 조각의 크기")
 TASTE = {"likes": ["고기"], "dislikes": ["과일"]}
 
 
-def mood_sums(traits, char):
-    b = body(traits, char, taste=TASTE)
+def mood_sums(traits, char, raw=None):
+    b = body(traits, char, taste=TASTE, raw=raw)
     out = {}
     for food, kind in (("meal", "like"), ("apple", "dislike"), ("ration", "plain")):
         b["needs"]["hunger"], b["moods"] = 41, []
@@ -317,7 +330,7 @@ def mood_sums(traits, char):
 _, m0 = mood_sums([], "4")
 b_g, m_g = mood_sums(["미식가"], "5")
 b_s, m_s = mood_sums(["소박한"], "6")
-b_gs, m_gs = mood_sums(["미식가", "소박한"], "7")
+b_gs, m_gs = mood_sums([], "7", raw=["미식가", "소박한"])   # p0.5.24 부터 반대 짝 — 조립기는 거절하니 옛 시트로
 check("⑤ 특성 없음: 좋아함 +15 · 싫어함 −5 · 기본 +8(정의 그대로 — 조각 시간 120·60·60)",
       m0 == {"like": ("like", 15, 120), "dislike": ("dislike", -5, 60), "plain": ("plain", 8, 60)}, m0)
 check("⑤ 미식가: 좋아함·싫어함만 150%(+23 · −8 — 0 에서 먼 쪽 반올림) · 기본 +8 그대로 · 조각 시간 그대로",
@@ -325,7 +338,7 @@ check("⑤ 미식가: 좋아함·싫어함만 150%(+23 · −8 — 0 에서 먼 
       and b_g.get("trait_fx") == {"hunger": {"mood": {"dislike": 150, "like": 150}}}, m_g)
 check("⑤ 소박한: 셋 다 50%(+8 · −3 · +4) · 조각 시간 그대로",
       m_s == {"like": ("like", 8, 120), "dislike": ("dislike", -3, 60), "plain": ("plain", 4, 60)}, m_s)
-check("⑤ 미식가 + 소박한: 곱(좋아함·싫어함 75% · 기본 50%) — +11 · −4 · +4",
+check("⑤ 미식가 + 소박한(옛 시트 — p0.5.24 부터 반대 짝, 러너는 막지 않는다): 곱(좋아함·싫어함 75% · 기본 50%) — +11 · −4 · +4",
       m_gs == {"like": ("like", 11, 120), "dislike": ("dislike", -4, 60), "plain": ("plain", 4, 60)}, m_gs)
 b_s["needs"]["hunger"], b_s["moods"] = 20, []
 b_g["needs"]["hunger"], b_g["moods"] = 20, []
@@ -400,8 +413,8 @@ old_presets = {K: 2, "version": 1, "presets": [{"id": "p1", "label": "미나", "
 before = json.dumps(old_presets, ensure_ascii=False, sort_keys=True)
 up = savedata.upgrade("presets", old_presets)
 s1, s2 = up["presets"][0]["slot"], up["presets"][1]["slot"]
-check("⑨ presets 2→3: needs·needs_meta 를 걷는다 · taste 그대로 · 반대 짝(수다스러운·과묵한)은 먼저 고른 쪽만 · 짝 없는 특성은 그대로 · 원본 dict 불변",
-      up.get(K) == savedata.CURRENT["presets"] == 3 and s1["traits"] == ["수다스러운", "신중한"] and s2["traits"] == ["대식가"]
+check("⑨ presets 2→3(→4): needs·needs_meta 를 걷는다 · taste 그대로 · 반대 짝(수다스러운·과묵한)은 먼저 고른 쪽만 · 짝 없는 특성은 그대로 · 원본 dict 불변",
+      up.get(K) == savedata.CURRENT["presets"] == 4 and s1["traits"] == ["수다스러운", "신중한"] and s2["traits"] == ["대식가"]
       and not ({"needs", "needs_meta"} & (set(s1) | set(s2))) and s1["taste"] == {"likes": ["빵"], "dislikes": []}
       and json.dumps(old_presets, ensure_ascii=False, sort_keys=True) == before, up)
 PR = os.path.join(TMP, "character_presets.json")
@@ -414,7 +427,7 @@ check("⑨ 옛 저장 캐릭터 파일을 저장소가 그대로 읽는다(반�
       [e["id"] for e in lst] == ["p1", "p2"] and lst[0]["slot"]["traits"] == ["수다스러운", "신중한"] and lst[0]["slot"].get("taste") == {"likes": ["빵"], "dislikes": []}
       and "needs" not in lst[0]["slot"], lst)
 v0 = savedata.upgrade("presets", {"version": 1, "presets": [{"id": "p0", "label": "x", "slot": dict(SLOT2, traits=["용맹한", "겁 많은"])}]})
-check("⑨ 판 번호 없는 옛 파일도 0→1→2→3 차례로(반대 짝 정리까지)", v0.get(K) == 3 and v0["presets"][0]["slot"]["traits"] == ["용맹한"], v0)
+check("⑨ 판 번호 없는 옛 파일도 0→1→2→3→4 차례로(반대 짝 정리까지)", v0.get(K) == 4 and v0["presets"][0]["slot"]["traits"] == ["용맹한"], v0)
 sheet_old = dict(sheetkit.build_sheet("궁수", ["수다스러운", "충직한"], "피른", "여"), needs={"hunger": {"level": "낮음"}},
                  needs_meta={"by": "gemini_api"}, taste={"likes": ["단것"], "dislikes": []})
 old_party = {K: 1, "_readme": "옛", "1": sheet_old, "2": dict(sheet_old, name="두란", traits=["수다스러운", "과묵한"], persona="수다스러운, 과묵한")}
@@ -431,8 +444,8 @@ b_old = G.spawn(D, "2", [], sheet=lp["2"])
 check("⑨ 옛 파티 파일을 러너가 그대로 읽는다(폴백 없음) — 옛 시트에 반대 짝이 둘 다 있어도(러너는 막지 않는다) 사교 등급은 서로 지워 보통 · 입맛은 몸에",
       "폴백" not in err_p.getvalue() and "needs" not in lp["1"] and lp["1"]["taste"] == {"likes": ["단것"], "dislikes": []}
       and NE.trait_effects(lp["2"]["traits"]) == ({}, {}) and b_old.get("taste") == {"likes": ["단것"], "dislikes": []}, err_p.getvalue()[-200:])
-check("⑨ 저장 판: party 2 · presets 3 · 이관 함수 등록부 완결(0..현재-1)",
-      savedata.CURRENT["party"] == 2 and savedata.CURRENT["presets"] == 3
+check("⑨ 저장 판: party 2 · presets 4(p0.5.24) · 이관 함수 등록부 완결(0..현재-1)",
+      savedata.CURRENT["party"] == 2 and savedata.CURRENT["presets"] == 4
       and all(sorted(savedata.MIGRATIONS[k]) == list(range(savedata.CURRENT[k])) for k in savedata.CURRENT))
 # p0522b 스냅샷 11→12 — 0.5.21 에서 멈춘 판(시트에 생성 호출의 needs·needs_meta, 몸에 그 무게 need_w)을 이어간다
 sA, sB, sC, sW, sD = (body(["대식가", "미식가"], "1"), body([], "2"), body(["소박한"], "3"), body(["수다스러운"], "4"), body([], "5"))
@@ -587,9 +600,94 @@ check("⑫ 배선: VERSION 0.5.23 이상 · PATCH_NOTES 0.5.23 · STREAM_FORMAT(
       tuple(int(x) for x in src("VERSION").strip().split(".")) >= (0, 5, 23) and "## 0.5.23" in src("docs", "PATCH_NOTES.md")
       and "trait_mood" in src("STREAM_FORMAT.md") and "p0.5.23" in src("docs", "CHANGELOG.md"))
 
+# ─────────────────────────────────────────────────────────────────────────────
+print("── ⑬ p0.5.24 미식가 ↔ 소박한 반대 짝 · 동료 특성")
+check("⑬ 미식가 ↔ 소박한: 정의가 서로 가리킨다 · 조립 표 · 화면이 받는 표(/api/presets.opposites) · 조립 거절(양 순서 — 사이에 다른 특성이 끼어도)",
+      comp("미식가").get("opposite") == "simple" and comp("소박한").get("opposite") == "gourmet"
+      and DATA["opposites"].get("미식가") == "소박한" and DATA["opposites"].get("소박한") == "미식가" and PL["opposites"].get("미식가") == "소박한"
+      and rejects(lambda: sheetkit.build_sheet("궁수", ["미식가", "대식가", "소박한"], "가", "여")) == "반대 특성은 같이 고를 수 없다: 미식가 · 소박한"
+      and rejects(lambda: sheetkit.build_sheet("궁수", ["소박한", "미식가"], "가", "여")) == "반대 특성은 같이 고를 수 없다: 소박한 · 미식가")
+SLOT3 = {"name": "가", "sex": "여", "job": "도적", "traits": ["미식가", "소박한", "신중한"], "persona": "말이 짧다.", "background": "", "look": None,
+         "taste": {"likes": ["빵"], "dislikes": []}}
+V3 = {K: 3, "version": 1, "presets": [{"id": "q1", "label": "가", "slot": SLOT3},
+                                      {"id": "q2", "label": "나", "slot": dict(SLOT3, name="나", traits=["소박한", "대식가", "미식가"])},
+                                      {"id": "q3", "label": "다", "slot": dict(SLOT3, name="다", traits=["대식가"])}]}
+v3_before = json.dumps(V3, ensure_ascii=False, sort_keys=True)
+up3 = savedata.upgrade("presets", V3)
+t3 = [e["slot"]["traits"] for e in up3["presets"]]
+check("⑬ presets 3→4: 둘 다 고른 슬롯은 먼저 고른 쪽만(0.5.22 이관과 같은 규칙 — 다른 특성·순서 그대로) · 짝 없는 슬롯 그대로 · 다른 칸(입맛 등) 그대로 · 원본 불변 · 등록부 3 = _p3_pairs",
+      up3.get(K) == savedata.CURRENT["presets"] == 4 and t3 == [["미식가", "신중한"], ["소박한", "대식가"], ["대식가"]]
+      and all({k: v for k, v in a["slot"].items() if k != "traits"} == {k: v for k, v in b["slot"].items() if k != "traits"}
+              for a, b in zip(V3["presets"], up3["presets"]))
+      and json.dumps(V3, ensure_ascii=False, sort_keys=True) == v3_before and savedata.MIGRATIONS["presets"][3] is savedata._p3_pairs, t3)
+PR3 = os.path.join(TMP, "presets_v3.json")
+jw(PR3, V3)
+with open(PR3, "rb") as f:
+    raw3 = f.read()
+try:
+    st3 = PresetStore(PR3, DATA)
+    lst3 = st3.list()
+    st3.save(dict(lst3[2]["slot"], name="라"), "라")
+except ValueError as e_:                             # 이관이 새 짝을 정리하지 않으면 여기서 목록 전체가 막힌다(이 칸이 지키는 사고)
+    lst3 = [{"id": "막힘: %s" % e_}]
+with open(PR3, encoding="utf-8") as f:
+    doc3 = json.load(f)
+check("⑬ 옛 v3 저장 캐릭터 파일(0.5.22~23 — 미식가·소박한을 같이 고를 수 있던 때)을 저장소가 읽는다(목록이 막히지 않는다) · 저장하면 판 4 · 덮기 전 .v3.bak = 원본 바이트",
+      [e["id"] for e in lst3] == ["q1", "q2", "q3"] and lst3[0]["slot"]["traits"] == ["미식가", "신중한"] and lst3[0]["slot"].get("taste") == {"likes": ["빵"], "dislikes": []}
+      and doc3.get(K) == 4 and [e["slot"]["traits"] for e in doc3["presets"]][:2] == [["미식가", "신중한"], ["소박한", "대식가"]]
+      and os.path.exists(PR3 + ".v3.bak") and open(PR3 + ".v3.bak", "rb").read() == raw3, [e.get("id") for e in lst3])
+COMP = ENT.companions()
+CS = {cid: sheetkit.build_companion_sheet(d, data=DATA) for cid, d in COMP.items()}
+LINES = {cid: s["persona"] for cid, s in CS.items()}
+check("⑬ 동료 셋의 시트: 특성 = 관리자 선택 그대로 · 성격 줄 = '특성, 특성. 서술'(조립기 규칙 — 서술은 말 파일의 sheet.persona 그대로) · 몸 = 직업 수치",
+      set(CS) == set(MATES) and all(CS[cid]["traits"] == MATES[cid][1] and LINES[cid] == ", ".join(MATES[cid][1]) + ". " + COMP[cid]["comps"]["sheet"]["persona"]
+                                    and CS[cid]["hp"] == DATA["jobs"][CS[cid]["job"]]["hp"] for cid in MATES), LINES)
+PJ = {s["name"]: s for k, s in party_json.items() if not k.startswith("_")}
+SOLO = {s["name"]: s for k, s in json.loads(src("party_solo.json")).items() if not k.startswith("_")}
+check("⑬ 기본 파티(party.json)·솔로 시트(party_solo.json) = 같은 세 사람 · 같은 특성 · 성격 줄이 동료 프리셋이 조립한 줄과 바이트 같다(말투·목표도 같다)",
+      len(PJ) == len(SOLO) == 3 and all(P[MATES[cid][0]].get("traits") == MATES[cid][1] and P[MATES[cid][0]]["persona"] == LINES[cid]
+                                         and P[MATES[cid][0]].get("speech") == CS[cid].get("speech") and P[MATES[cid][0]].get("goal") == CS[cid].get("goal")
+                                         for P in (PJ, SOLO) for cid in MATES), {n: s.get("persona") for n, s in PJ.items()})
+with contextlib.redirect_stderr(io.StringIO()) as err13:
+    LP = R.load_party(os.path.join(HERE, "party.json"))
+PP13 = os.path.join(TMP, "party_mates.json")
+sheetkit.write_party(sheetkit.build_party([{"companion": c} for c in ("duran", "kaya", "pirn")], data=DATA, companions=COMP), PP13)
+with contextlib.redirect_stderr(io.StringIO()) as err13b:
+    LM = R.load_party(PP13)
+D13, _st13 = G.Dungeon.from_ascii(["#########", "#123...>#", "#########"], seed=5)
+bots13, mates13 = [], []
+for c in sorted(LP):
+    bots13.append(G.spawn(D13, c, bots13, sheet=LP[c]))
+for c in sorted(LM):
+    mates13.append(G.spawn(D13, c, mates13, sheet=LM[c]))
+sh13 = {b["name"]: brains._sheet(b, bots13) for b in bots13}
+check("⑬ 완성 프롬프트의 시트: 기본 파티 = '- 성격: 용맹한, 충직한. 용맹하고 …' · 동료 프리셋으로 짠 파티(론처 → 파티 파일 → 러너)와 성격 줄이 같다 · 폴백 없음",
+      "폴백" not in err13.getvalue() + err13b.getvalue() and sorted(b["name"] for b in bots13) == sorted(b["name"] for b in mates13) == ["두란", "카야", "피른"]
+      and all(("- 성격: %s\n" % LINES[cid]) in sh13[MATES[cid][0]] for cid in MATES)
+      and all(b["persona"] == m["persona"] and b.get("traits") == m.get("traits") for b in bots13 for m in mates13 if b["name"] == m["name"])
+      and "- 성격: 용맹한, 충직한. 용맹하고 정면돌파를 즐긴다." in sh13["두란"], sh13.get("두란", "")[:200])
+check("⑬ 엔진: 준비 중 등급은 넷만(충직한 → 두란 애정 높음 · 과묵한 → 카야 사교 낮음 · 호기심 많은·수다스러운 → 피른 호기심·사교 높음 — 용맹한·신중한은 글만) — "
+      "몸에 무게·배율 칸이 없다 · 기분 기본값 0 · 단계 있는 욕구만(배고픔)",
+      {b["name"]: NE.trait_effects(b.get("traits")) for b in bots13} == {"두란": ({"affection": "높음"}, {}), "카야": ({"social": "낮음"}, {}),
+                                                                       "피른": ({"curiosity": "높음", "social": "높음"}, {})}
+      and not any({"need_w", "trait_fx"} & set(b) for b in bots13 + mates13) and all(NE.trait_mood(b.get("traits")) == 0 for b in bots13)
+      and all(set(b.get("needs") or {}) == {"hunger"} for b in bots13))
+CP = {c["id"]: c for c in launcher.companions_payload(DATA)}
+cp_raw = json.dumps(list(CP.values()), ensure_ascii=False)
+check("⑬ 론처 동료 목록(/api/presets.companions): traits = 특성 이름 · 성격 = 조립한 줄(앞머리 '특성. ' — 동료 칸이 그 앞머리를 '특성' 줄로 옮긴다) · id·효과 칸 없음",
+      all(CP[cid].get("traits") == MATES[cid][1] and CP[cid]["persona"] == LINES[cid] and CP[cid]["persona"].startswith(", ".join(MATES[cid][1]) + ". ") for cid in MATES)
+      and not any(t in cp_raw for t in ("trait_ids", "trait_fx", "effects", '"brave"', '"loyal"', '"cautious"', '"taciturn"', '"curious"', '"talkative"')),
+      {cid: (c.get("traits"), c.get("persona")) for cid, c in CP.items()})
+check("⑬ 동료 칸: '특성' 줄 = 이름만(', ' 로 · 효과·수치 없음) · 성격 줄은 그 앞머리를 뺀 서술 · 저장 캐릭터 동료도 같은 길(slot.traits)",
+      "row('특성', kw) + row('성격', free)" in html and "const kw = (m.traits || []).join(', ');" in html
+      and "m.persona.startsWith(kw + '. ') ? m.persona.slice(kw.length + 2)" in html and "traits: p.slot.traits || []" in html)
+check("⑬ 배선: VERSION 0.5.24 이상 · PATCH_NOTES 0.5.24 · CHANGELOG p0.5.24",
+      tuple(int(x) for x in src("VERSION").strip().split(".")) >= (0, 5, 24) and "## 0.5.24" in src("docs", "PATCH_NOTES.md")
+      and "p0.5.24" in src("docs", "CHANGELOG.md"))
+
 shutil.rmtree(TMP, ignore_errors=True)
 print()
 if C.failed:
     print("FAIL — %d/%d" % (C.failed, C.n))
     sys.exit(1)
-print("ALL PASS — verify_traits (p0.5.22 성격 키워드 → 캐릭터 특성 · p0.5.23 낙천↔냉소 기분 기본값: %d checks · 저장소 꼴·검증기·반대 짝·이름 바이트·대식가·미식가·소박한·겹침·준비 중·누설·이관·배선·낙천·냉소, 실 LLM 0콜)" % C.n)
+print("ALL PASS — verify_traits (p0.5.22 성격 키워드 → 캐릭터 특성 · p0.5.23 낙천↔냉소 기분 기본값 · p0.5.24 미식가↔소박한 짝·동료 특성: %d checks · 저장소 꼴·검증기·반대 짝·이름 바이트·대식가·미식가·소박한·겹침·준비 중·누설·이관·배선·낙천·냉소·동료, 실 LLM 0콜)" % C.n)

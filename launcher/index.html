@@ -1008,7 +1008,7 @@ function mateOf(v) {                             // 선택값 → 화면·요청
     return c ? { kind: 'c', ...c, chars: c.prompt_chars || 0 } : null;
   }
   const p = characterPresets.find(x => x.id === id && x.id !== slotFrom[0]);   // 1번 칸에 선 저장본은 동료로 못 고른다(같은 사람 둘)
-  return p ? { kind: 'p', id, name: p.slot.name, job: p.slot.job, sex: p.slot.sex, persona: personaOf(p.slot), about: p.label,
+  return p ? { kind: 'p', id, name: p.slot.name, job: p.slot.job, sex: p.slot.sex, persona: personaOf(p.slot), traits: p.slot.traits || [], about: p.label,
                look: p.slot.look, chars: [...personaOf(p.slot), ...(p.slot.background || '')].length, slot: p.slot, preset: p } : null;
 }
 function defaultMates() {                        // 첫 화면의 기본 동료 — 내 직업과 다른 직업의 프리셋을 앞에서부터 둘(⚠️임시 가정)
@@ -1019,11 +1019,13 @@ function defaultMates() {                        // 첫 화면의 기본 동료 
 function mateInfo(m) {
   const row = (k, t) => t ? `<div><span class="muted">${k}</span> ${esc(t)}</div>` : '';
   const tt = tasteSummary(m.kind === 'p' ? m.slot.taste : m.taste);    // p0.5.22 입맛 — 동료 칸은 한 줄 요약만(있을 때 · 고르기만 하는 칸)
+  const kw = (m.traits || []).join(', ');                             // p0.5.24 특성 — 이름만(효과·수치 없음). 성격 줄 앞머리의 특성 이름은 이 줄로 옮겨 보인다
+  const free = !kw ? m.persona : m.persona === kw ? '' : m.persona.startsWith(kw + '. ') ? m.persona.slice(kw.length + 2) : m.persona;
   return `<div class="look"><canvas class="lookPrev" width="16" height="16"></canvas><div class="lookBody">
       <div><b>${esc(m.name)}</b> · ${esc(m.job)}(${esc(m.sex)})${m.kind === 'p' ? ' · 내가 저장한 캐릭터' + esc(campaignLine(m.preset)) : ''}</div>
       ${m.kind === 'c' && m.about ? `<div class="hint">${esc(m.about)}</div>` : ''}
       ${tt ? `<div class="hint" data-mate-taste>${esc(tt)}</div>` : ''}
-    </div></div>` + row('성격', m.persona) + row('말투', m.speech) + row('목표', m.goal);
+    </div></div>` + row('특성', kw) + row('성격', free) + row('말투', m.speech) + row('목표', m.goal);
 }
 function renderMates() {
   if (!presets) return;

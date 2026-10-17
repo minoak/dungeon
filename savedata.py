@@ -19,7 +19,7 @@
   · 더 새 판(되돌린 코드가 새 패치의 파일을 읽음)은 내용을 손대지 않고 돌려준다 — 모르는 칸은 저장소가 버릴 수 있으므로 덮어쓰기 전 백업이 지킨다.
 대상과 빠진 것(p0.5.1 목록 — 새 저장 파일이 생기면 여기에 종류를 더한다):
   party     party_custom.json(론처가 쓰는 내 파티 · p0.5.22 판 2) · party*.json(저장소 기본 파티, 읽기만)   — sheetkit.write_party / show_runner.load_party
-  presets   character_presets.json(저장 캐릭터 · p0.5.20 판 2 — 슬롯의 욕구 칸 · p0.5.22 판 3 — 욕구 칸을 걷는다) — character_presets.PresetStore
+  presets   character_presets.json(저장 캐릭터 · p0.5.20 판 2 — 슬롯의 욕구 칸 · p0.5.22 판 3 — 욕구 칸을 걷는다 · p0.5.24 판 4 — 미식가↔소박한 짝) — character_presets.PresetStore
   campaign  campaign.json(저장 캐릭터별 원정 기록, 판 기록의 투영)                             — campaign.Book
   bestiary  bestiary.json(도감 원장 — 죽어도 남는 지식)                                        — bestiary.Issuer
   account   accounts/<id>/account.json(공개 서버 계정 — 열쇠 지문·별명)                       — accounts.Accounts
@@ -37,7 +37,7 @@ import time
 
 KEY = "_schema_version"
 
-CURRENT = {"party": 2, "presets": 3, "campaign": 1, "bestiary": 1, "account": 1}
+CURRENT = {"party": 2, "presets": 4, "campaign": 1, "bestiary": 1, "account": 1}
 
 
 def _stamp_only(doc):
@@ -65,31 +65,54 @@ def _party_traits(doc):
     return {k: (v if str(k).startswith("_") else _drop_needs(v)) for k, v in doc.items()}
 
 
+def _opposites():
+    import sheetkit                          # 지연 import — sheetkit 이 이 모듈을 import 한다
+    return sheetkit.load_traits().get("opposites") or {}
+
+
+def _first_of_pairs(slot, opp):
+    """반대 짝을 둘 다 고른 슬롯 → 먼저 고른 쪽만 남긴다(나머지 순서 그대로). traits 가 목록이 아니면 그대로."""
+    tr = slot.get("traits")
+    if not isinstance(tr, list):
+        return slot
+    keep = []
+    for t in tr:
+        if not (isinstance(t, str) and opp.get(t) in keep):
+            keep.append(t)
+    return {**slot, "traits": keep}
+
+
+def _each_slot(doc, fn):
+    """presets 문서의 슬롯마다 fn(slot) — 꼴이 다른 항목·presets 가 목록이 아닌 문서는 그대로."""
+    if not isinstance(doc.get("presets"), list):
+        return doc
+    out = []
+    for e in doc["presets"]:
+        if isinstance(e, dict) and isinstance(e.get("slot"), dict):
+            e = {**e, "slot": fn(e["slot"])}
+        out.append(e)
+    return {**doc, "presets": out}
+
+
 def _p2_traits(doc):
     """presets 2→3(p0.5.22 특성): 슬롯의 needs·needs_meta 를 걷는다(taste 는 그대로). traits 의 옛 키워드는 그대로 특성 이름이다.
     반대 짝(수다스러운 ↔ 과묵한 등 — 0.5.22 부터 같이 못 고른다)을 둘 다 고른 옛 슬롯은 먼저 고른 쪽만 남긴다 — 그대로 두면 저장소의
     검증(normalize_slot)이 그 슬롯을 거절해 저장 캐릭터 목록 전체를 못 읽는다. 반대 짝 표는 특성 저장소(sheetkit.load_traits — 지연 import)."""
-    import sheetkit                          # 지연 import — sheetkit 이 이 모듈을 import 한다
-    opp = sheetkit.load_traits().get("opposites") or {}
-    out = []
-    for e in doc.get("presets") if isinstance(doc.get("presets"), list) else []:
-        if isinstance(e, dict) and isinstance(e.get("slot"), dict):
-            slot = _drop_needs(e["slot"])
-            tr = slot.get("traits")
-            if isinstance(tr, list):
-                keep = []
-                for t in tr:
-                    if not (isinstance(t, str) and opp.get(t) in keep):
-                        keep.append(t)
-                slot = {**slot, "traits": keep}
-            e = {**e, "slot": slot}
-        out.append(e)
-    return {**doc, "presets": out} if isinstance(doc.get("presets"), list) else doc
+    opp = _opposites()
+    return _each_slot(doc, lambda s: _first_of_pairs(_drop_needs(s), opp))
+
+
+def _p3_pairs(doc):
+    """presets 3→4(p0.5.24 미식가 ↔ 소박한 = 반대 짝): 0.5.22~23 에서 둘을 같이 골라 둔 슬롯은 2→3 과 같은 규칙으로 먼저 고른 쪽만 남긴다
+    (그대로 두면 저장소의 검증이 그 슬롯을 거절해 목록 전체를 못 읽는다). 표는 지금 특성 저장소 — 다른 짝도 같은 규칙(저장소가 막아 온 짝이라 보통 바꿀 것이 없다)."""
+    opp = _opposites()
+    return _each_slot(doc, lambda s: _first_of_pairs(s, opp))
 
 
 MIGRATIONS = {kind: {0: _stamp_only} for kind in CURRENT}
 MIGRATIONS["presets"][1] = _p1_needs
 MIGRATIONS["presets"][2] = _p2_traits
+MIGRATIONS["presets"][3] = _p3_pairs
 MIGRATIONS["party"][1] = _party_traits
 
 

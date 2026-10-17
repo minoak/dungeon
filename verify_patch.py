@@ -165,8 +165,8 @@ store = PresetStore(PR, data)
 lst = store.list()
 store.save(dict(slot, name="두란", job="전사"), "두란")
 doc = jload(PR)
-check("④ presets: 옛 파일(판 번호 없음)을 읽고 · 저장하면 지금 판(_schema_version 3 — p0.5.22 슬롯의 욕구 칸을 걷음) · .v0.bak = 원본 · v0.5.0 의 읽기 조건(version 1·presets 목록) 그대로",
-      [e["id"] for e in lst] == ["pid1"] and doc.get(K) == savedata.CURRENT["presets"] == 3 and raw(PR + ".v0.bak") == pr0
+check("④ presets: 옛 파일(판 번호 없음)을 읽고 · 저장하면 지금 판(_schema_version 4 — p0.5.22 슬롯의 욕구 칸을 걷음 · p0.5.24 미식가↔소박한 짝) · .v0.bak = 원본 · v0.5.0 의 읽기 조건(version 1·presets 목록) 그대로",
+      [e["id"] for e in lst] == ["pid1"] and doc.get(K) == savedata.CURRENT["presets"] == 4 and raw(PR + ".v0.bak") == pr0
       and doc.get("version") == 1 and isinstance(doc.get("presets"), list) and len(doc["presets"]) == 2, doc.get(K))
 jdump(PR, {K: 7, "version": 1, "presets": [{"id": "pid9", "label": "카야", "slot": slot}]})
 pr7 = raw(PR)

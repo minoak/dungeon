@@ -595,6 +595,7 @@ def companions_payload(data=None):
     for cid, d in defs.items():
         s = sheetkit.build_companion_sheet(d, data=data)
         out.append({"id": cid, "name": s["name"], "job": s["job"], "sex": s["sex"], "persona": s["persona"],
+                    "traits": list(s.get("traits") or []),   # p0.5.24(additive) 특성 이름 — 화면은 이름만 보인다(효과·수치 없음)
                     "speech": s.get("speech"), "goal": s.get("goal"), "background": s.get("background"),
                     "about": (d["comps"].get("story") or {}).get("trait"), "look": s.get("look"),
                     **({"taste": s["taste"]} if s.get("taste") else {}),   # p0.5.20 입맛(데이터에 있을 때만 — 화면은 동료 칸 한 줄 요약)
