@@ -86,10 +86,8 @@ USE_KINDS = {'read': ('text', 'texts', 'verb'),   # 적힌 글을 읽는다 — 
              'rummage': ('loot',),           # 뒤진다 — loot[{item, w}] 가중 추첨(세계 시드·자리에서 정해진다 — 판정 rng 무접촉). 늘 한 번
              'lodge': ('price',),            # 묵는다 — HP 전부 + 상태 태그 소거(D34 '지우기는 휴식뿐': 묵기는 휴식이다) · p0.5.13 price(묵는 값, 골드 — 없으면 0)
              'warm': ('heal',),              # 불을 쬔다 — heal(기본 1)
-             'shop': ('sells', 'buys', 'line_free'),   # p0.5.13(경제 1a) 가게 — sells[{item: 오브젝트 정의 id, price}](파는 것) · buys{아이템 type: 값}(파는 것 밖에 사들이는 것).
+             'shop': ('sells', 'buys'),      # p0.5.13(경제 1a) 가게 — sells[{item: 오브젝트 정의 id, price}](파는 것) · buys{아이템 type: 값}(파는 것 밖에 사들이는 것).
              #   이 가게가 파는 물건은 파는 값의 절반(내림)에 되산다(SHOP_RESALE — 사서 되팔아 돈을 불리는 길을 막는다). 상품은 문턱 2칸 안에서 ID(g<n>)가 붙은 관측 대상이다
-             #   p0.5.25 sells 한 칸의 free(선택, 정수≥1) = 판 시작 때 모험가마다 받는 무료 횟수(그 자리에서 먹는 음식만 — 몸의 free 칸) ·
-             #   line_free = 무료로 받았을 때의 결과 문장({n} = 남은 무료 횟수 · 말 파일) — free 가 있는 가게에만, 있으면 꼭
              'offer': ()}                    # D95(09-20) 바친다 — 모은 보물을 신에게 내고 몸의 한 칸(힘·민첩·최대 HP)이 +1.
 #   무엇이 오를지는 신이 고른다(바치는 이가 지정하지 않는다). 값·후보는 상수 한 곳(interactables.OFFER_COST·OFFER_STATS)이라
 #   정의가 읽는 칸이 없다. 세계의 스위치(Dungeon.offer_on — 러너 DUNGEON_OFFER)를 켠 판에서만 쓰임이 선다(interactables.use_of).
@@ -273,17 +271,11 @@ def _use_problems(rel, use):
         out.append('%s: use(lodge).price 는 정수≥0(묵는 값, 골드)' % rel)
     if kind == 'shop':                               # p0.5.13 가게 — 상품의 정의 id 가 실제 아이템인지는 2차 검사(_problems 끝)가 본다
         sells, buys = use.get('sells'), use.get('buys')
-        if not (isinstance(sells, list) and sells and all(isinstance(e, dict) and {'item', 'price'} <= set(e) <= {'item', 'price', 'free'} and isinstance(e['item'], str)
-                                                          and type(e['price']) is int and e['price'] >= 1 and _pos_int(e.get('free', 1)) for e in sells)):
-            out.append('%s: use(shop).sells 는 [{item: 오브젝트 정의 id, price: 정수≥1, free?: 정수≥1}] 목록(비어 있지 않게)' % rel)
+        if not (isinstance(sells, list) and sells and all(isinstance(e, dict) and set(e) == {'item', 'price'} and isinstance(e['item'], str)
+                                                          and type(e['price']) is int and e['price'] >= 1 for e in sells)):
+            out.append('%s: use(shop).sells 는 [{item: 오브젝트 정의 id, price: 정수≥1}] 목록(비어 있지 않게)' % rel)
         elif len({e['item'] for e in sells}) != len(sells):
             out.append('%s: use(shop).sells 에 같은 물건이 두 번 있다' % rel)
-        else:                                        # p0.5.25 무료 횟수가 있는 가게엔 무료 결과 문장이 꼭 있다({n} 한 번 · 다른 중괄호 없음) — 없는 가게엔 두지 않는다
-            lf, has_free = use.get('line_free'), any('free' in e for e in sells)
-            if has_free and not (isinstance(lf, str) and lf.strip() and lf.count('{n}') == 1 and '{' not in lf.replace('{n}', '') and '}' not in lf.replace('{n}', '')):
-                out.append('%s: use(shop).sells 에 free 가 있으면 line_free(무료 결과 문장 — {n} 자리 한 번, 다른 중괄호 없음)가 있어야 한다' % rel)
-            elif lf is not None and not has_free:
-                out.append('%s: use(shop).line_free 는 sells 에 free 가 있는 가게만' % rel)
         if buys is not None and not (isinstance(buys, dict) and all(k in SHOP_BUY_TYPES and type(v) is int and v >= 1 for k, v in buys.items())):
             out.append('%s: use(shop).buys 는 {%s 중 하나: 정수≥1}' % (rel, '|'.join(SHOP_BUY_TYPES)))
         if use.get('once'):
@@ -302,8 +294,6 @@ def _shop_problems(rel, use, defs_by_id):
                        % (rel, e.get('item') if isinstance(e, dict) else e, '|'.join(SHOP_ITEM_TYPES)))
         else:
             types.add(df['type'])
-            if 'free' in e and df['type'] != 'food':   # p0.5.25 무료는 그 자리에서 먹는 음식만(사는 순간 먹는 길 하나 — 결과 문장도 그 길의 것)
-                out.append('%s: use(shop).sells 의 %r 에 free 를 둘 수 없다 — 무료는 그 자리에서 먹는 음식(type food)만' % (rel, e['item']))
     for k in (use.get('buys') or {}) if isinstance(use.get('buys'), dict) else ():
         if k in types:
             out.append('%s: use(shop).buys 의 %r 는 이 가게가 파는 type 이다 — 파는 물건은 파는 값의 절반에 되산다(따로 적지 않는다)' % (rel, k))
@@ -465,7 +455,7 @@ def _trait_problems(rel, d, comps):
 LIFE_PARTS = {'npc': ('npc', 'story'), 'building': ('building', 'story', 'use')}
 LIFE_NPC_KEYS = ('line', 'line_again', 'role', 'persona', 'hail', 'hail_no_potion', 'hail_board', 'hail_return',
                  'hail_oracle', 'hail_party', 'line_party',   # p0.5.17: hail_rumor(주점 소문 인사) 칸은 거뒀다
-                 'line_free_end')   # p0.5.25 맡은 가게에서 손님이 마지막 무료 끼니를 받을 때의 정해진 말(마을 생활 판의 가게에만 무료가 있다)
+                 'line_too_poor')   # p0.5.27 맡은 가게에서 손님이 값이 모자라 사지 못할 때의 정해진 말(마을 생활 판의 가게)
 
 
 def _life_problems(rel, kind, comps):
@@ -556,9 +546,9 @@ def _problems(pairs, root):
         if kind == 'npc' and (comps.get('npc') or {}).get('shop') is not None:   # p0.5.13 NPC 가 맡은 가게(건물 정의 id) — NPC 두뇌 사실에 그 가게의 값이 실린다
             npc_shops.append((rel, comps['npc']['shop']))
         if kind == 'npc' and (comps.get('npc') or {}).get('shop') is None and any(
-                isinstance(p_, dict) and p_.get('line_free_end') is not None
+                isinstance(p_, dict) and p_.get('line_too_poor') is not None
                 for p_ in (comps.get('npc'), (comps.get('life') or {}).get('npc') if isinstance(comps.get('life'), dict) else None)):
-            out.append('%s: npc.line_free_end(마지막 무료 끼니 때의 말)는 가게를 맡은 사람(npc.shop)만' % rel)   # p0.5.25 — 말할 자리가 없는 말
+            out.append('%s: npc.line_too_poor(손님의 돈이 모자랄 때의 말)는 가게를 맡은 사람(npc.shop)만' % rel)   # p0.5.27 — 말할 자리가 없는 말
         if kind == 'quest' and (comps.get('quest') or {}).get('gold') is not None:   # p0.5.13 의뢰 보상(골드) — 보고 때 보고한 사람에게
             g_ = comps['quest']['gold']
             if not (type(g_) is int and g_ >= 1):
@@ -991,8 +981,8 @@ def npc(eid, life=False):
             'line_close': c.get('line_close'),
             # p0.5.13(경제 1a): 이 사람이 맡은 가게(건물 정의 id — 선택). 판정은 가게(건물의 쓰임)가 하고 이 칸은 NPC 두뇌 사실(그 가게의 값)의 재료뿐
             'shop': c.get('shop'),
-            # p0.5.25: 맡은 가게에서 손님이 마지막 무료 끼니를 받은 순간의 정해진 말(선택 — NPC 두뇌를 거치지 않는다 · 러너 free_end_says)
-            'line_free_end': c.get('line_free_end'),
+            # p0.5.27: 맡은 가게에서 손님이 값이 모자라 사지 못한 순간의 정해진 말(선택 — NPC 두뇌를 거치지 않는다 · 러너 too_poor_says)
+            'line_too_poor': c.get('line_too_poor'),
             # D71(09-14): NPC 가 먼저 거는 인사 — hail(기본)·hail_no_potion·hail_board·hail_return·hail_oracle(전부 선택, 상황별)
             #   p0.5.17(민옥 10-16 "마을 NPC 는 마을 이야기를 한다"): 주점 주인의 소문 인사 hail_rumor(지하 1층 실측 수)는 거뒀다 — 정의에 적어도 읽지 않는다
             **{k: c.get(k) for k in ('hail', 'hail_no_potion', 'hail_board', 'hail_return', 'hail_oracle',

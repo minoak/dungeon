@@ -417,8 +417,7 @@ snap = {"version": 2, "state_version": 3,
         "waiting": {"3": {"char": "3", "npc_replies": {}}}}
 up = SN.upgrade(json.loads(json.dumps(snap)))
 again = SN.upgrade(json.loads(json.dumps(up)))
-NEED9 = {"needs": {nid: sp["start"] for nid, sp in G.NE.live()}, "moods": [], "rations": 0,   # p0.5.16 8→9 이관: 욕구 시작값·빈 기분 조각·휴대식 0
-         "free": {}}                                                                         # p0.5.25 12→13 이관: 옛 판의 몸은 무료 끼니 0끼
+NEED9 = {"needs": {nid: sp["start"] for nid, sp in G.NE.live()}, "moods": [], "rations": 0}   # p0.5.16 8→9 이관: 욕구 시작값·빈 기분 조각·휴대식 0
 check("⑦ STATE_VERSION ≥ 4(p0.5.11 = 5) · MIGRATIONS 3 · 몸마다 npc_talk{'npc:'+이름} · 이미 있으면 큰 쪽 · 옛 칸 없음 · 빈 장부는 칸을 만들지 않는다 · 두 번 올려도 같다",
       SN.STATE_VERSION >= 4 and 3 in SN.MIGRATIONS and up["state_version"] == SN.STATE_VERSION
       and up["bots"][0] == {"char": "1", "npc_talk": {"npc:" + GEAR: 2, "npc:" + PRIEST: 3}, "gold": G.START_GOLD,   # gold = p0.5.13 5→6 이관(시작 지갑)

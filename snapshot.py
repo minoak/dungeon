@@ -40,8 +40,9 @@
       11→12(p0.5.22 캐릭터 특성): 욕구 무게는 시트의 특성이 정한다. 그 판의 시트(sheets)에서 0.5.20~21 의 needs·needs_meta 칸을 걷고(입맛은 그대로),
                    몸마다 무게 need_w·배율 trait_fx 를 몸의 특성으로 다시 정한다(_m11_traits — 스폰과 같은 규칙 needs.fields. 층 이동·부활 때 스폰이 시트에서
                    다시 읽는 것과 이어간 순간의 몸이 같아진다). 충족도·기분 조각은 그대로.
-      12→13(p0.5.25 주점 무료 식사): 몸에 무료 끼니 free{물건 정의 id: 남은 횟수}가 생겼다 — 새 판은 판 시작 때 가게 정의의 free 만큼 받는다.
-                   옛 판의 몸은 이미 시작한 판이라 0끼(빈 칸 {} — _m12_free · 이미 칸이 있으면 그대로).
+      12→13(p0.5.25 주점 무료 식사): 몸에 무료 끼니 칸 free 가 생겼다 — p0.5.27 에 걷었다. 이 이관은 이제 할 일이 없다(_m12_pass — 그 칸은 13→14 가 버린다).
+      13→14(p0.5.27 시작 골드 10): 0.5.25 판의 몸에 있던 무료 끼니 칸 free 를 버리고, 마을 던전의 주점 주인 말을 지금 정의로 다시 읽는다
+                   (피클에 얼어 있던 정의 사본에서 line_free_end 가 빠지고 돈이 모자랄 때의 말 line_too_poor 가 든다 — _m13_meal). 골드는 그대로(시작 골드는 새 판에만).
 LLM 0콜 · 순수 파일(이관 함수만 몸 dict·반응 원장을 고친다 — 그때 judge 를 늦게 import).
 """
 import io
@@ -53,7 +54,7 @@ import time
 
 VERSION = 2                  # 판형(위 머리글) — 옛 코드(version 1 만 읽음)가 새 스냅샷을 거절하게 하는 문
 READS = (1, 2)               # 이 코드가 읽는 판형. 1 = p0.5.2 까지(내용 판 0)
-STATE_VERSION = 13           # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
+STATE_VERSION = 14           # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
 PKL = "snapshot.pkl"
 META = "snapshot.json"
 
@@ -349,16 +350,29 @@ def _m11_traits(snap):
     return snap
 
 
-def _m12_free(snap):
-    """12→13(p0.5.25 주점 무료 식사 — DECISIONS 10-17): 몸마다 무료 끼니 칸 free{물건 정의 id: 남은 횟수}. 새 판은 스폰 때 가게 정의의 free 만큼 받지만
-    옛 판의 몸은 이미 시작한 판이다 — 0끼(빈 칸 {}). 이미 칸이 있으면 그대로(제자리·한 번 — 다시 올려도 같다). 층 이동·부활은 이 칸을 그대로 옮긴다(_carry)."""
+def _m12_pass(snap):
+    """12→13(p0.5.25 주점 무료 식사 — p0.5.27 에 걷었다): 그때 몸마다 채우던 무료 끼니 칸은 다음 이관(13→14)이 버린다 — 여기서는 할 일이 없다(판 번호만 지난다)."""
+    return snap
+
+
+MEAL_DEFS = ("tavern_keeper",)   # p0.5.27 이관이 말을 새로 읽는 정의 — 돈이 모자랄 때의 말(line_too_poor)이 생긴 주점 주인(빠진 옛 칸은 _m13_meal)
+
+
+def _m13_meal(snap):
+    """13→14(p0.5.27 시작 골드 10 — DECISIONS 10-17): 0.5.25 판의 몸(지금 세계·다른 세계·부활 대기)에 있던 무료 끼니 칸 free 를 버린다 ·
+    마을 던전마다 주점 주인의 말을 지금 정의로 다시 읽는다(MEAL_DEFS — 피클에 얼어 있던 정의 사본의 line_free_end 가 빠지고 line_too_poor 가 든다).
+    골드는 건드리지 않는다(이어가는 판의 지갑 그대로 — 시작 골드 10 은 새 판에만). 제자리·한 번(다시 올려도 같다)."""
+    import dungeon_gm as G                        # 늦은 import — 이관이 있을 때만
     for b in _bodies(snap):
-        b.setdefault("free", {})
+        b.pop("free", None)
+    for d in dungeons(snap):
+        if getattr(d, "town", False):
+            _refresh_economy_words(d, G, MEAL_DEFS)
     return snap
 
 
 MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore, 5: _m5_gold, 6: _m6_away, 7: _m7_repeat, 8: _m8_needs,
-              9: _m9_rumor, 10: _m10_moods, 11: _m11_traits, 12: _m12_free}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
+              9: _m9_rumor, 10: _m10_moods, 11: _m11_traits, 12: _m12_pass, 13: _m13_meal}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
 
 
 def state_version_of(doc):

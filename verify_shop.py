@@ -3,7 +3,7 @@
 게이트:
   ① 정의·검증기: 장비점·잡화점 = 가게(파는 것·값·사들이는 값 = 설계 §5.2 초기 값표) · 숙소 셋 묵는 값 1·4·8 · 의뢰 보상 15·12·8 · 골드 아이템(설명·규칙) ·
      상인 둘의 선물 없음(판매로) + 맡은 가게 · 접수원·성직자 선물 그대로 · 검증기가 잘못된 가게·값·보상·맡은 가게를 거절한다
-  ② 시작 지갑: 새 몸 골드 5 · 스트림 스냅샷 늘 gold · 관측 gold · '네 상태' 첫 줄 '골드 5' · 소지품 i7(골드 — 액수) · i8(보물 — 있을 때만) · 옛 관측(칸 없음)은 옛 줄
+  ② 시작 지갑: 새 몸 골드 START_GOLD(p0.5.27 부터 10 — 그 전 5) · 스트림 스냅샷 늘 gold · 관측 gold · '네 상태' 첫 줄 '골드 N' · 소지품 i7(골드 — 액수) · i8(보물 — 있을 때만) · 옛 관측(칸 없음)은 옛 줄
   ③ 가게 관측: 문턱 2칸 안에서만 가게 항목(상품 g1~g8 — p0.5.16 주점 식사·휴대식·햇사과가 더해져 번호가 밀렸다 · 사들이는 값) + 상품 대상(값·설명) · 3칸 밖·끈 판(마을 생활 꺼짐)엔 없다 · 팔기 설명은 가게 곁에서만
   ④ 사기: 골드 모자람 = too_poor(지갑·소지 그대로) · 물약 = 골드 −10·물약 +1 · 빈손에 무기 = 바로 든다 · 들던 무기는 같은 번호로 발밑에 · 발밑이 차 있으면
      no_room(골드 그대로 — 원자적) · 3칸 밖은 못 산다(대상 소실 · 메뉴형 too_far) · 목격은 물건 이름만(값·지갑 없음)
@@ -16,7 +16,7 @@
   ⑨ 선물 → 판매: 장비 상인·아이템 상인에게 말을 걸면 대화만(npc_talk · npc_offer 빈 목록) · 접수원은 물약+단검·성직자는 축복 그대로 · 상인 문장에 선물 말 없음 ·
      NPC 두뇌 사실에 맡은 가게의 값(마을 생활 판만 — 옛 마을은 값을 말하지 않는다)
   ⑩ 메뉴형: 가게 곁이면 '사기:' 메뉴 줄 · 그 줄(interact g<n>)로 산다
-  ⑪ 저장 이관(5→6): 옛 몸에 골드 5 · 이미 보고한 완수는 보상 받은 것으로 · 보고 전 완수는 다음 보고에 받는다 · 피클에 얼어 있던 상인 선물·옛 대사가 지금 정의로
+  ⑪ 저장 이관(5→6): 옛 몸에 시작 지갑(START_GOLD) · 이미 보고한 완수는 보상 받은 것으로 · 보고 전 완수는 다음 보고에 받는다 · 피클에 얼어 있던 상인 선물·옛 대사가 지금 정의로
   ⑫ 러너 판(더미 · 임시 state · 각본 두뇌): 공동 숙소에 묵고(1골드) 잡화점에서 물약을 사려다 모자란다 — 스트림 tick.bots[].gold(늘) · lodged paid · too_poor ·
      층 이월(_carry)이 골드를 옮긴다
   ⑬ 배선: 결과 어휘(IA.RESULTS) · 실패 결과의 resolution · 관전 화면(evline·FocusCard)이 새 결과·골드를 읽는다 · STREAM_FORMAT · _run_gates.sh 등록
@@ -145,9 +145,9 @@ check("① 상인 둘의 선물 없음(판매로) + 맡은 가게 · 여관주�
       and ENT.npc("innkeeper")["shop"] == "ordinary_inn"
       and ENT.npc("guild_receptionist")["gift"] == {"potions": 1, "weapon": "단검"} and ENT.npc("temple_attendant")["gift"].get("boon"))
 gdef = ENT.item_def("gold")
-check("① 골드 = 아이템(type gold · 설명) · 다루는 규칙 둘(골드·보물)이 amount 를 말한다 · 시작 지갑 상수 5",
+check("① 골드 = 아이템(type gold · 설명) · 다루는 규칙 둘(골드·보물)이 amount 를 말한다 · 시작 지갑 상수 10(p0.5.27 — 그 전 5)",
       gdef is not None and gdef["name"] == "골드" and "gold" in ENT.ITEM_TYPES and "`amount`" in ENT.item_rule("gold")
-      and "`amount`" in ENT.item_rule("treasure") and G.START_GOLD == 5)
+      and "`amount`" in ENT.item_rule("treasure") and G.START_GOLD == 10)
 P = ENT._use_problems
 check("① 검증기(가게): 빈 상품 · 값 0 · 같은 물건 둘 · 모르는 buys type · once 를 거절한다",
       P("t", {"kind": "shop", "sells": []}) and P("t", {"kind": "shop", "sells": [{"item": "potion", "price": 0}]})
@@ -205,12 +205,13 @@ d, bots = town(on=True, quests=True)
 b1, b2, b3 = bots
 obs = d.view(b1, bots)
 w = brains._wire(obs, NAMES, compose=True)
-check("② 새 몸 골드 5 · 스트림 스냅샷에 gold · 관측 gold",
-      b1["gold"] == 5 and G.bot_snapshot(b1)["gold"] == 5 and obs["gold"] == 5)
-check("② '네 상태' 첫 줄에 '골드 5' · 소지품 i7 골드(액수 · 설명·규칙) · 보물이 없으면 i8 없음",
-      "- HP %d/%d, 골드 5, 모은 보물 0개" % (b1["hp"], b1["maxhp"]) in w
-      and any(t["id"] == "i7" and t["name"] == "골드" and t["count"] == 5 for t in obs["items"])
-      and "[i7] 골드 (item, currency) · 5골드" in w and not any(t["id"] == "i8" for t in obs["items"]))
+SG = G.START_GOLD                                     # p0.5.27: 시작 지갑은 상수 한 곳 — 값이 바뀌어도 검사가 따라간다(값 자체는 ① 이 본다)
+check("② 새 몸 골드 %d · 스트림 스냅샷에 gold · 관측 gold" % SG,
+      b1["gold"] == SG and G.bot_snapshot(b1)["gold"] == SG and obs["gold"] == SG)
+check("② '네 상태' 첫 줄에 '골드 %d' · 소지품 i7 골드(액수 · 설명·규칙) · 보물이 없으면 i8 없음" % SG,
+      "- HP %d/%d, 골드 %d, 모은 보물 0개" % (b1["hp"], b1["maxhp"], SG) in w
+      and any(t["id"] == "i7" and t["name"] == "골드" and t["count"] == SG for t in obs["items"])
+      and "[i7] 골드 (item, currency) · %d골드" % SG in w and not any(t["id"] == "i8" for t in obs["items"]))
 b1["bag"] = 2
 obs = d.view(b1, bots)
 check("② 보물이 있으면 i8(개수 · 설명에 amount 규칙)",
@@ -313,9 +314,9 @@ ref_ = {"g1": {"kind": "good", "gid": "g1", "shop": "f%d" % fw}}
 rw, ro = dw._interact(bw, "g1", [bw]), do._interact(bo, "g1", [bo])
 check("④ p0513b(리뷰 P2): 2칸 안이어도 벽 너머(안 보이는) 가게 = 가게 항목·상품 대상 없음 · 묵은 참조도 실물 아님 · 사기 no_target(골드 그대로) — 벽이 없으면 보이고 산다",
       not IA.notices(dw, bw) and not [t for t in ow["targets"] if t["kind"] == "good"]
-      and CA.entity(dw, bw, "g1", [bw], refs=ref_) is None and rw["result"] == "no_target" and bw["gold"] == 5
+      and CA.entity(dw, bw, "g1", [bw], refs=ref_) is None and rw["result"] == "no_target" and bw["gold"] == SG
       and IA.notices(do, bo) and [t["id"] for t in oo["targets"] if t["kind"] == "good"] == ["g1"]
-      and CA.entity(do, bo, "g1", [bo], refs=ref_) is not None and ro["result"] == "bought" and bo["gold"] == 2, (rw, ro))
+      and CA.entity(do, bo, "g1", [bo], refs=ref_) is not None and ro["result"] == "bought" and bo["gold"] == SG - 3, (rw, ro))
 for o in bots:
     o.pop("witnessed", None)
 put(b1, stand_by(d, GS, bots))
@@ -448,9 +449,9 @@ r = act(dq, rep_b, bq, {"type": "use", "target": "f%d" % GR.id})
 check("⑧ 보고한 사람에게 완수한 의뢰 둘의 골드(15+8=23) · 미완(2층 답사)은 보상 없음 · 장부 paid · 결과 reward·paid·gold",
       r["result"] == "npc_report" and r["reward"] == 23 and sorted(r["paid"]) == ["goblin_cull", "lost_trinket"]
       and rep_b["gold"] == gold0 + 23 and r["gold"] == rep_b["gold"] and set(Q["paid"]) == {"goblin_cull", "lost_trinket"}
-      and all(bb["gold"] == 5 for bb in bq if bb is not rep_b), r)
-check("⑧ 문장 '…원정을 보고했다 (…) — 보상 23골드를 받았다(지금 골드 28)' · 궤적 꼬리표 '보상 23골드'",
-      brains._last_prose(r).endswith("— 보상 23골드를 받았다(지금 골드 28)") and "보상 23골드" in G.event_tags(r)[0][2], brains._last_prose(r))
+      and all(bb["gold"] == SG for bb in bq if bb is not rep_b), r)
+check("⑧ 문장 '…원정을 보고했다 (…) — 보상 23골드를 받았다(지금 골드 %d)' · 궤적 꼬리표 '보상 23골드'" % (gold0 + 23),
+      brains._last_prose(r).endswith("— 보상 23골드를 받았다(지금 골드 %d)" % (gold0 + 23)) and "보상 23골드" in G.event_tags(r)[0][2], brains._last_prose(r))
 scene = {}
 brains._call_claude = lambda prompt, model="haiku": scene.setdefault("p", prompt) and ""
 brains.npc_reply(rep_b, r, None, ["사실"], npc=dq.npc_defs.get(GR.name))
@@ -546,8 +547,8 @@ snap5 = {"version": 2, "state_version": 5, "d": ds, "bots": bs, "sheets": SHEETS
          "expedition": {"n": 2, "t0": 5, "fallen": 0, "said": ["goblin_cull"]}}
 snap6 = S.upgrade(pickle.loads(pickle.dumps(snap5)))   # 이 프로세스가 방금 만든 바이트만 되읽는다(피클 왕복 = 이어가기와 같은 길) — 밖에서 온 데이터가 아니다
 d6 = snap6["d"]
-check("⑪ 판 번호 6 이상(지금 판 — p0.5.14 = 7) · 옛 몸마다 골드 5",
-      S.STATE_VERSION >= 6 and snap6["state_version"] == S.STATE_VERSION and 5 in S.MIGRATIONS and all(b_["gold"] == 5 for b_ in snap6["bots"]))
+check("⑪ 판 번호 6 이상(지금 판 — p0.5.14 = 7) · 옛 몸마다 골드 %d" % SG,
+      S.STATE_VERSION >= 6 and snap6["state_version"] == S.STATE_VERSION and 5 in S.MIGRATIONS and all(b_["gold"] == SG for b_ in snap6["bots"]))
 check("⑪ 앞선 결산이 적은 완수(고블린 소탕)는 보상 받은 것으로 · 보고 전 완수(장신구)는 아직 — 다음 보고에 받는다",
       set(snap6["quests"]["paid"]) == {"goblin_cull"})
 GR6 = by_name(d6, "길드 접수원")
@@ -557,7 +558,7 @@ d6.quests["returned"] = 10
 d6.expedition_returned = True
 put(b6, stand_by(d6, GR6, snap6["bots"]))
 r6 = act(d6, b6, snap6["bots"], {"type": "use", "target": "f%d" % GR6.id})
-check("⑪ 이관 뒤 보고 = 장신구 8만", r6.get("reward") == 8 and r6["paid"] == ["lost_trinket"] and b6["gold"] == 13, r6)
+check("⑪ 이관 뒤 보고 = 장신구 8만", r6.get("reward") == 8 and r6["paid"] == ["lost_trinket"] and b6["gold"] == SG + 8, r6)
 check("⑪ 피클에 얼어 있던 상인 선물은 걷히고 대사·역할·가게의 역할·특징은 지금 정의로",
       GMs.name not in d6.npc_gifts and IMs.name not in d6.npc_gifts and d6.npc_lines[IMs.name] == ENT.npc("item_merchant", life=True)["line"]
       and d6.feature_roles[IMs.id] == ENT.npc("item_merchant", life=True)["role"]
@@ -567,7 +568,7 @@ check("⑪ 피클에 얼어 있던 상인 선물은 걷히고 대사·역할·�
 q_rep = {"accepted": {"goblin_cull": {}}, "done": {"goblin_cull": 2}, "progress": {}, "returned": 3, "reported": 4}
 s_rep = S.upgrade({"version": 2, "state_version": 5, "bots": [{"char": "1"}], "quests": q_rep})
 check("⑪ 보고를 이미 찍은 옛 장부: 그 완수는 받은 것으로 · 이미 골드가 있는 몸은 그대로",
-      set(s_rep["quests"]["paid"]) == {"goblin_cull"} and s_rep["bots"][0]["gold"] == 5
+      set(s_rep["quests"]["paid"]) == {"goblin_cull"} and s_rep["bots"][0]["gold"] == SG
       and S.upgrade({"version": 2, "state_version": 5, "bots": [{"char": "1", "gold": 40}]})["bots"][0]["gold"] == 40)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -617,11 +618,11 @@ evs = [e for r_ in ticks for e in r_.get("events") or [] if e.get("char") == "1"
 lodged = next((e for e in evs if e.get("result") == "lodged"), None)
 poor = next((e for e in evs if e.get("result") == "too_poor"), None)
 g1 = [next(b_["gold"] for b_ in r_["bots"] if b_["char"] == "1") for r_ in ticks]
-check("⑫ 판이 끝까지 돈다 · 모든 틱의 tick.bots[] 에 gold · 첫 틱 5",
-      rows12[-1]["kind"] == "end" and all("gold" in b_ for r_ in ticks for b_ in r_["bots"]) and g1[0] == 5, (rows12[-1].get("kind"), g1[:3]))
-check("⑫ 공동 숙소에 묵어 1골드를 냈다(paid 1 · 골드 4) · 잡화점에서 물약을 사려다 모자랐다(too_poor 10/4) · 스트림 골드 5 → 4",
-      lodged and lodged.get("paid") == 1 and lodged.get("gold") == 4 and poor and poor.get("price") == 10 and poor.get("gold") == 4
-      and g1[-1] == 4, ([(e.get("type"), e.get("result"), e.get("target")) for e in evs if e.get("result") not in ("walking",)][:12], g1[-1:]))
+check("⑫ 판이 끝까지 돈다 · 모든 틱의 tick.bots[] 에 gold · 첫 틱 %d" % SG,
+      rows12[-1]["kind"] == "end" and all("gold" in b_ for r_ in ticks for b_ in r_["bots"]) and g1[0] == SG, (rows12[-1].get("kind"), g1[:3]))
+check("⑫ 공동 숙소에 묵어 1골드를 냈다(paid 1 · 골드 %d) · 잡화점에서 물약을 사려다 모자랐다(too_poor 10/%d) · 스트림 골드 %d → %d" % (SG - 1, SG - 1, SG, SG - 1),
+      SG - 1 < 10 and lodged and lodged.get("paid") == 1 and lodged.get("gold") == SG - 1 and poor and poor.get("price") == 10 and poor.get("gold") == SG - 1
+      and g1[-1] == SG - 1, ([(e.get("type"), e.get("result"), e.get("target")) for e in evs if e.get("result") not in ("walking",)][:12], g1[-1:]))
 check("⑫ 층 이월(_carry)이 골드를 옮긴다 — 러너 소스(새 몸의 시작 지갑을 지닌 골드로 덮는다)",
       'n["gold"] = b.get("gold", 0)' in src("show_runner.py"))
 

@@ -30,7 +30,6 @@
                   shop→browsed{wares,buys}(물건 없이 쓰면 진열과 값) · buy(g<n>)→bought{what,price,gold,…}|too_poor|no_room ·
                   sell(item)→sold{what,n,price,got,gold,…}|no_deal|not_enough ·
                   p0.5.16 그 자리에서 먹는 음식(type food)의 buy → need_fill{via:'buy',need,what,price,gold,…}|need_none{why:'full'}(사지 않는다)|too_poor ·
-                  p0.5.25 무료 끼니가 남은 몸의 buy → need_fill{…, free_left, free_line}(골드 그대로 · 배부름 거절 땐 횟수 그대로) ·
                   쉬기 효과가 막힌 몸(needs.no_regen — 굶주림)의 sit·drink·warm·lodge → heal 0 + no_regen{욕구 id}(묵기는 몸 상태는 낫는다)
   (뒤져서 나온 것의 칸 이름이 `found` 가 아니라 `got` 인 까닭: `found` 는 수색 결과의 [{kind,name…}] 목록 계약이라
    tags.py·bestiary.py 가 모든 이벤트의 found 를 목록으로 돈다 — 문자열을 실으면 그 집계기들이 죽는다.)
@@ -89,8 +88,7 @@ _STAT_OBJ = {'str': '힘을', 'dex': '민첩을', 'maxhp': '최대 HP 를'}   # 
 _OFFER_SEEN = {'offered': '신전에 보물을 바쳤다', 'offer_short': '바치려다 그만두었다'}   # ⚠️문구 임시 — 곁의 사람이 보는 한 마디(ally_use 괄호)
 # p0.5.13 가게·묵기 값의 목격 한 마디(ally_use 괄호) — 무엇을 사고팔았나는 보이고, 얼마를 냈는지·남은 지갑은 보이지 않는다. ⚠️문구 임시
 _TRADE_SEEN = {'bought': '%s 샀다', 'sold': '%s 팔았다', 'buy_short': '사려다 그만두었다', 'lodge_short': '묵으려다 그만두었다',
-               'ate': '%s 사 먹었다', 'full': '사 먹으려다 그만두었다',   # p0.5.16 그 자리에서 먹는 음식 — 먹었다·안 먹었다는 보이고 배가 불렀는지는 보이지 않는다
-               'free': '%s 받아 먹었다'}   # p0.5.25 무료 끼니 — 값을 내지 않고 받은 것은 보이고 남은 무료 횟수는 보이지 않는다
+               'ate': '%s 사 먹었다', 'full': '사 먹으려다 그만두었다'}   # p0.5.16 그 자리에서 먹는 음식 — 먹었다·안 먹었다는 보이고 배가 불렀는지는 보이지 않는다
 
 _IDX = {'src': None, 'n': -1, 'by_type': {}}
 
@@ -420,30 +418,9 @@ def shop_at(d, f):
     return use if (use or {}).get('kind') == 'shop' else None
 
 
-# ── p0.5.25 무료 끼니(DECISIONS 10-17 '주점 무료 식사 → 길드 의뢰로 잇기') — 판 시작 때 몸마다 받는 무료 횟수(가게 정의 sells 의 free · 사는 순간 먹는 음식만) ──
-def free_start():
-    """판 시작 때 몸이 받는 무료 횟수 {물건 정의 id: 횟수} — 건물 정의의 가게(use · 마을 생활 판의 life.use) sells 에 적힌 free(정의 id 순 · 같은 물건은 처음 것).
-    세계가 아니라 정의에서 센다 — 판이 던전에서 시작해도 몸은 같다(가게가 문을 열지 않은 판에선 쓸 곳이 없을 뿐). 없으면 {}."""
-    out = {}
-    for df in sorted(ENT.by_kind('building'), key=lambda v: v['id']):
-        c = df.get('comps') or {}
-        for use in (c.get('use'), (c.get('life') or {}).get('use')):
-            if (use or {}).get('kind') == 'shop':
-                for e in use.get('sells') or []:
-                    if e.get('free'):
-                        out.setdefault(e['item'], int(e['free']))
-    return out
-
-
-def free_left(bot, use, item):
-    """이 가게(use)에서 이 물건(정의 id)을 지금 무료로 받을 수 있는 남은 횟수 — 가게의 sells 에 free 가 없으면 0 · 몸에 칸이 없으면 0(옛 판의 몸)."""
-    if not any(e.get('item') == item and e.get('free') for e in (use or {}).get('sells') or []):
-        return 0
-    return max(0, int((bot.get('free') or {}).get(item) or 0))
-
-
 def keeper_of(d, shop_id):
-    """가게 피처('f<n>' 또는 번호) → 그 가게를 맡은 NPC 이름(정의 npc.shop = 그 건물 정의 id · 이 세계에 서 있는 사람만 — 이름 순 첫 사람) 또는 None."""
+    """가게 피처('f<n>' 또는 번호) → 그 가게를 맡은 NPC 이름(정의 npc.shop = 그 건물 정의 id · 이 세계에 서 있는 사람만 — 이름 순 첫 사람) 또는 None.
+    p0.5.27: 손님의 돈이 모자랄 때 그 사람의 정해진 말(러너 too_poor_says)을 찾는 데 쓴다."""
     try:
         bid = (getattr(d, 'building_defs', None) or {}).get(int(str(shop_id).lstrip('f')))
     except ValueError:
@@ -468,14 +445,6 @@ def buy(d, bot, gid, bots=None):
     if g['type'] == 'food' and NE.full_block(bot, df):      # p0.5.16 그 자리에서 먹는 음식 — 배가 불러 들어가지 않으면 사지 않는다(값을 보기 전에 몸이 거절한다 · 돈 그대로)
         d._witness_use(bots, f.x, f.y, [bot], f.name, 'f%d' % f.id, _TRADE_SEEN['full'])
         return {**base, **NE.eat(d, bot, df, getattr(d, 'turn', 0), via='buy'), 'price': price, 'gold': gold}
-    use = shop_at(d, f)
-    free = free_left(bot, use, g['item']) if g['type'] == 'food' else 0
-    if free:                                                   # p0.5.25 무료 끼니 — 남아 있으면 골드 없이 먹는다(지갑 그대로 · 배부름 거절은 위에서 이미 — 그때는 횟수 그대로)
-        bot.setdefault('free', {})[g['item']] = free - 1
-        fill = NE.eat(d, bot, df, getattr(d, 'turn', 0), via='buy')
-        d._witness_use(bots, f.x, f.y, [bot], f.name, 'f%d' % f.id, _TRADE_SEEN['free'] % (g['name'] + _j(g['name'], '을', '를')))
-        return {**base, **fill, 'price': price, 'gold': gold, 'free_left': free - 1,   # price = 진열 값(낸 값이 아니다 — 지갑은 gold 그대로)
-                'free_line': use['line_free'].replace('{n}', str(free - 1))}       # 결과 문장(가게 정의의 말 — 남은 횟수는 이 문장에만 나온다)
     if gold < price:
         d._witness_use(bots, f.x, f.y, [bot], f.name, 'f%d' % f.id, _TRADE_SEEN['buy_short'])
         return {**base, 'result': 'too_poor', 'price': price, 'gold': gold}

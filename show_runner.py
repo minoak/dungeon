@@ -1519,14 +1519,15 @@ def deliver_npc_says(d, bots, inbox, npc_says, turn):
                 inbox.setdefault(b["char"], []).append({"from": "npc:" + npc_name, "text": line_, "turn": turn, "to": to_c})
 
 
-def free_end_says(d, b, res):
-    """p0.5.25(DECISIONS 10-17 '주점 무료 식사 → 길드 의뢰로 잇기') 마지막 무료 끼니(결과 free_left 0) → [(그 가게를 맡은 NPC 이름, 정해진 말, 받은 봇)].
-    말은 그 NPC 정의의 line_free_end(말 파일 — 마을 생활 판) 그대로이고 NPC 두뇌를 거치지 않는다(두뇌가 켜져 있어도). 배달은 NPC 의 답과 한 길
-    (npc_says → deliver_npc_says: 다음 틱 편지함 'npc:<이름>' · 그 NPC 의 말이 들리는 사람에게). 맡은 사람이 이 세계에 없거나 말이 없으면 []."""
-    if res.get("result") != "need_fill" or res.get("free_left") != 0:
+def too_poor_says(d, b, res):
+    """p0.5.27(DECISIONS 10-17 '시작 골드 10') 가게에서 골드가 모자라 사지 못함(결과 too_poor · use_kind shop) → [(그 가게를 맡은 NPC 이름, 정해진 말, 못 산 봇)].
+    말은 그 NPC 정의의 line_too_poor(말 파일 — 마을 생활 판의 주점 주인만 가졌다) 그대로이고 NPC 두뇌를 거치지 않는다(두뇌가 켜져 있어도). 거절될 때마다 한다.
+    배달은 NPC 의 답과 한 길(npc_says → deliver_npc_says: 다음 틱 편지함 'npc:<이름>' · 그 NPC 의 말이 들리는 사람에게).
+    묵기 값이 모자란 것(use_kind lodge)·맡은 사람이 이 세계에 없음·그 사람에게 말이 없음(다른 가게)이면 []."""
+    if res.get("result") != "too_poor" or res.get("use_kind") != "shop":
         return []
     k_ = G.IA.keeper_of(d, res.get("shop_id"))
-    ln_ = ((getattr(d, "npc_defs", None) or {}).get(k_) or {}).get("line_free_end") if k_ else None
+    ln_ = ((getattr(d, "npc_defs", None) or {}).get(k_) or {}).get("line_too_poor") if k_ else None
     return [(k_, ln_, b["char"])] if ln_ else []
 
 
@@ -2249,7 +2250,7 @@ def main():
                 if got_["line"]:
                     npc_says.append((res["npc"], got_["line"], b["char"]))   # NPC 의 말은 들은 말로(다음 틱 편지함 — 말 건 사람·엿들은 사람 같은 문장)
                 npc_used.append((res["npc"], str(b["char"]), got_["stage"]))   # p0510b: 되받기의 두 제한(NPC 두뇌 차례 · 쌍 한 번)의 재료
-            npc_says += free_end_says(d, b, res)        # p0.5.25 마지막 무료 끼니 — 그 가게를 맡은 사람의 정해진 말(NPC 두뇌 무관 · NPC 의 답과 같은 들은 말 길)
+            npc_says += too_poor_says(d, b, res)        # p0.5.27 가게에서 돈이 모자람 — 그 가게를 맡은 사람의 정해진 말(NPC 두뇌 무관 · NPC 의 답과 같은 들은 말 길)
             if res.get("type") in ("give", "bond") and res.get("result") in ("given", "done"):
                 # 접근 완료도 수신자의 다음 결정에서 반응을 기록한다. 접근 시작에는 기록하지 않는다.
                 open_acts.setdefault(res["to"], {})[b["char"]] = "건네기" if res["type"] == "give" else "친목"
@@ -2405,7 +2406,6 @@ def main():
         n["potions"] = b.get("potions", 0)        # 물약도 이월(07-17) — 들고 내려간다
         n["boons"] = b.get("boons", 0)            # 축복의 물약도 이월(D74, 09-15)
         n["rations"] = b.get("rations", 0)        # p0.5.16 휴대식도 이월 — 들고 내려간다
-        n["free"] = dict(b.get("free") or {})      # p0.5.25 무료 끼니도 그 몸을 따라간다(층·원정·부활 — 판 시작에만 받는다 · 칸이 없는 옛 몸은 0끼)
         G.NE.carry(b, n)                          # p0.5.16 욕구 충족도·살아 있는 기분 조각도 그 몸을 따라간다(무게·취향은 스폰이 시트에서 다시 읽었다)
         n["str"], n["dex"] = b["str"], b["dex"]   # 축복으로 오른 능력치는 이 판 안에서 영구(D74) — 시트 초기값을 덮는다
         n["maxhp"] = b["maxhp"]                   # D95(09-20): 공물로 오른 최대 HP 도 같은 급(힘·민첩과 함께). 아무도 안 올린 판에선 시트 값 그대로 = 무변화

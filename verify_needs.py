@@ -179,7 +179,7 @@ check("① 음식 셋(§4.1): 휴대식 ration +50 빵 · 식사 food +70 고기
       == [("ration", {"hunger": 50}, ["빵"]), ("food", {"hunger": 70}, ["고기", "따뜻한 것"]), ("food", {"hunger": 20}, ["과일"])]
       and CA.ITEM_SLOTS["i9"] == "ration" and IA.COUNTED["ration"] == "rations" and set(ENT.FOOD_TYPES) == {"ration", "food"})
 check("① 가게(§5.2): 주점 식사 3 · 잡화점 휴대식 2(1에 되산다) · 채소 좌판 햇사과 1 — 마을 생활 판에만 · 식사·사과는 되사지 않는다(지닐 수 없다)",
-      ENT.comps_of("tavern", True)["use"]["sells"] == [{"item": "meal", "price": 3, "free": 2}] and ENT.comps_of("tavern", False).get("use") is None   # p0.5.25 free = 판 시작 무료 끼니(verify_free_meal)
+      ENT.comps_of("tavern", True)["use"] == {"kind": "shop", "sells": [{"item": "meal", "price": 3}]} and ENT.comps_of("tavern", False).get("use") is None
       and {"item": "ration", "price": 2} in ENT.comps_of("general_store", True)["use"]["sells"]
       and ENT.get("produce_stall")["comps"]["use"] == {"kind": "shop", "sells": [{"item": "apple", "price": 1}]}
       and IA.buy_list(ENT.comps_of("tavern", True)["use"]) == [] and ("휴대식", 1) in IA.buy_list(ENT.comps_of("general_store", True)["use"])
@@ -567,7 +567,7 @@ aH, bH, cH = botsH
 TAV, GS, STALL = by_name(dH, "주점"), by_name(dH, "잡화점"), by_name(dH, "채소 좌판")
 gm, gr, ga = gid_of(dH, "식사"), gid_of(dH, "휴대식"), gid_of(dH, "햇사과")
 put(aH, stand_by(dH, TAV, botsH))
-aH["gold"], aH["needs"]["hunger"], aH["free"] = 5, 40, {}   # p0.5.25 무료 끼니(판 시작 2끼)를 다 쓴 몸 — 값을 내는 길(무료 길은 verify_free_meal)
+aH["gold"], aH["needs"]["hunger"] = 5, 40
 oH = dH.view(aH, botsH)
 wH = brains._wire(oH, NAMES, compose=True)
 check("⑤ 주점 곁: 상품 식사(%s) — 대상 줄에 취향 꼬리표 '식사 — 고기·따뜻한 것' · 값 3골드 · 설명(물건 설명 + 규칙 '사는 순간 그 자리에서 먹는다')" % gm,

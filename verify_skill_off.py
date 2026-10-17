@@ -19,7 +19,10 @@ master_plan §7.1). 등록부가 비어 관측의 다른 칸·행동·상태·�
 행동·상태·난수는 그대로다 — 그것만 되돌리면(gold_v0512) p0.5.6 해시와 세 시드 모두 일치한다. 새 해시는 p0.5.13 작업 트리 코드에서 뽑았다.
 **2026-10-16 p0.5.16 갱신**(욕구 틀 + 배고픔): 새 몸이 욕구 충족도(needs — 배고픔 시작값 70)를 지닌다 — 봇 스냅샷에 needs 칸이 더해졌다
 (이 판은 러너의 틱 머리가 아니라 엔진만 돌려 줄기가 없고, 보통 단계라 관측의 '몸과 기분'·휴대식·기분 조각 칸은 나오지 않는다).
-행동·상태·난수는 그대로다 — 그 칸만 되돌리면(needs_v0515) p0.5.13 해시와 세 시드 모두 일치한다. 새 해시는 p0.5.16 작업 트리 코드에서 뽑았다."""
+행동·상태·난수는 그대로다 — 그 칸만 되돌리면(needs_v0515) p0.5.13 해시와 세 시드 모두 일치한다. 새 해시는 p0.5.16 작업 트리 코드에서 뽑았다.
+**2026-10-17 p0.5.27 갱신**(시작 골드 5 → 10 — DECISIONS 10-17): 새 몸의 골드가 10 이다 — 봇 스냅샷·관측의 gold 칸과 소지품·대상 목록의 i7(골드) 줄 개수가 5 크다
+(이 판은 가게·의뢰가 없는 던전이라 골드가 움직이지 않는다). 행동·상태·난수는 그대로다 — 그 값만 5 줄이면(start_gold_v0525) p0.5.16 해시와 세 시드 모두 일치한다.
+새 해시는 p0.5.27 작업 트리 코드에서 뽑았다."""
 import hashlib
 import json
 import os
@@ -95,11 +98,32 @@ P0513_EXPECTED = {   # 2026-10-15 p0.5.13(경제 1a): 몸에 골드(시작 지�
     217: '383309f1fba78f5581cff307dff71ff445caf72e27d20a1f83ed581c60f12e30',
 }
 
-EXPECTED = {   # 2026-10-16 p0.5.16(욕구 틀 + 배고픔): 봇 스냅샷 needs 칸(배고픔 70)
+P0516_EXPECTED = {   # 2026-10-16 p0.5.16(욕구 틀 + 배고픔): 봇 스냅샷 needs 칸(배고픔 70)(p0.5.27 회귀 비교용으로 보존)
     7: '940df4944003b0e03d253693c292cab256b88b017f8bc9dc6cb221b33a2f76c7',
     37: '0d2557d0b3630327bab05bd60e14b794d4cfd6f52e48f3faf6161401377ed565',
     217: 'f6744ca2ecaa372c020fd5c8868a04c4f55e89aaead7fbd6c1977001f8be745e',
 }
+
+EXPECTED = {   # 2026-10-17 p0.5.27(시작 골드 5 → 10): 봇 스냅샷·관측의 gold · 소지품·대상 목록의 i7(골드) 개수
+    7: '7d9fc7bf503fcd3cfe34d32e70a10c5aa825853ebddd6f5422e8c37928f85399',
+    37: '652101d2d2551512fe49e126f70221eb36a5be1f4d29b54587dec0026274609f',
+    217: '2bbfbf029b8919af73c3b89814c7ab977daf721b91617575f0b3b986fd97a84e',
+}
+
+START_GOLD_P0516 = 5   # p0.5.27 전의 시작 골드(dungeon_gm.START_GOLD 가 10 이 되기 전)
+
+
+def start_gold_v0525(value):
+    """p0.5.27 시작 골드만 되돌린 사본 — gold 칸과 i7(골드) 줄의 개수를 (지금 시작 골드 − 옛 시작 골드)만큼 줄인다.
+    이 판엔 골드가 오가는 길(가게·의뢰·건네기)이 없어 늘 시작 값이다. 그 밖의 바이트(행동·상태·난수)가 p0.5.16 기준선과 같은지 보는 데 쓴다."""
+    shift = G.START_GOLD - START_GOLD_P0516
+    if isinstance(value, dict):
+        gold_line = (value.get('id'), value.get('slot')) == ('i7', 'gold')
+        return {k: (v - shift if ((k == 'gold' or (gold_line and k == 'count')) and type(v) is int) else start_gold_v0525(v))
+                for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [start_gold_v0525(v) for v in value]
+    return value
 
 NEED_KEYS_P0516 = ('needs', 'moods', 'rations', 'need_lines')   # p0.5.16 이 몸·관측·봇 스냅샷에 더한 칸(이 판에 나오는 것은 needs 뿐)
 
@@ -159,14 +183,17 @@ if __name__ == '__main__':
         records = trace_records(seed)
         actual = digest(records)
         assert actual == EXPECTED[seed], (seed, actual, EXPECTED[seed])
-        p0513 = digest(needs_v0515(records))
+        gold5 = start_gold_v0525(records)
+        p0516 = digest(gold5)
+        assert p0516 == P0516_EXPECTED[seed], (seed, p0516, P0516_EXPECTED[seed])
+        p0513 = digest(needs_v0515(gold5))
         assert p0513 == P0513_EXPECTED[seed], (seed, p0513, P0513_EXPECTED[seed])
-        nogold = gold_v0512(needs_v0515(records))
+        nogold = gold_v0512(needs_v0515(gold5))
         p056 = digest(nogold)
         assert p056 == P056_EXPECTED[seed], (seed, p056, P056_EXPECTED[seed])
         p055 = digest(items_v055(nogold))
         assert p055 == P055_EXPECTED[seed], (seed, p055, P055_EXPECTED[seed])
         old = digest(schema_v04(items_v055(nogold)))
         assert old == T13C_EXPECTED[seed], (seed, old, T13C_EXPECTED[seed])
-        print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치 · 욕구 칸만 되돌리면 p0.5.13 · 골드 칸까지 되돌리면 p0.5.6 · 아이템 설명 칸까지 되돌리면 p0.5.5 · 관측 계약 문자열까지 되돌리면 t13c 기준선과 일치' % seed)
-    print('ALL PASS — verify_skill_off (3시드 × 80틱, 기준선 = 78fbe84 + D51 + D66 + t13c + p0.5.5 + p0.5.6 + p0.5.13 + p0.5.16 2026-10-16)')
+        print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치 · 시작 골드만 되돌리면 p0.5.16 · 욕구 칸까지 되돌리면 p0.5.13 · 골드 칸까지 되돌리면 p0.5.6 · 아이템 설명 칸까지 되돌리면 p0.5.5 · 관측 계약 문자열까지 되돌리면 t13c 기준선과 일치' % seed)
+    print('ALL PASS — verify_skill_off (3시드 × 80틱, 기준선 = 78fbe84 + D51 + D66 + t13c + p0.5.5 + p0.5.6 + p0.5.13 + p0.5.16 + p0.5.27 2026-10-17)')

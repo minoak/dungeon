@@ -593,7 +593,7 @@ with open(os.path.join(SD12, snapshot.PKL), "wb") as f:
 snapshot.write_meta(SD12, {"run_id": "12@x"})
 up12, _m12 = snapshot.load(os.path.join(SD12, snapshot.PKL))
 b12 = up12["bots"][0]
-check("⑫ 이어가기: v0.5.22 판(내용 판 12)이 읽힌다(p0.5.23 은 판 번호를 올리지 않았다 — 기분 기본값은 몸에 칸이 없다 · p0.5.25 무료 끼니 이관 12→13 만 지난다) · 이어간 몸도 기본값이 든 합(배고픔 −10 + 낙천 5 = −5)",
+check("⑫ 이어가기: v0.5.22 판(내용 판 12)이 읽힌다(p0.5.23 은 판 번호를 올리지 않았다 — 기분 기본값은 몸에 칸이 없다 · 그 뒤 판을 올린 이관만 지난다) · 이어간 몸도 기본값이 든 합(배고픔 −10 + 낙천 5 = −5)",
       up12["state_version"] == snapshot.STATE_VERSION >= 13 and b12.get("traits") == ["낙천적인"]
       and (NE.mood_of(b12, 51) or {}).get("sum") == -5 and NE.mood_line(b12, 51) == "좋지 않다 (이유: 배고픔)", (up12["state_version"], NE.mood_of(b12, 51)))
 check("⑫ 배선: VERSION 0.5.23 이상 · PATCH_NOTES 0.5.23 · STREAM_FORMAT(기분 합에 특성 기본값) · CHANGELOG p0.5.23",
