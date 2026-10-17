@@ -1,0 +1,24 @@
+{
+  "id": "simple",
+  "name": "소박한",
+  "kind": "trait",
+  "tags": [
+    "trait"
+  ],
+  "comps": {
+    "trait": {
+      "effects": {
+        "need": {
+          "hunger": {
+            "mood": {
+              "like": 50,
+              "plain": 50,
+              "dislike": 50
+            }
+          }
+        }
+      }
+    }
+  },
+  "note": "p0.5.22 특성(DECISIONS 10-17). 먹은 뒤 기분 조각의 크기 50%(좋아함·기본·싫어함 모두). 값 임시."
+}

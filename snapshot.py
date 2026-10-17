@@ -37,6 +37,9 @@
                    (정의 사본의 소문 인사 칸·역할·성격·대사·특징·이야기)을 지금 정의로 다시 읽는다(_m9_rumor).
       10→11(p0.5.18 몸·기분 줄): 기분 조각의 꼴이 바뀌었다(문장 line → 먹은 것 이름 what — 값·이유 낱말은 그릴 때 정의에서). 옛 꼴 조각(line 칸)은 걷는다
                    (_m10_moods — 이유를 다시 쓸 재료인 먹은 것 이름이 옛 조각에 없고, 길어야 120틱 남는 조각이다). 충족도는 그대로.
+      11→12(p0.5.22 캐릭터 특성): 욕구 무게는 시트의 특성이 정한다. 그 판의 시트(sheets)에서 0.5.20~21 의 needs·needs_meta 칸을 걷고(입맛은 그대로),
+                   몸마다 무게 need_w·배율 trait_fx 를 몸의 특성으로 다시 정한다(_m11_traits — 스폰과 같은 규칙 needs.fields. 층 이동·부활 때 스폰이 시트에서
+                   다시 읽는 것과 이어간 순간의 몸이 같아진다). 충족도·기분 조각은 그대로.
 LLM 0콜 · 순수 파일(이관 함수만 몸 dict·반응 원장을 고친다 — 그때 judge 를 늦게 import).
 """
 import io
@@ -48,7 +51,7 @@ import time
 
 VERSION = 2                  # 판형(위 머리글) — 옛 코드(version 1 만 읽음)가 새 스냅샷을 거절하게 하는 문
 READS = (1, 2)               # 이 코드가 읽는 판형. 1 = p0.5.2 까지(내용 판 0)
-STATE_VERSION = 11           # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
+STATE_VERSION = 12           # 내용 판 — 올릴 때 MIGRATIONS 에 한 칸
 PKL = "snapshot.pkl"
 META = "snapshot.json"
 
@@ -319,8 +322,33 @@ def _m10_moods(snap):
     return snap
 
 
+GONE_SHEET_KEYS = ("needs", "needs_meta")   # p0.5.22 거둔 시트 칸(0.5.20~21 욕구 생성 호출) — savedata.GONE_NEED_KEYS 와 같은 목록(이관 함수끼리 서로 import 하지 않는다)
+
+
+def _m11_traits(snap):
+    """11→12(p0.5.22 캐릭터 특성 — DECISIONS 10-17): 욕구 무게는 시트의 특성이 정한다. 그 판의 시트(sheets)에서 0.5.20~21 의 needs·needs_meta 칸을
+    걷는다(제자리 — 입맛 taste 는 그대로). 몸마다 무게 need_w·특성 배율 trait_fx 를 몸의 특성 이름(traits — 없으면 그 판의 시트)으로 다시 정한다 —
+    스폰과 같은 규칙(needs.fields: 단계 있는 욕구만 · 보통·없음이면 칸을 지운다). 옛 몸의 need_w(생성 호출이 시트에 적은 무게)를 그대로 두면
+    층 이동·부활(스폰이 시트에서 다시 읽는다) 때 무게가 바뀐다 — 이어간 순간부터 같게 맞춘다. 충족도·기분 조각은 그대로(다시 올려도 같다)."""
+    import needs as NE                            # 늦은 import — 이관이 있을 때만(특성 정의를 읽는다)
+    sheets = snap.get("sheets") if isinstance(snap.get("sheets"), dict) else {}
+    for s in sheets.values():
+        if isinstance(s, dict):
+            for k in GONE_SHEET_KEYS:
+                s.pop(k, None)
+    for b in _bodies(snap):
+        tr = b.get("traits") if "traits" in b else (sheets.get(str(b.get("char"))) or {}).get("traits")
+        f = NE.fields({"traits": tr})
+        for k in ("need_w", "trait_fx"):
+            if k in f:
+                b[k] = f[k]
+            else:
+                b.pop(k, None)
+    return snap
+
+
 MIGRATIONS = {0: _m0_prof, 1: _m1_alias, 2: _m2_refs, 3: _m3_talk, 4: _m4_lore, 5: _m5_gold, 6: _m6_away, 7: _m7_repeat, 8: _m8_needs,
-              9: _m9_rumor, 10: _m10_moods}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
+              9: _m9_rumor, 10: _m10_moods, 11: _m11_traits}   # n → n+1 (0..STATE_VERSION-1 이 다 있어야 한다 — verify_class_foundation)
 
 
 def state_version_of(doc):

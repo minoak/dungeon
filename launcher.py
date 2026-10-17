@@ -7,12 +7,13 @@
 포트 8000, 같은 서빙 루트 — 뷰어는 한 줄도 안 고침) 세 가지를 더 한다: 파티 저장 · 판 시작/중지 ·
 상태 조회. 표준 라이브러리만 쓴다(새 의존 0). 127.0.0.1 만 듣는다.
 
-흐름: 타이틀 → 파티(직업·성격 키워드 최대 3·이름·성별·배경 자유입력) → 옵션(맵·마을·두뇌·시드) →
+흐름: 타이틀 → 파티(직업·특성 최대 3·이름·성별·배경 자유입력·입맛) → 옵션(맵·마을·두뇌·시드) →
 시작 → 러너(show_runner.py)를 자식 프로세스로 띄우고 → 관전 뷰어로 이어진다.
 
 API(JSON):
-  GET  /api/presets  traits.json(키워드·직업) + looks(외형 사전, D37) + 기본 파티(party.json) 미리보기 + 상태
+  GET  /api/presets  특성(p0.5.22 entities/trait — 이름·반대 짝) + traits.json(직업) + looks(외형 사전, D37) + 기본 파티(party.json) 미리보기 + 상태
                      + companions(D81 동료 프리셋 목록 — entities/companion/*.json: id·이름·직업·성격·말투·목표·소개 한 줄·외형)
+                     + taste_ui(p0.5.22 입맛 고르기 — 어휘·상한)
   GET  /api/characters  저장한 캐릭터 목록 {presets:[{id,label,slot}]} — 규격은 docs/character-presets.md
   POST /api/characters  {slot,label?,id?} → id 생략 시 새 저장, 있으면 해당 프리셋 덮어쓰기 → {preset}
   POST /api/characters/delete  {id} → 해당 프리셋 삭제 → {ok:true}
@@ -29,14 +30,7 @@ API(JSON):
   GET  /api/status   {running,pid,started,seed,party,turn,outcome,viewer,game, stopping, resume:{run_id,seed,turn_last,depth,party,stopped,pages}|null}
   POST /api/stop     {graceful?:bool, pages?:bool} — graceful 이면 러너가 다음 틱 머리에서 (수첩 한 장씩 쓰고) 스스로 닫는다(D79), 아니면 즉시 종료
   POST /api/retry    {pause_id} → 판단 정지 중인 같은 러너에서 모델 재시도
-  p0.5.20 욕구 생성 호출(need_gen.py · 설계 §3.8.2) — 두뇌·모델·키는 화면에서 고른 것(키는 그 호출의 자식 프로세스 env 에만):
-  POST /api/needs/gen    {slot, brain|provider, model?, key?} → {needs, taste, needs_meta, state} — [정하기]·[다시 정하기](사람이 고친 칸도 덮는다).
-                         모델에 닿지 못하면 400 + 이유 한 줄. dummy 두뇌는 부르지 않고 전부 보통(by dummy)
-  POST /api/needs/check  {slot} → {state: none|fresh|stale, why: [sheet|prompt]} — 낡음 표시(0콜)
-  POST /api/characters 에 brain|provider(+model·key)가 실려 오면: 정한 욕구가 없거나 낡았을 때만 부른다 → 응답에 needs_gen{ok, error?}(additive) ·
-                         못 닿으면 슬롯 그대로 저장(출발 때 다시). 두뇌를 싣지 않은 옛 요청은 옛 동작 그대로(부르지 않는다)
-  POST /api/start(새 원정 · 내 파티) 앞: 파티 파일의 시트 가운데 정한 욕구가 **없는** 사람만 판과 같은 두뇌·키·모델로 부른다(연결 확인 겸) —
-                         못 닿으면 400(러너를 띄우지 않는다). 낡은 칸은 덮지 않는다 · 동료 프리셋·기본 파티는 데이터(tools/need_gen.py)라 부르지 않는다
+  (p0.5.22: 0.5.20~21 의 욕구 생성 호출 /api/needs/gen·check 와 저장·출발 때의 호출은 거뒀다 — 욕구 무게는 특성이 정한다)
   GET  /game/        게임 클라이언트(game/dist/ 빌드 산출물 — 초점 캐릭터 카메라 뷰어, 2026-09-09 M3/B5).
                      /game → 302 /game/ · /game/… 은 game/dist/… 서빙 · 빌드가 없으면 503 한 장(빌드 명령 안내)
 
@@ -68,7 +62,6 @@ import skill_schema                              # noqa: E402
 import run_control                               # noqa: E402
 import snapshot                                  # noqa: E402  # D79 이어가기 — 멈춘 판의 요약(snapshot.json)만 읽는다(피클은 러너 몫)
 import savedata                                  # noqa: E402  # p0.5.1 저장 데이터 이관 틀 — 기본 파티 미리보기도 러너와 같은 판으로 읽는다
-import need_gen                                  # noqa: E402  # p0.5.20 욕구 생성 호출 — 검증·해시·낡음(0콜) + 자식 프로세스 호출 한 곳
 from brain_config import BACKENDS, HTTP_BACKENDS, KEY_ENV, MODEL_ENV, clean_model, model_id, provider_catalog
 from character_presets import PresetStore         # noqa: E402
 
@@ -604,96 +597,29 @@ def companions_payload(data=None):
         out.append({"id": cid, "name": s["name"], "job": s["job"], "sex": s["sex"], "persona": s["persona"],
                     "speech": s.get("speech"), "goal": s.get("goal"), "background": s.get("background"),
                     "about": (d["comps"].get("story") or {}).get("trait"), "look": s.get("look"),
-                    **{k: s[k] for k in sheetkit.NEED_FIELDS if k in s},   # p0.5.20 욕구 무게·입맛(데이터에 있을 때만 — 화면은 한 줄 요약만)
+                    **({"taste": s["taste"]} if s.get("taste") else {}),   # p0.5.20 입맛(데이터에 있을 때만 — 화면은 동료 칸 한 줄 요약)
                     "prompt_chars": sum(len(str(s.get(k) or "")) for k in ("persona", "background", "speech", "goal"))})
     return out
 
 
-def needs_ui_payload():
-    """p0.5.20 화면의 '욕구와 입맛' 재료(need_gen.ui). 정의가 깨졌으면 None(론처는 산다 — 이유는 엔티티 게이트가 말한다)."""
+def taste_ui_payload():
+    """p0.5.22 화면의 '입맛' 재료 — 어휘(욕구 정의들의 tastes)·좋아함·싫어함 상한. 정의가 깨졌으면 None(론처는 산다 — 이유는 엔티티 게이트가 말한다)."""
     try:
-        return need_gen.ui()
+        import needs as NE                        # 지연 import — 정의(entities)를 읽는다
+        return {"tastes": NE.tastes(), "likes_max": NE.LIKES_MAX, "dislikes_max": NE.DISLIKES_MAX}
     except (entities.EntityError, OSError, ValueError):
         return None
 
 
-def _is_companion(sheet, comps):
-    """파티 파일의 시트가 동료 프리셋 그대로인가(욕구 칸·저장 id 를 뺀 나머지가 같다) — 동료의 욕구는 데이터가 정한다(tools/need_gen.py)."""
-    bare = {k: v for k, v in sheet.items() if k not in sheetkit.NEED_FIELDS and k != "id"}
-    return any(bare == {k: v for k, v in c.items() if k not in sheetkit.NEED_FIELDS} for c in comps)
-
-
-def fill_party_needs(ctx, opts, brain, env, call=None):
-    """p0.5.20 출발 때(설계 §3.8.2 '언제 부르나'): 내 파티 파일(party_custom.json)의 시트 가운데 정한 욕구가 **없는** 사람만 — 판과 같은 두뇌·키·모델로
-    부른다(판 시작 전 연결 확인을 겸한다). 낡은 칸은 덮지 않는다(§10-25 — 화면이 표시만 한다). 동료 프리셋 그대로인 칸·기본 파티(party.json)는 데이터가
-    정한다 — 부르지 않는다. 이어가기는 스냅샷의 시트로 돈다 — 부르지 않는다. 정한 것은 파티 파일에 적고, 저장 캐릭터에서 온 칸(id)이면 그 저장본에도 한 번
-    (아직 정한 것이 없고 글이 그대로일 때 — 다음 출발에 다시 부르지 않게). 화면이 그 저장본을 다시 불러오지 않아 칸이 비어 와도, 저장본에 같은 글로 정한
-    욕구가 있으면 부르지 않고 그것을 쓴다. 모델에 닿지 못하면 BadRequest — 출발을 멈춘다(판도 같은 키로 돈다).
-    call(prompt) → (text, label, model) — 없으면 자식 프로세스(need_gen.call_model). → 정한 칸 번호 목록."""
-    if opts.get("resume") or opts.get("party", "custom") == "default" or not os.path.exists(ctx.party_path):
-        return []
-    try:
-        with io.open(ctx.party_path, encoding="utf-8") as f:
-            doc = savedata.upgrade("party", json.load(f))
-    except (OSError, ValueError):
-        return []                                   # 깨진 파티 파일 — 러너의 load_party 가 제 말로 알린다
-    if not isinstance(doc, dict):
-        return []
-    try:
-        comps = [sheetkit.build_companion_sheet(d, data=ctx.presets) for d in entities.companions().values()]
-    except (entities.EntityError, OSError, ValueError):
-        comps = []
-    todo = [c for c in sorted(k for k in doc if not str(k).startswith("_"))
-            if isinstance(doc[c], dict) and not need_gen.has(doc[c]) and not _is_companion(doc[c], comps)]
-    if not todo:
-        return []
-    call = call or (lambda p: need_gen.call_model(p, env))
-    saved = {}
-    if any(isinstance(doc[c].get("id"), str) for c in todo):
-        try:
-            saved = {p["id"]: p["slot"] for p in ctx.characters.list()}
-        except (OSError, ValueError):
-            saved = {}
-    done, made, err = [], [], None                  # done = 칸이 채워진 사람(파티 파일에 남긴다) · made = 그중 이번에 정한 사람(저장본에 적을 후보)
-    for c in todo:
-        ps = saved.get(doc[c].get("id")) if isinstance(doc[c].get("id"), str) else None
-        try:
-            ps = need_gen.sheet_of_slot(ps, ctx.presets) if ps else None
-        except ValueError:
-            ps = None
-        if ps and need_gen.has(ps) and need_gen.sheet_hash(ps) == need_gen.sheet_hash(doc[c]):   # 그 저장본에 이미 정한 욕구(같은 글) — 부르지 않고 그것을(판마다 같은 무게)
-            doc[c] = {**doc[c], **{k: ps[k] for k in sheetkit.NEED_FIELDS if k in ps}}   # 빈 입맛은 저장본에 칸이 없다 — 있는 칸만
-            done.append(c)
-            continue
-        try:
-            doc[c] = {**doc[c], **need_gen.generate(doc[c], brain, call)}
-        except need_gen.NeedGenError as e:
-            err = e
-            break
-        done.append(c)
-        made.append(c)
-    if done:                                        # 앞의 사람이 정해졌으면 남긴다(다음 출발에 그 사람은 다시 부르지 않는다)
-        savedata.save("party", ctx.party_path, {k: v for k, v in doc.items() if k != savedata.KEY}, indent=2)
-        for c in made:                              # 저장본에서 가져온 사람은 다시 적지 않는다(이미 그 값이다)
-            pid = doc[c].get("id")
-            if isinstance(pid, str) and need_gen.has(doc[c]):
-                try:
-                    ctx.characters.set_needs(pid, {k: doc[c][k] for k in sheetkit.NEED_FIELDS if k in doc[c]}, doc[c]["needs_meta"]["of"])
-                except (OSError, ValueError):
-                    pass                            # 저장본에 못 적어도 이 판은 산다(다음 출발에 다시 정한다)
-    if err:
-        raise BadRequest(need_gen.FAIL_START % err.label)
-    return done
-
-
 def presets_payload(ctx):
-    """GET /api/presets 본문 — 론처 화면이 처음 읽는 것(키워드·직업·외형·기본 파티·모드·상한·상태). server.py 가 재사용."""
+    """GET /api/presets 본문 — 론처 화면이 처음 읽는 것(특성·직업·외형·기본 파티·모드·상한·상태). server.py 가 재사용."""
     p = ctx.presets
     return {"traits": p["traits"], "max_traits": p["max_traits"], "jobs": p["jobs"],
+            "opposites": p["opposites"],          # p0.5.22 반대 특성 {이름: 이름} — 화면이 한쪽을 고르면 다른 쪽을 잠근다(additive)
             "looks": sheetkit.load_looks(),   # D37(09-06) 외형 사전 — 파츠·스와치·기본색
             "default_party": default_party_preview(ctx.root),
             "companions": companions_payload(p),   # D81 동료 프리셋(파티 2·3번 칸의 선택지) — additive
-            "needs_ui": needs_ui_payload(),        # p0.5.20 '욕구와 입맛' — 욕구 목록(준비 중 표시)·등급·입맛 어휘·상한(additive)
+            "taste_ui": taste_ui_payload(),        # p0.5.22 '입맛' — 어휘·상한(additive · 0.5.20 needs_ui 를 대신한다)
             "skill_alpha": {"presets": skill_schema.PRESETS,
                             "default_sets": skill_schema.DEFAULT_SETS},
             "default_mode": "standard", "ruleset": "skills-v1",
@@ -710,40 +636,6 @@ def presets_payload(ctx):
             "providers": provider_catalog(),
             "model_defaults": {p: model_id(p, "haiku") for p in HTTP_BACKENDS},
             "status": ctx.runner.status()}
-
-
-def _placeholder(s):
-    """화면이 실어 온 욕구 칸이 '아직 정하지 않은 것'인가 — 칸이 없거나, 정한 것이 아닌 임시값(dummy 두뇌의 전부 보통)이고 사람이 고친 칸(src user)이 없을 때."""
-    if not any(k in s for k in sheetkit.NEED_FIELDS):
-        return True
-    nd = s.get("needs") if isinstance(s.get("needs"), dict) else {}
-    return not need_gen.has(s) and not any(isinstance(e, dict) and e.get("src") == "user" for e in nd.values())
-
-
-def _carry_needs(sheets, path):
-    """p0.5.20 아직 정하지 않은 시트(_placeholder — 칸 없음 · dummy 임시값)가 지난 파티 파일의 **같은 글** 시트(need_gen.sheet_hash)에 정한 욕구를
-    갖고 있으면 그것을 잇는다(제자리). 화면은 출발 때 서버가 정한 칸을 모른다 — 출발이 중간에 실패해 다시 누르거나 론처로 돌아와 다시 출발할 때,
-    이미 정한 사람을 빈 칸·임시값으로 덮어 다시 부르지 않게(비용·결과가 달라진다). 화면이 정한 욕구를 실어 왔으면(불러온 저장본) 또는 사람이 고친 칸이
-    있으면 그것이 이긴다. dummy 결과는 잇지 않는다(정한 것이 아니다). 저장 캐릭터 id 가 양쪽에 다 있으면 같을 때만 잇는다(같은 글의 다른 저장 캐릭터)."""
-    try:
-        with io.open(path, encoding="utf-8") as f:
-            old = savedata.upgrade("party", json.load(f))
-    except (OSError, ValueError):
-        return
-    if not isinstance(old, dict):
-        return
-    prev = {}
-    for k, s in sorted(old.items()):
-        if not str(k).startswith("_") and isinstance(s, dict) and need_gen.has(s):
-            prev.setdefault(need_gen.sheet_hash(s), []).append(s)
-    import needs as NE                                  # 지연 import(욕구 칸 검증기 — 잇는 칸도 같은 검증기를 지난다)
-    for c, s in sheets.items():
-        if not _placeholder(s):
-            continue
-        p = next((o for o in prev.get(need_gen.sheet_hash(s), ())
-                  if not (s.get("id") and o.get("id") and s["id"] != o["id"])), None)   # id 는 둘 다 있을 때만 대조
-        if p:
-            sheets[c] = {**{k: v for k, v in s.items() if k not in sheetkit.NEED_FIELDS}, **NE.sheet_fields(p)}
 
 
 def save_party(ctx, slots, preset_ids=None):
@@ -765,7 +657,6 @@ def save_party(ctx, slots, preset_ids=None):
             pid = ids[i] if i < len(ids) else None
             if isinstance(pid, str) and pid in saved:
                 sheets[char] = {**sheets[char], "id": pid}
-    _carry_needs(sheets, ctx.party_path)              # p0.5.20 저장 id 를 붙인 뒤에 — 잇기는 id 도 대조한다(둘 다 있을 때)
     sheetkit.write_party(sheets, ctx.party_path)
     import show_runner                                # 지연 import — 러너 모듈의 검증기를 그대로 쓴다
     with io.StringIO() as err:
@@ -822,73 +713,6 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         if self.path.startswith("/api/") and not self.path.startswith("/api/status"):
             sys.stderr.write("[launcher] %s\n" % (fmt % args))
-
-    # ── p0.5.20 욕구 생성 호출(need_gen.py) ──
-    def _gen_plan(self, body, required=True):
-        """생성 호출의 두뇌·자식 env — 화면이 고른 두뇌(brain|provider)·모델·키, 러너 시작과 같은 규칙과 같은 거절 문장(Runner.start).
-        로컬 론처: 키가 없으면 이 프로세스의 환경(.env)의 키. required=False(저장 때): 요청이 두뇌를 싣지 않았으면 None — 부르지 않는다
-        (옛 화면·게이트의 저장은 옛 동작 그대로). 공개 서버(server.PublicHandler)는 이것을 덮어 요청의 키만 쓴다."""
-        if not required and not (body.get("brain") or body.get("provider")):
-            return None
-        brain = str(body.get("brain") or body.get("provider") or self.ctx.default_brain or "gemini_api")
-        if brain not in BRAINS:
-            raise BadRequest("두뇌는 %s 중 하나" % "/".join(BRAINS))
-        key = body.get("key", "")
-        if not isinstance(key, str) or len(key) > 1024:
-            raise BadRequest("API 키는 1,024자 이내의 문자열이어야 한다")
-        key = key.strip()
-        if any(c.isspace() for c in key):
-            raise BadRequest("API 키에 공백을 넣을 수 없다")
-        if key and brain not in HTTP_BACKENDS:
-            raise BadRequest("API 키는 API 두뇌를 선택했을 때만 넣을 수 있다")
-        model = None
-        if "model" in body:
-            try:
-                model = clean_model(body["model"])
-            except ValueError as e:
-                raise BadRequest(str(e))
-        return {"brain": brain, "env": need_gen.call_env(brain, model, key or None)}
-
-    def _sheet_of(self, slot):
-        try:
-            return need_gen.sheet_of_slot(slot, self.ctx.presets)
-        except ValueError as e:
-            raise BadRequest(str(e))
-
-    def _needs_gen(self, body):
-        """[정하기]·[다시 정하기] — 사람이 고친 칸도 덮는다(누른 사람의 뜻). 저장하지 않는다(화면이 칸에 담고, 저장·출발이 싣는다)."""
-        sheet = self._sheet_of(body.get("slot"))
-        plan = self._gen_plan(body)
-        try:
-            out = need_gen.generate(sheet, plan["brain"], lambda p: need_gen.call_model(p, plan["env"]))
-        except need_gen.NeedGenError as e:
-            raise BadRequest(need_gen.FAIL_GEN % e.label)
-        return {**out, "state": need_gen.state({**sheet, **out})}
-
-    def _save_needs(self, slot, plan):
-        """저장 때(§3.8.2): 정한 욕구가 없거나 낡았으면 부른다 → (저장할 슬롯, needs_gen 칸 | None). 모델에 닿지 못하면 슬롯을 그대로 저장한다
-        (정한 적 없으면 비어 있는 채로 — 출발 때 다시 · 낡은 칸은 그대로 남아 낡음 표시)."""
-        try:
-            sheet = need_gen.sheet_of_slot(slot, self.ctx.presets)
-        except ValueError:
-            return slot, None                         # 틀린 슬롯 — 저장소가 제 말로 거절한다
-        if need_gen.state(sheet)["state"] == "fresh":
-            return slot, None
-        try:
-            out = need_gen.generate(sheet, plan["brain"], lambda p: need_gen.call_model(p, plan["env"]))
-        except need_gen.NeedGenError as e:
-            return slot, {"ok": False, "error": need_gen.FAIL_GEN % e.label}
-        return {**slot, **out}, {"ok": True, "by": plan["brain"]}
-
-    def _start_needs(self, body):
-        """출발 앞(fill_party_needs — 이어가기·기본 파티는 그 함수가 거른다). 옵션이 틀렸으면 여기서는 넘어간다 — Runner.start 가 제 문장으로 거절한다."""
-        if self.ctx.runner.running():
-            raise Conflict("이미 판이 진행 중이다 — 중지하거나 끝나길 기다려라")
-        try:
-            plan = self._gen_plan(body)
-        except BadRequest:
-            return
-        fill_party_needs(self.ctx, body, plan["brain"], plan["env"])
 
     def end_headers(self):
         if self.path.startswith("/state/") or self.path.startswith("/runs/") or self.path.startswith("/launcher/"):
@@ -974,19 +798,11 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             body = self._body()
             if path == "/api/characters":
-                slot, info = body.get("slot"), None
-                plan = self._gen_plan(body, required=False)   # p0.5.20 화면이 두뇌를 실어 보내면 — 정한 욕구가 없거나 낡았을 때만 부른다
-                if plan:
-                    slot, info = self._save_needs(slot, plan)
                 try:
-                    entry = self.ctx.characters.save(slot, body.get("label"), body.get("id"))
+                    entry = self.ctx.characters.save(body.get("slot"), body.get("label"), body.get("id"))
                 except ValueError as e:
                     raise BadRequest(str(e)) from e
-                return self._json(200, {"preset": entry, **({"needs_gen": info} if info else {})})
-            if path == "/api/needs/gen":                # p0.5.20 [정하기]·[다시 정하기]
-                return self._json(200, self._needs_gen(body))
-            if path == "/api/needs/check":              # p0.5.20 낡음 표시(0콜)
-                return self._json(200, need_gen.state(self._sheet_of(body.get("slot"))))
+                return self._json(200, {"preset": entry})
             if path == "/api/characters/delete":
                 try:
                     self.ctx.characters.delete(body.get("id"))
@@ -996,7 +812,6 @@ class Handler(SimpleHTTPRequestHandler):
             if path == "/api/party":
                 return self._json(200, save_party(self.ctx, body.get("slots") or [], body.get("preset_ids")))
             if path == "/api/start":
-                self._start_needs(body)                 # p0.5.20 정한 욕구가 없는 사람만 — 못 닿으면 400(러너를 띄우지 않는다)
                 return self._json(200, self.ctx.runner.start(body, self.ctx.party_path, self.ctx.default_brain))
             if path == "/api/retry":
                 return self._json(200, self.ctx.runner.retry(body.get("pause_id")))

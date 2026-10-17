@@ -1,0 +1,20 @@
+{
+  "id": "curious",
+  "name": "호기심 많은",
+  "kind": "trait",
+  "tags": [
+    "trait"
+  ],
+  "comps": {
+    "trait": {
+      "effects": {
+        "need": {
+          "curiosity": {
+            "level": "높음"
+          }
+        }
+      }
+    }
+  },
+  "note": "p0.5.22 특성(DECISIONS 10-17). 준비 중 욕구의 등급만 적어 둔다(엔진은 건너뛴다 — 호기심에 단계가 생기면 돈다). 값 임시."
+}

@@ -167,7 +167,20 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 - events.log: `봇N 기분: 없음 → 좋지 않다 (배고픔 · 합 -10)` · `봇N 기분: 좋다 → 없음`(관전용 — 합을 싣는다).
 - 저장 판 10 → 11(`snapshot._m10_moods`): 옛 꼴 기분 조각(`line` 칸이 있는 것)은 걷는다(이유 낱말을 채울 먹은 것 이름이 없고, 길어야 120틱 남는 조각). 충족도·새 꼴 조각은 그대로.
 
-## 욕구 생성 호출 — 2026-10-16 p0.5.20 additive (스위치 없음 — 론처·공개 서버 · 설계 §3.8.2)
+## 캐릭터 특성 — 2026-10-17 p0.5.22 (스위치 없음 — 모든 판 · DECISIONS 2026-10-17 '특성 격상'·'두 기능')
+
+- 성격 키워드 → 특성(`entities/trait/<id>.json` — 이름 · 반대 특성 id · 효과). 시트·`run_meta.party[].traits` 는 지금처럼 **이름**(성격 줄 글자 그대로 — 옛 키워드가 그대로 맞는다).
+- `run_meta.party[].trait_ids`(additive) = 아는 특성의 id(`traits` 와 같은 순서 · 모르는 이름은 빠진다 · 없으면 칸 없음). 효과의 숫자는 스트림에 싣지 않는다 — 정의 파일이 원본.
+- 욕구 무게는 특성이 정한다(정의 `comps.trait.effects.need.<욕구>.level` — 낮음|높음) → 몸 `need_w`(단계 있는 욕구만). 배율(`fill` % · 먹은 뒤 기분 조각 `mood{갈래: %}`)은
+  몸 `trait_fx` = `{욕구: {fill?, mood?}}`(있을 때만 · 관전 칸 `IG.SPECTATOR_KEYS` — `tick.bots[]` 스냅샷에는 없다). 여러 특성이 겹치면 배율은 곱(정수 % 반올림), 등급은 같으면 그 등급·다르면 보통.
+  `need_fill` 의 `after` 는 배율이 곱해진 채움이다. `mood_now.sum`·`need_mood.sum` 은 배율이 곱해진 조각 값의 합이다(`run_meta.need_defs` 의 값은 정의 그대로).
+- **거둠(0.5.20~21)**: `run_meta.party[].needs`·`needs_meta`(욕구 생성 호출의 기록)는 더 이상 없다 — `taste` 는 그대로. 옛 시트의 칸은 저장 이관이 걷는다:
+  `party_custom.json` 판 1 → 2 · `character_presets.json` 판 2 → 3(반대 특성을 둘 다 고른 옛 슬롯은 먼저 고른 쪽만).
+- 저장 판 11 → 12(`snapshot._m11_traits`, p0522b): 멈춘 판의 시트(`sheets`)에서 `needs`·`needs_meta` 를 걷고, 몸마다 `need_w`·`trait_fx` 를 몸의 특성으로 다시 정한다(스폰과 같은 규칙) —
+  이어간 순간부터 층 이동·부활 때와 같은 무게. 충족도·기분 조각은 그대로.
+- 동료 프리셋(`entities/companion`)의 `comps.sheet.taste`(p0.5.20 칸)는 그대로 받는다 — 시트·`run_meta.party[].taste` 로 간다(어휘 밖·꼴이 틀리면 엔티티 검증기가 거절).
+
+## 욕구 생성 호출 — 2026-10-16 p0.5.20 additive (p0.5.22 에서 거둠 — 위 '캐릭터 특성' 절)
 
 - `run_meta.party[].needs_meta` = `{by: 두뇌(anthropic_api|gemini_api|openai_api|claude_cli|dummy), model?: 모델 id, at: 정한 시각, ok: 모델 답을 읽었나,
   prompt: 프롬프트·욕구 뜻 해시, of: 시트 글 해시}` — 시트에 있을 때만(`needs`·`taste` 와 같은 자리). 론처가 출발 앞에 정한 사람은 늘 있다(dummy 두뇌 판은 `by:"dummy"` · 전부 보통).

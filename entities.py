@@ -23,6 +23,8 @@
   · 욕구(p0.5.16 경제 1b): kind need 의 comps.need(시작값·줄어드는 빠르기·단계와 상태 문장·효과·기분 조각·무게·취향 어휘) → needs.py.
     먹을 것은 오브젝트의 satisfies{욕구: 양}·taste[꼬리표] — 휴대식(type ration, 소지 칸 i9)·그 자리에서 먹는 음식(type food). 새 욕구 = JSON 한 장.
     p0.5.18: 단계·기분 조각의 mood(기분 합산 값)·why(이유 낱말) — '기분:' 줄의 좋다·좋지 않다·이유 머리는 prompts/world/mood.md(MOOD_WORDS).
+  · 특성(p0.5.22 — 옛 traits.json 의 성격 키워드): kind trait 의 name(시트 '성격' 줄에 들어가는 글자 그대로) · comps.trait 의 opposite(반대 특성 id —
+    같이 고를 수 없다) · effects.need{욕구: {level?, fill?, mood?}}(아래 TRAIT_*) → needs.trait_effects. 목록·반대 짝은 sheetkit.load_traits 가 시트 조립에 쓴다.
 자리만 있고 아직 안 읽는 것: ai.start·ai.concealed(스폰 코드가 명시), item.lore(p0.5.6 — 물건의 속, 물건 search 를 설계할 때),
 loot·container·heal·consumable·exit 부품(메모 "부품은 필요할 때 하나씩"). 클라이언트 스프라이트 프레임 번호는
 game/src/assets/world.ts 가 소유 — sprite 필드는 텍스처 참조(wl-<이름>[#프레임])이고 검증은 텍스처 파일 존재까지.
@@ -39,7 +41,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, 'entities')
 SPRITE_DIR = os.path.join(HERE, 'game', 'src', 'assets', 'world')
 KINDS = ('monster', 'trap', 'object', 'npc', 'map', 'building', 'quest', 'companion',   # quest(D61, 09-12): 길드 게시판의 의뢰 — 정보만
-         'need')   # p0.5.16(경제 1b): 욕구 — 시간이 지나면 줄고 채우면 차는 수치 하나의 정의(아래 NEED_*, 처리는 needs.py)
+         'need',   # p0.5.16(경제 1b): 욕구 — 시간이 지나면 줄고 채우면 차는 수치 하나의 정의(아래 NEED_*, 처리는 needs.py)
+         'trait')  # p0.5.22: 캐릭터 특성 — 이름이 곧 성격 줄의 글자, 효과는 엔진이 읽는 값(아래 TRAIT_*, 처리는 needs.trait_effects)
 #   companion(D81, 09-17): 동료 프리셋 — 파티에 뽑히면 동료 칸의 시트(sheet), 안 뽑히면 마을 주민(npc·story, 2단계)
 COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
          'trap': {'trap', 'knowledge'},
@@ -54,6 +57,7 @@ COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
          #   overheard=D90(09-20) 구역의 '들린 말' 고정 풀(메모 §4-4 "거리 분위기 '들린 말' 한 줄 고정 풀(0콜)") — 문장 목록, 마을 생활 스위치 판에서만 읽는다
          #   life=D90(09-20) 마을 생활 판에서만 덮어쓸 칸들(아래 LIFE_PARTS) — 끈 판의 문장·바이트는 그대로 두고, 켠 판에서 거짓이 되는 문장만 갈아 끼운다
          'quest': {'quest'},
+         'trait': {'trait'},   # p0.5.22 특성 — opposite(반대 특성 id) · effects(엔진이 읽는 값)
          'companion': {'sheet', 'npc', 'story'}}   # D81: sheet=파티 시트 칸(능력치 없음 — 직업에서) · npc/story=마을 주민일 때의 말·걸음·소개(NPC 와 같은 꼴)
 UNLOCK_EVENTS = {'encounter', 'kill', 'search_first', 'trap_avoid', 'trap_disarm', 'visit', 'talk'}   # 메모 §2-5 어휘.
 #   코드가 세는 건 encounter 뿐(bestiary.Issuer, D53) — 나머지는 검증기만 아는 예약어(정의에 적어도 아직 안 센다).
@@ -106,7 +110,7 @@ ITEM_TYPES = ('potion', 'boon', 'treasure', 'weapon', 'armor', 'gold',   # gold 
 FOOD_TYPES = ('ration', 'food')   # p0.5.16 먹는 아이템 type — satisfies(채우는 욕구) 부품이 있어야 하고, 그 밖 type 에는 satisfies 를 달 수 없다(먹는 길이 없다)
 
 # p0.5.16(경제 1b, .orch/drafts/economy_design.md §3) 욕구 정의(kind need — entities/need/<id>.json 의 comps.need)의 어휘. 처리는 needs.py.
-#   단계(stages)가 없는 정의는 엔진이 건너뛴다(이름·뜻만 — 생성 호출이 무게를 미리 채우는 자리, §3.2 끝).
+#   단계(stages)가 없는 정의는 엔진이 건너뛴다(이름·뜻만 — 준비 중인 욕구. 특성이 등급을 적어 둘 수는 있다, §3.2 끝 · p0.5.22).
 NEED_KEYS = ('about', 'start', 'decay', 'full_at', 'full_blocks', 'stages', 'mood', 'weights', 'from_events', 'tastes',
              'tolerance')   # tolerance = 내성(§3.2.1) — 검증기는 자리만 허용한다(엔진은 아직 읽지 않는다 · DECISIONS 10-15 §10-23 호기심 단계부터)
 NEED_STAGE_KEYS = ('min', 'word', 'line', 'effects',   # 단계 하나 — min(이 값 이상) · word(낱말 — 스트림·측정용, 관측에 안 나간다) · line(몸 문장 — 말 파일) · effects
@@ -120,6 +124,14 @@ MOOD_WORD_KEYS = ('good', 'bad', 'why')   # 좋은 쪽 · 나쁜 쪽 · 괄호 �
 NEED_LEVELS = ('낮음', '보통', '높음')      # 욕구 무게(§3.8.2) — 보통 = 정의의 decay·채움 100%·기분 시간 100%. weights 에는 낮음·높음만 적는다
 NEED_WEIGHT_KEYS = ('every', 'fill', 'mood_time')   # 등급 하나가 함께 바꾸는 셋(§10-13): 몇 틱마다 1 · 채움 % · 기분 조각 시간 %
 _NEED_FILL_RE = re.compile(r'\{what(?::(을|은|이|과))?\}')   # 기분 문장의 자리 — {what} 먹은 것 이름, {what:을} 이름 + 받침에 맞는 조사
+# p0.5.22(DECISIONS 10-17 '특성의 두 기능') 특성 정의(kind trait — entities/trait/<id>.json 의 comps.trait)의 어휘. 처리는 needs.trait_effects.
+#   에이전트에게는 이름만 간다(성격 줄) — 효과의 숫자는 엔진 안쪽 재료다(몸·기분 줄로만 느낀다).
+TRAIT_KEYS = ('opposite', 'effects')         # opposite = 반대 특성 id(서로 가리킨다 — 같이 고를 수 없다) · effects = 엔진이 읽는 값(없어도 된다 — 글만인 특성)
+TRAIT_EFFECTS = ('need',)                    # 효과가 닿는 고리 — 지금은 욕구뿐(need{욕구 id: {…}})
+TRAIT_NEED_KEYS = ('level', 'fill', 'mood')  # level = 그 욕구의 무게 등급(낮음|높음 — 단계가 없는 준비 중 욕구도 적어 둔다, 엔진은 건너뛴다) ·
+#   fill = 채우는 양 %(무게 등급의 fill 에 곱한다 — 단계 있는 욕구만) · mood = 먹은 뒤 기분 조각 값의 크기 %{갈래: %}(단계 있는 욕구의 mood 갈래만)
+TRAIT_PCT_MAX = 1000                         # fill·mood % 상한(1~이것)
+TRAIT_NAME_MAX = 20                          # 이름 글자 상한 — 러너 load_party 의 traits 규칙(20자 이내 문자열)과 같은 값
 SHOP_RESALE = 2    # p0.5.13 가게가 제가 파는 물건을 되사는 값 = 파는 값 // 이것(절반, 내림 — 경제 설계 §5.1 '사들이는 값은 파는 값의 절반')
 ITEM_KEYS = ('desc', 'lore')    # desc = 겉(보면 아는 것 — 관측 대상 목록) · lore = 속(search 로만 드러날 것 — 자리만, 아직 아무도 안 읽는다)
 ITEM_FILL = {'bonus': '장비 보정(equipment.bonus) — equipment 부품이 있는 정의만',          # 설명 속 중괄호 자리 → 값의 출처(엔진이 채운다)
@@ -377,6 +389,36 @@ def _food_problems(rel, d, comps):
     return out
 
 
+def _trait_problems(rel, d, comps):
+    """p0.5.22 특성 정의의 꼴 — 이름(성격 줄 글자) · 모르는 칸 · 효과 어휘 · 등급·% 범위. 반대 특성이 서로 가리키는지·욕구 id·갈래는 2차(_problems 끝)가 본다."""
+    out, nm, tr = [], d.get('name'), comps.get('trait')
+    if not (isinstance(nm, str) and nm.strip() == nm and 0 < len(nm) <= TRAIT_NAME_MAX and not set(nm) & set(',.\n')):
+        out.append('%s: 특성 이름은 앞뒤 공백 없는 %d자 이내 글(쉼표·마침표 없이 — 성격 줄에 그대로 들어간다)' % (rel, TRAIT_NAME_MAX))
+    if not isinstance(tr, dict):
+        return out + ['%s: trait 부품(객체)이 있어야 한다' % rel]
+    if set(tr) - set(TRAIT_KEYS):
+        out.append('%s: trait 가 모르는 칸 %s' % (rel, sorted(set(tr) - set(TRAIT_KEYS))))
+    if tr.get('opposite') is not None and not (isinstance(tr['opposite'], str) and tr['opposite']):
+        out.append('%s: trait.opposite 는 반대 특성 id(문자열)' % rel)
+    ef = tr.get('effects')
+    if ef is None:
+        return out
+    if not (isinstance(ef, dict) and ef and set(ef) <= set(TRAIT_EFFECTS) and isinstance(ef.get('need'), dict) and ef['need']):
+        return out + ['%s: trait.effects 는 {%s: {욕구 id: {...}}}' % (rel, '|'.join(TRAIT_EFFECTS))]
+    pct = lambda v: _pos_int(v, 1, TRAIT_PCT_MAX)   # noqa: E731
+    for nid, e in ef['need'].items():
+        if not (isinstance(e, dict) and e and set(e) <= set(TRAIT_NEED_KEYS)):
+            out.append('%s: trait.effects.need.%s 는 {%s} 중 하나 이상' % (rel, nid, '|'.join(TRAIT_NEED_KEYS)))
+            continue
+        if 'level' in e and e['level'] not in ('낮음', '높음'):
+            out.append('%s: trait.effects.need.%s.level 은 낮음|높음(보통은 적지 않는다)' % (rel, nid))
+        if 'fill' in e and not pct(e['fill']):
+            out.append('%s: trait.effects.need.%s.fill 은 정수 1~%d(%%)' % (rel, nid, TRAIT_PCT_MAX))
+        if 'mood' in e and not (isinstance(e['mood'], dict) and e['mood'] and set(e['mood']) <= set(NEED_MOODS) and all(pct(v) for v in e['mood'].values())):
+            out.append('%s: trait.effects.need.%s.mood 는 {%s: 정수 1~%d(%%)}' % (rel, nid, '|'.join(NEED_MOODS), TRAIT_PCT_MAX))
+    return out
+
+
 # D90(2026-09-20) 마을 생활 부품 life{<부품 이름>: {덮어쓸 칸}} — 마을 생활 스위치(러너 DUNGEON_TOWN_LIFE)를 켠 판에서만 읽는다.
 #   왜: 건물 아홉 동의 '…서비스는 아직 준비 중이다', 옛 상인의 '아직 손님 받을 준비가 안 됐어' 같은 문장은 켠 판에서 거짓이 된다.
 #   끈 판은 옛 판과 바이트가 같아야 하므로 원래 칸은 그대로 두고, 켠 판용 문장·쓰임을 이 부품에 따로 둔다(comps_of 가 합친다).
@@ -410,7 +452,9 @@ def _problems(pairs, root):
     boards, kinds_by_id = [], {}                     # D61 2차 검사 재료
     quest_mons = []                                  # D69 2차 검사 재료(처치형 의뢰의 몬스터 id)
     companion_names = []                             # D81 2차 검사 재료(동료 이름 — 파티 안에서 이름이 곧 열쇠라 서로 달라야 한다)
-    companion_needs = []                             # p0.5.20 2차 검사 재료(동료 시트의 욕구 칸 — 욕구 정의를 다 읽은 뒤 대조)
+    traits_ = [d for _, d in pairs if isinstance(d, dict) and d.get('kind') == 'trait']   # p0.5.22 지금 읽는 특성 정의(동료 시트 검증 · 2차 검사 재료)
+    trait_table = None                               #   동료 시트를 조립할 표(처음 필요할 때 — 저장소를 다시 읽지 않는다: 지금이 그 읽는 도중이다)
+    companion_tastes = []                            # p0.5.20 2차 검사 재료(동료 시트의 입맛 — 욕구 정의를 다 읽은 뒤 어휘로 대조)
     gift_weapons, weapon_names = [], set()           # p0.5.6 G6 2차 검사 재료(마을 인물이 건네는 무기 이름 · 무기 정의 이름)
     shops, npc_shops = [], []                        # p0.5.13 2차 검사 재료(가게의 상품 · NPC 가 맡은 가게)
     foods = []                                       # p0.5.16 2차 검사 재료(먹을 것의 satisfies·taste)
@@ -493,6 +537,8 @@ def _problems(pairs, root):
                 weapon_names.add(d.get('name'))
         if kind == 'need':                                   # p0.5.16 욕구 정의
             out.extend(_need_problems(rel, comps))
+        if kind == 'trait':                                  # p0.5.22 특성 정의
+            out.extend(_trait_problems(rel, d, comps))
         if kind in ('npc', 'companion'):                     # G6 재료 — 선물 무기는 이름으로 건너간다(엔진은 GEAR_KINDS 에서 보정을 푼다)
             gw = ((comps.get('npc') or {}).get('gift') or {}).get('weapon')
             if gw is not None:
@@ -526,16 +572,17 @@ def _problems(pairs, root):
                     out.append('%s: trap.%s 정수 필요' % (rel, k))
         if kind == 'npc' and not (comps.get('npc') or {}).get('line'):
             out.append('%s: npc.line 필요' % rel)
-        if kind == 'companion':                              # D81 동료 프리셋 — 시트 칸은 시트 조립기가 그대로 검증한다(직업·키워드·상한·외형)
+        if kind == 'companion':                              # D81 동료 프리셋 — 시트 칸은 시트 조립기가 그대로 검증한다(직업·특성·상한·외형)
             import sheetkit                                  # 지연 import — 엔진 import 경로에 시트 도구를 끌어들이지 않는다(표준 라이브러리만 쓰는 모듈)
             sh = comps.get('sheet') if isinstance(comps.get('sheet'), dict) else None
-            need_sub = {k: sh[k] for k in sheetkit.NEED_FIELDS if k in sh} if sh else {}
-            try:                                             # p0.5.20 욕구 칸은 떼고 조립한다 — 조립기의 욕구 검증은 정의를 읽는데, 지금이 그 읽는 도중이다(재귀)
-                sheetkit.build_companion_sheet({**d, 'comps': {**comps, 'sheet': {k: v for k, v in sh.items() if k not in need_sub}}} if need_sub else d)
+            try:                                             # p0.5.22 특성 목록은 지금 읽는 특성 정의로 준다(조립기가 저장소를 읽으면 재귀)
+                trait_table = trait_table or sheetkit.load_traits(defs=traits_)
+                sheetkit.build_companion_sheet({**d, 'comps': {**comps, 'sheet': {k: v for k, v in sh.items() if k != 'taste'}}}
+                                               if sh and 'taste' in sh else d, data=trait_table)   # 입맛은 떼고 조립한다 — 어휘는 정의(욕구)를 읽는다(재귀) · 2차가 본다
             except (ValueError, OSError) as e:
                 out.append('%s: sheet — %s' % (rel, e))
-            if need_sub:
-                companion_needs.append((rel, need_sub))     # 2차: 지금 읽는 욕구 정의·입맛 어휘로 대조(아래)
+            if sh and sh.get('taste') is not None:
+                companion_tastes.append((rel, sh['taste']))   # 2차: 지금 읽는 욕구 정의의 입맛 어휘로 대조(아래)
             if comps.get('npc') is not None and not (comps.get('npc') or {}).get('line'):
                 out.append('%s: npc 부품이 있으면 npc.line 필요' % rel)
             companion_names.append((rel, d.get('name')))
@@ -630,13 +677,47 @@ def _problems(pairs, root):
         for t in (comps.get('taste') if isinstance(comps.get('taste'), list) else ()):
             if t not in tastes_:
                 out.append('%s: taste 의 %r 는 취향 어휘(욕구 정의의 tastes)에 없다' % (rel, t))
-    if companion_needs:                              # 2차(p0.5.20): 동료 시트의 욕구 무게·입맛·생성 기록 — 시트 검증기(needs.sheet_fields)를 지나도 그대로여야 한다(데이터는 깐깐하게)
-        import needs as NE                           # 지연 import(needs 가 이 모듈을 import 한다) — 욕구 목록·어휘는 지금 읽는 정의에서 준다(정의를 다시 읽지 않는다)
-        for rel, sub in companion_needs:
-            got = NE.sheet_fields(sub, ids=set(needs_), vocab=tastes_)
-            bad = [k for k in sub if got.get(k) != sub[k]]
-            if bad:
-                out.append('%s: sheet — %s 칸이 검증기를 지나며 달라진다(모르는 욕구·등급·꼬리표·꼴)' % (rel, ', '.join(bad)))
+    if companion_tastes:                             # 2차(p0.5.20): 동료 시트의 입맛 — 시트 검증기(needs.sheet_fields)를 지나도 그대로여야 한다(데이터는 깐깐하게)
+        import needs as NE                           # 지연 import(needs 가 이 모듈을 import 한다) — 어휘는 지금 읽는 정의에서 준다(정의를 다시 읽지 않는다)
+        for rel, tt in companion_tastes:
+            if NE.sheet_fields({'taste': tt}, vocab=tastes_).get('taste') != tt:
+                out.append('%s: sheet — taste 칸이 검증기를 지나며 달라진다(어휘 밖 꼬리표·개수·겹침·꼴)' % rel)
+    out.extend(_trait_links(traits_, needs_, ids))   # 2차(p0.5.22): 특성 이름 겹침 · 반대 짝 · 효과가 가리키는 욕구
+    return out
+
+
+def _trait_links(traits_, needs_, ids):
+    """p0.5.22 특성 2차 검사 — 이름은 서로 달라야 한다(시트가 이름을 든다) · 반대 특성은 있는 특성이고 서로 가리킨다(자기 자신 아님) ·
+    효과의 욕구 id = 욕구 정의 · fill·mood 는 단계가 있는 욕구에만(준비 중 욕구엔 등급만 — 엔진이 건너뛴다) · mood 갈래는 그 욕구의 mood 에 있는 것."""
+    out, by_id, names = [], {d.get('id'): d for d in traits_}, {}
+    for d in traits_:
+        rel = ids.get(d.get('id'), str(d.get('id')))   # ids = {id: 상대 경로}(1차 검사가 채웠다)
+        nm, tr = d.get('name'), (d.get('comps') or {}).get('trait')
+        if not isinstance(nm, str):                  # 이름 꼴은 1차(_trait_problems)가 말했다
+            continue
+        if nm in names:
+            out.append('%s: 특성 이름 %r 중복(%s)' % (rel, nm, names[nm]))
+        names[nm] = rel
+        if not isinstance(tr, dict):
+            continue
+        op = tr.get('opposite')
+        if isinstance(op, str) and op:
+            other = ((by_id.get(op) or {}).get('comps') or {}).get('trait')
+            if op == d.get('id') or op not in by_id or not isinstance(other, dict) or other.get('opposite') != d.get('id'):
+                out.append('%s: trait.opposite %r 는 이 특성을 반대로 가리키는 다른 특성이어야 한다' % (rel, op))
+        ef = tr.get('effects')
+        for nid, e in ((ef.get('need') if isinstance(ef, dict) and isinstance(ef.get('need'), dict) else {}) or {}).items():
+            nd = needs_.get(nid)
+            if nd is None:
+                out.append('%s: trait.effects.need 의 %r 는 욕구 정의가 아니다' % (rel, nid))
+                continue
+            if not isinstance(e, dict):
+                continue
+            if ('fill' in e or 'mood' in e) and not nd.get('stages'):
+                out.append('%s: trait.effects.need.%s — 단계가 없는(준비 중) 욕구엔 level 만 적는다(fill·mood 는 엔진이 읽지 않는다)' % (rel, nid))
+            for mk in (e.get('mood') if isinstance(e.get('mood'), dict) else {}):
+                if mk not in (nd.get('mood') or {}):
+                    out.append('%s: trait.effects.need.%s.mood 의 %r 는 그 욕구의 기분 갈래(need.mood)에 없다' % (rel, nid, mk))
     return out
 
 
@@ -871,6 +952,23 @@ def companions():
 def need_defs():
     """p0.5.16 욕구 정의 전부 [정의] — id 순(결정론). 단계가 없는 정의(이름·뜻만)도 든다 — 엔진이 쓰는 것만 고르는 건 needs.live()."""
     return sorted(by_kind('need'), key=lambda d: d['id'])
+
+
+_TRAIT_IDX = {'src': None, 'n': -1, 'by_name': {}}
+
+
+def trait_by_name():
+    """p0.5.22 특성 정의 {이름: 정의} — 시트의 traits 칸은 이름(성격 줄 글자)을 든다. 정의 사전이 바뀌면(재로드·게이트의 주입) 다시 짓는다."""
+    defs = load()
+    if _TRAIT_IDX['src'] is not defs or _TRAIT_IDX['n'] != len(defs):
+        _TRAIT_IDX.update(src=defs, n=len(defs), by_name={d['name']: d for d in sorted(by_kind('trait'), key=lambda d: d['id'])})
+    return _TRAIT_IDX['by_name']
+
+
+def trait_ids(names):
+    """특성 이름 목록 → 아는 특성의 id 목록(같은 순서 · 모르는 이름은 빠진다) — run_meta.party[].trait_ids(관전·부검용)."""
+    by = trait_by_name()
+    return [by[n]['id'] for n in (names or ()) if isinstance(n, str) and n in by]
 
 
 def lore(plus=True):

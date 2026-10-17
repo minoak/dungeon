@@ -165,8 +165,8 @@ store = PresetStore(PR, data)
 lst = store.list()
 store.save(dict(slot, name="두란", job="전사"), "두란")
 doc = jload(PR)
-check("④ presets: 옛 파일(판 번호 없음)을 읽고 · 저장하면 지금 판(_schema_version 2 — p0.5.20 슬롯의 욕구 칸) · .v0.bak = 원본 · v0.5.0 의 읽기 조건(version 1·presets 목록) 그대로",
-      [e["id"] for e in lst] == ["pid1"] and doc.get(K) == savedata.CURRENT["presets"] == 2 and raw(PR + ".v0.bak") == pr0
+check("④ presets: 옛 파일(판 번호 없음)을 읽고 · 저장하면 지금 판(_schema_version 3 — p0.5.22 슬롯의 욕구 칸을 걷음) · .v0.bak = 원본 · v0.5.0 의 읽기 조건(version 1·presets 목록) 그대로",
+      [e["id"] for e in lst] == ["pid1"] and doc.get(K) == savedata.CURRENT["presets"] == 3 and raw(PR + ".v0.bak") == pr0
       and doc.get("version") == 1 and isinstance(doc.get("presets"), list) and len(doc["presets"]) == 2, doc.get(K))
 jdump(PR, {K: 7, "version": 1, "presets": [{"id": "pid9", "label": "카야", "slot": slot}]})
 pr7 = raw(PR)
@@ -183,8 +183,8 @@ with contextlib.redirect_stderr(err):
     sheetkit.write_party(sheets, PP)
     lp1 = show_runner.load_party(PP)
 pdoc = jload(PP)
-check("④ party: 옛 파일을 러너가 읽고(폴백 없음) · write_party 가 _schema_version 1 · .v0.bak = 원본 · 다시 읽어도 같은 시트",
-      sorted(lp0) == ["1", "2"] and lp0 == lp1 and "폴백" not in err.getvalue() and pdoc.get(K) == 1 and raw(PP + ".v0.bak") == pp0,
+check("④ party: 옛 파일을 러너가 읽고(폴백 없음) · write_party 가 지금 판(_schema_version 2 — p0.5.22 시트의 욕구 칸을 걷음) · .v0.bak = 원본 · 다시 읽어도 같은 시트",
+      sorted(lp0) == ["1", "2"] and lp0 == lp1 and "폴백" not in err.getvalue() and pdoc.get(K) == savedata.CURRENT["party"] == 2 and raw(PP + ".v0.bak") == pp0,
       err.getvalue().strip()[-120:])
 check("④ party: v0.5.0 load_party 의 규칙 — '_' 로 시작하지 않는 최상위 키는 전부 캐릭터 칸('1'~'9')",
       all(k.startswith("_") or (len(k) == 1 and k.isdigit() and k != "0") for k in pdoc), list(pdoc))
@@ -462,7 +462,7 @@ orig_w = raw(PW)
 jdump(PW + ".v0.bak", {K: 1, "1": {}})                          # 온전한 JSON 이지만 다른 판 — 이 판의 백업이 아니다
 sheetkit.write_party(sheets2, PW)
 check("⑧ 잘린 .bak·판이 다른 .bak 은 백업으로 치지 않는다 → 온전한 원본으로 새로 남긴다",
-      raw(PI + ".v0.bak") == orig_i and raw(PW + ".v0.bak") == orig_w and jload(PI).get(K) == 1)
+      raw(PI + ".v0.bak") == orig_i and raw(PW + ".v0.bak") == orig_w and jload(PI).get(K) == savedata.CURRENT["party"])
 DIRP = os.path.join(F, "isdir.json")
 os.makedirs(DIRP)
 e_dir = attempt(lambda: savedata.backup_before_write("party", DIRP))

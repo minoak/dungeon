@@ -90,7 +90,7 @@ with tempfile.TemporaryDirectory() as root:
     except ENT.EntityError as e:
         msg = str(e)
     check('② 검증기 거절 — sheet 없음·모르는 직업·모르는 칸(능력치)·미등재 키워드·npc.line 없음·walk 불량·이름 중복을 한 번에',
-          all(t in msg for t in ('nosheet.json: sheet', '직업은', '모르는 칸: hp', '등재되지 않은 성격 키워드', 'npc.line 필요',
+          all(t in msg for t in ('nosheet.json: sheet', '직업은', '모르는 칸: hp', '등재되지 않은 특성', 'npc.line 필요',   # p0.5.22 '성격 키워드' → '특성'
                                  'npc.walk', "동료 이름 '쌍둥이' 중복")))
 check('② 정본 폴더는 그대로 읽힌다(동료가 다른 종류의 검사를 흔들지 않는다)', set(ENT.reload()) >= set(comps))
 

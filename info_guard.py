@@ -31,7 +31,7 @@ public(result, viewer) — 결과 하나를 "그 사람이 실제로 볼 수 있
      남의 관측·봇 스냅샷에 실리지 않는다 — 결과 dict 에 옮겨 적히는 길이 없다). 반복 신호(관측 repeat)도 그 몸의 관측에만 실린다.
   ⑦ (p0.5.16 욕구) 욕구 결과(NEED_RESULTS)의 숫자 칸 NEED_NUM_KEYS — 충족도 전후(before·after)·내성 배율(tol)·단계 id(from·to). 에이전트는 숫자를 보지 않는다
      (경제 설계 §3.8.6 — 몸의 상태는 '몸:'·'기분:' 낱말로만, p0.5.18). 몸의 needs·moods·need_w·taste 와 봇 스냅샷의 기분 합산 mood_now 는 ⑥ 관전 칸에 든다(스트림 tick.bots[] 에만).
-     p0.5.20 욕구 생성 기록 needs_meta 도 ⑥ 관전 칸(몸·결과에는 없다 — 옮겨 적혀도 새지 않게).
+     p0.5.22 몸의 특성 배율 trait_fx(대식가 채움 % · 기분 조각 % — 숫자)도 ⑥ 관전 칸(에이전트에게는 특성 이름만 — 성격 줄).
   viewer(보는 사람)의 가시성(perceives, 4a)은 아직 쓰지 않는다.
 LLM 0콜 · 판정 rng 무접촉 · 엔진 무의존(dungeon_gm 을 import 하지 않는다 — 엔진이 이 모듈을 쓴다).
 """
@@ -49,7 +49,7 @@ SPECTATOR_KEYS = ("lore_note", "lore_drop", "lore_shown", "lore_cut", "lore_ops"
                   "todo_ops",   # p0.5.15 목표 칸 변경 — 스트림 tick.todo_ops(누가 무엇을 적었나). 그 사람의 몫은 자기 관측의 todo 한 줄뿐이다
                   "needs", "moods", "need_w", "taste",   # p0.5.16 욕구 — 몸의 충족도·기분 조각·무게·취향(스트림 tick.bots[] 의 관전 칸). 그 사람의 몫은 자기 관측의 '몸:'·'기분:' 줄뿐
                   "mood_now",   # p0.5.18 기분 합산{key, sum, why}(스트림 tick.bots[] — 합 숫자가 든다)
-                  "needs_meta")   # p0.5.20 욕구 생성 기록(누가·언제·해시 — 시트·run_meta 에만 있다. 몸·결과에는 없지만 옮겨 적혀도 새지 않게)
+                  "trait_fx")   # p0.5.22 몸의 특성 배율{욕구: {fill?, mood?}}(숫자 — 몸에만 있다. 결과에 옮겨 적혀도 새지 않게)
 NEED_RESULTS = ("need_fill", "need_none", "need_stage", "need_drain", "need_mood")   # p0.5.16 욕구 결과·사건(needs.NEED_RESULTS 와 같은 목록 — 엔진 무의존이라 사본)
 NEED_NUM_KEYS = ("before", "after", "tol", "from", "to",   # p0.5.16 ⑦ 욕구 결과의 숫자·단계 이름(충족도 전후 · 내성 배율 · 단계 id) — 먹은 사람의 last·궤적에도 안 간다(§3.8.6 숫자 노출 금지)
                  "sum")   # p0.5.18 기분 합(need_mood 사건 — 결과로 옮겨 적혀도 새지 않게)

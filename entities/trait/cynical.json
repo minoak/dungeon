@@ -1,0 +1,14 @@
+{
+  "id": "cynical",
+  "name": "냉소적인",
+  "kind": "trait",
+  "tags": [
+    "trait"
+  ],
+  "comps": {
+    "trait": {
+      "opposite": "optimistic"
+    }
+  },
+  "note": "p0.5.22 특성(DECISIONS 10-17). 기분 기본값 쪽 효과는 이번엔 붙이지 않았다(기분 줄 이유를 어떻게 보일지 민옥 결정 대기) — 글만."
+}

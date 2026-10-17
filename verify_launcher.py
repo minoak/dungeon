@@ -65,9 +65,10 @@ party_bytes_before = io.open(os.path.join(HERE, "party.json"), "rb").read()
 # ───────────────────── ① sheetkit ─────────────────────
 print("── ① sheetkit — 키워드 사전·직업 수치·조립·거부")
 data = sheetkit.load_traits()
-check("① traits.json: 키워드 12종 목록 — 문장 없음(09-12 §3-3 키워드 그대로 주입)",
-      isinstance(data["traits"], list) and len(data["traits"]) == 12
-      and all(isinstance(t, str) and t.strip() for t in data["traits"]) and len(set(data["traits"])) == 12)
+OLD_KEYWORDS = ["호기심 많은", "신중한", "용맹한", "과묵한", "수다스러운", "겁 많은", "탐욕스러운", "충직한", "냉소적인", "낙천적인", "의심 많은", "명예를 중시하는"]
+check("① 특성 목록(p0.5.22 — traits.json 의 옛 키워드 12종은 특성 저장소 entities/trait 로): 이름 목록 — 문장 없음(09-12 §3-3 이름 그대로 주입) · 옛 키워드 12종 그대로 · 중복 없음",
+      isinstance(data["traits"], list) and set(OLD_KEYWORDS) <= set(data["traits"])
+      and all(isinstance(t, str) and t.strip() for t in data["traits"]) and len(set(data["traits"])) == len(data["traits"]) >= 12)
 legacy_traits = {**data, "traits": {t: {"persona": "옛 문장 " + t, "speech": "옛 말투 " + t} for t in data["traits"]}}
 check("① 옛 사전 형식(키워드→문장)을 넘겨도 키워드만 쓴다 — 문장은 프롬프트에 안 나간다",
       "옛 문장" not in sheetkit.build_sheet("도적", ["신중한"], "a", "여", data=legacy_traits)["persona"])
@@ -298,8 +299,9 @@ else:
             return e.code, json.loads(e.read().decode("utf-8") or "{}")
 
     st, pre = call("/api/presets")
-    check("③ GET /api/presets: 200 · traits 12 · jobs 4(p0.5.3 마법사) · 기본 파티 3인 미리보기",
-          st == 200 and len(pre["traits"]) == 12 and list(pre["jobs"]) == ["전사", "도적", "궁수", "마법사"] and len(pre["default_party"]) == 3)
+    check("③ GET /api/presets: 200 · traits = 특성 이름 전부(p0.5.22) · 반대 짝(opposites) · jobs 4(p0.5.3 마법사) · 기본 파티 3인 미리보기",
+          st == 200 and pre["traits"] == data["traits"] and pre.get("opposites") == data["opposites"]
+          and list(pre["jobs"]) == ["전사", "도적", "궁수", "마법사"] and len(pre["default_party"]) == 3)
     check("③ presets.looks(D37): 머리 12·몸통 2·스와치 4재질·기본색 4",
           len(pre["looks"]["heads"]) == 12 and len(pre["looks"]["bodies"]) == 2
           and sorted(pre["looks"]["swatches"]) == sorted(sheetkit.LOOK_KEYS) and len(pre["looks"]["defaults"]) == 4)

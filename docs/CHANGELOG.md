@@ -1,5 +1,47 @@
 # 변경 기록
 
+## 2026-10-17 — p0.5.22 성격 키워드 → 캐릭터 특성 + 욕구 생성 호출 제거
+
+근거: DECISIONS 10-17(특성 격상 · 생성 호출 지움 · 두 기능 — 에이전트에게는 이름만 · 대식가 = 덜 찬다) · 설계 초안 `.orch/drafts/trait_design_v0.md` §1 꼴·§4 목록.
+
+- **특성 = 데이터**(`entities/trait/<id>.json`, kind `trait` — 31장 = 옛 키워드 12 + 초안 §4 새 19): `name`(시트 '성격' 줄에 들어가는 글자 그대로) · `comps.trait.opposite`(반대 특성 id —
+  8쌍, 서로 가리킨다) · `comps.trait.effects.need{욕구 id: {level?, fill?, mood?{갈래: %}}}`(없어도 된다 — 글만). 검증기(`entities._trait_problems`·`_trait_links`): 모르는 칸·등급(낮음|높음)·
+  % 1~1000 · 이름 20자·쉼표/마침표 없음·중복 없음 · 반대는 있는 특성이고 서로 가리킨다(자기 자신 아님) · 욕구 id 는 욕구 정의 · fill·mood 는 단계 있는 욕구만 · mood 갈래는 그 욕구의 mood 에 있는 것.
+  `entities.trait_by_name()`·`trait_ids()`. `traits.json` 은 직업만(옛 `traits`·`max_traits` 칸 삭제 — 최대 개수는 `sheetkit.MAX_TRAITS` 3).
+- **시트 조립**(`sheetkit`): `load_traits()` = 직업표 + 특성 저장소(`trait_table` — 이름 가나다순 · `opposites{이름: 이름}` · `trait_ids`) · `defs=` 를 주면 저장소를 읽지 않는다
+  (엔티티 검증기의 동료 시트 — 재귀 방지). `build_sheet` 가 반대 짝을 거절('반대 특성은 같이 고를 수 없다: A · B') · 오류 문장 '성격 키워드' → '특성'. 성격 줄 규칙은 그대로
+  (`", ".join(이름)` + `". " + 서술`) — 옛 키워드를 고른 시트의 성격 줄·완성 프롬프트는 바이트 그대로.
+- **효과**(`needs.trait_effects(이름들)` → (등급, 배율)): 대식가 `hunger.fill 70`(채우는 양만 — `weight_of` 가 무게 등급의 fill 에 곱한다: 등급 높음 70% × 70% = 49% · 줄기·기분 시간은 그대로) ·
+  미식가 `hunger.mood{like 150, dislike 150}` · 소박한 `hunger.mood{like·plain·dislike 50}`(먹은 뒤 조각의 값에 곱 — `_parts` 가 그릴 때 · 0 에서 먼 쪽 반올림 · 0 이 된 조각은 세지 않는다 ·
+  단계가 주는 기분은 그대로) · 수다스러운 `social 높음` ↔ 과묵한 `낮음` · 호기심 많은 `curiosity 높음` · 충직한 `affection 높음`(준비 중 욕구 — 정의에만, 엔진은 건너뛴다) ·
+  낙천적인↔냉소적인은 글만(기분 줄 이유 표시 결정 대기). **겹침 규칙**: 배율은 곱(정수 %로 반올림 — 미식가 × 소박한 = 75·50·75) · 등급은 모두 같으면 그 등급, 다르면 보통 · 같은 이름은 한 번 ·
+  모르는 이름은 건너뜀. 몸: `need_w`(특성 등급 — 단계 있는 욕구만) · `trait_fx{욕구: {fill?, mood?}}`(있을 때만 · `IG.SPECTATOR_KEYS`). 값은 전부 임시(정의 파일).
+- **기록**: `run_meta.party[].trait_ids`(additive) · `needs`·`needs_meta` 칸 없음(`taste` 그대로). 숫자는 관측·프롬프트·봇 스냅샷에 없다.
+- **욕구 생성 호출 제거(0.5.20~21)**: `need_gen.py` · `tools/need_gen.py` · `prompts/launcher/need_gen.md` · `verify_need_gen.py`(게이트 목록에서도) · 론처 `/api/needs/gen`·`/api/needs/check` ·
+  저장 때 호출(`/api/characters` 의 두뇌·`needs_gen` 응답) · 출발 때 `fill_party_needs`·`_carry_needs` · `needs_ui_payload` · 공개 서버 `_gen_plan`·출발 때 호출(`server.py` 는 0.5.19 와 같은 글로 돌아갔다) ·
+  `PresetStore.set_needs` · `needs.sheet_fields` 의 needs·needs_meta(입맛만 남음) · `sheetkit.NEED_FIELDS`·동료 시트의 needs·needs_meta 칸(입맛 taste 는 남김 — p0522b) · `words._NOT_WORDS` 의 `sheet.needs.` · `IG.SPECTATOR_KEYS` 의 `needs_meta`.
+  준비 중 욕구 정의(호기심·사교·애정)는 남겼다(설명·말 파일 주석만 고침).
+- **화면**(`launcher/index.html`): '성격 키워드' → '특성' · 반대 짝을 고르면 다른 쪽 칩이 잠긴다(`/api/presets.opposites` — additive) · '욕구와 입맛' → '입맛'(좋아함·싫어함 칩만 —
+  `/api/presets.taste_ui`, 0.5.20 `needs_ui` 를 대신함) · 등급 고르기·근거·[지금 정하기]·[다시 정하기]·정한 모델 줄·낡음 문장·저장 요청의 두뇌·'출발 준비 중…' 제거 · 동료 칸 요약은 입맛만(있을 때).
+- **이관**(`savedata`): party 1 → 2(`_party_traits` — 시트의 needs·needs_meta 걷음, 특성·taste 그대로) · presets 2 → 3(`_p2_traits` — 같은 걷음 + 반대 짝을 둘 다 고른 옛 슬롯은 먼저 고른 쪽만:
+  그대로 두면 `normalize_slot` 이 그 슬롯을 거절해 저장 캐릭터 목록 전체를 못 읽는다) · 스냅샷 11 → 12(p0522b — 아래).
+- 동료 프리셋(`entities/companion`)·기본 파티(`party.json`)의 특성은 바꾸지 않았다(비어 있는 채로 — 민옥 결정).
+- 게이트: verify_traits(새, 43칸 0콜 — 저장소 꼴·검증기 16종·반대 짝·이름 바이트·대식가·미식가·소박한·겹침·준비 중·누설·이관·배선) · verify_needs(무게 검사를 시험 특성 주입으로 ·
+  시트 needs 칸은 읽지 않음 · 93칸 그대로) · verify_launcher(특성 목록·opposites) · verify_patch(판 party 2·presets 3) · verify_entities(특성 갈래) · verify_companion(오류 문장).
+- 검증: 게이트 105/105(_run_gates.sh 104 + tools/check_words — 기준선 '후' 산출 p0522-after, 4조각 포그라운드). 빨간불 31종(`ab_runs/p0522/redlight.py`, 로컬) 놓침 0 · 깨짐 0.
+  기준선(전 = e2b1374 v0.5.21 105/105, 후 = 이 작업 트리 — 판 3 × 120틱 · 게이트 전부): **(나) 0** — 19건 전부 전후 원문 고정 규칙(`ab_runs/baseline/p0522-rules.py`, 로컬 · 탐침:
+  두 사본의 VERSION · `prompts/world/` 지문(후에서 욕구 말 파일 넷을 전 바이트로 바꾸면 전과 같다 · 말 칸은 같다) · 정의 수 +31 · ast 로 모은 검사명 · 반례 3건 거부). 차이 = 버전(판 셋·verify_patch·verify_public) ·
+  prompts/world 지문(판 셋) · 정의 수(check_words·verify_words) · 검사명(verify_launcher·verify_needs·verify_patch) · 게이트 목록. 판의 관측·프롬프트·피클·요약은 전후 같다(기본 파티에 특성이 없다).
+  옛 키워드 12종을 고른 파티 둘(더미 8틱)의 완성 프롬프트는 전(v0.5.21 사본)·후 바이트가 같다(`ab_runs/p0522/prompt_bytes.py` — 호출 순서는 두뇌 스레드 시간에 따라 같은 코드에서도 갈린다 · 같은 순서로 뜬 쌍은 목록째 같다).
+- p0522b(Codex p0522r 필수 2건): ① **스냅샷 11 → 12**(`snapshot._m11_traits`) — 0.5.21 에서 멈춘 판은 시트에 생성 호출의 needs·needs_meta, 몸에 그 무게 need_w 가 남아
+  층 이동·부활(스폰이 시트에서 다시 읽는다) 때 무게가 바뀌었다 → 이어갈 때 시트의 두 칸을 걷고(입맛 그대로) 몸마다 need_w·trait_fx 를 몸의 특성으로 다시 정한다
+  (needs.fields — 지금 세계·다른 세계·부활 대기 · 특성 칸이 없는 몸은 그 판의 시트). ② **동료 프리셋의 입맛**(p0.5.20 `comps.sheet.taste`)을 다시 받는다 —
+  `COMPANION_SHEET_KEYS` · `build_companion_sheet`(검증기를 지나며 달라지면 거절) · 엔티티 검증기(입맛은 떼고 조립 → 2차에서 지금 읽는 어휘로 대조 — `needs.sheet_fields(vocab=)`) ·
+  `/api/presets.companions[].taste`(화면의 동료 칸 한 줄 요약). 권장: 두 회귀를 게이트·빨간불에 더함(verify_traits 43 → 47칸 · 빨간불 +9).
+  재검증: 게이트 105/105(기준선 '후' p0522b-after, 4조각 포그라운드) · 빨간불 40종 놓침 0 · 깨짐 0 · 기준선 **(나) 0** — 31건(`ab_runs/baseline/p0522b-rules.py` — 위 19건 +
+  스냅샷 판 11→12: 판 셋의 snapshot.json·snapshot_meta.json 6 · 판 번호를 찍는 게이트 줄(verify_class_foundation·identity·info_guard·repeat_goal — 소스 같음·숫자만) 6 ·
+  verify_public ⑩ 두 줄 한 덩어리 · 반례 4건 거부).
+
 ## 2026-10-17 — p0.5.21 욕구 생성 검증: 근거 없는 '낮음·높음'은 보통으로
 
 근거: 0.5.20 뒤 동료 3명을 claude-haiku-5-5 로 정한 결과(`.orch/drafts/need_gen_companions.md` · 사본 `.orch/drafts/need_gen_v1/`, 커밋 안 함) — 두란·카야의 애정·사교가

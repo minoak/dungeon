@@ -53,7 +53,6 @@ from http.server import SimpleHTTPRequestHandler
 from urllib.parse import unquote, urlparse
 
 import launcher                                   # noqa: E402
-import need_gen                                   # noqa: E402  # p0.5.20 욕구 생성 호출 — 자식 env(요청의 키만)
 import run_control                                # noqa: E402  # D98 운영자 키 판 사용량 파일(반쪽 JSON 없이 교체 쓰기)
 import accounts as ACC                            # noqa: E402  # D77 계정 = 키 지문(파일 저장소)
 from launcher import BadRequest, Conflict, Ctx, Handler, LauncherServer   # noqa: E402
@@ -128,15 +127,6 @@ def key_alive(key, provider="gemini_api", timeout=8):
 
 
 KEY_CHECK = key_alive                     # 게이트(verify_account)가 바꿔 끼운다 — 실 네트워크 없이
-
-
-def _key_env(provider, key):
-    """자식 프로세스(러너·p0.5.20 욕구 생성 호출)에 주는 키 칸 — 회사 키·모델 칸을 전부 비우고 그 요청의 키 하나만, 호환 주소는 서버 설정으로
-    (자식의 .env 로더도 목적지를 바꾸지 못하게). 서버 자체의 키는 자식에 안 간다."""
-    extra = {k: "" for k in (*KEY_ENV.values(), *MODEL_ENV, *LEGACY_MODEL_ENV.values())}
-    extra[KEY_ENV[provider]] = key
-    extra["OPENAI_BASE_URL"] = openai_base_url()
-    return extra
 
 
 def _env_int(name, default):
@@ -598,35 +588,6 @@ class PublicHandler(Handler):
         self.send_error(404)                                          # 상태 줄은 latin-1 만 — 한글 메시지 금지(응답이 끊긴다)
         return None
 
-    # ── p0.5.20 욕구 생성 호출 ──
-    def _gen_plan(self, body, required=True):
-        """론처 Handler._gen_plan 을 덮는다 — 키는 그 요청의 것만(서버 프로세스의 키·.env 는 자식에 안 간다 — 러너와 같은 규칙, 보관 없음) ·
-        주소당 시간 상한(로그인과 같은 수 — 이 길을 남의 키 검사기로 못 쓰게). 저장 때(required=False) 키가 없거나 꼴이 틀리면 부르지 않는다
-        (§3.8.2 '키가 없으면 저장만 하고 needs 는 비워 둔다'). 두뇌가 dummy 인 서버(0콜 게이트)는 부르지 않고 전부 보통."""
-        raw = body.get("key")
-        try:
-            if not (isinstance(raw, str) and raw.strip()):
-                raise BadRequest("선택한 회사의 API 키를 넣어 줘 — 이 호출에만 쓰고 남기지 않는다")
-            default = self.sessions.brain if self.sessions.brain in HTTP_BACKENDS else "gemini_api"
-            provider = Sessions.provider_name(body.get("provider") or body.get("brain") or default)
-            key = Sessions.key_shape(raw, provider)
-        except BadRequest:
-            if not required:
-                return None
-            raise
-        if not self.sessions.allow_login(self._ip()):
-            if not required:
-                return None                                  # 저장은 막지 않는다(출발 때 판과 같은 키로 다시)
-            raise BadRequest("이 주소에서 시도한 호출이 너무 많다 — 한 시간에 %d번까지" % self.sessions.login_per_hour)
-        model = None
-        if "model" in body:
-            try:
-                model = clean_model(body["model"])
-            except ValueError as e:
-                raise BadRequest(str(e))
-        brain = "dummy" if self.sessions.brain == "dummy" else provider
-        return {"brain": brain, "env": need_gen.call_env(brain, model, extra=_key_env(provider, key))}
-
     # ── D77 계정 ──
     def _me(self):
         aid = self.sessions.account_of(self.sid)
@@ -784,8 +745,6 @@ class PublicHandler(Handler):
                                         % self.sessions.starts_per_hour})
             if not house:                                  # 운영자 키는 생존 확인을 하지 않는다(우리 키 — 회사에 한 번 더 묻지 않는다)
                 self.sessions.check_start_key(key, provider)
-            brain = "dummy" if self.sessions.brain == "dummy" else provider   # p0.5.20 정한 욕구가 없는 사람만 — 판과 같은 회사·키·모델(네트워크라 start_lock 밖 ·
-            launcher.fill_party_needs(self.ctx, body, brain, need_gen.call_env(brain, body.get("model"), extra=_key_env(provider, key)))   # 이어가기·기본 파티는 그 함수가 거른다)
             with self.sessions.start_lock:
                 if no_room():                             # 생존 확인(수 초)을 기다리는 사이 자리가 찼을 수 있다
                     return
@@ -811,8 +770,10 @@ class PublicHandler(Handler):
         """start_lock 안에서 러너를 띄운다(자리·상한·키 확인은 끝난 뒤). house = D98 운영자 키 판."""
         body["provider"] = provider
         body["brain"] = "dummy" if self.sessions.brain == "dummy" else provider   # 서버 쪽 0콜 게이트만 예외
-        extra = _key_env(provider, key)              # 러너 __main__의 .env 로더도 목적지를 바꾸지 못하게 서버 설정을 명시한다(호환 주소 포함).
-        extra.update({"DUNGEON_BRAIN_BACKEND": body["brain"], "DUNGEON_BRAIN_FALLBACK": ""})
+        extra = {k: "" for k in (*KEY_ENV.values(), *MODEL_ENV, *LEGACY_MODEL_ENV.values())}
+        extra.update({KEY_ENV[provider]: key, "DUNGEON_BRAIN_BACKEND": body["brain"], "DUNGEON_BRAIN_FALLBACK": ""})
+        # 러너 __main__의 .env 로더도 목적지를 바꾸지 못하게 서버 설정을 명시한다.
+        extra["OPENAI_BASE_URL"] = openai_base_url()
         extra["DUNGEON_PAUSE_LIMIT_SEC"] = self.sessions.pause_limit   # F1 재시도를 아무도 안 누르는 판이 자리를 쥐고 있지 못하게
         extra["DUNGEON_API_CALL_LIMIT"] = self.sessions.api_call_limit   # D96 한 판이 쓰는 LLM 호출 수 — /api/presets 로 화면이 예고한 그 값이 러너로 간다(이어가는 판도 새 프로세스라 여기서 다시 0부터)
         self.ctx.house = bool(house)                 # D98 이 Ctx 의 지금 판이 운영자 키 판인가 — '안 보면 멈춤'이 짧아진다(stop_unwatched)

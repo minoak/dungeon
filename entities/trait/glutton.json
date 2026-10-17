@@ -1,0 +1,20 @@
+{
+  "id": "glutton",
+  "name": "대식가",
+  "kind": "trait",
+  "tags": [
+    "trait"
+  ],
+  "comps": {
+    "trait": {
+      "effects": {
+        "need": {
+          "hunger": {
+            "fill": 70
+          }
+        }
+      }
+    }
+  },
+  "note": "p0.5.22 특성(DECISIONS 10-17 '대식가 = 먹어도 덜 찬다'). 배고픔을 채우는 양만 70%(무게 등급의 fill 에 곱한다) — 배고파지는 빠르기·기분 시간은 그대로. 값 임시."
+}

@@ -7,9 +7,10 @@
 
   · 몸: bot['needs'] = {욕구: 충족도 0~100} · bot['moods'] = [{src, size, what?, until}](같은 욕구의 조각은 새것이 덮는다 — p0.5.18: 문장 대신 먹은 것 이름 ·
     값과 이유 낱말은 그릴 때 정의에서 읽는다) ·
-    무게 bot['need_w'] = {욕구: 낮음|높음}(보통이 아닌 것만 — 시트 needs 칸에서, 0.5.16 은 시트에 칸이 없어 모두 보통 · p0.5.20 부터 론처의
-    생성 호출(need_gen.py)이 칸을 채우고 사람이 고친다 — 엔진은 칸만 읽는다, 성격 해석 규칙 없음) ·
-    취향 bot['taste'] = {likes, dislikes}(시트 taste 칸 — 있을 때만). 무게·취향은 스폰이 시트에서 다시 읽는다(이월할 것이 없다).
+    무게 bot['need_w'] = {욕구: 낮음|높음}(보통이 아닌 것만 — p0.5.22 부터 시트의 특성이 정한다: 특성 정의의 effects.need.<욕구>.level ·
+    0.5.20~21 의 생성 호출·시트 needs 칸은 거뒀다) · 특성 배율 bot['trait_fx'] = {욕구: {fill?: %, mood?: {갈래: %}}}(있을 때만 — 대식가의
+    채움·미식가·소박한의 기분 조각 크기) · 취향 bot['taste'] = {likes, dislikes}(시트 taste 칸 — 있을 때만).
+    무게·배율·취향은 스폰이 시트에서 다시 읽는다(이월할 것이 없다).
   · 엔진 공용 지점 셋: 틱마다 줄이기(tick) · 채우기(eat — 먹을 것의 satisfies / on_result — 정의의 from_events) · 단계 판정(문장·효과·사건).
   · 숫자는 에이전트에게 보이지 않는다(§3.8.6) — p0.5.18(DECISIONS 10-16 '몸·기분 줄') 관측은 두 줄과 결과 사실 문장뿐:
       '몸:' = 보통이 아닌 단계의 몸 문장(가장 낮은 충족도부터, 한 번에 문장 LINE_CAP 개) ·
@@ -34,9 +35,8 @@ import entities as ENT
 LINE_CAP = 2                 # §10-20 '몸:' 줄 상한 — 한 번에 문장 2개(문장 묶음 수가 아니라 문장 수), 가장 낮은 충족도의 몸 문장부터
 MOOD_EDGE = 3                # p0.5.18 기분 합의 절댓값이 이것보다 작으면(0 근처) '기분:' 줄이 없다 — 문턱은 여기 한 곳 ⚠️임시(값은 정의의 mood 칸들과 함께 교정)
 WHY_CAP = 2                  # p0.5.18 '기분:' 줄의 이유 — 합에 가장 크게 기여한 조각부터 최대 2개(DECISIONS 10-16)
-DEFAULT_LEVEL = '보통'       # 시트에 무게가 없으면(0.5.16 은 모두) 보통 = 정의의 decay · 채움 100% · 기분 시간 100%
+DEFAULT_LEVEL = '보통'       # 무게를 정하는 특성이 없으면 보통 = 정의의 decay · 채움 100% · 기분 시간 100%
 TOL_FULL = 100               # 내성 배율 자리(%) — 내성이 없는 동안 늘 100
-WHY_MAX = 40                 # 시트 needs[].why(생성 근거 — 론처에만) 상한. 엔진은 읽지 않는다
 LIKES_MAX, DISLIKES_MAX = 2, 1   # §3.6 취향 — 좋아함 0~2 · 싫어함 0~1
 NEED_RESULTS = ('need_fill', 'need_none', 'need_stage', 'need_drain',   # 이 모듈이 내는 결과·사건 이름(§10-19 — ate·full 이름은 쓰지 않는다)
                 'need_mood')     # p0.5.18 기분 합산의 결과(좋다·좋지 않다·없음과 이유)가 바뀐 사건(관전·측정용)
@@ -49,10 +49,6 @@ DRAIN_LINE = '기운이 빠졌다'                        # hp_drain 이 HP 를 
 
 _IDX = {'src': None, 'n': -1, 'all': [], 'live': []}
 _SENT_RE = re.compile(r'(?<=[.!?…])\s+')            # 문장 자르기 — 줄 상한(lines)·문장 게이트(order_problems) 공용
-_META_RE = {'by': re.compile(r'[A-Za-z_]{1,24}\Z'),                        # p0.5.20 needs_meta(생성 호출의 기록 — 론처·판 기록용, 엔진은 읽지 않는다) — 두뇌 이름
-            'model': re.compile(r'[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}\Z'),  #   모델 id(brain_config.clean_model 과 같은 글자)
-            'at': re.compile(r'[0-9T:\-]{1,32}\Z'),                         #   정한 시각
-            'prompt': re.compile(r'[0-9a-f]{8,64}\Z'), 'of': re.compile(r'[0-9a-f]{8,64}\Z')}   # 프롬프트·욕구 뜻 해시 · 시트 글 해시(낡음 판정 — need_gen.state)
 _JOSA = {'을': ('을', '를'), '은': ('은', '는'), '이': ('이', '가'), '과': ('과', '와')}
 
 
@@ -65,7 +61,7 @@ def _index():
 
 
 def all_defs():
-    """욕구 정의 전부(단계 없는 것 포함 — 시트 needs 칸의 열쇠 어휘·생성 호출 목록)."""
+    """욕구 정의 전부(단계 없는 것 포함 — 준비 중 욕구도 든다)."""
     return list(_index()['all'])
 
 
@@ -106,6 +102,52 @@ def level(bot, nid):
     return (bot.get('need_w') or {}).get(nid, DEFAULT_LEVEL)
 
 
+def weight_of(bot, nid, sp):
+    """p0.5.22 몸 하나의 무게 — 등급(need_w)의 {every, fill, mood_time} 에 특성 배율(trait_fx 의 fill %)을 곱한 것.
+    채우는 양은 이 fill 하나로 계산된다(_fill) — 대식가 70% × 등급 높음 70% = 49%. 줄어드는 빠르기·기분 시간은 등급 그대로."""
+    w = weight(sp, level(bot, nid))
+    f = ((bot.get('trait_fx') or {}).get(nid) or {}).get('fill')
+    if f is not None:
+        w['fill'] = w['fill'] * int(f) / 100.0
+    return w
+
+
+def _scaled(v, pct):
+    """기분 값 v 에 특성 배율 pct(%)를 곱한다 — 0 에서 먼 쪽으로 반올림(+7.5 → +8 · −7.5 → −8). 배율이 없으면 v."""
+    if pct is None:
+        return v
+    m = int(abs(v) * int(pct) / 100.0 + 0.5)
+    return m if v > 0 else -m
+
+
+def trait_effects(names):
+    """p0.5.22 특성 이름들(시트 traits — 성격 줄에 든 글자 그대로) → (등급 {욕구: 낮음|높음}, 배율 {욕구: {fill?: %, mood?: {갈래: %}}}).
+    특성 정의(entities/trait)의 effects.need 를 읽는다 — 모르는 이름은 건너뛴다(손 시트·지운 특성 — 판을 막지 않는다), 같은 이름은 한 번.
+    겹침(여러 특성이 같은 칸을 바꾸면): 배율은 곱한다(정수 %로 반올림 — 70 × 70 = 49 · 미식가 150 × 소박한 50 = 75) ·
+    등급은 모두 같으면 그 등급, 하나라도 다르면 보통(서로 지운다 — 보통은 칸을 두지 않는다).
+    단계가 없는 욕구(준비 중)의 등급도 돌려준다 — 몸에 거는 것만 고르는 건 fields(엔진은 단계가 있는 욕구만 쓴다)."""
+    by = ENT.trait_by_name()
+    lv, pct = {}, {}
+    for nm in dict.fromkeys(n for n in (names or ()) if isinstance(n, str)):
+        d = by.get(nm)
+        for nid, e in sorted((((((d or {}).get('comps') or {}).get('trait') or {}).get('effects') or {}).get('need') or {}).items()):
+            if e.get('level'):
+                lv.setdefault(nid, set()).add(e['level'])
+            if e.get('fill') is not None:
+                pct[(nid, 'fill', None)] = pct.get((nid, 'fill', None), 100.0) * e['fill'] / 100.0
+            for mk, p in sorted((e.get('mood') or {}).items()):
+                pct[(nid, 'mood', mk)] = pct.get((nid, 'mood', mk), 100.0) * p / 100.0
+    levels = {nid: next(iter(s)) for nid, s in sorted(lv.items()) if len(s) == 1}
+    fx = {}
+    for (nid, k, mk), p in sorted(pct.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2] or '')):
+        v = int(p + 0.5)
+        if k == 'fill':
+            fx.setdefault(nid, {})['fill'] = v
+        else:
+            fx.setdefault(nid, {}).setdefault('mood', {})[mk] = v
+    return levels, fx
+
+
 def josa(word, mark):
     """조사 고르기 — 끝 글자 받침 유무로(한글이 아니면 '을(를)' 꼴 — 기존 문장 관례)."""
     a, b = _JOSA[mark]
@@ -123,28 +165,12 @@ def fill_line(line, what):
 
 # ── 몸 ──────────────────────────────────────────────────────────────
 
-def sheet_fields(s, ids=None, vocab=None):
-    """시트(파티 파일의 한 칸 · 저장 캐릭터 슬롯) → 거른 {needs?, taste?, needs_meta?} — load_party·sheetkit.build_sheet 가 부른다. **판을 막지 않는다**:
-    모르는 욕구·등급이 아닌 값은 그 칸만 버린다(그 욕구는 보통 — 설계 §3.8.2 검증 '그 욕구만 보통'), 취향은 어휘 안의 꼬리표만 · 좋아함 2·싫어함 1까지 ·
-    겹치면 싫어함에서 뺀다. why 는 한 줄 WHY_MAX 자(론처용 — 게임 프롬프트에 안 나간다). p0.5.20 needs_meta(생성 호출의 기록)는 아는 칸·꼴만 남기고
-    by(두뇌)가 없으면 버린다 — 몸에는 걸리지 않는다(fields 는 needs·taste 만 읽는다). 칸이 없거나 남는 것이 없으면 그 칸을 만들지 않는다.
-    ids·vocab(욕구 id 묶음·입맛 어휘)을 주면 정의를 읽지 않는다 — 정의를 읽는 도중의 검증기(entities 의 동료 시트)가 쓴다(다시 읽기 재귀를 막는다)."""
+def sheet_fields(s, vocab=None):
+    """시트(파티 파일의 한 칸 · 저장 캐릭터 슬롯) → 거른 {taste?} — load_party·sheetkit.build_sheet 가 부른다. **판을 막지 않는다**:
+    취향은 어휘 안의 꼬리표만 · 좋아함 2·싫어함 1까지 · 겹치면 싫어함에서 뺀다. 칸이 없거나 남는 것이 없으면 그 칸을 만들지 않는다.
+    vocab(입맛 어휘)을 주면 정의를 읽지 않는다 — 정의를 읽는 도중의 검증기(entities 의 동료 시트)가 쓴다(다시 읽기 재귀를 막는다).
+    p0.5.22: 욕구 무게(0.5.20~21 의 needs·needs_meta 칸)는 시트에서 읽지 않는다 — 특성이 정한다(trait_effects). 옛 칸은 저장 이관이 버린다(savedata)."""
     out = {}
-    nd = s.get('needs')
-    if isinstance(nd, dict):
-        ids = {d['id'] for d in all_defs()} if ids is None else ids
-        keep = {}
-        for nid, e in sorted(nd.items()):
-            if nid not in ids or not isinstance(e, dict) or e.get('level') not in ENT.NEED_LEVELS:
-                continue
-            row = {'level': e['level']}
-            if isinstance(e.get('why'), str) and e['why'].strip():
-                row['why'] = ' '.join(e['why'].split())[:WHY_MAX]
-            if e.get('src') in ('model', 'user', 'fallback'):
-                row['src'] = e['src']
-            keep[nid] = row
-        if keep:
-            out['needs'] = keep
     tt = s.get('taste')
     if isinstance(tt, dict):
         vocab = tastes() if vocab is None else vocab
@@ -152,13 +178,6 @@ def sheet_fields(s, ids=None, vocab=None):
         dis = [t for t in (tt.get('dislikes') or []) if isinstance(t, str) and t in vocab and t not in likes][:DISLIKES_MAX] if isinstance(tt.get('dislikes'), list) else []
         if likes or dis:
             out['taste'] = {'likes': likes, 'dislikes': dis}
-    mt = s.get('needs_meta')
-    if isinstance(mt, dict):
-        keep = {k: mt[k] for k, rx in _META_RE.items() if isinstance(mt.get(k), str) and rx.match(mt[k])}
-        if type(mt.get('ok')) is bool:
-            keep['ok'] = mt['ok']
-        if keep.get('by'):
-            out['needs_meta'] = keep
     return out
 
 
@@ -173,13 +192,19 @@ def tastes():
 
 
 def fields(sheet=None):
-    """스폰 몸의 칸 — 시작 충족도(정의의 start) · 빈 기분 조각 · 시트의 무게(보통이 아닌 것만 — 0.5.16 은 시트에 칸이 없어 생기지 않는다)·취향(있을 때만).
+    """스폰 몸의 칸 — 시작 충족도(정의의 start) · 빈 기분 조각 · 특성이 정한 무게(need_w — 보통이 아닌 것만)·배율(trait_fx — 있을 때만) ·
+    시트의 취향(있을 때만). 무게·배율은 단계가 있는 욕구만 몸에 건다(준비 중 욕구의 등급은 엔진이 건너뛴다).
     판 안의 층 전이는 러너가 충족도·기분을 옮기고(carry), 부활은 되돌린다(reset)."""
+    sheet = sheet or {}
     out = {'needs': {nid: int(sp['start']) for nid, sp in live()}, 'moods': []}
-    sf = sheet_fields(sheet or {})
-    w = {nid: e['level'] for nid, e in (sf.get('needs') or {}).items() if e['level'] != DEFAULT_LEVEL and spec(nid)}
+    lv, fx = trait_effects(sheet.get('traits'))
+    w = {nid: v for nid, v in lv.items() if spec(nid)}
     if w:
         out['need_w'] = w
+    fx = {nid: v for nid, v in fx.items() if spec(nid)}
+    if fx:
+        out['trait_fx'] = fx
+    sf = sheet_fields(sheet)
     if sf.get('taste'):
         out['taste'] = sf['taste']
     return out
@@ -286,10 +311,10 @@ def _mood(sp, bot, tags):
 
 def _fill(d, bot, nid, amount, turn, what=None, tags=(), via='eat', src_key=None):
     """한 욕구를 채운다 → need_fill 칸(dict). 무게의 fill% 를 곱하고(올림 없이 반올림) 100 에서 자른다 · 기분 조각을 붙인다(같은 욕구의 조각은 덮는다 —
-    p0.5.18: 조각엔 갈래·먹은 것 이름·끝나는 틱만, 값과 이유 낱말은 그릴 때 정의에서)."""
+    p0.5.18: 조각엔 갈래·먹은 것 이름·끝나는 틱만, 값과 이유 낱말은 그릴 때 정의에서 · p0.5.22 fill% 엔 특성 배율이 곱해져 있다(weight_of))."""
     sp = spec(nid)
-    w = weight(sp, level(bot, nid))
-    gain = max(1, int(round(int(amount) * int(w['fill']) / 100.0)))
+    w = weight_of(bot, nid, sp)
+    gain = max(1, int(round(int(amount) * w['fill'] / 100.0)))
     before, after = _set(d, bot, nid, (bot.get('needs') or {}).get(nid, int(sp['start'])) + gain)
     rec = {'result': 'need_fill', 'need': nid, 'via': via, **({'what': what} if what else {}),
            **({'src_key': src_key} if src_key else {}), 'tol': TOL_FULL, 'before': before, 'after': after}
@@ -390,7 +415,8 @@ def lines(bot):
 def _parts(bot, turn=None):
     """p0.5.18 살아 있는 기분 조각 [(값, 이유 낱말)] — 욕구 단계가 주는 것(그 단계의 mood·why — 가장 낮은 충족도부터, 같으면 욕구 id 순) 다음
     먹은 뒤 조각(정의의 mood.<갈래>.mood·why — 새것부터). 이 순서가 이유 정렬의 동점 순서다. turn 이 있으면 그 틱에 끝난 조각(until ≤ turn)은 뺀다
-    (관측과 같은 자르기 — 없으면 몸의 목록 그대로: 틱 머리가 이미 걷었다). 정의에 값이 없는 조각(지운 욕구·지운 갈래)은 세지 않는다."""
+    (관측과 같은 자르기 — 없으면 몸의 목록 그대로: 틱 머리가 이미 걷었다). 정의에 값이 없는 조각(지운 욕구·지운 갈래)은 세지 않는다.
+    p0.5.22 먹은 뒤 조각의 값엔 몸의 특성 배율(trait_fx 의 mood{갈래: %} — 미식가·소박한)을 곱한다 — 곱해서 0 이 된 조각은 세지 않는다. 단계가 주는 값은 그대로."""
     rows = []
     for nid, sp in live():
         v = (bot.get('needs') or {}).get(nid)
@@ -400,12 +426,15 @@ def _parts(bot, turn=None):
         if st.get('mood'):
             rows.append((v, nid, int(st['mood']), st['why']))
     out = [(m, w) for _v, _n, m, w in sorted(rows, key=lambda r: (r[0], r[1]))]
+    fx = bot.get('trait_fx') or {}
     for p in reversed(bot.get('moods') or []):
         if turn is not None and int(p.get('until', 0)) <= int(turn):
             continue
         mv = (((spec(p.get('src')) or {}).get('mood') or {}).get(p.get('size'))) or {}
         if mv.get('mood'):
-            out.append((int(mv['mood']), fill_line(mv['why'], p.get('what'))))
+            m = _scaled(int(mv['mood']), ((fx.get(p.get('src')) or {}).get('mood') or {}).get(p.get('size')))
+            if m:
+                out.append((m, fill_line(mv['why'], p.get('what'))))
     return out
 
 

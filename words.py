@@ -37,8 +37,7 @@ _WORD_KEYS = {"role", "persona", "trait", "history", "brief", "deep", "text", "t
               "desc", "lore",                       # p0.5.6 아이템 — item.desc(물건 설명) · item.lore(속 — 자리만)
               "about",                              # p0.5.16 욕구 — need.about(한 줄 뜻). 단계 몸 문장·결과 꼬리는 끝 키가 line 이라 이미 말 칸이다
               "why"}                                # p0.5.18 욕구 — 단계·기분 조각의 기분 이유 낱말(need.stages.<단계>.why · need.mood.<갈래>.why)
-_NOT_WORDS = ("space.",                             # 이 접두의 경로는 말이 아니다(구역 종류 id)
-              "sheet.needs.")                       # p0.5.20 동료 시트의 욕구 무게 — why 는 생성 호출이 단 근거(론처에만 보이는 데이터 · tools/need_gen.py 가 적는다)
+_NOT_WORDS = ("space.",)                            # 이 접두의 경로는 말이 아니다(구역 종류 id)
 
 # 사람용 설명 — (경로 끝 맞춤, 설명). 앞의 것이 이긴다. life.* 는 describe 가 꼬리를 붙인다. 말 파일 제목 줄의 줄표 뒤에 찍힌다.
 DESC = [
@@ -85,7 +84,7 @@ def describe(kind, path):
     """(종류, 경로) → 사람용 설명 한 줄. 모르는 경로면 빈 문자열(제목에 줄표가 안 붙는다)."""
     base = path[5:] if path.startswith("life.") else path
     if kind == "need":                              # p0.5.16 욕구 — 단계 id·기분 갈래가 경로 가운데에 든다(끝 맞춤으로는 못 가른다)
-        return ("욕구의 한 줄 뜻 — 캐릭터를 만들 때 무게를 정하는 데 쓴다(게임 프롬프트엔 안 나간다)" if base == "need.about"
+        return ("욕구의 한 줄 뜻 — 사람이 읽는 설명(게임 프롬프트엔 안 나간다)" if base == "need.about"
                 else "몸 문장 — 그 단계에 있는 동안 '몸:' 줄에 뜬다(상태 그대로 · 지시·권유 없이)" if ".stages." in base and base.endswith(".line")
                 else "기분 이유 — 그 단계에 있는 동안 '기분:' 줄의 이유에 든다(짧은 명사구)" if ".stages." in base and base.endswith(".why")
                 else "기분 이유 — 채운 뒤 정해진 틱 동안 '기분:' 줄의 이유에 든다(짧은 명사구 · {what} = 먹은 것 · {what:을} = 이름 + 조사)"

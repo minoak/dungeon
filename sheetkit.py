@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
-"""시트 조립기(D31, 2026-09-05) — 커스터마이징 입력(직업·성격 키워드·이름·성별·배경)을
+"""시트 조립기(D31, 2026-09-05) — 커스터마이징 입력(직업·특성·이름·성별·배경)을
 party 시트 dict 로 조립한다. LLM 0콜·순수 함수. 러너의 load_party 가 최종 검증자라
 여기서 만든 시트는 그 검증을 그대로 통과해야 한다(이중 검증 = 론처 저장이 러너 계약을 어기지 못함).
 
 왜 키워드인가: 성격 키워드가 행동을 재현한다는 근거가 있다 — 피른 '호기심'은 솔로 판 탐색을
 0→26회로, 카야 '과묵'은 사교 콜 3/3 침묵으로. 처음(09-05)엔 키워드마다 우리가 쓴 persona/speech
 문장을 매겨 이어 붙였으나, 2026-09-12(파트너 메모 §3-3 [결정]) 키워드를 **그대로** 시트 성격 줄에
-넣는다 — traits.json 은 키워드 목록만, 말투(speech)는 손으로 쓴 시트에서만 온다.
+넣는다 — 말투(speech)는 손으로 쓴 시트에서만 온다.
+p0.5.22(DECISIONS 10-17): 성격 키워드 → 캐릭터 특성(entities/trait). 이름은 지금처럼 성격 줄에 그대로 들어가고(에이전트에게는 이름만),
+엔진은 특성의 효과를 읽는다(needs.trait_effects). 시트 traits 칸은 이름을 든다 — 옛 키워드가 그대로 맞는다. 반대 특성은 같이 고를 수 없다.
 
 배경(background)은 사용자의 **자유 입력**이다 — 시트 UGC 의 프롬프트 인젝션 관문이 여기서
 열린다. 막을 수는 없고(LLM 특성) 격리한다: 길이 상한 + 개행·마크다운 표식 제거(시트 섹션 위장
@@ -26,6 +28,7 @@ NAME_MAX = 20            # 이름 — 자유 입력 1호(한 줄, 프롬프트 �
 BACKGROUND_MAX = 4000    # 09-11: 긴 과거 서술도 저장·복원·프롬프트까지 같은 상한으로 전달한다.
 PERSONA_MAX = 2000       # 사용자가 직접 쓰는 성격. 키워드 문장 길이는 별도로 확보한다.
 PERSONA_TOTAL_MAX = 2500 # 키워드 문장+자유 서술 합계. 러너도 성격에만 이 상한을 쓴다.
+MAX_TRAITS = 3           # p0.5.22 특성 최대 개수(옛 traits.json max_traits 자리 — 지금처럼 3)
 SEXES = ("남", "여")
 
 # ── 외형(D37, 2026-09-06) — 파츠 스프라이트. 시트가 정하고 러너가 기록하고 뷰어가 그린다.
@@ -41,23 +44,32 @@ _MARK = re.compile(r"[#`<>\[\]]")        # 마크다운 헤더·코드펜스·�
 _WS = re.compile(r"\s+")
 
 
-def load_traits(path=TRAITS_FILE):
-    """traits.json → dict. 형식 검증(traits = 키워드 문자열 목록·중복 없음, jobs 몸 수치 전수 · p0.5.3 정신·숙련·스킬 칸은 있으면 형식만).
-    옛 형식(키워드→{persona,speech} 사전, 2026-09-05~09-11)은 키 목록으로 읽는다 — 문장은 버린다."""
+def trait_table(defs):
+    """p0.5.22 특성 정의들(entities/trait) → 시트 조립이 쓰는 표 {traits: [이름 — 가나다순], opposites: {이름: 반대 특성 이름}, trait_ids: {이름: id}}.
+    이름은 성격 줄에 들어가는 글자 그대로다. 꼴은 엔티티 검증기가 본다 — 여기는 이름이 글인 정의만 담는다."""
+    defs = [d for d in defs if isinstance(d, dict) and isinstance(d.get("name"), str) and d["name"].strip()]
+    by_id = {d.get("id"): d for d in defs}
+    opp = {}
+    for d in defs:
+        o = ((d.get("comps") or {}).get("trait") or {}).get("opposite")
+        if isinstance(o, str) and o in by_id:
+            opp[d["name"]] = by_id[o]["name"]
+    return {"traits": sorted(d["name"] for d in defs), "opposites": opp, "trait_ids": {d["name"]: d.get("id") for d in defs}}
+
+
+def load_traits(path=TRAITS_FILE, defs=None):
+    """traits.json(직업표) + 특성 저장소(p0.5.22 entities/trait) → dict {jobs, traits, opposites, trait_ids, max_traits}.
+    형식 검증(jobs 몸 수치 전수 · p0.5.3 정신·숙련·스킬 칸은 있으면 형식만). 파일에 옛 traits·max_traits 칸이 남아 있어도 읽지 않는다 — 특성은 저장소가 정한다.
+    defs(특성 정의 목록)를 주면 저장소를 읽지 않는다 — 정의를 읽는 도중의 검증기(entities 의 동료 시트)가 쓴다(다시 읽기 재귀를 막는다)."""
     with io.open(path, encoding="utf-8") as f:
         data = json.load(f)
-    traits = data.get("traits") or []
     jobs = data.get("jobs") or {}
-    if isinstance(traits, dict):                 # 옛 사전 형식(오래 켜 둔 론처·옛 파일) — 키워드만 취한다
-        traits = list(traits)
-    if not traits or not jobs:
-        raise ValueError("traits.json: traits/jobs 가 비었다")
-    if not isinstance(traits, list) or any(not isinstance(t, str) or not t.strip() for t in traits):
-        raise ValueError("traits.json: traits 는 비어 있지 않은 키워드 문자열 목록")
-    traits = [t.strip() for t in traits]
-    if len(set(traits)) != len(traits):
-        raise ValueError("traits.json: 키워드 중복")
-    data["traits"] = traits
+    if not jobs:
+        raise ValueError("traits.json: jobs 가 비었다")
+    if defs is None:
+        import entities                          # 지연 import — 특성 목록은 엔티티 저장소에 있다(정의 파일만 읽는 모듈)
+        defs = entities.by_kind("trait")
+    data.update(trait_table(defs))               # 특성이 하나도 없는 정의 폴더(게이트의 부분 사본)도 읽힌다 — 그때 시트는 자유 서술만 받는다
     for j, v in jobs.items():
         for f in ("hp", "str", "dex", "wdmg", "stealth", "search_r", "atk_range"):
             if not isinstance(v.get(f), int) or isinstance(v.get(f), bool):
@@ -71,7 +83,7 @@ def load_traits(path=TRAITS_FILE):
                 raise ValueError("traits.json: 직업 %r %s 는 중복 없는 스킬 id 목록" % (j, f))
         if not set(v.get("skills", [])) <= set(v.get("skill_list", v.get("skills", []))):
             raise ValueError("traits.json: 직업 %r 시작 스킬이 직업 스킬 목록 밖이다" % j)
-    data["max_traits"] = int(data.get("max_traits", 3))
+    data["max_traits"] = MAX_TRAITS
     return data
 
 
@@ -283,18 +295,17 @@ def random_look(rng, sex, data=None):
             "colors": {k: rng.choice(list(data["swatches"][k])) for k in LOOK_KEYS}}
 
 
-def build_sheet(job, traits, name, sex, background=None, data=None, persona_text=None, look=None,
-                needs=None, taste=None, needs_meta=None):
+def build_sheet(job, traits, name, sex, background=None, data=None, persona_text=None, look=None, taste=None):
     """커스터마이징 입력 → party 시트 dict(load_party 계약 형태).
-    job: traits.json jobs 키 / traits: 키워드 0~max_traits / name: 자유 입력(한 줄) /
+    job: traits.json jobs 키 / traits: 특성 이름 0~max_traits(반대 특성은 같이 고를 수 없다 — p0.5.22) / name: 자유 입력(한 줄) /
     sex: '남'|'여' / background: 자유 입력(정제·상한) 또는 None /
-    persona_text: 성격 자유 서술(파트너 정정 09-05 — 키워드 뒤에 이어붙이고, 키워드 0개면 이것만).
-    키워드와 자유 서술 중 하나는 있어야 한다. 합계가 PERSONA_TOTAL_MAX 를 넘으면 거부(조용한 절단 금지).
-    persona = 키워드 그대로(2026-09-12 개정, 파트너 메모 §3-3): "신중한, 겁 많은" · 자유 서술이 있으면
+    persona_text: 성격 자유 서술(파트너 정정 09-05 — 특성 뒤에 이어붙이고, 특성 0개면 이것만).
+    특성과 자유 서술 중 하나는 있어야 한다. 합계가 PERSONA_TOTAL_MAX 를 넘으면 거부(조용한 절단 금지).
+    persona = 특성 이름 그대로(2026-09-12 개정, 파트너 메모 §3-3): "신중한, 겁 많은" · 자유 서술이 있으면
     "신중한, 겁 많은. <서술>" — 문장 템플릿 없음. speech 는 만들지 않는다(손 시트의 speech 만 산다).
-    반환 시트에는 원본 키워드도 `traits` 로 남긴다 — run_meta 기록(부검)·론처 복원에 쓴다.
-    p0.5.20 needs·taste·needs_meta(욕구 무게·입맛·생성 호출 기록 — need_gen.py): 러너와 같은 검증기(needs.sheet_fields)로 거른다 —
-    틀린 칸만 버리고 저장을 막지 않는다(옛 저장본의 욕구 id 가 나중에 없어져도 목록을 읽을 수 있게). 셋 다 없으면 시트에 칸이 안 생긴다(옛 슬롯 꼴 그대로)."""
+    반환 시트에는 고른 특성 이름도 `traits` 로 남긴다 — 엔진이 효과를 읽고(needs.trait_effects), run_meta 기록(부검)·론처 복원에 쓴다.
+    taste(입맛 — 론처에서 플레이어가 고르는 칸, p0.5.20): 러너와 같은 검증기(needs.sheet_fields)로 거른다 — 틀린 꼬리표만 버리고 저장을 막지 않는다.
+    없으면 시트에 칸이 안 생긴다(옛 슬롯 꼴 그대로)."""
     data = data or load_traits()
     jobs, keywords = data["jobs"], data["traits"]
     if job not in jobs:
@@ -302,18 +313,22 @@ def build_sheet(job, traits, name, sex, background=None, data=None, persona_text
     if sex not in SEXES:
         raise ValueError("성별은 남/여")
     if not isinstance(traits, (list, tuple)):
-        raise ValueError("성격 키워드는 목록이어야 한다")
+        raise ValueError("특성은 목록이어야 한다")
     ptxt = sanitize_freetext(persona_text, PERSONA_MAX)
     if not traits and not ptxt:
-        raise ValueError("성격 키워드를 하나 이상 고르거나 성격 문장을 써야 한다")
+        raise ValueError("특성을 하나 이상 고르거나 성격 문장을 써야 한다")
     if len(traits) > data["max_traits"]:
-        raise ValueError("성격 키워드는 최대 %d개" % data["max_traits"])
+        raise ValueError("특성은 최대 %d개" % data["max_traits"])
     if len(set(traits)) != len(traits):
-        raise ValueError("성격 키워드가 중복됐다")
+        raise ValueError("특성이 중복됐다")
     for t in traits:
         if t not in keywords:
-            raise ValueError("등재되지 않은 성격 키워드: %r" % (t,))
-    kw = ", ".join(traits)                       # 키워드 그대로 — 복수는 ', ' 로(⚠️임시 가정, 파트너 미답)
+            raise ValueError("등재되지 않은 특성: %r" % (t,))
+    opp = data.get("opposites") or {}
+    for t in traits:
+        if opp.get(t) in traits:
+            raise ValueError("반대 특성은 같이 고를 수 없다: %s · %s" % (t, opp[t]))
+    kw = ", ".join(traits)                       # 특성 이름 그대로 — 복수는 ', ' 로(⚠️임시 가정, 파트너 미답)
     persona = (kw + ". " + ptxt) if (kw and ptxt) else (kw or ptxt)
     body = jobs[job]
     sheet = {
@@ -337,24 +352,23 @@ def build_sheet(job, traits, name, sex, background=None, data=None, persona_text
     lk = sanitize_look(look)                     # D37 외형 — 없으면 필드 없음(러너가 랜덤)
     if lk:
         sheet["look"] = lk
-    if needs is not None or taste is not None or needs_meta is not None:
-        import needs as NE                       # 지연 import — 욕구 칸이 있을 때만 정의(entities)를 읽는다
-        sheet.update(NE.sheet_fields({"needs": needs, "taste": taste, "needs_meta": needs_meta}))
+    if taste is not None:
+        import needs as NE                       # 지연 import — 입맛 칸이 있을 때만 정의(entities)를 읽는다
+        sheet.update(NE.sheet_fields({"taste": taste}))
     return sheet
 
 
 COMPANION_TEXT_MAX = 300   # 동료 프리셋의 말투·목표 상한 — 러너 load_party 의 FREETEXT_MAX 와 같은 값
 COMPANION_SHEET_KEYS = ("job", "sex", "traits", "persona", "speech", "goal", "background", "look",
-                        "needs", "taste", "needs_meta")   # p0.5.20 욕구 무게·입맛·생성 기록 — tools/need_gen.py 가 적는다(민옥 확인 뒤 커밋)
-NEED_FIELDS = ("needs", "taste", "needs_meta")
+                        "taste")   # p0.5.20 입맛(좋아함·싫어함) — 데이터에 적은 대로(p0.5.22: 욕구 무게 칸은 거뒀고 입맛은 남는다)
 
 
 def build_companion_sheet(defn, data=None):
     """동료 프리셋 정의(entities/companion/<id>.json, D81) → party 시트.
-    정의의 comps.sheet 는 '파티 시트 칸'만 든다(job·sex·traits·persona·speech·goal·background·look) — 능력치는 적지 않고
+    정의의 comps.sheet 는 '파티 시트 칸'만 든다(job·sex·traits·persona·speech·goal·background·look·taste) — 능력치는 적지 않고
     직업에서 온다(build_sheet 그대로). 말투·목표는 손 시트(party.json)처럼 그대로 싣는다(같은 정제·상한).
     이름은 정의의 name — 정제 뒤에 달라지는 이름은 거부한다(화면에 보인 이름 = 판에 선 이름).
-    p0.5.20 needs·taste·needs_meta 는 데이터라 깐깐하게 — 검증기를 지나며 달라지는 칸은 거부한다(엔티티 게이트가 잡는다)."""
+    입맛(taste)은 데이터라 깐깐하게 — 검증기(needs.sheet_fields)를 지나며 달라지면 거부한다(엔티티 게이트가 잡는다)."""
     if not isinstance(defn, dict) or not isinstance((defn.get("comps") or {}).get("sheet"), dict):
         raise ValueError("동료 프리셋에 sheet 부품이 없다")
     comp = defn["comps"]["sheet"]
@@ -362,13 +376,11 @@ def build_companion_sheet(defn, data=None):
     if extra:
         raise ValueError("sheet 부품이 모르는 칸: %s" % ", ".join(extra))
     sheet = build_sheet(comp.get("job"), comp.get("traits") or [], defn.get("name", ""), comp.get("sex"),
-                        comp.get("background"), data=data, persona_text=comp.get("persona"), look=comp.get("look"),
-                        **{k: comp.get(k) for k in NEED_FIELDS})
+                        comp.get("background"), data=data, persona_text=comp.get("persona"), look=comp.get("look"), taste=comp.get("taste"))
     if sheet["name"] != defn.get("name"):
         raise ValueError("이름이 정제 뒤 달라진다: %r → %r" % (defn.get("name"), sheet["name"]))
-    bad = [k for k in NEED_FIELDS if comp.get(k) is not None and sheet.get(k) != comp[k]]
-    if bad:
-        raise ValueError("%s 칸이 검증기를 지나며 달라진다(모르는 욕구·등급·꼬리표·꼴)" % ", ".join(bad))
+    if comp.get("taste") is not None and sheet.get("taste") != comp["taste"]:
+        raise ValueError("taste 칸이 검증기를 지나며 달라진다(어휘 밖 꼬리표·개수·겹침·꼴)")
     for k in ("speech", "goal"):
         v = comp.get(k)
         if v is None:
@@ -406,7 +418,7 @@ def build_party(slots, data=None, companions=None):
         sheet = build_sheet(s.get("job"), s.get("traits") or [], s.get("name", ""),
                             s.get("sex"), s.get("background"), data=data,
                             persona_text=s.get("persona"), look=s.get("look"),
-                            **{k: s.get(k) for k in NEED_FIELDS})   # p0.5.20 화면 칸의 욕구 무게·입맛·생성 기록(있을 때만)
+                            taste=s.get("taste"))   # p0.5.20 화면 칸의 입맛(있을 때만 — p0.5.22 욕구 무게는 특성이 정한다)
         if sheet["name"] in names:
             raise ValueError("이름 중복: %s" % sheet["name"])
         names.add(sheet["name"])

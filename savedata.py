@@ -18,8 +18,8 @@
     (OSError 의 한 갈래라 저장소의 기존 '쓰기 실패' 처리가 그대로 받는다). 읽기만 하는 파일(저장소의 party.json 등)에는 백업이 생기지 않는다.
   · 더 새 판(되돌린 코드가 새 패치의 파일을 읽음)은 내용을 손대지 않고 돌려준다 — 모르는 칸은 저장소가 버릴 수 있으므로 덮어쓰기 전 백업이 지킨다.
 대상과 빠진 것(p0.5.1 목록 — 새 저장 파일이 생기면 여기에 종류를 더한다):
-  party     party_custom.json(론처가 쓰는 내 파티) · party*.json(저장소 기본 파티, 읽기만)   — sheetkit.write_party / show_runner.load_party
-  presets   character_presets.json(저장 캐릭터 · p0.5.20 판 2 — 슬롯의 욕구 칸)                — character_presets.PresetStore
+  party     party_custom.json(론처가 쓰는 내 파티 · p0.5.22 판 2) · party*.json(저장소 기본 파티, 읽기만)   — sheetkit.write_party / show_runner.load_party
+  presets   character_presets.json(저장 캐릭터 · p0.5.20 판 2 — 슬롯의 욕구 칸 · p0.5.22 판 3 — 욕구 칸을 걷는다) — character_presets.PresetStore
   campaign  campaign.json(저장 캐릭터별 원정 기록, 판 기록의 투영)                             — campaign.Book
   bestiary  bestiary.json(도감 원장 — 죽어도 남는 지식)                                        — bestiary.Issuer
   account   accounts/<id>/account.json(공개 서버 계정 — 열쇠 지문·별명)                       — accounts.Accounts
@@ -37,7 +37,7 @@ import time
 
 KEY = "_schema_version"
 
-CURRENT = {"party": 1, "presets": 2, "campaign": 1, "bestiary": 1, "account": 1}
+CURRENT = {"party": 2, "presets": 3, "campaign": 1, "bestiary": 1, "account": 1}
 
 
 def _stamp_only(doc):
@@ -52,8 +52,45 @@ def _p1_needs(doc):
     return doc
 
 
+GONE_NEED_KEYS = ("needs", "needs_meta")     # p0.5.22 거둔 칸 — 욕구 무게(생성 호출 0.5.20~21)는 이제 특성이 정한다. 입맛(taste)은 남는다
+
+
+def _drop_needs(sheet):
+    return {k: v for k, v in sheet.items() if k not in GONE_NEED_KEYS} if isinstance(sheet, dict) else sheet
+
+
+def _party_traits(doc):
+    """party 1→2(p0.5.22 특성): 시트의 needs·needs_meta 칸을 걷는다(욕구 무게는 특성이 정한다 · taste 는 그대로). traits 칸(옛 성격 키워드)은
+    그대로 특성 이름으로 맞는다 — 바꿀 것이 없다. 판을 막지 않는다(옛 칸이 남아 있어도 러너는 읽지 않는다 — 판 번호는 되돌린 코드의 백업용)."""
+    return {k: (v if str(k).startswith("_") else _drop_needs(v)) for k, v in doc.items()}
+
+
+def _p2_traits(doc):
+    """presets 2→3(p0.5.22 특성): 슬롯의 needs·needs_meta 를 걷는다(taste 는 그대로). traits 의 옛 키워드는 그대로 특성 이름이다.
+    반대 짝(수다스러운 ↔ 과묵한 등 — 0.5.22 부터 같이 못 고른다)을 둘 다 고른 옛 슬롯은 먼저 고른 쪽만 남긴다 — 그대로 두면 저장소의
+    검증(normalize_slot)이 그 슬롯을 거절해 저장 캐릭터 목록 전체를 못 읽는다. 반대 짝 표는 특성 저장소(sheetkit.load_traits — 지연 import)."""
+    import sheetkit                          # 지연 import — sheetkit 이 이 모듈을 import 한다
+    opp = sheetkit.load_traits().get("opposites") or {}
+    out = []
+    for e in doc.get("presets") if isinstance(doc.get("presets"), list) else []:
+        if isinstance(e, dict) and isinstance(e.get("slot"), dict):
+            slot = _drop_needs(e["slot"])
+            tr = slot.get("traits")
+            if isinstance(tr, list):
+                keep = []
+                for t in tr:
+                    if not (isinstance(t, str) and opp.get(t) in keep):
+                        keep.append(t)
+                slot = {**slot, "traits": keep}
+            e = {**e, "slot": slot}
+        out.append(e)
+    return {**doc, "presets": out} if isinstance(doc.get("presets"), list) else doc
+
+
 MIGRATIONS = {kind: {0: _stamp_only} for kind in CURRENT}
 MIGRATIONS["presets"][1] = _p1_needs
+MIGRATIONS["presets"][2] = _p2_traits
+MIGRATIONS["party"][1] = _party_traits
 
 
 def version_of(doc):

@@ -1,0 +1,12 @@
+{
+  "id": "greedy",
+  "name": "탐욕스러운",
+  "kind": "trait",
+  "tags": [
+    "trait"
+  ],
+  "comps": {
+    "trait": {}
+  },
+  "note": "p0.5.22 특성(DECISIONS 10-17). 글만 — 성격 줄에 이름이 들어간다. 규칙이 생기면 효과를 붙인다."
+}

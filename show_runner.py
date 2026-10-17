@@ -427,8 +427,8 @@ def load_party(path):
                 if not isinstance(rel, dict):
                     raise ValueError("봇%s relationships 는 객체여야 함" % char)
                 out["relationships"] = {str(o): str(t)[:FREETEXT_MAX] for o, t in rel.items()}
-            out.update(G.NE.sheet_fields(s))     # p0.5.16 욕구 무게(needs{욕구: {level, why?, src?}})·취향(taste{likes, dislikes}) — 있을 때만, 틀린 칸만 버린다(판을 막지 않는다 —
-                                                #   그 욕구는 보통). 게임 프롬프트엔 안 나간다(엔진만 읽는다 · run_meta.party 에 기록) · p0.5.20 needs_meta(생성 기록 — 몸에 안 걸린다)
+            out.update(G.NE.sheet_fields(s))     # p0.5.16 취향(taste{likes, dislikes}) — 있을 때만, 틀린 꼬리표만 버린다(판을 막지 않는다).
+                                                #   게임 프롬프트엔 안 나간다(엔진만 읽는다 · run_meta.party 에 기록) · p0.5.22 욕구 무게는 시트가 아니라 특성(traits)이 정한다
             lk = s.get("look")                  # D37(09-06) 외형 — 뷰어 전용(엔진·프롬프트 무접촉).
             if lk is not None:                  #   미등재 파츠·hex 아님 = ValueError = 폴백 경로 그대로
                 out["look"] = sheetkit.sanitize_look(lk)
@@ -1929,8 +1929,9 @@ def main():
                         **({"id": b["id"]} if b.get("id") else {}),         # D78(09-16) additive: 저장 캐릭터 id — 캠페인·원장 키
                         **{k: b[k] for k in ("speech", "goal", "background")   # D31(09-05) additive —
                            if b.get(k)},                                       #   커스텀 시트 원문(있을 때만)
-                        **({"traits": list(b["traits"])} if b.get("traits") else {}),   # 키워드 원본
-                        **{k: sheets[b["char"]][k] for k in ("needs", "taste", "needs_meta") if (sheets.get(b["char"]) or {}).get(k)},   # p0.5.16(additive) 시트의 욕구 무게(level·why·src)·취향 — 있을 때만 · p0.5.20 needs_meta(누가·언제 정했나·해시 — 론처 생성 호출)
+                        **({"traits": list(b["traits"])} if b.get("traits") else {}),   # 특성 이름(옛 키워드 원본 — 성격 줄 글자)
+                        **({"trait_ids": tid_} if (tid_ := G.ENT.trait_ids(b.get("traits"))) else {}),   # p0.5.22(additive) 아는 특성의 id(같은 순서) — 효과는 엔진만 읽는다(관측 무접촉)
+                        **({"taste": sheets[b["char"]]["taste"]} if (sheets.get(b["char"]) or {}).get("taste") else {}),   # p0.5.16(additive) 시트의 취향 — 있을 때만 · p0.5.22 욕구 무게(needs·needs_meta)는 거뒀다
                         **({"look": b["look"]} if b.get("look") else {}),   # D37(09-06) 외형 — 뷰어 전용
                         **({"looks": lk_} if (STRANGERS_ON and (lk_ := sheetkit.looks_line({"look": b.get("look")}))) else {})}   # p0.5.12(additive, 켠 판에만) 겉모습 한 줄의 그림 부분 — 무기·갑옷은 틱의 bots 에서 잇는다(looks_line 과 같은 ' · ')
                        for b in bots])

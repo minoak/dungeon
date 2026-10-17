@@ -1,0 +1,23 @@
+{
+  "id": "gourmet",
+  "name": "미식가",
+  "kind": "trait",
+  "tags": [
+    "trait"
+  ],
+  "comps": {
+    "trait": {
+      "effects": {
+        "need": {
+          "hunger": {
+            "mood": {
+              "like": 150,
+              "dislike": 150
+            }
+          }
+        }
+      }
+    }
+  },
+  "note": "p0.5.22 특성(DECISIONS 10-17). 먹은 뒤 기분 조각 중 좋아함·싫어함의 크기 150%(기본 갈래는 그대로). 값 임시."
+}

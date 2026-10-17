@@ -3,6 +3,7 @@
 p0.5.18 몸·기분 줄(DECISIONS 10-16 '문장 대원칙'·'몸·기분 줄'): 관측 두 줄 '- 몸: …'(보통이 아닌 단계의 몸 문장) · '- 기분: 좋다 / 좋지 않다 (이유: …)'
 (기분 조각 합산 — 0 근처면 없음 · 이유는 같은 쪽 큰 것부터 2개 · 동점은 낮은 충족도·단계 먼저) · 새 문장 글자 그대로 · 결과 문장 간결 · need_mood 사건 ·
 mood_now 관전 칸 · 이관 10→11 · 시험용 욕구로 기분까지 데이터만으로.
+p0.5.22(특성): 무게 등급은 시트의 특성이 정한다(옛 needs·needs_meta 칸은 읽지 않는다) — 무게 검사는 시험 특성을 정의 사전에 주입해서 본다(특성 자체는 verify_traits).
 게이트:
   ① 정의·검증기: 배고픔 정의(시작 70 · 4틱마다 1 · 81 가득 참 · 단계 넷 · 굶주림 효과 둘 · 기분 셋 · 무게 둘 · 취향 어휘 8) · 음식 셋(휴대식 i9·식사·햇사과) ·
      가게(주점 식사 3 · 잡화점 휴대식 2 · 채소 좌판 햇사과 1) · 뒤지기 표에 휴대식 · 검증기가 잘못된 욕구·먹을 것을 한 번에 거절한다 ·
@@ -263,6 +264,8 @@ TEST_MD = ("# 목마름 · test_thirst\n\n## `need.about`\n마실 것이 필요�
            "## `need.stages.dry.line`\n목이 탄다.\n\n## `need.stages.dry.why`\n목마름\n\n## `need.mood.plain.why`\n물을 마심\n")
 IDLE_DEF = {"id": "test_idle", "name": "호기심(시험)", "kind": "need", "tags": ["need"], "comps": {"need": {"about": "@prompts"}}}
 IDLE_MD = "# 호기심(시험) · test_idle\n\n## `need.about`\n새로운 것을 알고 싶은 정도\n"
+TRAIT_T = {"id": "test_parched", "name": "목마른(시험)", "kind": "trait", "tags": ["trait"],   # p0.5.22 등급은 특성이 정한다 — 단계 있는 것·없는 것 둘 다
+           "comps": {"trait": {"effects": {"need": {"test_thirst": {"level": "높음"}, "test_idle": {"level": "높음"}}}}}}
 TMP2 = tempfile.mkdtemp(prefix="defs2_", dir=ROOT)
 eroot2, wroot2 = os.path.join(TMP2, "entities"), os.path.join(TMP2, "world")
 shutil.copytree(ENT.ROOT, eroot2)
@@ -271,17 +274,21 @@ for d_, md_ in ((TEST_DEF, TEST_MD), (IDLE_DEF, IDLE_MD)):
     jw(os.path.join(eroot2, "need", d_["id"] + ".json"), d_)
     with io.open(os.path.join(wroot2, "need", d_["id"] + ".md"), "w", encoding="utf-8", newline="\n") as f:
         f.write(md_)
+jw(os.path.join(eroot2, "trait", TRAIT_T["id"] + ".json"), TRAIT_T)
 DEFS0 = ENT.load()
 DEFS_T = ENT.read(eroot2, words_root=wroot2)          # 검증기를 통과한 정의 사전(시험 정의 둘 + 리포 정의 전부)
-check("② 시험용 정의 둘(단계 있는 목마름 · 이름·뜻만 있는 호기심)이 검증기를 통과한다 · 말 파일이 합쳐진다 · 나머지 정의는 리포 그대로",
+check("② 시험용 정의 둘(단계 있는 목마름 · 이름·뜻만 있는 호기심) + 시험 특성 하나가 검증기를 통과한다 · 말 파일이 합쳐진다 · 나머지 정의는 리포 그대로",
       DEFS_T["test_thirst"]["comps"]["need"]["stages"]["dry"]["line"] == "목이 탄다." and DEFS_T["test_idle"]["comps"]["need"]["about"] == "새로운 것을 알고 싶은 정도"
       and {k: v for k, v in DEFS_T.items() if not k.startswith("test_")} == DEFS0)
 ENT._DEFS = DEFS_T                                     # 주입 — 코드는 하나도 안 고친다(정의 사전만 바뀐다 · needs._index 가 다시 짓는다)
 try:
-    check("② 엔진이 쓰는 욕구 = 단계가 있는 것만(배고픔·목마름) · 이름·뜻만 있는 것은 건너뛴다(시트 needs 칸의 열쇠로는 받는다 — p0.5.20 리포의 애정·호기심·사교도 그 꼴)",
+    check("② 엔진이 쓰는 욕구 = 단계가 있는 것만(배고픔·목마름) · 이름·뜻만 있는 것은 건너뛴다(특성이 등급을 적어 둘 수는 있다 — 몸의 무게엔 단계 있는 것만 · "
+          "p0.5.22 리포의 애정·호기심·사교도 그 꼴)",
           [i for i, _ in NE.live()] == ["hunger", "test_thirst"]
           and [d_["id"] for d_ in NE.all_defs()] == ["affection", "curiosity", "hunger", "social", "test_idle", "test_thirst"]
-          and "test_idle" in (NE.sheet_fields({"needs": {"test_idle": {"level": "높음"}}}).get("needs") or {}))
+          and NE.trait_effects(["목마른(시험)"])[0] == {"test_idle": "높음", "test_thirst": "높음"}
+          and NE.fields({"traits": ["목마른(시험)"]}).get("need_w") == {"test_thirst": "높음"},
+          (NE.trait_effects(["목마른(시험)"]), NE.fields({"traits": ["목마른(시험)"]})))
     dT, botsT = town(on=True)
     aT, bT = botsT[0], botsT[1]
     check("② 새 몸에 새 욕구의 시작값(50) · 이름·뜻만 있는 욕구는 몸에 없다", aT["needs"] == {"hunger": 70, "test_thirst": 50})
@@ -338,7 +345,7 @@ finally:
     ENT._DEFS = DEFS0
 check("② 시험 정의를 걷으면 엔진도 걷는다(정의 사전이 곧 욕구 목록)", [i for i, _ in NE.live()] == ["hunger"])
 CODE = ("needs.py", "dungeon_gm.py", "interactables.py", "composed_actions.py", "brains.py", "show_runner.py", "snapshot.py", "info_guard.py", "entities.py",
-        "need_gen.py", "launcher.py", "sheetkit.py")   # p0.5.20 생성 호출·론처·시트 조립도 욕구 id 를 모른다(목록은 정의에서)
+        "launcher.py", "sheetkit.py", "savedata.py")   # 론처·시트 조립·저장 이관도 욕구 id 를 모른다(목록은 정의에서 · p0.5.22 특성 효과도 정의의 id 로)
 check("② 코드에 욕구 id 글자('hunger')가 없다 — 욕구는 정의(데이터)로만 들어온다(이 게이트가 코드 길을 숨기지 않는다)",
       not [f for f in CODE if re.search(r"['\"]hunger['\"]", src(f))], [f for f in CODE if re.search(r"['\"]hunger['\"]", src(f))])
 shutil.rmtree(TMP2, ignore_errors=True)
@@ -614,16 +621,24 @@ rR = act(dR, bR, [bR], {"type": "use", "target": "f%d" % found}) if found else {
 check("⑤ 던전 통을 뒤져 휴대식 — 소지 +1 · 문장 '통을 뒤졌다 — 휴대식 하나가 나왔다(소지 휴대식 1개)' · 오브젝트 태그 '휴대식 나옴'",
       found and rR.get("got") == "ration" and bR["rations"] == 1 and brains._last_prose(rR) == "통을 뒤졌다 — 휴대식 하나가 나왔다(소지 휴대식 1개)"
       and (bR.get("obj_tags") or {}).get(found, {}).get("note") == "휴대식 나옴", (found, rR))
-# 무게·취향 — 시트 칸
-sheet_hi = dict(SHEETS["1"], needs={"hunger": {"level": "높음", "why": "먹는 걸 좋아한다", "src": "model"}}, taste={"likes": ["고기"], "dislikes": ["과일"]})
-sheet_lo = dict(SHEETS["2"], needs={"hunger": {"level": "낮음"}})
+# 무게·취향 — p0.5.22 무게는 시트의 특성이 정한다(배고픔 등급을 적은 시험 특성 둘을 정의 사전에 주입 — 코드 무수정) · 취향은 시트 칸
+W_TRAITS = {"test_heavy": {"id": "test_heavy", "name": "많이 먹는(시험)", "kind": "trait", "tags": ["trait"],
+                           "comps": {"trait": {"effects": {"need": {"hunger": {"level": "높음"}}}}}},
+            "test_light": {"id": "test_light", "name": "적게 먹는(시험)", "kind": "trait", "tags": ["trait"],
+                           "comps": {"trait": {"effects": {"need": {"hunger": {"level": "낮음"}}}}}}}
+sheet_hi = dict(SHEETS["1"], traits=["많이 먹는(시험)"], needs={"hunger": {"level": "낮음"}}, taste={"likes": ["고기"], "dislikes": ["과일"]})   # 옛 needs 칸은 읽지 않는다
+sheet_lo = dict(SHEETS["2"], traits=["적게 먹는(시험)"])
 dW, _ = town(on=True)
-bw_hi = G.spawn(dW, "1", [], sheet=sheet_hi)
-bw_lo = G.spawn(dW, "2", [bw_hi], sheet=sheet_lo)
-bw_mid = G.spawn(dW, "3", [bw_hi, bw_lo], sheet=dict(SHEETS["3"]))
+ENT._DEFS = {**DEFS0, **W_TRAITS}
+try:
+    bw_hi = G.spawn(dW, "1", [], sheet=sheet_hi)
+    bw_lo = G.spawn(dW, "2", [bw_hi], sheet=sheet_lo)
+    bw_mid = G.spawn(dW, "3", [bw_hi, bw_lo], sheet=dict(SHEETS["3"], needs={"hunger": {"level": "높음"}}))
+finally:
+    ENT._DEFS = DEFS0
 for t in range(1, 13):
     NE.tick(dW, [bw_hi, bw_lo, bw_mid], t)
-check("⑤ 무게 — 줄기: 높음 3틱마다(12틱에 −4) · 보통 4틱(−3) · 낮음 6틱(−2) · 몸의 need_w 는 보통이 아닐 때만",
+check("⑤ 무게(특성이 정한다 — 시트의 옛 needs 칸은 읽지 않는다) — 줄기: 높음 3틱마다(12틱에 −4) · 보통 4틱(−3) · 낮음 6틱(−2) · 몸의 need_w 는 보통이 아닐 때만",
       (hun(bw_hi), hun(bw_mid), hun(bw_lo)) == (66, 67, 68) and bw_hi.get("need_w") == {"hunger": "높음"} and "need_w" not in bw_mid,
       (hun(bw_hi), hun(bw_mid), hun(bw_lo)))
 for b_ in (bw_hi, bw_lo, bw_mid):
@@ -659,16 +674,16 @@ check("⑤ 싫어하는 음식을 사 먹으면 결과 문장 '채소 좌판에�
       rH7["result"] == "need_fill" and rH7.get("mood") == "dislike"
       and brains._last_prose(aH["last"]) == "채소 좌판에서 햇사과를 사 먹었다 — 입에 맞지 않았다 · 1골드를 냈다(남은 골드 0)"
       and G.event_tags(rH7) == [("use", "사 먹음", "햇사과 ← 채소 좌판 1골드 (남은 0) · 입에 맞지 않았다")], (rH7, brains._last_prose(aH["last"]), G.event_tags(rH7)))
-sf_ = NE.sheet_fields({"needs": {"hunger": {"level": "높음", "why": "가" * 60, "src": "model"}, "nope": {"level": "높음"}, "test_x": {"level": "엄청"}},
+sf_ = NE.sheet_fields({"needs": {"hunger": {"level": "높음", "why": "가" * 60, "src": "model"}}, "needs_meta": {"by": "gemini_api"},
                        "taste": {"likes": ["고기", "단것", "빵", "초콜릿"], "dislikes": ["고기", "생선", "채소"]}})
-check("⑤ 시트 칸 거르기(판을 막지 않는다): 모르는 욕구·등급이 아닌 값은 그 칸만 버린다 · why 40자 · 좋아함 2 · 싫어함 1(겹치면 싫어함에서 뺀다) · 어휘 밖 꼬리표 버림",
-      sf_ == {"needs": {"hunger": {"level": "높음", "why": "가" * 40, "src": "model"}}, "taste": {"likes": ["고기", "단것"], "dislikes": ["생선"]}}, sf_)
+check("⑤ 시트 칸 거르기(판을 막지 않는다): 좋아함 2 · 싫어함 1(겹치면 싫어함에서 뺀다) · 어휘 밖 꼬리표 버림 · p0.5.22 옛 needs·needs_meta 칸은 읽지 않는다",
+      sf_ == {"taste": {"likes": ["고기", "단것"], "dislikes": ["생선"]}}, sf_)
 pf = os.path.join(ROOT, "party_needs.json")
-jw(pf, {"1": dict(SHEETS["1"], needs={"hunger": {"level": "낮음"}}, taste={"likes": ["빵"], "dislikes": []}), "2": dict(SHEETS["2"])})
+jw(pf, {"1": dict(SHEETS["1"], needs={"hunger": {"level": "낮음"}}, needs_meta={"by": "gemini_api"}, taste={"likes": ["빵"], "dislikes": []}), "2": dict(SHEETS["2"])})
 with contextlib.redirect_stderr(io.StringIO()) as err_:
     lp = R.load_party(pf)
-check("⑤ load_party 가 needs·taste 칸을 받는다(폴백 없음 · 시트에 그대로) · 칸이 없는 시트는 칸도 없다",
-      not err_.getvalue() and lp["1"].get("needs") == {"hunger": {"level": "낮음"}} and lp["1"].get("taste") == {"likes": ["빵"], "dislikes": []}
+check("⑤ load_party 가 taste 칸을 받는다(폴백 없음 · 시트에 그대로) · 옛 needs·needs_meta 칸은 버린다(판을 막지 않는다) · 칸이 없는 시트는 칸도 없다",
+      not err_.getvalue() and "needs" not in lp["1"] and "needs_meta" not in lp["1"] and lp["1"].get("taste") == {"likes": ["빵"], "dislikes": []}
       and "needs" not in lp["2"] and "taste" not in lp["2"], (err_.getvalue()[:200], lp.get("1")))
 # 두 욕구 동시(시험용 목마름 −6 · 마신 뒤 +4) — 몸 줄 상한 · 기분 합산 · 이유 2개 · 문턱 · 동점
 PLAIN_H = {"src": "hunger", "size": "plain", "what": "휴대식", "until": 999}       # 먹은 뒤 기본 조각 +8
