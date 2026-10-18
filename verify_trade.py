@@ -4,7 +4,7 @@
 원칙: 사실만 · 데이터 주도(동사 정의 + 말 파일 + 세트 한 줄 — 처리기만 코드) · 기능 플래그 없음 · 동사 유일함(한 일엔 맞는 동사 하나).
 게이트:
   ① 동사·세트·말: buy(대상 = 상품 · 소지품 칸 없음 · 걷지 않음) · sell(대상 = 가게 · 소지품 꼭 · 자동 접근)이 세트의 use 다음 · 처리기 buy·sell ·
-     설명 = 말 파일 · 사고팔기 말(prompts/actions/trade.md) 칸 셋 · 검증기가 모르는 자리·빠진 칸·남는 칸·짝 없는 중괄호를 거절
+     설명 = 말 파일 · 사고팔기 말(prompts/actions/trade.md) 칸 여섯(p0.5.30 buy 거절 문장 셋 — 그 문장은 verify_shop_plain) · 검증기가 모르는 자리·빠진 칸·남는 칸·짝 없는 중괄호를 거절
   ② 지침·관측 문장: 행동 사전의 buy·sell 줄 · 먼저 걸어가는 동사(sell 은 걷고 buy 는 아니다) · item 을 붙이는 동사 use·sell·give · use 설명에 거래 말 없음 ·
      관측 가게 줄 '- 주점 f… — 파는 것(buy)과 사들이는 값(sell):'(칸 설명 없음) · 메뉴형 가게 줄 그대로
   ③ buy 로 사기: 식사(그 자리에서 먹음) · 물약(소지 +1) · 장비(바로 든다) · 골드 차감 · 돈 부족 too_poor → 주점 주인의 정해진 말 그대로 ·
@@ -141,7 +141,8 @@ def hun(b):
 
 ASENT = "- 이동은 세계가 대신 걷는다. %s는 대상이 멀면 닿는 곳까지 먼저 걸어간 뒤 한다. 이동이 중단되면 다시 판단한다."
 ISENT = "`target`은 관측에 나온 ID이고, `self`는 너 자신이다. `item`은 소지품 ID(`i...`)이며 %s에만 붙인다."
-BUY_DESC, SELL_DESC = "`target`의 상품을 산다. 값은 골드로 낸다.", "`item`을 `target` 가게에 판다."
+BUY_DESC, SELL_DESC = "상품을 산다. `target`은 상품 ID(`g...`)다. 값은 골드로 낸다.", "`item`을 `target` 가게에 판다."   # p0.5.30 buy 설명(관리자 지시 — 옛: "`target`의 상품을 산다. 값은 골드로 낸다.")
+TRADE_CELLS = ("shop", "use_good", "use_shop_item", "buy_shop", "buy_other", "good")   # p0.5.30 buy 거절 문장 칸 셋(buy_shop·buy_other·good)이 더해졌다
 
 # ─────────────────────────────────────────────────────────────────────────────
 print("── ① 동사·세트·말")
@@ -159,8 +160,8 @@ check("① 설명 = 말 파일(prompts/world/verb/buy.md·sell.md 의 verb.desc 
       and raw_buy["comps"]["verb"]["desc"] == WD.WORD_MARK == raw_sell["comps"]["verb"]["desc"], (BUY.get("desc"), SELL.get("desc")))
 TW = CA.trade_words()
 bad_tw = CA.trade_problems({"shop": "파는 것({gold})", "use_good": "{shop} {", "extra": "x"})
-check("① 사고팔기 말(prompts/actions/trade.md) = 칸 셋(shop·use_good·use_shop_item) · 칸마다 정해진 자리만 · 검증기가 빠진 칸·남는 칸·모르는 자리·짝 없는 중괄호를 한 번에 거절",
-      set(TW) == {"shop", "use_good", "use_shop_item"} and CA.trade_problems(TW) == [] and len(bad_tw) == 4
+check("① 사고팔기 말(prompts/actions/trade.md) = 칸 여섯(%s) · 칸마다 정해진 자리만 · 검증기가 빠진 칸·남는 칸·모르는 자리·짝 없는 중괄호를 한 번에 거절" % "·".join(TRADE_CELLS),
+      set(TW) == set(TRADE_CELLS) and tuple(CA.TRADE_FILLS) == TRADE_CELLS and CA.trade_problems(TW) == [] and len(bad_tw) == 7
       and any("`use_shop_item` 가 없다" in p for p in bad_tw) and any("`extra` 는 사고팔기 말이 아니다" in p for p in bad_tw)
       and any("{gold} 는 모르는 자리다" in p for p in bad_tw) and any("짝이 맞지 않는 중괄호" in p for p in bad_tw), bad_tw)
 
@@ -450,8 +451,9 @@ check("⑧ use 의 다른 쓰임 그대로 — 휴대식 먹기(need_fill · 휴
 print("── ⑨ 배선")
 cw = subprocess.run([sys.executable, os.path.join(HERE, "tools", "check_words.py")], capture_output=True, text=True, encoding="utf-8",
                     env=dict(os.environ, PYTHONUTF8="1"))
-check("⑨ tools/check_words.py 가 0 으로 끝나고 사고팔기 말을 센다 — '사고팔기 말 prompts/actions/trade.md — 칸 3개(shop·use_good·use_shop_item) — 칸·자리 일치'",
-      cw.returncode == 0 and "사고팔기 말 prompts/actions/trade.md — 칸 3개(shop·use_good·use_shop_item) — 칸·자리 일치" in cw.stdout, cw.stdout[-400:])
+CW_LINE = "사고팔기 말 prompts/actions/trade.md — 칸 6개(%s) — 칸·자리 일치" % "·".join(TRADE_CELLS)
+check("⑨ tools/check_words.py 가 0 으로 끝나고 사고팔기 말을 센다 — '%s'" % CW_LINE,
+      cw.returncode == 0 and CW_LINE in cw.stdout, cw.stdout[-400:])
 sf = src("STREAM_FORMAT.md")
 check("⑨ _run_gates.sh 등록(낱말 경계) · VERSION 0.5.29 이상 · PATCH_NOTES 0.5.29 · CHANGELOG p0.5.29 · STREAM_FORMAT(type buy·sell · use_good·use_shop_item) · prompts/README(trade.md)",
       re.search(r"(?<![\w])verify_trade(?![\w])", src("_run_gates.sh")) is not None

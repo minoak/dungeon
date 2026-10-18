@@ -16,6 +16,8 @@
      주점 주인 '네가 낸 의뢰를 이 파티가 맡았다' — 소문 분기 밖) · 맡지 않았으면 그 줄 없음
   ⑤ 러너 풀런(스텁 두뇌 — 0콜, 1층에 몬스터·함정이 있는 판): 인사(두뇌)·되받기의 NPC 요청 전부에 그 1층의 실측(종별 수·함정 수)이 없다 ·
      주점 주인의 요청이 실제로 있었다 · 앎의 범위 줄 · tick.npc_hails 에 hail_rumor·숫자 없음 · 스냅샷의 세계에 소문 재료 칸 없음
+     (p0.5.30: 주점 주인은 가게를 맡은 사람이라 NPC 두뇌를 쓰지 않는다(정의 npc.brain false) — 그 사람의 요청은 0 · 인사는 정의의 문장 ·
+      되받기는 말 없음(닫는 차례만 정해진 닫는 말) · 다른 마을 사람의 요청은 있었다)
   ⑥ 저장 판 10(snapshot._m9_rumor): 옛 판 9 의 세계 — 소문 재료 칸을 걷고 주점 주인·떠돌이 모험자·주점의 말을 지금 정의로(행인의 걷는 자리는 그대로) ·
      다른 NPC 의 말은 손대지 않는다 · 제자리·한 번 · 이관한 세계의 인사
   ⑦ 배선: 러너·엔진 소스에 소문 재료 경로 없음 · _run_gates.sh 등록 · STREAM_FORMAT·PATCH_NOTES·CHANGELOG
@@ -398,9 +400,12 @@ check("⑤ 1층에 몬스터·함정이 있는 판(%s · 함정 %d) — 인사(�
       sum(KINDS1.values()) >= 2 and len(FL1.traps) >= 1 and npc_prompts and not bad5, bad5[:3])
 hails5 = [h for r in rows5 if r["kind"] == "tick" for h in (r.get("npc_hails") or [])]
 reps5 = [x for r in rows5 if r["kind"] == "tick" for x in (r.get("npc_replies") or [])]
-check("⑤ 주점 주인의 요청이 실제로 있었다(인사·되받기) · 요청마다 앎의 범위 한 줄 · 되받은 말이 스트림에",
-      len(tk5) >= 2 and all(KNOW in p for p in npc_prompts) and any(x["npc"] == TK for x in reps5)
-      and any(h["npc"] == TK and h.get("line_src") == "brain" for h in hails5), (len(tk5), [x.get("npc") for x in reps5][:4]))
+check("⑤ p0.5.30 주점 주인(npc.brain false)의 요청은 없다 — 인사는 정의의 문장(line_src 없음) · 되받은 말은 정해진 닫는 말뿐 · "
+      "다른 마을 사람의 요청은 있었다 · 요청마다 앎의 범위 한 줄 · 되받은 말이 스트림에",
+      not tk5 and npc_prompts and all(KNOW in p for p in npc_prompts) and any(x["npc"] != TK for x in reps5)
+      and all(x.get("talk") == "close" and x["line"] == G.NPC_LINE_CLOSE for x in reps5 if x["npc"] == TK)
+      and any(h["npc"] == TK for h in hails5) and not any(h["npc"] == TK and h.get("line_src") for h in hails5),
+      (len(tk5), [(x.get("npc"), x.get("talk")) for x in reps5][:6], [(h["npc"], h.get("line_src")) for h in hails5][:6]))
 check("⑤ tick.npc_hails — hail_rumor 없음 · 숫자 인사 없음",
       hails5 and not any(h.get("key") == "hail_rumor" or "마리" in h["line"] or "함정" in h["line"] for h in hails5), hails5[:3])
 snap5 = pickle.loads(last_pkl["b"]) if last_pkl else {}   # 이 게이트의 러너가 방금 쓴 자기 피클 바이트(밖에서 온 파일이 아니다)

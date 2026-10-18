@@ -1088,6 +1088,8 @@ def _last_prose(last, names=None):
         return "%s에게 접근할 길이 없었다" % _tgt_name(tgt, names)
     if r == 'no_effect' and last.get('reason_code') in G.CA.USE_CUT:   # p0.5.29 use 로 상품·가게+소지품을 씀(사고팔지 않는다) — 사실 한 줄(말 파일 trade)
         return G.CA.cut_line(last)
+    if r == 'no_effect' and last.get('reason_code') == 'not_for_sale':   # p0.5.30 상품이 아닌 대상에 buy — 사실 한 줄(말 파일 trade · 가게면 그 가게가 파는 것과 상품 ID)
+        return G.CA.not_good_line(last, _tgt_name(tgt, names) if ID.is_bot_key(tgt) else None)
     if r == 'no_effect':
         return '%s에 %s을(를) 시도했으나 변화가 없었다 (%s)' % (_tgt_name(tgt, names), t, last.get('reason_code', 'no_effect'))
     if r == 'lost' and t in ('goto', 'explore', 'follow', 'attack'):   # p0.5.4: 조합형 실행이 대상 ID 를 지금 못 찾음(CA.execute) — 옛 판은 결과 dict 통째 JSON 폴백이었다 ⚠️문구 임시

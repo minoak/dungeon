@@ -289,6 +289,8 @@ def event_tags(rec, names=None):
         return [('misc', '접근 불가', place_word(tgt, 'decide'))]
     if r == 'no_effect' and rec.get('reason_code') in CA.USE_CUT:   # p0.5.29 use 로 상품·가게+소지품을 씀(사고팔지 않는다) — 궤적 판의 에이전트는 이 꼬리표로 본다: 말 파일 문장 그대로
         return [('misc', '변화 없음', CA.cut_line(rec))]
+    if r == 'no_effect' and rec.get('reason_code') == 'not_for_sale':   # p0.5.30 상품이 아닌 대상에 buy — 같은 길: 말 파일 문장 그대로(가게면 그 가게가 파는 것과 상품 ID)
+        return [('misc', '변화 없음', CA.not_good_line(rec, nm(ID.char_of(tgt)) if ID.is_bot_key(tgt) else None))]
     if r == 'no_effect':
         return [('misc', '변화 없음', '%s %s' % (t, tgt))]
     if t in CA.COMMON_EXT and r in ('too_far', 'lost'):      # p0.5.5 등록부 동사의 라우터 결과(자동 접근 없음 — §6.3 경로 7). 그 밖의 결과는 동사 단계가 등록 ⚠️문구 임시

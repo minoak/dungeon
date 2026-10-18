@@ -1,5 +1,34 @@
 # 변경 기록
 
+## 2026-10-18 — p0.5.30 가게 주인은 두뇌 없이 · buy 설명 · 거절 사실 · 말로 오가지 않음
+
+근거: 실판 trade1(10-18) — 산 횟수 0 · buy 1번 = `buy f13`(가게를 대상 — 설명 "`target`의 상품을 산다"가 가게로 읽힘 · 결과는 '변화 없음 (not_for_sale)' 뿐) · 말로 "3골드" 22번 ·
+주점 주인(NPC 두뇌)이 "3골드 받았네! 바로 차려 줄게"라고 거래를 지어내 수나가 국밥을 기다렸다. 민옥 10-18 "상인 npc는 그냥 두뇌를 빼고 기계적으로 하는걸로 돌리자" · "복잡하게 구현할 생각하지마".
+앞선 시도(주인에게 구매 장부 사실 — `.orch/drafts/p0530_ledger_abandoned.diff`)는 접었다. 원칙: 사실만 · 데이터 주도 · 기능 플래그 없음 · 프롬프트 짧게 · 새 저장 상태 없음.
+
+- **가게 주인은 두뇌를 쓰지 않는다**(데이터 칸 하나): NPC 정의 `npc.brain: false` — 주점 주인·아이템 상인·장비 상인·여관주인(지금 `npc.shop` 을 가진 넷 · 이름 목록·shop 추정 없음). 검증기 = true|false 만.
+  읽기 = `ENT.npc_brain(이름)`(정의를 그때 읽는다 — 피클에 얼는 `d.npc_defs` 사본·`ENT.npc()` 에 새 칸 없음 → 저장 판 14 그대로, 이어간 판도 같다). 붙는 자리 둘:
+  `R.npc_turn`(대화 한 길 — use 말 걸기·자동 접근 도착·되받기) 머리에서 `brain_on and ENT.npc_brain(name)` · 러너 인사(`NPC_HAIL_BRAIN_ON`) 조건에 같은 것.
+  그래서 두뇌 판에서도 옛 '두뇌 꺼짐' 길 그대로: 말 걸기 = 정의의 대사(`npc.line`·`line_again`) · 되받기 = 말 없음 · 닫는 차례 = `line_close`(없으면 `G.NPC_LINE_CLOSE`) · 그 뒤 등 돌림 · 인사 = 정의의 문장 · 0콜.
+  돈이 모자랄 때의 말(`R.too_poor_says`)은 원래 두뇌 무관 — 그대로. 다른 마을 사람의 두뇌는 그대로. 대사는 새로 쓰지 않았다(넷의 정해진 문장 중 값·물건이 정의와 틀린 것은 없었다).
+- **buy 설명**(말 파일 `prompts/world/verb/buy.md` ⚠️임시): "상품을 산다. `target`은 상품 ID(`g...`)다. 값은 골드로 낸다."
+- **buy 거절 사실**: `CA._buy` 가 상품이 아닌 대상(`not_for_sale` — reason_code 그대로)에 사실 칸 — 가게면 `shop`·`goods`(그 가게가 파는 것 `[{tid, name, price}]` — `IA.goods`), 다른 피처면 `what`.
+  문장 = `CA.not_good_line`(말 파일 `prompts/actions/trade.md` 새 칸 `buy_shop`·`buy_other`·`good` ⚠️임시): "주점 f13은(는) 상품이 아니다 — 파는 것: [g1] 식사 3골드" / "주점 주인 f3은(는) 상품이 아니다"
+  (사람은 보는 사람의 호칭). 지시 없음. 1인칭 문장(`brains._last_prose`)·꼬리표(`G.event_tags` — 궤적 판의 에이전트가 보는 '그 결과:' 줄) 같은 문장 · 관전 요약(`R.act_summary`)은 그대로.
+- **모험가 지침**(`prompts/adventurer_prompt.md` '네가 아는 세계' — 이동 줄 다음 ⚠️임시): "- 돈과 물건은 말로 오가지 않는다."(파티·혼자 · 마을 안팎).
+- 그대로: 동사 세트(11종)·`compose_profile`·`action_schema`(compose-v0.6 — 세트가 안 바뀌었다) · 메뉴형·자유형 지침(legacy) · 관전 화면 TS · 저장 판(STATE_VERSION 14).
+- 게이트: verify_shop_plain(새 — 정의·검증기 · 대화 한 길(넷 0콜 · 다른 셋 두뇌) · 러너 풀런(스텁 · 마을 생활 · 되받기·인사 두뇌 켬: 장비 상인 도착·지목 넷 / 대장장이 비교) ·
+  지침 · 거절 문장(가게 둘·사람·피처·동료 · 꼬리표·공개 사본·관측) · 그대로인 길(식사·돈 부족 말) · 배선).
+  기존 게이트: verify_trade(buy 설명 · 말 칸 여섯 · check_words 줄 — 검사명 셋 고침) · verify_npc_scope ⑤(주점 주인의 요청 → '없다'로 — 검사명 고침) ·
+  verify_npc_talk·verify_npcreply(두뇌 NPC 의 대화 기계를 장비 상인·주점 주인으로 보던 재연 — 그 게이트 안에서만 `ENT.npc_brain` 으로 그 둘을 두뇌 NPC 로 둔다, verify_npc_talk 의 옛 선물 주입과 같은 꼴 · 검사 그대로).
+- 검증: 게이트 110/110(_run_gates.sh 109 + tools/check_words — 기준선 '후' p0530s-after, 판 + 게이트 4조각 포그라운드). 빨간불 28종(`ab_runs/p0530s/redlight.py`, 로컬 — 정의 다섯 ·
+  읽기·붙는 자리 여섯 · 거절 사실 아홉 · 설명·지침 셋 · 게이트 안 재연 표본 둘 · 배선 셋) 잡힘 28 · 놓침 0 · 깨짐 0. 기준선(전 = p0530s-before — v0.5.29 커밋 935a51f 의 git archive ·
+  후 = 이 작업 트리): **(나) 0** — 307건 23규칙(`ab_runs/baseline/p0530s-rules.py`, 로컬): 판 셋 스트림은 1줄 run_meta 의 버전·지문(world·actions·지침)뿐 · 조합형 판 둘의 프롬프트(52·92개)는
+  저마다 두 고침(buy 설명 · '말로 오가지 않는다' 줄)만 · 메뉴형 판·스냅샷·로그 해시 같음 · 게이트 = verify_patch·verify_public 버전 · verify_start_gold 훑는 파일 414 → 415 ·
+  verify_trade 줄 넷(buy 설명 자리 둘 · 칸 여섯 · check_words 줄) · verify_npc_scope ⑤ 줄 둘(NPC 요청 13 → 9 — 각 사본에서 그 게이트를 다시 돌려 사람별로 세니 빠진 넷이 주점 주인 몫이고
+  다른 사람의 요청은 바이트 같음 · 검사명) · check_words 사고팔기 말 칸 3 → 6 · 새 verify_shop_plain 출력 전체 일대일(문장은 후 사본에서 말 파일 칸·가게 번호·상품 ID 로 다시 지음) ·
+  verify_npc_talk·verify_npcreply 출력 해시 같음. 반례 18건 + 생성 반례 15건 + 탐침 반례 11건 거부. 후 사본과 지금 작업 트리의 차이는 이 검증 기록뿐.
+
 ## 2026-10-18 — p0.5.29 buy · sell 동사 — 사고팔기를 use 에서 떼어 냄
 
 근거: 실판(10-18 state/) 160틱 동안 식사를 산 횟수 0 — 사기·팔기가 둘 다 `use` 라 하이쿠가 `use f13 + item g1`(입력 오류 9)·`use f13`(구경 9)·`use f13 + item i7`(골드 팔기 6)만 되풀이.

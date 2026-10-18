@@ -61,7 +61,8 @@ FIELD_LEN = 40
 EXTRA_WORDS = 'common_extra'          # prompts/actions/<이것>.md — '추가 행동' 블록의 문장
 _EXTRA_LINES = None
 TRADE_WORDS = 'trade'                 # p0.5.29 prompts/actions/<이것>.md — 사고팔기의 말(관측 가게 줄 머리 · use 의 끊긴 길 결과 문장)
-TRADE_FILLS = {'shop': ('buy', 'sell'), 'use_good': ('verb', 'shop', 'what'), 'use_shop_item': ('verb', 'shop', 'what')}   # 칸 → 엔진이 채우는 자리
+TRADE_FILLS = {'shop': ('buy', 'sell'), 'use_good': ('verb', 'shop', 'what'), 'use_shop_item': ('verb', 'shop', 'what'),   # 칸 → 엔진이 채우는 자리
+               'buy_shop': ('target', 'goods'), 'buy_other': ('target',), 'good': ('id', 'name', 'price')}   # p0.5.30 buy 가 상품이 아닌 대상에 닿은 결과 문장
 USE_CUT = ('use_good', 'use_shop_item')   # p0.5.29 use 로는 사고팔지 않는다 — 상품에 use · 가게에 소지품을 들고 use 의 결과(no_effect)의 reason_code = 말 칸 이름
 _TRADE = None
 _FILL_RE = re.compile(r'\{([^{}]*)\}')
@@ -244,6 +245,21 @@ def cut_line(last):
     if last.get('result') != 'no_effect' or code not in USE_CUT:
         return None
     return _fill(trade_words()[code], verb=last.get('type') or '?', shop=last.get('shop') or '가게', what=last.get('what') or '?')
+
+
+def not_good_line(last, who=None):
+    """p0.5.30 상품이 아닌 대상에 buy(결과 no_effect · reason_code not_for_sale — _buy)의 사실 한 줄(말 파일 trade.buy_shop·buy_other). 그 결과가 아니면 None.
+    대상 = '이름 ID'(결과의 shop·what) · 이름이 없으면 who(사람 — 부르는 쪽의 호칭) 또는 ID. 가게면 그 가게가 파는 것(trade.good 을 ' · ' 로 잇는다). 무엇을 하라는 말은 없다."""
+    if last.get('result') != 'no_effect' or last.get('reason_code') != 'not_for_sale':
+        return None
+    w, tid = trade_words(), str(last.get('target') or '?')
+    name = last.get('shop') or last.get('what')
+    target = '%s %s' % (name, tid) if name else (who or tid)
+    goods = [g for g in last.get('goods') or [] if isinstance(g, dict)]
+    if goods:
+        return _fill(w['buy_shop'], target=target, goods=' · '.join(
+            _fill(w['good'], id=g.get('tid', '?'), name=g.get('name', '?'), price=g.get('price', 0)) for g in goods))
+    return _fill(w['buy_other'], target=target)
 
 
 def item_value(bot, slot):
@@ -738,10 +754,16 @@ def _use(d, bot, action, target, bots):
 
 def _buy(d, bot, action, target, bots):
     """p0.5.29 사기 — 대상이 가게의 상품(g…)이면 그 가게에서 산다(IA.buy — 값·돈 부족·장비 바꿔 들기·그 자리에서 먹기 그대로).
-    결과 기록 type = 고른 동사(관리자 결정 10-18 — 로그에 에이전트가 고른 동사가 보이게) · effect_type = 결과 어휘의 꼴(interact)."""
+    결과 기록 type = 고른 동사(관리자 결정 10-18 — 로그에 에이전트가 고른 동사가 보이게) · effect_type = 결과 어휘의 꼴(interact).
+    p0.5.30 상품이 아닌 대상(not_for_sale)엔 사실 칸 — 가게면 shop(이름)·goods(그 가게가 파는 것 [{tid, name, price}]) · 다른 피처면 what(이름).
+    문장은 not_good_line(말 파일) — 실판 10-18(trade1): `buy f13`(가게를 대상)의 결과가 '변화 없음 (not_for_sale)' 뿐이었다."""
     kind, xy, obj = target
     if kind != 'good':
-        return _base(bot, action, 'no_effect', reason_code='not_for_sale')
+        if kind == 'feature' and IA.shop_at(d, obj) is not None:
+            facts = {'shop': obj.name, 'goods': [{'tid': g['gid'], 'name': g['name'], 'price': g['price']} for g in IA.goods(d) if g['fid'] == obj.id]}
+        else:
+            facts = {'what': obj.name} if kind in ('feature', 'exit') else {}
+        return _base(bot, action, 'no_effect', reason_code='not_for_sale', **facts)
     res = IA.buy(d, bot, action.get('target'), bots)
     return {**res, 'type': action['type'], 'effect_type': 'interact'}
 

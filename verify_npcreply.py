@@ -80,6 +80,11 @@ def src(*p):
 SHEETS = R.load_party(os.path.join(HERE, "party.json"))
 NAMES = {c: SHEETS[c]["name"] for c in SHEETS}
 RECEPTION, KEEPER = "길드 접수원", "주점 주인"
+# p0.5.30(민옥 10-18 "상인 npc 는 그냥 두뇌를 빼고 기계적으로"): 가게를 맡은 주점 주인(정의 npc.brain false)은 NPC 두뇌를 쓰지 않는다(그 0콜 길은
+#   verify_shop_plain). 이 게이트는 되받기 기계를 두 두뇌 NPC(접수원·주점 주인 — D93 그때의 표본)로 보므로 주점 주인을 두뇌 NPC 로 둔다 —
+#   정의는 그대로, 러너가 묻는 ENT.npc_brain 만 이 게이트 안에서.
+_npc_brain_now = G.ENT.npc_brain
+G.ENT.npc_brain = lambda name: name == KEEPER or _npc_brain_now(name)
 
 
 def town(on=True):

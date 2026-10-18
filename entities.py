@@ -603,6 +603,8 @@ def _problems(pairs, root):
                 out.append('%s: quest.gold 는 정수≥1(보상 골드)' % rel)
         if kind == 'npc' and (comps.get('npc') or {}).get('town_life') is not None and type(comps['npc']['town_life']) is not bool:
             out.append('%s: npc.town_life 는 true|false(마을 생활 판에서만 나오는 행인 — 러너의 행인 루프가 끈 판에서 건너뛴다)' % rel)
+        if kind == 'npc' and (comps.get('npc') or {}).get('brain') is not None and type(comps['npc']['brain']) is not bool:
+            out.append('%s: npc.brain 은 true|false(false = NPC 두뇌를 쓰지 않는다 — 말 걸기·되받기·인사 모두 정해진 문장)' % rel)   # p0.5.30
         sp = d.get('sprite')
         if sp:
             tex = str(sp).split('#')[0]
@@ -1039,6 +1041,14 @@ def npc(eid, life=False):
                                      'hail_party', 'line_party',   # D84 조각 5: 파티 결성 판에서 입구의 규칙을 말해 주는 인사·대사 꼬리({party_need})
                                      'hail_blessed')},   # D95(09-20): 공물 판에서 이미 축복을 받은 사람에게 거는 인사 — 축복이 판당 한 번이라 옛 인사가 거짓이 되는 자리
             'walk': (dict(c['walk']) if isinstance(c.get('walk'), dict) else None)}   # D73(09-14) 행인: {region: layout 구역 id, rate}
+
+
+def npc_brain(name):
+    """p0.5.30 이 이름의 마을 NPC 가 NPC 두뇌(LLM)를 쓰는가 — 정의 npc.brain(없으면 true · 정의가 없는 이름도 true).
+    false(가게를 맡은 사람들) = 말 걸기·되받기·인사 모두 LLM 호출 없이 정해진 문장. 피클에 얼어 있는 정의 사본(d.npc_defs)이 아니라
+    정의를 그때 읽는다 — 저장 판을 올리지 않아도 이어간 판에 같은 값이 선다."""
+    d = next((e for e in by_kind('npc') if e.get('name') == name), None)
+    return d is None or ((d.get('comps') or {}).get('npc') or {}).get('brain') is not False
 
 
 def companions():

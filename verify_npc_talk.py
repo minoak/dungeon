@@ -108,6 +108,11 @@ def _build_town_1013(*a, **k):
 
 
 R.build_town = _build_town_1013
+# p0.5.30(민옥 10-18 "상인 npc 는 그냥 두뇌를 빼고 기계적으로"): 가게를 맡은 사람(정의 npc.brain false)은 NPC 두뇌를 쓰지 않는다(그 0콜 길은
+#   verify_shop_plain). 이 게이트는 같은 10-13 장면으로 두뇌 NPC 의 대화 한 길을 보므로, 그 판처럼 장비 상인·주점 주인을 두뇌 NPC 로 둔다 —
+#   정의는 그대로, 러너가 묻는 ENT.npc_brain 만 이 게이트 안에서(선물 주입과 같은 꼴).
+_npc_brain_now = G.ENT.npc_brain
+G.ENT.npc_brain = lambda name: name in (GEAR, KEEPER) or _npc_brain_now(name)
 
 
 def town(quests=None):

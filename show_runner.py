@@ -1442,13 +1442,16 @@ def npc_turn(d, b, name, said, res, facts_of, brain_on, names=None):
     n 은 대화 차례(두뇌 콜·실패 콜·고정 대사 모두 한 번)로 세고 상한에서 멈춘다(등 돌림은 세지 않는다). 풀림: npc_away_expire(G.NPC_AWAY_TICKS — 장부도 다시 센다)
     또는 다음 마을 방문(새 봇 dict) — 먼저 오는 쪽.
     res 는 제자리에서 고친다 — talk 'close'|'away'(스트림 additive · NPC 두뇌 장면 재료). 반환 {line(None = 말 없음), src 'brain'|'fixed', stage 'talk'|'close'|'away'}.
-    문장의 배달(다음 틱 편지함 — 말 건 사람과 엿들은 사람에게 같은 문장)은 부르는 쪽이 한다."""
+    문장의 배달(다음 틱 편지함 — 말 건 사람과 엿들은 사람에게 같은 문장)은 부르는 쪽이 한다.
+    p0.5.30(민옥 10-18 "상인 npc 는 그냥 두뇌를 빼고 기계적으로"): 정의가 두뇌를 쓰지 않는 NPC(npc.brain false — 가게를 맡은 사람들)는
+    판의 두뇌가 켜져 있어도 꺼진 것과 같다 — 0콜, 위의 정해진 길 그대로(말 걸기 = 정의의 대사 · 되받기 = 말 없음 · 닫는 말 = line_close)."""
     book = b.setdefault("npc_talk", {})
     k = npc_talk_key(name)
     n = int(book.get(k, 0))
     nd = (getattr(d, "npc_defs", None) or {}).get(name) or {}
     r = res.get("result")
     now = int(getattr(d, "turn", 0) or 0)
+    brain_on = brain_on and G.ENT.npc_brain(name)
     if G.npc_turned(b, name) or n >= G.NPC_REPLY_MAX:
         b.setdefault("npc_away", {}).setdefault(k, now)
         res.pop("line", None)
@@ -2125,7 +2128,7 @@ def main():
         if NPC_HAIL_ON and getattr(d, "town", False):
             for nm_, ch_, line_, hx_, hy_, key_ in d.npc_greetings(bots):
                 src_ = None
-                if npc_brain and NPC_HAIL_BRAIN_ON:   # 옵션: 인사도 LLM 이(인사당 1콜) — 기본은 정의의 문장(0콜)
+                if npc_brain and NPC_HAIL_BRAIN_ON and G.ENT.npc_brain(nm_):   # 옵션: 인사도 LLM 이(인사당 1콜) — 기본은 정의의 문장(0콜) · p0.5.30 두뇌를 쓰지 않는 NPC(npc.brain false)는 늘 정의의 문장
                     b_ = next((x for x in bots if x["char"] == ch_), None)
                     line2 = brains.npc_reply(b_, {"result": "npc_hail", "npc": nm_, "line": line_, "key": key_}, None,
                                              npc_facts(d, nm_, bots, _fallen_now(), quests, _exp_n(), names), npc=(getattr(d, "npc_defs", None) or {}).get(nm_),
