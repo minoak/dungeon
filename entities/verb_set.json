@@ -1,0 +1,14 @@
+{
+  "note": "p0.5.28 동사 세트 — 이 판에 쓰는 동사와 순서(관측 COMMON 줄 · 지침 '행동 사전' 줄이 이 순서다). 동사 정의는 entities/verb/<동사>.json, 설명은 prompts/world/verb/<동사>.md. 이 목록을 바꾸면 판의 동사가 바뀐다.",
+  "verbs": [
+    "goto",
+    "explore",
+    "search",
+    "attack",
+    "use",
+    "give",
+    "bond",
+    "wait",
+    "rest"
+  ]
+}

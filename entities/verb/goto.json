@@ -1,0 +1,16 @@
+{
+  "id": "goto",
+  "name": "이동",
+  "kind": "verb",
+  "tags": [
+    "verb"
+  ],
+  "comps": {
+    "verb": {
+      "handler": "goto",
+      "target": "required",
+      "memory_target": true,
+      "desc": "@prompts"
+    }
+  }
+}

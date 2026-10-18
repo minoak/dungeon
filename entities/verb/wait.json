@@ -1,0 +1,16 @@
+{
+  "id": "wait",
+  "name": "기다림",
+  "kind": "verb",
+  "tags": [
+    "verb"
+  ],
+  "comps": {
+    "verb": {
+      "handler": "wait",
+      "target": "optional",
+      "open_end": true,
+      "desc": "@prompts"
+    }
+  }
+}

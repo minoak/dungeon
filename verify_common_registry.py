@@ -345,11 +345,11 @@ with registered():
             draft6 = f.read().replace("\r\n", "\n")
         raw6, _added = FB.variant_raw(base6, draft6)
         fulls[os.path.basename(path)] = (FB.is_full(draft6), raw6 == draft6)
-        text = brains._strip_comments(brains._variant(raw6, False))
+        text = brains._strip_comments(brains._variant(brains._fill_verbs(raw6), False))   # p0.5.28 동사 줄·목록 자리는 게임 로더처럼 세트로 채운다
         d6, bots6 = world(False)
         p6, _ = prompt_of(d6, bots6, bots6[0], instructions=text)
         blocks[os.path.basename(path)] = block_of(p6)
-        heads.add(text in p6)
+        heads.add(text in p6 and ". 는 대상이 멀면" not in text)   # p0.5.28 동사 목록 자리가 빈 채 걷힌 지침(로더 밖에서 지은 글)은 실린 지침이 아니다
 check("⑥ 벤치 변형 %d개(tools/bench_variants/ — 절 변형 6 + 전문 변형 1) 모두 기준선과 같은 추가 블록 · 변형 지침이 실제로 실렸다" % len(variants),
       len(variants) == 7 and all(v == block_of(p_on) for v in blocks.values()) and heads == {True}, sorted(blocks))
 check("⑥ 전문 변형(p0.5.6 prompt-v0.5.5 = v0.5.5 지침 전문)은 파일 그대로 지침이 된다 · 절 변형 6개는 '## 행동 사전' 절만 갈아 끼운다(기존 동작)",

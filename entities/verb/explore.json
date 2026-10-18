@@ -1,0 +1,15 @@
+{
+  "id": "explore",
+  "name": "탐색",
+  "kind": "verb",
+  "tags": [
+    "verb"
+  ],
+  "comps": {
+    "verb": {
+      "handler": "explore",
+      "target": "required",
+      "desc": "@prompts"
+    }
+  }
+}

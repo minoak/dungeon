@@ -1,0 +1,17 @@
+{
+  "id": "bond",
+  "name": "친목",
+  "kind": "verb",
+  "tags": [
+    "verb"
+  ],
+  "comps": {
+    "verb": {
+      "handler": "bond",
+      "target": "required",
+      "form": 120,
+      "approach": true,
+      "desc": "@prompts"
+    }
+  }
+}

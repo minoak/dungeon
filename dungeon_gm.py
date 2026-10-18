@@ -3083,7 +3083,7 @@ class Dungeon:
         #   f3 가 계단 너머라 goto f3 마다 계단 칸에서 at_exit 로 서고, 계단 위 동료는 자리 교대로 밀려나 다시 goto f3 — 무한.
         #   D19 '개시 때 이미 보이던 계단은 새것이 아니다'와 같은 규율: 알고 지나는 계단은 안 세운다(goto exit 는 도착이라 선다).
         if 'then' in (action or {}):              # 작정 접수 — 저작 검증(시야-온리)은 brains 소관,
-            bot['plan'] = ([] if typ in ('follow', 'wait', 'rest')   # 동행·대기·휴식=열린 결말 — 뒤수 부적합
+            bot['plan'] = ([] if typ == 'follow' or typ in (CA.OPEN_END if self.composed_actions else ('wait', 'rest'))   # 동행·대기·휴식=열린 결말 — 뒤수 부적합(조합형은 동사 정의 open_end)
                            else [dict(s) for s in (action.get('then') or [])
                                  if isinstance(s, dict) and s.get('type')][:getattr(self, 'plan_max', PLAN_MAX)])   # D66: 러너 기본 0
 
@@ -3092,7 +3092,7 @@ class Dungeon:
             self._action_serial += 1
             aid = 'd%s:t%s:a%s' % (self.depth, self.turn, self._action_serial)
             action['action_id'] = aid             # 실제 접수된 결정에만 부여. 모델이 만드는 값이 아니다
-            # p0.5.5(§6.3 경로 7): 자동 접근 = 상시 동사 중 DISTANCE_ACTIONS 와 스킬뿐. 등록부 동사(route 'ext')는 접근하지 않는다 — 닿지 않으면 too_far
+            # p0.5.5(§6.3 경로 7): 자동 접근 = 상시 동사 중 DISTANCE_ACTIONS(p0.5.28 동사 정의 approach)와 스킬뿐. 등록부 동사(route 'ext')는 접근하지 않는다 — 닿지 않으면 too_far
             res = (self._begin_approach(bot, action, bots)
                    if self.auto_approach and (typ in (CA.DISTANCE_ACTIONS if self.composed_actions else ('attack', 'interact', 'give', 'bond')) or CA.route(self, typ) == 'skill')
                    else None)
@@ -3199,9 +3199,10 @@ class Dungeon:
 
     def _begin_approach(self, bot, action, bots):
         typ = action['type']
-        if (typ == 'give' and not self.give_verb) or (typ == 'bond' and not self.bond_verb):
+        h = CA.handler_of(typ) if self.composed_actions else typ   # p0.5.28 조합형은 동사의 처리기 열쇠로 본다(동사 이름이 아니라)
+        if (h == 'give' and not self.give_verb) or (h == 'bond' and not self.bond_verb):
             return None
-        if typ == 'attack' and not action.get('target'):
+        if h == 'attack' and not action.get('target'):
             return None                           # 기존 무대상 공격 API는 현재 사거리 판정 유지
         base = {'char': bot['char'], **{k: action[k] for k in CA.fields() if k in action}}
         target = self._approach_target(bot, action, bots)

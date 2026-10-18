@@ -86,9 +86,15 @@ def observe(d, bot, obs):
     return obs
 
 
+def _handler(typ):
+    """p0.5.28 행동 type → 처리기 열쇠(composed_actions.handler_of — 세트 밖 이름은 그대로). 지연 import — composed_actions 가 이 모듈을 import 한다."""
+    import composed_actions as CA
+    return CA.handler_of(typ)
+
+
 def required_range(d, bot, action):
     skill = lookup(d, bot, action.get('type'))
-    return skill['range'] if skill else (int(bot.get('atk_range') or 1) if action['type'] == 'attack' else 1)
+    return skill['range'] if skill else (int(bot.get('atk_range') or 1) if _handler(action['type']) == 'attack' else 1)
 
 
 def in_range(d, bot, skill, target, at=None):
@@ -282,7 +288,7 @@ def complete(d, bot, action, result):
         return
     valid = (result.get('skill_spent') or result.get('resolution', {}).get('status') == 'success'
              or result.get('result') == 'attack'
-             or (action.get('type') == 'search' and result.get('found') is not None))
+             or (_handler(action.get('type')) == 'search' and result.get('found') is not None))   # p0.5.28 처리기 열쇠로
     if not valid or bot.get('_skill_completed_action') == action.get('action_id'):
         return
     bot['_skill_completed_action'] = action.get('action_id')

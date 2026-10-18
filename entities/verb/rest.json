@@ -1,0 +1,16 @@
+{
+  "id": "rest",
+  "name": "휴식",
+  "kind": "verb",
+  "tags": [
+    "verb"
+  ],
+  "comps": {
+    "verb": {
+      "handler": "rest",
+      "target": "optional",
+      "open_end": true,
+      "desc": "@prompts"
+    }
+  }
+}

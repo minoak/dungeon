@@ -84,8 +84,12 @@ SEEDS = (11, 22, 33, 44, 55)            # 주사위 조합을 굴리는 고정 �
 MAX_STEPS = 200                         # 접근·이동을 끝까지 굴리는 틱 상한(마을 끝에서 끝 ~120걸음, 넘으면 '미확정' = 실패로 센다)
 BOND_FORM = "어깨를 가볍게 두드린다"      # 가능 공간 대입용 몸짓(엔진은 문구를 판정에 안 쓴다)
 KIND_OF = {"bot": "b", "monster": "m", "exit": "exit", "door": "d", "way": "w", "trap": "t", "quest": "q", "item": "i"}
-TARGETLESS = ("wait", "rest", "party_leave")   # 엔진이 대상을 읽지 않는 동사
 G = SR = brains = CA = bestiary = None   # 엔진 모듈 — _engine() 이 환경을 건 뒤 채운다
+
+
+def targetless():
+    """엔진이 대상을 읽지 않는 동사 — 세트의 대상 안 적는 동사(p0.5.28 동사 정의 target optional: wait·rest) + party_leave."""
+    return tuple(v for v in CA.COMMON if CA.VERBS[v]["target"] == "optional") + ("party_leave",)
 
 
 def _engine(state_dir, call_limit=0):
@@ -455,7 +459,7 @@ def normalize(action, obs):
     # 같은 동작은 같은 키(t06c 리뷰 2). 엔진이 대상을 안 읽는 동사(wait·rest·party_leave)는 대상을 적어 와도 무대상 —
     # 파서는 wait+self 를 받아 주지만 실행은 같다. 내 소지품을 대상으로 한 use(item 없음 또는 같은 칸)는 엔진에서 자신에게 쓰는 것과
     # 같은 길이다(CA.execute: item_id = item 또는 대상, 받는 사람 = 자신) → 'use self+<칸>'.
-    if typ in TARGETLESS:
+    if typ in targetless():
         tid = None
     own = {e["id"]: e["slot"] for e in obs.get("items", [])}
     if typ == "use" and tid in own and (not item or item == tid):
@@ -732,6 +736,7 @@ def combos(obs):
     tids = ["self"] + [t["id"] for t in obs.get("targets", []) if t["id"] not in ("self", obs.get("actor"))]
     mem = [e["id"] for e in (obs.get("known") or {}).get("statics", []) if e.get("id") and e["id"] not in tids]
     items = [e["id"] for e in obs.get("items", [])]
+    lone = targetless()
     for typ in types:
         spec = CA.COMMON_EXT.get(typ)
         if spec is not None:
@@ -739,22 +744,16 @@ def combos(obs):
                 for fv in _ext_field_combos(spec):
                     yield {"type": typ, **({"target": t} if t else {}), **fv}
             continue
-        if typ in TARGETLESS:
+        if typ in lone:
             yield {"type": typ}
             yield {"type": typ, "target": "self"}   # 파서가 받는 꼴이라 공간에도 넣는다(정규화로 같은 키가 된다)
             continue
-        for t in tids + (mem if typ == "goto" else []):
-            if typ == "give":
-                for i in items:
-                    yield {"type": typ, "target": t, "item": i}
-            elif typ == "use":
-                yield {"type": typ, "target": t}
-                for i in items:
-                    yield {"type": typ, "target": t, "item": i}
-            elif typ == "bond":
-                yield {"type": typ, "target": t, "form": BOND_FORM}
-            else:
-                yield {"type": typ, "target": t}
+        vb = CA.VERBS.get(typ) or {}                 # p0.5.28 동사 정의의 입력 칸 — 기억 속 장소(goto) · 소지품(give 꼭 · use 선택) · 몸짓(bond). 세트 밖(스킬·파티)은 대상만
+        for t in tids + (mem if vb.get("memory_target") else []):
+            if vb.get("item") != "required":
+                yield {"type": typ, "target": t, **({"form": BOND_FORM} if vb.get("form") else {})}
+            for i in (items if vb.get("item") else []):
+                yield {"type": typ, "target": t, "item": i}
 
 
 def possible_space(scene):

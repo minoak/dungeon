@@ -1,0 +1,17 @@
+{
+  "id": "give",
+  "name": "건네기",
+  "kind": "verb",
+  "tags": [
+    "verb"
+  ],
+  "comps": {
+    "verb": {
+      "handler": "give",
+      "target": "required",
+      "item": "required",
+      "approach": true,
+      "desc": "@prompts"
+    }
+  }
+}

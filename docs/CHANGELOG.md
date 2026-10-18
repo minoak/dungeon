@@ -1,5 +1,50 @@
 # 변경 기록
 
+## 2026-10-18 — p0.5.28 동사를 데이터로 — 확장 가능한 기본 동사 구조(동작 변화 0)
+
+근거: DECISIONS 10-18(동사 원칙 · 동사 정리 · 동사 작업 순서 ① = 구조 패치). 설계 메모 `.orch/drafts/verbs_v0.md`. 원칙: 사실만·시스템 지시 없음 · 데이터 주도 · 기능 플래그 없음 · 프롬프트는 짧게.
+
+- **동사 정의**(`entities/verb/<동사>.json`, 새 kind `verb` — `entities.VERB_*`·`_verb_problems`): `comps.verb` = `handler`(처리기 열쇠) · `target`(required|optional) ·
+  `default_target`(self — search) · `memory_target`(기억 속 장소 — goto) · `item`(required — give · optional — use) · `form`(몸짓 글자 수 — bond 120) · `approach`(자동 접근 —
+  search·attack·use·give·bond) · `open_end`(열린 결말 — wait·rest) · `desc`(말 파일). `handler`·`target`·`desc` 는 꼭 둔다(없으면 거절 — target 에 기본값은 없다) · 나머지 칸이 없으면 없음. 설명 = `prompts/world/verb/<동사>.md` 의 `verb.desc`
+  (D100 관례 — 지침의 옛 COMMON 9줄을 바이트 그대로 옮겼다 · `words.DESC` 한 줄). 지금 9개(goto·explore·search·attack·use·give·bond·wait·rest)를 그대로 옮겼다.
+- **동사 세트** = `entities/verb_set.json` 하나(`verbs` — 쓰는 동사와 순서). 세트를 바꾸면 판의 동사가 바뀐다(코드 스위치 없음). `composed_actions.read_set`·`use_set`(모듈을 읽을 때 한 번)이
+  거절을 전부 나열한다: 정의 없는 동사 · 처리기 없음 · 중복 · 엔진이 따로 읽는 이름(옛 별칭 interact·drink · 파티 동사) · 꼴. 틀리면 `VerbError` 로 게임이 뜨지 않는다.
+- **엔진은 처리기만**: `CA.HANDLERS`(goto·explore·search·attack·use·give·bond·wait·rest → 옛 `execute` 의 갈래를 함수로 뗀 것 — 판정 그대로). `execute` = 동사 정의대로 거르기
+  (대상을 꼭 적는 동사: 못 찾으면 lost — 기억 속 장소는 처리기로 · 자동 접근 동사: 닿지 않으면 too_far) → 처리기. 대상을 적지 않는 동사는 거르지 않는다.
+- **세트에서 읽게 바꾼 곳**: `CA.COMMON`·`DISTANCE_ACTIONS`·`OPEN_END`·`VERBS`(세트에서 지음 — route·known_types·common_types·관측 COMMON 줄·자동 접근이 그대로 읽는다) ·
+  `CA.parse`(동사 판별 · 기본 대상 · 대상 꼭/선택 · 기억 속 장소 · 소지품 꼭/선택/없음 · 몸짓) · `CA.plan_step`(대상 없는 동사 · 기억 속 장소) · `CA.normalize`(기본 대상) ·
+  `CA.in_range`·`decorate`(처리기 열쇠 — `handler_of`) · `Dungeon.act`(작정 접수의 열린 결말 — 조합형) · `Dungeon._begin_approach`(건네기·친목 스위치·대상 없는 공격 — 처리기 열쇠) ·
+  `brains._then`·`_parse_decision`(열린 결말) · **지침 '행동 사전'**(파일엔 `<!--VERBS-->` 표식 — `brains._fill_verbs` 가 `CA.guide_lines` 로 채운다) ·
+  `skill_schema._ext_verbs`(스킬 이름 예약에 세트 동사) · `tools/freedom_bench.py`(대상 없는 동사·조합 공간 — 동사 정의) · `tools/check_words.py`(세트 대조 한 줄).
+- **못 합친 것(그대로 둠)**: 행동 등록부(`COMMON_EXT`·`common_extra`) — 비어 있고, 항목이 코드(노출 조건·실행·사거리 함수)이며, 등록부를 둘지가 민옥 판단 대기(verbs_v0).
+  파티 동사(`PARTY`) — 받는 조건(관측 partyform)과 노출 조건(here·mine)·숫자 채움(need)이 관측 블록 코드이고, ③ 에서 ask 로 흡수될 후보. 둘 다 합치려면 노출 조건 칸이 필요하다(③).
+  스킬 동사는 건드리지 않았다.
+- **결정을 읽고 판단하는 다른 자리도 처리기 열쇠로**(`CA.handler_of` — 세트 밖 이름은 그대로라 옛 판·메뉴형 무접촉): `social_reactions.physical`(사회 장부) ·
+  `repeat_signal.key_of`(반복 신호의 열쇠) · `show_runner.classify_reply`(제안 뒤 행동 답) · 러너의 NPC 에게 건 말. 결과 기록을 그리는 쪽(`event_tags`·`_last_prose`·관전 요약·
+  결산·분석 도구)은 기록의 `type` 으로 읽는 그대로다(지금 세트는 동사 = 처리기 이름).
+- 게이트: verify_verbs(새, 33칸 0콜 — 세트 읽기 · 지금 세트 = 0.5.27 의 9개 · 기억 속 장소 · 기본 대상·작정 · 잘못된 세트 5종·꼴 5종 거부 · 정의 검증기 11종 · **데이터만으로 동사 셋**
+  (시험용 임시 세트 — hand = 처리기 give · idle = wait · peek = search: 지침 줄 · COMMON 줄 · 파서 칸 규칙 · 자동 접근 → 건넴 · 대각선 곁 · 건네기 끈 판 · 판정 상태 · 열린 결말 ·
+  스킬 이름 예약 · 벤치 조합 · 되돌림) · 지침 행동 사전이 세트에서(순서 뒤집기·빼기) · 지침 문장 대조 · 잔재 · 배선) · verify_entities ①(동사도 '수는 늘어난다' 갈래 — 검사명 그대로) ·
+  verify_place ③(지침 본문 = TOWN 블록을 걷고 동사 줄을 채운 것 — 검사명 고침).
+- 검증: 게이트 108/108(_run_gates.sh 107 + tools/check_words — 기준선 '후' 산출 p0528-after, 판 + 게이트 4조각 포그라운드 · verify_brain_pause 임시 파일 WinError 5 한 번 →
+  `--only` 재산출 PASS). 빨간불 46종(`ab_runs/p0528/redlight.py`, 로컬) 놓침 0 · 깨짐 0(첫 돌림에서 놓친 4종 — 기억 속 장소 파싱·실행 · 별칭 정규화의 기본 대상 · 작정의 대상 없는 동사 —
+  은 기존 게이트가 그 길을 안 밟았다(verify_compose 의 기억 대상 검사는 옛 선행 프로브 길) → verify_verbs ① 두 칸으로 잡힘). 기준선(전 = p0527b-after — v0.5.27(f824fec)과 바이트 같음,
+  docs/CHANGELOG.md 만 다름 · 이 패치가 고친 19개 파일마다 전 사본 = HEAD 블롭 · 후 = 이 작업 트리): **(나) 0** — 18건 18규칙(`ab_runs/baseline/p0528-rules.py`, 로컬):
+  판 셋은 스트림 1줄(run_meta)의 버전·말 폴더 지문·지침 파일 지문뿐(그 칸을 되돌리면 전 줄과 바이트 같음 · 나머지 줄 바이트 같음) · 완성 프롬프트·스냅샷·요약·로그 해시 같음 ·
+  두 사본이 게임에서 읽은 조합형 지침(파티·혼자)·마을 규칙 바이트 같음 · 말 폴더의 다른 파일 = 새 동사 말 파일 9장(설명 = 0.5.27 지침의 COMMON 9줄) · 게이트(값 자리 = 각 사본 실측 —
+  verify_words·check_words 정의·말 파일·말 칸 +9 · verify_patch·verify_public 버전 · verify_start_gold 훑는 파일 389 → 408 · verify_place ③ 이름 한 쌍 · check_words 출력 전체 =
+  첫 줄 수 + 동사 세트 줄 하나 · 새 verify_verbs 출력 전체 일대일). 반례 12건 + 생성 반례 13건 + 탐침 반례 5건 거부. 후 사본과 지금 작업 트리의 차이는 이 검증 기록(CHANGELOG)뿐.
+- p0528b(Codex p0528r 필수 3건 + 권장 1건): ① **지침 문장 안의 동사 목록도 세트에서** — '네가 아는 세계'의 먼저 걸어가는 동사(search·attack·use·give·bond)와 행동 사전 첫 문장의
+  소지품 동사(use와 give)가 손으로 적혀 있어 시험 동사 hand(소지품 꼭)와 모순됐다 → 지침에 `<!--VERBS:approach:·-->`·`<!--VERBS:item:와 -->` 표식(그 칸이 있는 세트 동사를 잇는 말로 —
+  `CA.VERB_LIST`·`guide_list`, 모르는 칸은 VerbError) · `brains._fill_verbs` 가 채운다(게임이 읽는 지침은 그대로 바이트 같음) · 목록 뒤 조사는 글. ② `skill_core.required_range`(공격 처리기의
+  접근 반경 = 사거리)·`complete`(수색 처리기의 무발견도 끝난 행동)를 처리기 열쇠로. ③ `repeat_signal.key_of` 의 기다리기를 처리기 열쇠로(idle → wait 연속).
+  권장: 동사 정의의 target 은 꼭 둔다(기본값 없음)를 주석·기록에 맞춤. 안 한 권장: 새 이름 동사의 실패 꼬리표·결과 문장 — 그리는 쪽이 기록 type 으로 읽어 고칠 곳이 많다(③ 의 결정).
+  verify_verbs 33 → 36칸(시험 동사 strike = attack · nap = rest 추가 — 임시 세트의 문장 전체 · 순서 뒤집기의 목록 · 칸 이름 거절 · 접근 반경 · 대기시간 · 반복 열쇠) ·
+  verify_common_registry ⑥ 변형 지침도 `_fill_verbs` 를 거친다(검사명 그대로 — 목록 자리가 빈 채 걷힌 글이면 실패). 재검증: 게이트 108/108(기준선 '후' p0528b-after, 판 + 게이트 4조각 포그라운드 ·
+  verify_public ⑩ 멈춘 틱 8→9 한 번 → `--only` 재산출 8) · 빨간불 55종 놓침 0 · 깨짐 0 · 기준선 **(나) 0** — 18건 18규칙(`ab_runs/baseline/p0528-rules.py p0528b-after`) ·
+  반례 12건 + 생성 반례 13건 + 탐침 반례 5건 거부. 후 사본과 지금 작업 트리의 차이는 이 검증 기록뿐.
+
 ## 2026-10-17 — p0.5.27 무료 식사 걷어내기 → 시작 골드 10 · 돈이 모자랄 때 주점 주인이 길드로 안내
 
 근거: DECISIONS 10-17(민옥 "시작 골드를 두면 굳이 무료식사 같은 시스템이 있을 필요가 없으니 좋은것 같아 … 기본 골드는 10골드 정도로"). p0526(주인 NPC 사실에 무료 끼니)은 접었다 —

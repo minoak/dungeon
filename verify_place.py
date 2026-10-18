@@ -168,8 +168,8 @@ check("③ 갈래 고르기 = 옛 마을 줄과 같은 순서(구역 시야 → 
       {k: brains._town_kind(o) for k, o in OBS.items()} == {"zone": "zone", "hear": "hear", "all": "all"}
       and brains._town_kind(base) is None and brains._town_kind(dict(base, town_sight="zone", town_hear="zone")) is None)
 raw_adv = src("prompts", "adventurer_prompt.md")
-stripped = brains._TOWN_BLOCK.sub("", raw_adv)
-check("③ 지침 본문(brains.COMPOSE_PROMPT)엔 규칙·표식이 없다 = 파일에서 TOWN 블록만 걷은 것(파티·혼자) · 블록은 세 갈래 하나씩",
+stripped = brains._fill_verbs(brains._TOWN_BLOCK.sub("", raw_adv))   # p0.5.28 동사 줄 자리는 동사 세트로 채운다(TOWN 블록과 무관 — verify_verbs)
+check("③ 지침 본문(brains.COMPOSE_PROMPT)엔 규칙·표식이 없다 = 파일에서 TOWN 블록을 걷은 것(동사 줄은 세트로 채운다 · 파티·혼자) · 블록은 세 갈래 하나씩",
       brains.COMPOSE_PROMPT == brains._strip_comments(brains._variant(stripped, False))
       and brains.COMPOSE_PROMPT_SOLO == brains._strip_comments(brains._variant(stripped, True))
       and not any(TR[k] in brains.COMPOSE_PROMPT + brains.COMPOSE_PROMPT_SOLO for k in TR) and "TOWN" not in brains.COMPOSE_PROMPT

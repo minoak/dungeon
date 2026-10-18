@@ -49,10 +49,10 @@ def key_of(dec, char=None):
     """판단 → 연속의 열쇠. wait = WAIT · 대상이 있는 행동 = 대상 ID · 그 밖(탐색 — 길 ID 는 관측마다 새것 · 휴식 · 대상 없는 행동) = None(끊긴다).
     char = 판단한 사람 — 조합형은 self 를 행동자 ID(b<번호>)로 풀어 두므로 자기 자신은 'self' 하나로 모은다."""
     t = str((dec or {}).get("type") or "")
-    if t == WAIT:
+    if G.CA.handler_of(t) == WAIT:                # p0.5.28 처리기 열쇠로(기다리기 처리기의 동사면 이름이 달라도 기다리기 연속)
         return WAIT
     tgt = (dec or {}).get("target")
-    if not tgt or t in ("explore", "rest"):
+    if not tgt or G.CA.handler_of(t) in ("explore", "rest"):   # p0.5.28 처리기 열쇠로 본다(세트 밖 이름은 그대로)
         return None
     tgt = str(tgt)
     return "self" if (char is not None and tgt == "b%s" % char) else tgt

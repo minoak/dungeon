@@ -26,9 +26,11 @@ def _ext_verbs():
     """p0.5.5: 행동 등록부(composed_actions.COMMON_EXT)의 동사도 스킬 이름으로 못 쓴다 — 위 COMMON(옛 상시 동사 + follow) 옆의 예약.
     등록부가 늘면 따라 는다(두 곳을 손으로 맞추지 않는다). 지연 import — composed_actions 가 skill_core → 이 모듈 순으로 import 한다.
     순환 import 도중(이 모듈이 처음 읽히며 아래 PRESETS 를 만들 때 composed_actions 는 아직 반쯤 읽힌 상태)에는 빈 것으로 본다 —
-    기본 스킬 이름과 등록부의 충돌은 verify_common_registry 가 따로 본다."""
+    기본 스킬 이름과 등록부의 충돌은 verify_common_registry 가 따로 본다.
+    p0.5.28: 동사 세트의 동사(composed_actions.COMMON — 데이터)도 같은 예약이다 — 세트에 새 동사가 들면 그 이름도 스킬 이름으로 못 쓴다
+    (위 COMMON 은 옛 판 기록과 겹치지 않게 남기는 이름이라 세트에서 빠져도 예약으로 남는다)."""
     import composed_actions as CA
-    return getattr(CA, 'COMMON_EXT', ())
+    return tuple(getattr(CA, 'COMMON_EXT', ())) + tuple(getattr(CA, 'COMMON', ()))
 
 
 def effect_key(effect):

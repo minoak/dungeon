@@ -1,0 +1,16 @@
+{
+  "id": "attack",
+  "name": "공격",
+  "kind": "verb",
+  "tags": [
+    "verb"
+  ],
+  "comps": {
+    "verb": {
+      "handler": "attack",
+      "target": "required",
+      "approach": true,
+      "desc": "@prompts"
+    }
+  }
+}

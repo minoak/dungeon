@@ -12,6 +12,7 @@
 """
 import copy
 
+import composed_actions as CA   # p0.5.28 동사 → 처리기 열쇠(handler_of)
 import info_guard as IG
 import identity as ID       # p0.5.9 사람 열쇠 판정(설계 X6)
 
@@ -174,7 +175,7 @@ def physical(d, bot, action, result, bots):
     ledger = book(d)
     if ledger is None:
         return
-    typ, outcome = action['type'], result.get('result')
+    typ, outcome = CA.handler_of(action['type']), result.get('result')   # p0.5.28 동사가 아니라 처리기 열쇠로 본다(세트 밖 이름은 그대로)
     recipient = None
     details = {}
     if (typ, outcome) in (('give', 'given'), ('bond', 'done')):

@@ -27,6 +27,8 @@
     같이 고를 수 없다) · effects.need{욕구: {level?, fill?, mood?}}(아래 TRAIT_*) → needs.trait_effects. 목록·반대 짝은 sheetkit.load_traits 가 시트 조립에 쓴다.
     p0.5.23: effects.mood(기분 기본값 — 정수) → needs.trait_mood(기분 합에 더한다 · 이유로는 안 보인다).
   · 위치 낱말(p0.5.23): '네 상태' 절 맨 앞 '현재 위치:' 줄의 낱말은 prompts/world/place.md(PLACE_WORDS).
+  · 동사(p0.5.28): kind verb 의 comps.verb(처리기 열쇠·입력 칸 규칙·자동 접근·열린 결말 — 아래 VERB_*)와 설명(말 파일 verb.desc) → composed_actions.
+    그 판에 쓰는 동사와 순서는 동사 세트 파일(composed_actions.VERB_SET) 하나가 정한다 — 세트에 없는 동사 정의는 읽히기만 하고 쓰이지 않는다.
 자리만 있고 아직 안 읽는 것: ai.start·ai.concealed(스폰 코드가 명시), item.lore(p0.5.6 — 물건의 속, 물건 search 를 설계할 때),
 loot·container·heal·consumable·exit 부품(메모 "부품은 필요할 때 하나씩"). 클라이언트 스프라이트 프레임 번호는
 game/src/assets/world.ts 가 소유 — sprite 필드는 텍스처 참조(wl-<이름>[#프레임])이고 검증은 텍스처 파일 존재까지.
@@ -44,7 +46,8 @@ ROOT = os.path.join(HERE, 'entities')
 SPRITE_DIR = os.path.join(HERE, 'game', 'src', 'assets', 'world')
 KINDS = ('monster', 'trap', 'object', 'npc', 'map', 'building', 'quest', 'companion',   # quest(D61, 09-12): 길드 게시판의 의뢰 — 정보만
          'need',   # p0.5.16(경제 1b): 욕구 — 시간이 지나면 줄고 채우면 차는 수치 하나의 정의(아래 NEED_*, 처리는 needs.py)
-         'trait')  # p0.5.22: 캐릭터 특성 — 이름이 곧 성격 줄의 글자, 효과는 엔진이 읽는 값(아래 TRAIT_*, 처리는 needs.trait_effects)
+         'trait',  # p0.5.22: 캐릭터 특성 — 이름이 곧 성격 줄의 글자, 효과는 엔진이 읽는 값(아래 TRAIT_*, 처리는 needs.trait_effects)
+         'verb')   # p0.5.28: 동사 — 행동 type 하나(아래 VERB_*). 어떤 동사를 어떤 순서로 쓰는지는 동사 세트(composed_actions.VERB_SET)가 정한다
 #   companion(D81, 09-17): 동료 프리셋 — 파티에 뽑히면 동료 칸의 시트(sheet), 안 뽑히면 마을 주민(npc·story, 2단계)
 COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
          'trap': {'trap', 'knowledge'},
@@ -60,6 +63,7 @@ COMPS = {'monster': {'health', 'combat', 'ai', 'knowledge'},
          #   life=D90(09-20) 마을 생활 판에서만 덮어쓸 칸들(아래 LIFE_PARTS) — 끈 판의 문장·바이트는 그대로 두고, 켠 판에서 거짓이 되는 문장만 갈아 끼운다
          'quest': {'quest'},
          'trait': {'trait'},   # p0.5.22 특성 — opposite(반대 특성 id) · effects(엔진이 읽는 값)
+         'verb': {'verb'},     # p0.5.28 동사 — 처리기 열쇠 · 입력 칸 규칙 · 자동 접근 · 열린 결말 · 설명(말 파일)
          'companion': {'sheet', 'npc', 'story'}}   # D81: sheet=파티 시트 칸(능력치 없음 — 직업에서) · npc/story=마을 주민일 때의 말·걸음·소개(NPC 와 같은 꼴)
 UNLOCK_EVENTS = {'encounter', 'kill', 'search_first', 'trap_avoid', 'trap_disarm', 'visit', 'talk'}   # 메모 §2-5 어휘.
 #   코드가 세는 건 encounter 뿐(bestiary.Issuer, D53) — 나머지는 검증기만 아는 예약어(정의에 적어도 아직 안 센다).
@@ -138,6 +142,23 @@ TRAIT_NEED_KEYS = ('level', 'fill', 'mood')  # level = 그 욕구의 무게 등�
 #   fill = 채우는 양 %(무게 등급의 fill 에 곱한다 — 단계 있는 욕구만) · mood = 먹은 뒤 기분 조각 값의 크기 %{갈래: %}(단계 있는 욕구의 mood 갈래만)
 TRAIT_PCT_MAX = 1000                         # fill·mood % 상한(1~이것)
 TRAIT_NAME_MAX = 20                          # 이름 글자 상한 — 러너 load_party 의 traits 규칙(20자 이내 문자열)과 같은 값
+# p0.5.28(DECISIONS 10-18 동사 작업 순서 ①) 동사 정의(kind verb — entities/verb/<id>.json 의 comps.verb)의 어휘. id 가 곧 모델이 적는 행동 type 이다.
+#   처리(효과 판정)는 composed_actions.HANDLERS 의 처리기 — 처리기 열쇠가 있는지·세트는 composed_actions 가 본다(이 모듈은 꼴만).
+#   handler·target·desc 는 꼭 둔다(없으면 거절 — target 에 기본값은 없다). 그 밖 칸이 없으면: 기본 대상 없음 · 기억 속 장소 안 받음 · 소지품 안 받음 ·
+#   몸짓 없음 · 자동 접근 없음 · 작정을 잇는다.
+VERB_KEYS = ('handler',         # 처리기 열쇠(문자열) — 엔진이 이 동사의 효과를 판정하는 함수
+             'target',          # required(대상 ID 를 적어야 한다) | optional(적지 않는다 — 적으면 관측 ID 인지만 본다)
+             'default_target',  # self — 대상을 빼면 이것(search 의 '지금 자리 주변')
+             'memory_target',   # true — 기억에 적힌 장소 ID(관측 known.statics)도 대상으로 받는다(goto)
+             'item',            # required | optional — 소지품 ID(i…) 칸을 받는다(빠지면 missing_item · 칸이 없으면 unexpected_item)
+             'form',            # 정수 — 몸짓 서술(form) 칸을 받아 이 글자 수에서 자른다(bond 120)
+             'approach',        # true — 대상이 멀면 자동 접근(닿는 곳까지 걷고 나서 한다) · 닿지 않으면 too_far
+             'open_end',        # true — 열린 결말(기다림·휴식): 이어질 작정(then)을 받지 않는다
+             'desc')            # 지침 '행동 사전'의 이 동사 줄 설명 — 말 파일(prompts/world/verb/<id>.md 의 verb.desc), 한 줄
+VERB_TARGETS = ('required', 'optional')
+VERB_ITEMS = ('required', 'optional')
+VERB_DEFAULT_TARGETS = ('self',)
+VERB_ID_RE = re.compile(r'[a-z][a-z0-9_]{0,31}')   # 모델이 적는 행동 type — 소문자 낱말(스킬 id 와 같은 꼴)
 SHOP_RESALE = 2    # p0.5.13 가게가 제가 파는 물건을 되사는 값 = 파는 값 // 이것(절반, 내림 — 경제 설계 §5.1 '사들이는 값은 파는 값의 절반')
 ITEM_KEYS = ('desc', 'lore')    # desc = 겉(보면 아는 것 — 관측 대상 목록) · lore = 속(search 로만 드러날 것 — 자리만, 아직 아무도 안 읽는다)
 ITEM_FILL = {'bonus': '장비 보정(equipment.bonus) — equipment 부품이 있는 정의만',          # 설명 속 중괄호 자리 → 값의 출처(엔진이 채운다)
@@ -448,6 +469,33 @@ def _trait_problems(rel, d, comps):
     return out
 
 
+def _verb_problems(rel, d, comps):
+    """p0.5.28 동사 정의의 꼴 — id(행동 type 낱말) · 모르는 칸 · 칸마다 받는 값 · 설명 한 줄. 처리기 열쇠가 엔진에 있는지·세트는 composed_actions 가 본다."""
+    out, vb = [], comps.get('verb')
+    if not (isinstance(d.get('id'), str) and VERB_ID_RE.fullmatch(d['id'])):
+        out.append('%s: 동사 id 는 소문자 낱말(영문 소문자로 시작 · 소문자·숫자·밑줄 32자 이내 — 모델이 적는 행동 type)' % rel)
+    if not isinstance(vb, dict):
+        return out + ['%s: verb 부품(객체)이 있어야 한다' % rel]
+    if set(vb) - set(VERB_KEYS):
+        out.append('%s: verb 가 모르는 칸 %s' % (rel, sorted(set(vb) - set(VERB_KEYS))))
+    if not (isinstance(vb.get('handler'), str) and vb['handler']):
+        out.append('%s: verb.handler 는 처리기 열쇠(문자열)' % rel)
+    if vb.get('target') not in VERB_TARGETS:
+        out.append('%s: verb.target 은 %s' % (rel, '|'.join(VERB_TARGETS)))
+    if 'default_target' in vb and (vb['default_target'] not in VERB_DEFAULT_TARGETS or vb.get('target') != 'required'):
+        out.append('%s: verb.default_target 은 %s 이고 target 이 required 인 동사만(대상을 빼면 이것)' % (rel, '|'.join(VERB_DEFAULT_TARGETS)))
+    for k in ('memory_target', 'approach', 'open_end'):
+        if k in vb and vb[k] is not True:
+            out.append('%s: verb.%s 는 true(아니면 칸을 두지 않는다)' % (rel, k))
+    if 'item' in vb and vb['item'] not in VERB_ITEMS:
+        out.append('%s: verb.item 은 %s' % (rel, '|'.join(VERB_ITEMS)))
+    if 'form' in vb and not _pos_int(vb['form']):
+        out.append('%s: verb.form 은 정수≥1(몸짓 서술을 자르는 글자 수)' % rel)
+    if not (isinstance(vb.get('desc'), str) and vb['desc'].strip() and '\n' not in vb['desc']):
+        out.append('%s: verb.desc(말 파일)는 비지 않은 한 줄(지침 행동 사전의 한 줄이 된다)' % rel)
+    return out
+
+
 # D90(2026-09-20) 마을 생활 부품 life{<부품 이름>: {덮어쓸 칸}} — 마을 생활 스위치(러너 DUNGEON_TOWN_LIFE)를 켠 판에서만 읽는다.
 #   왜: 건물 아홉 동의 '…서비스는 아직 준비 중이다', 옛 상인의 '아직 손님 받을 준비가 안 됐어' 같은 문장은 켠 판에서 거짓이 된다.
 #   끈 판은 옛 판과 바이트가 같아야 하므로 원래 칸은 그대로 두고, 켠 판용 문장·쓰임을 이 부품에 따로 둔다(comps_of 가 합친다).
@@ -573,6 +621,8 @@ def _problems(pairs, root):
             out.extend(_need_problems(rel, comps))
         if kind == 'trait':                                  # p0.5.22 특성 정의
             out.extend(_trait_problems(rel, d, comps))
+        if kind == 'verb':                                   # p0.5.28 동사 정의
+            out.extend(_verb_problems(rel, d, comps))
         if kind in ('npc', 'companion'):                     # G6 재료 — 선물 무기는 이름으로 건너간다(엔진은 GEAR_KINDS 에서 보정을 푼다)
             gw = ((comps.get('npc') or {}).get('gift') or {}).get('weapon')
             if gw is not None:

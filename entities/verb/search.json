@@ -1,0 +1,17 @@
+{
+  "id": "search",
+  "name": "수색",
+  "kind": "verb",
+  "tags": [
+    "verb"
+  ],
+  "comps": {
+    "verb": {
+      "handler": "search",
+      "target": "required",
+      "default_target": "self",
+      "approach": true,
+      "desc": "@prompts"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "use",
+  "name": "사용",
+  "kind": "verb",
+  "tags": [
+    "verb"
+  ],
+  "comps": {
+    "verb": {
+      "handler": "use",
+      "target": "required",
+      "item": "optional",
+      "approach": true,
+      "desc": "@prompts"
+    }
+  }
+}

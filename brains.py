@@ -10,7 +10,7 @@ claude.exe -p --model haiku 로 (캐릭터 시트 + obs)를 주고 한 '행동'�
 
 진실(좌표·이동가능·주사위 판정)은 dungeon_gm 이 쥔다. 봇은 '의도'만 낸다.
 반환: {type, [target], [choice], say, reason, src}
-   조합형 type = COMMON 10개 동사, target = 관측 대상 ID(self 포함, explore는 길 ID).
+   조합형 type = COMMON 동사(p0.5.28 동사 세트 — entities/verb_set.json), target = 관측 대상 ID(self 포함, explore는 길 ID).
    choice = 리모컨 모드에서 고른 옵션 번호(기록용 — 엔진 판정은 type/target 만 읽는다).
 조합형(기본): COMMON과 현재 대상 ID를 조합한다. 이전 방식은 백업 비교용 명시 설정에서만 읽는다.
 """
@@ -68,7 +68,16 @@ def _load_prompt(fname, required=True):
             raise
         return "", ""
     raw = _TOWN_BLOCK.sub("", raw)               # p0.5.23 마을 규칙 블록은 지침 본문에서 걷는다 — 마을에 있는 판단에만 _town_guide 가 끼운다
+    raw = _fill_verbs(raw)
     return _strip_comments(_variant(raw, False)), _strip_comments(_variant(raw, True))
+
+
+def _fill_verbs(raw):
+    """p0.5.28 지침의 동사 줄 자리(CA.VERB_MARK)에 동사 세트의 줄(CA.guide_lines — 세트 순서 · 설명은 말 파일)을 넣고, 문장 안의 동사 목록 자리
+    (CA.VERB_LIST — <!--VERBS:칸:잇는 말-->)에 그 칸이 있는 세트 동사의 목록(CA.guide_list)을 넣는다. 자리가 없는 지침은 그대로.
+    주석을 걷기 전에 넣는다(표식도 주석 꼴이다). 부를 때마다 지금 세트를 읽으므로 시험이 바꿔 낀 세트에도 같은 자리에 들어간다."""
+    raw = raw.replace(G.CA.VERB_MARK, "\n".join(G.CA.guide_lines())) if G.CA.VERB_MARK in raw else raw
+    return G.CA.VERB_LIST.sub(lambda m: G.CA.guide_list(m.group(1), m.group(2)), raw)
 
 
 # p0.5.23(DECISIONS 10-17 '현재 위치 줄 정리') 마을의 규칙 — 옛 관측 마을 줄('여기는 마을이다 — 위험한 것이 없고 …')에서 지침 '네가 아는 세계'로 옮겼다.
@@ -2377,7 +2386,7 @@ def _then(obj, obs):
             if error:
                 break
             out.append(step)
-            if step['type'] in ('wait', 'rest'):      # D48: follow 는 COMMON 밖(parse 가 먼저 거른다)
+            if step['type'] in G.CA.OPEN_END:          # 열린 결말(동사 정의 open_end — wait·rest) · D48: follow 는 COMMON 밖(parse 가 먼저 거른다)
                 break
         return out
     out, valid = [], None
@@ -2707,7 +2716,7 @@ def _parse_decision(raw, why, obs, char, roster):
         if said:                                            # D47 말의 종류 — 말이 있을 때만(잡담|제안, 기본 잡담)
             rel = {**rel, "say_kind": _parse_kind(obj.get("say_kind"))}
         if COMPOSE:
-            if composed["type"] in ("wait", "rest"):    # 열린 결말 — then 못 이음(D48 뒤 follow 없음)
+            if composed["type"] in G.CA.OPEN_END:       # 열린 결말(동사 정의 open_end) — then 못 이음(D48 뒤 follow 없음)
                 then = []
             return {**composed, **({"then": then} if then else {}),
                     **({"note": note} if note else {}), **todo, **rel, **reaction,

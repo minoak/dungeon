@@ -7,7 +7,8 @@
 p0.5.5: 행동 말 파일(prompts/actions/common_extra.md — 관측 '추가 행동' 블록)도 읽어 행동 등록부와 칸을 대조한다.
 p0.5.6: 아이템의 다루는 규칙(prompts/actions/item_rules.md)은 정의 읽기(ENT.read)가 아이템 type 과 대조한다 — 여기서는 밟은 양을 찍는다.
 p0.5.18: 기분 낱말(prompts/world/mood.md — '기분:' 줄의 좋다·좋지 않다·이유)도 정의 읽기가 칸을 대조한다 — 여기서는 밟은 양을 찍는다.
-p0.5.23: 위치 낱말(prompts/world/place.md — '현재 위치:' 줄)도 같다."""
+p0.5.23: 위치 낱말(prompts/world/place.md — '현재 위치:' 줄)도 같다.
+p0.5.28: 동사 설명(prompts/world/verb/<동사>.md)은 위 합쳐 읽기에 든다 — 동사 세트(entities/verb_set.json)가 정의·처리기와 맞는지도 본다."""
 import glob
 import os
 import sys
@@ -42,7 +43,23 @@ def main():
              len(WD.action_words(ENT.ITEM_RULES)), "·".join(ENT.ITEM_TYPES)))
     print("기분 낱말 prompts/world/%s.md — 칸 %d개(%s)" % (ENT.MOOD_WORDS, len(WD.world_words(ENT.MOOD_WORDS)), "·".join(ENT.MOOD_WORD_KEYS)))   # p0.5.18 — 꼴은 ENT.read 가 이미 봤다
     print("위치 낱말 prompts/world/%s.md — 칸 %d개(%s)" % (ENT.PLACE_WORDS, len(WD.world_words(ENT.PLACE_WORDS)), "·".join(ENT.PLACE_WORD_KEYS)))   # p0.5.23 — 꼴은 ENT.read 가 이미 봤다
-    return check_actions()
+    return check_verbs(defs) or check_actions()
+
+
+def check_verbs(defs):
+    """p0.5.28 동사 세트(entities/verb_set.json) — 세트의 동사마다 동사 정의가 있고(설명은 말 파일 — 위 합쳐 읽기가 봤다) 처리기 열쇠가 엔진에 있는지,
+    같은 동사가 두 번 없는지(composed_actions.read_set — 게임이 뜰 때와 같은 검사). 세트 밖 동사 정의는 읽히기만 한다(개수만 찍는다)."""
+    try:
+        import composed_actions as CA      # 모듈을 읽을 때 기본 세트를 쓴다 — 세트가 틀리면 여기서 VerbError(ValueError)
+        names, _ = CA.read_set()
+    except ValueError as e:
+        print("문제(동사 세트):")
+        print(str(e))
+        return 1
+    verbs = [d for d in defs.values() if d.get("kind") == "verb"]
+    print("동사 세트 entities/%s — 동사 %d개(%s) · 동사 정의 %d장 · 처리기 %d개 — 세트와 정의·처리기 일치"
+          % (os.path.basename(CA.VERB_SET), len(names), "·".join(names), len(verbs), len(CA.HANDLERS)))
+    return 0
 
 
 def check_actions():
