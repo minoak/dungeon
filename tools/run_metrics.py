@@ -42,6 +42,8 @@ ACT = {                                   # (동사, 결과) → 마을 활동 �
     ("use", "used_up"): "다 쓴 것 쓰기", ("use", "healed"): "물약 마시기", ("use", "drink_boon"): "축복 물약", ("use", "equip"): "장비 바꾸기",
     ("use", "no_effect"): "헛손질", ("use", "exit"): "던전 입구 쓰기", ("use", "wait_allies"): "던전 입구 쓰기",
     ("use", "need_party"): "던전 입구 쓰기",
+    ("buy", "bought"): "사기", ("buy", "too_poor"): "돈 모자람", ("buy", "no_room"): "거래 안 됨",          # p0.5.29 사고팔기 동사(옛 판의 use 줄은 그대로 센다)
+    ("sell", "sold"): "팔기", ("sell", "no_deal"): "거래 안 됨", ("sell", "not_enough"): "거래 안 됨",
 }
 ACT_VERB = {"search": "살피기", "bond": "몸짓", "give": "건네기", "rest": "쉬기", "attack": "공격",
             "party_form": "파티 맺기", "party_leave": "파티 떠나기"}   # 결과와 무관하게 동사로 묶는 것

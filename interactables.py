@@ -14,8 +14,8 @@
   · 판정 rng(d.rng·d20)를 건드리지 않는다 — 뒤지기의 추첨은 세계 시드·층·피처 자리의 해시다(통에 무엇이 들었나는 세계가 지어질 때
     이미 정해진 사실이다). 그래서 use 부품이 없는 세계는 옛 판과 바이트가 같다(verify_skill_off).
   · p0.5.13(경제 1a, .orch/drafts/economy_design.md): 돈은 골드(몸의 정수 bot['gold'])다. 가게 = kind 'shop' 하나 — 상품은 문턱 SHOP_RANGE 칸 안에서
-    ID(g<n>)가 붙은 관측 대상이고 `use g<n>` = 사기(buy), `use <가게 f…> item=<소지 ID>` = 팔기(sell — 엔진이 값을 정한다: buys 에 적힌 값 또는
-    파는 값의 절반). 묵기는 정의의 price 를 낸다. browse 는 여전히 구경만이다. 흥정·재고·NPC 지갑은 없다(1a 범위 밖).
+    ID(g<n>)가 붙은 관측 대상이고 `buy g<n>` = 사기(buy — 메뉴형은 `interact g<n>`), `sell <가게 f…> item=<소지 ID>` = 팔기(sell — 엔진이 값을 정한다: buys 에 적힌 값 또는
+    파는 값의 절반). p0.5.29 전엔 둘 다 use 의 갈래였다(지금 use 로는 사고팔지 않는다 — composed_actions._use). 묵기는 정의의 price 를 낸다. browse 는 여전히 구경만이다. 흥정·재고·NPC 지갑은 없다(1a 범위 밖).
   · 문장은 사실만(조언·결론·행동 지시 없음) — 엔진이 실제로 한 일만 말한다. ⚠️아래 문장·라벨·태그 낱말은 전부 임시(검토표 등재 대상).
   · 다 쓴 것은 다 쓴 것으로 보인다(09-20 리뷰 수선) — once 로 다 쓴 피처는 관측의 use 칸에 spent 가 실리고, 메뉴 라벨·조합형
     '대상의 현재 사실' 줄이 효과 꼬리('마시면 HP +3') 대신 '이미 쓰였다'는 사실만 말한다(남이 다 쓴 뒤의 다른 캐릭터에게도 — 세계의 상태).
@@ -430,7 +430,7 @@ def keeper_of(d, shop_id):
 
 
 def buy(d, bot, gid, bots=None):
-    """상품 g<n> 을 산다(use/interact g<n>) — 그 가게 문턱 SHOP_RANGE 칸 안이어야 한다. 값이 지닌 골드보다 크면 too_poor(사실만 — 몸·지갑 그대로).
+    """상품 g<n> 을 산다(조합형 buy g<n> · 메뉴형 interact g<n>) — 그 가게 문턱 SHOP_RANGE 칸 안이어야 한다. 값이 지닌 골드보다 크면 too_poor(사실만 — 몸·지갑 그대로).
     물약은 소지 물약 +1, 무기·갑옷은 바로 든다 — 들던 것은 발밑에 놓인다(바꿔 들기와 같은 문법 · 발밑이 차 있으면 no_room). 원자적: 물건이 못 오면 골드도 안 나간다."""
     base = {'char': bot['char'], 'type': 'interact', 'target': gid, 'use_kind': 'shop'}
     g = good(d, gid)
@@ -474,8 +474,8 @@ def buy(d, bot, gid, bots=None):
 
 
 def sell(d, bot, f, slot, amount=None, bots=None, target_id=None, item_id=None):
-    """가게 f 에 소지품(slot)을 판다(use <가게> item=<소지 ID> [amount]) — 값은 이 가게가 정한다(buy_price). 개수는 보물만(amount, 빼면 1).
-    사들이지 않는 물건이면 no_deal, 지닌 것보다 많이 팔려 하면 not_enough(둘 다 몸·지갑 그대로). 거리는 호출측(CA.execute 의 use 거리)이 봤다."""
+    """가게 f 에 소지품(slot)을 판다(sell <가게> item=<소지 ID> [amount]) — 값은 이 가게가 정한다(buy_price). 개수는 보물만(amount, 빼면 1).
+    사들이지 않는 물건이면 no_deal, 지닌 것보다 많이 팔려 하면 not_enough(둘 다 몸·지갑 그대로). 거리는 호출측(CA.execute 의 sell 거리 — 자동 접근)이 봤다."""
     use = shop_at(d, f)
     fid = 'f%d' % f.id
     name = item_name(bot, slot) or slot

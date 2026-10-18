@@ -2,9 +2,9 @@
 """p0.5.28 동사를 데이터로(DECISIONS 10-18 동사 작업 순서 ① 구조 패치 — 동작 변화 0) — 헤들리스 검증. LLM 0콜.
 게이트:
   ① 세트 읽기: entities/verb_set.json 의 동사 = CA.COMMON(순서) · VERBS = 동사 정의의 comps.verb(설명은 말 파일에서) · DISTANCE_ACTIONS·OPEN_END 는
-     정의에서 지은 것 · 처리기 열쇠가 엔진에 있다 · 지금 세트 = v0.5.27 의 9개(순서·처리기·칸)
+     정의에서 지은 것 · 처리기 열쇠가 엔진에 있다 · 지금 세트 = v0.5.29 의 11개(v0.5.27 의 9개 + use 다음 buy·sell — 순서·처리기·칸)
   ② 잘못된 세트 거부: 없는 동사 · 처리기 없음 · 중복 · 엔진이 따로 읽는 이름을 한 번에 나열 · 꼴(목록 아님·빈 목록·없는 파일·JSON 아님) · 거절돼도 쓰던 세트 그대로
-  ③ 동사 정의 검증기: id 꼴 · 모르는 칸 · 칸마다 받는 값 · 설명 한 줄 — 한 번에 나열 · 지금 정의 9장은 깨끗하다
+  ③ 동사 정의 검증기: id 꼴 · 모르는 칸 · 칸마다 받는 값 · 설명 한 줄 — 한 번에 나열 · 지금 정의 11장은 깨끗하다
   ④ 데이터만으로 동사 추가(처리기가 이미 있는 것 · 시험용 임시 세트 — 코드 무수정): 정의 JSON + 말 파일 + 세트 한 줄 → 지침 행동 사전 줄 · 관측 COMMON 줄 ·
      파서(칸 규칙 = 정의) · 자동 접근 → 처리기 판정 · 대상 안 적는 동사(열린 결말 — 작정이 끊긴다) · 되돌리면 그대로 · 실제 세트·정의엔 없다
   ⑤ 지침 '행동 사전' 절이 세트에서 생긴다: 파일엔 동사 줄이 없고 표식 하나 · 줄 = 세트 순서 · 순서를 바꾸면 따라 바뀐다 · 빼면 지침·COMMON·파서에서 빠진다
@@ -117,15 +117,17 @@ OLD = {"goto": {"handler": "goto", "target": "required", "memory_target": True},
        "search": {"handler": "search", "target": "required", "default_target": "self", "approach": True},
        "attack": {"handler": "attack", "target": "required", "approach": True},
        "use": {"handler": "use", "target": "required", "item": "optional", "approach": True},
+       "buy": {"handler": "buy", "target": "required"},                                    # p0.5.29 — 상품은 문턱 2칸 안에서만 대상이라 걷지 않는다
+       "sell": {"handler": "sell", "target": "required", "item": "required", "approach": True},
        "give": {"handler": "give", "target": "required", "item": "required", "approach": True},
        "bond": {"handler": "bond", "target": "required", "form": 120, "approach": True},
        "wait": {"handler": "wait", "target": "optional", "open_end": True},
        "rest": {"handler": "rest", "target": "optional", "open_end": True}}
-check("① 지금 세트 = v0.5.27 의 9개 그대로 — 순서 · 처리기(같은 이름) · 칸(자동 접근 search·attack·use·give·bond · 열린 결말 wait·rest · 소지품 use 선택/give 꼭 · "
-      "몸짓 bond 120자 · 기억 속 장소 goto · 기본 대상 search=self)",
-      CA.COMMON == ("goto", "explore", "search", "attack", "use", "give", "bond", "wait", "rest")
+check("① 지금 세트 = v0.5.29 의 11개 — v0.5.27 의 9개 + use 다음 buy·sell · 순서 · 처리기(같은 이름) · 칸(자동 접근 search·attack·use·sell·give·bond · 열린 결말 wait·rest · "
+      "소지품 use 선택/sell·give 꼭 · 몸짓 bond 120자 · 기억 속 장소 goto · 기본 대상 search=self)",
+      CA.COMMON == ("goto", "explore", "search", "attack", "use", "buy", "sell", "give", "bond", "wait", "rest")
       and {v: {k: x for k, x in s.items() if k != "desc"} for v, s in CA.VERBS.items()} == OLD
-      and CA.DISTANCE_ACTIONS == ("search", "attack", "use", "give", "bond") and CA.OPEN_END == ("wait", "rest"), CA.VERBS)
+      and CA.DISTANCE_ACTIONS == ("search", "attack", "use", "sell", "give", "bond") and CA.OPEN_END == ("wait", "rest"), CA.VERBS)
 d1, bots1 = scene()
 b1 = bots1[0]
 d1.view(b1, bots1)
@@ -159,7 +161,7 @@ check("② 꼴: verbs 가 목록이 아님 · 빈 목록 · 세트가 객체가 
       and "못 읽는다 — FileNotFoundError" in (shape[3] or "") and "못 읽는다 — JSONDecodeError" in (shape[4] or ""), shape)
 check("② 거절돼도 쓰던 세트 그대로(COMMON·VERBS·자동 접근·열린 결말 · 지침)",
       list(CA.COMMON) == SET["verbs"] and CA.VERBS == {v: DEFS[v]["comps"]["verb"] for v in CA.COMMON}
-      and CA.DISTANCE_ACTIONS == ("search", "attack", "use", "give", "bond") and CA.OPEN_END == ("wait", "rest") and guide() == BASE_GUIDE)
+      and CA.DISTANCE_ACTIONS == ("search", "attack", "use", "sell", "give", "bond") and CA.OPEN_END == ("wait", "rest") and guide() == BASE_GUIDE)
 
 print("── ③ 동사 정의 검증기")
 bad_def = {"id": "Bad-Verb", "name": "x", "kind": "verb", "tags": ["verb"],
@@ -173,7 +175,7 @@ check("③ 거절 11종을 한 번에 — id 꼴 · 모르는 칸 · 처리기 �
       all(any(w in p for p in probs) for w in want3) and len(probs) == len(want3), probs)
 opt_def = {"id": "linger", "name": "x", "kind": "verb", "comps": {"verb": {"handler": "wait", "target": "optional", "default_target": "self", "desc": "x"}}}
 probs2 = ENT._problems([(os.path.join(ENT.ROOT, "verb", "linger.json"), opt_def)], ENT.ROOT)
-check("③ 기본 대상은 대상을 꼭 적는 동사만(target optional + default_target 은 거절) · 지금 정의 9장은 깨끗하다",
+check("③ 기본 대상은 대상을 꼭 적는 동사만(target optional + default_target 은 거절) · 지금 정의 11장은 깨끗하다",
       len(probs2) == 1 and "target 이 required 인 동사만" in probs2[0]
       and ENT._problems([(os.path.join(ENT.ROOT, "verb", v + ".json"), DEFS[v]) for v in CA.COMMON], ENT.ROOT) == [], (probs2,))
 
@@ -205,12 +207,12 @@ check("④ 정의 JSON + 말 파일(임시 저장소 — 저장소 로더·말 �
 g_new = guide()
 lines_new = verb_lines(g_new[0])
 added = ["- `%s`: %s" % (v, NEW[v][2]) for v in NEW]
-WORLD_NEW, ITEM_NEW = ASENT % "search·attack·use·give·bond·hand·peek·strike", ISENT % "use와 give와 hand"
+WORLD_NEW, ITEM_NEW = ASENT % "search·attack·use·sell·give·bond·hand·peek·strike", ISENT % "use·sell·give·hand"
 check("④ 지침 행동 사전: 새 동사 줄 다섯이 세트 순서대로 rest 줄 뒤에 — 문장 안의 동사 목록도 세트에서(먼저 걸어가는 동사 …·bond·hand·peek·strike · "
-      "소지품을 받는 동사 use와 give와 hand — 문장 전체) — 그 다섯과 두 목록을 되돌리면 기본 지침과 바이트 같다(파티·혼자)",
+      "소지품을 받는 동사 use·sell·give·hand — 문장 전체) — 그 다섯과 두 목록을 되돌리면 기본 지침과 바이트 같다(파티·혼자)",
       lines_new[-5:] == added and lines_new[:-5] == verb_lines(BASE_GUIDE[0])
       and all(WORLD_NEW in g.split("\n") and ITEM_NEW in g.split("\n") for g in g_new)
-      and all(g.replace("\n" + "\n".join(added), "", 1).replace(WORLD_NEW, ASENT % "search·attack·use·give·bond").replace(ITEM_NEW, ISENT % "use와 give") == b
+      and all(g.replace("\n" + "\n".join(added), "", 1).replace(WORLD_NEW, ASENT % "search·attack·use·sell·give·bond").replace(ITEM_NEW, ISENT % "use·sell·give") == b
               for g, b in zip(g_new, BASE_GUIDE)), lines_new[-6:])
 d4, bots4 = scene()
 o4 = d4.view(bots4[0], bots4)
@@ -305,7 +307,7 @@ sec = raw[raw.index("## 행동 사전"):raw.index("## 생각과 말")]
 check("⑤ 지침 파일엔 동사 줄·동사 목록이 없다 — 행동 사전 절의 COMMON 아래 표식 하나(VERBS) · 문장 안 목록 자리 둘(approach · item) · 동사 설명은 말 파일(prompts/world/verb/)에만",
       raw.count(CA.VERB_MARK) == 1 and CA.VERB_MARK in sec and not re.search(r"^- `(?:%s)`:" % "|".join(SET["verbs"]), raw, re.M)
       and sorted(m.group(1) for m in CA.VERB_LIST.finditer(raw)) == ["approach", "item"]
-      and "search·attack·use·give·bond" not in brains._strip_comments(raw) and "use와 give" not in brains._strip_comments(raw)   # 사람용 메모(주석)의 예시는 뺀다
+      and "search·attack·use·sell·give·bond" not in brains._strip_comments(raw) and "use·sell·give" not in brains._strip_comments(raw)   # 사람용 메모(주석)의 예시는 뺀다
       and all(CA.VERBS[v]["desc"] not in raw for v in CA.COMMON) and all(os.path.isfile(WD.word_file(WD.WORDS_ROOT, "verb", v)) for v in CA.COMMON))
 check("⑤ 게임이 읽은 지침(파티·혼자)의 COMMON 아래 줄 = 세트 순서대로 '- `동사`: 설명'(CA.guide_lines) · 표식·주석이 남지 않는다",
       all(verb_lines(g) == CA.guide_lines() == ["- `%s`: %s" % (v, CA.VERBS[v]["desc"]) for v in CA.COMMON] for g in BASE_GUIDE)
@@ -319,19 +321,19 @@ d5b, bots5b = scene()
 o5b = d5b.view(bots5b[0], bots5b)
 g_cut, line_cut, p_cut = guide(), common_line(o5b), CA.parse({"type": "rest"}, o5b)
 CA.use_set()
-check("⑤ 세트 순서를 뒤집으면 지침 동사 줄·문장 안 목록(bond·give·use·attack·search · give와 use)·관측 COMMON 줄이 함께 뒤집힌다(다른 글은 그대로)",
+check("⑤ 세트 순서를 뒤집으면 지침 동사 줄·문장 안 목록(bond·give·sell·use·attack·search · give·sell·use)·관측 COMMON 줄이 함께 뒤집힌다(다른 글은 그대로)",
       verb_lines(g_rev[0]) == list(reversed(verb_lines(BASE_GUIDE[0]))) and line_rev == "COMMON: " + " / ".join(rev)
       and g_rev[0].replace("\n".join(verb_lines(g_rev[0])), "\n".join(verb_lines(BASE_GUIDE[0])))
-      .replace(ASENT % "bond·give·use·attack·search", ASENT % "search·attack·use·give·bond").replace(ISENT % "give와 use", ISENT % "use와 give") == BASE_GUIDE[0], line_rev)
+      .replace(ASENT % "bond·give·sell·use·attack·search", ASENT % "search·attack·use·sell·give·bond").replace(ISENT % "give·sell·use", ISENT % "use·sell·give") == BASE_GUIDE[0], line_rev)
 check("⑤ 세트에서 rest 를 빼면 지침의 rest 줄 · 관측 COMMON 줄의 rest · 파서(invalid_type)에서 함께 빠진다 — 되돌리면 그대로",
       "- `rest`:" not in g_cut[0] + g_cut[1] and verb_lines(g_cut[0]) == verb_lines(BASE_GUIDE[0])[:-1] and not line_cut.endswith("rest")
       and line_cut == "COMMON: " + " / ".join(SET["verbs"][:-1]) and p_cut == (None, "invalid_type") and guide() == BASE_GUIDE, (line_cut, p_cut))
 
 print("── ⑥ 지침 문장 안의 동사 목록 · 설명의 숫자")
 items = [v for v in CA.COMMON if CA.VERBS[v].get("item")]
-check("⑥ 지침 문장 안의 동사 목록 = 세트에서 지은 것(문장 전체 · 파티·혼자): 먼저 걸어가는 동사 search·attack·use·give·bond(approach 칸) · 소지품을 받는 동사 use와 give(item 칸)",
-      all(ASENT % "search·attack·use·give·bond" in g.split("\n") and ISENT % "use와 give" in g.split("\n") for g in BASE_GUIDE)
-      and CA.guide_list("approach", "·") == "·".join(CA.DISTANCE_ACTIONS) and CA.guide_list("item", "와 ") == "와 ".join(items), (CA.DISTANCE_ACTIONS, items))
+check("⑥ 지침 문장 안의 동사 목록 = 세트에서 지은 것(문장 전체 · 파티·혼자): 먼저 걸어가는 동사 search·attack·use·sell·give·bond(approach 칸) · 소지품을 받는 동사 use·sell·give(item 칸)",
+      all(ASENT % "search·attack·use·sell·give·bond" in g.split("\n") and ISENT % "use·sell·give" in g.split("\n") for g in BASE_GUIDE)
+      and CA.guide_list("approach", "·") == "·".join(CA.DISTANCE_ACTIONS) and CA.guide_list("item", "·") == "·".join(items), (CA.DISTANCE_ACTIONS, items))
 bad_mark = None
 try:
     brains._fill_verbs("x <!--VERBS:color:·--> y")

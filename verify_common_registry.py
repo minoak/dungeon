@@ -15,7 +15,7 @@
      블록은 관측의 COMMON 줄 바로 아래에만 · 스킬 판의 SKILL 안내 치환은 그대로
   ⑥ 기준선/변형 모두 같은 추가 블록: '## 행동 사전' 절을 벤치 변형(tools/bench_variants/)으로 갈아 끼운 지침에서도 블록 바이트가 같다
      (p0.5.6: 벤치의 variant_raw 로 짓는다 — 전문 변형 prompt-v0.5.5 는 파일 전체가 지침)
-  ⑦ 등록부가 비면 관측 꼴이 v0.4 와 같다: common_extra 키 없음 · 블록 없음 · 입력 칸 = 기본 4칸 · SCHEMA 문자열만 compose-v0.5
+  ⑦ 등록부가 비면 관측 꼴이 v0.4 와 같다: common_extra 키 없음 · 블록 없음 · 입력 칸 = 기본 4칸 · SCHEMA 문자열만 compose-v0.6(p0.5.5 v0.5 · p0.5.29b v0.6)
   ⑧ 말 파일·이름: check_words 가 등록부와 일치 · 문장 없는 동사를 등록하면 check_words 실패 · 등록부 동사는 스킬 이름으로 못 쓴다 ·
      실제 등록부 동사의 꼴(조건·실행 함수·칸 정의·결과 코드 선언)과 이름 충돌(상시 9개·PARTY·스킬 예약·기본 스킬) 없음
   ⑨ 결과 문장(p0.5.5b): 실제 등록 동사가 선언한 결과 코드(spec 'results') + 라우터 결과(too_far·lost)마다 직전 결과 문장(_last_prose)과
@@ -361,9 +361,9 @@ print("── ⑦ 등록부가 비면 관측 꼴이 v0.4 와 같다(SCHEMA 문�
 with patch.dict(CA.COMMON_EXT, {}, clear=True):
     d7, bots7 = world(False)
     p7, o7 = prompt_of(d7, bots7, bots7[0])
-    check("⑦ common_extra 키 없음 · 블록 없음 · 입력 칸 = 기본 4칸 · common_types = 상시 9개 · SCHEMA compose-v0.5",
+    check("⑦ common_extra 키 없음 · 블록 없음 · 입력 칸 = 기본 4칸 · common_types = 상시 동사(세트) · SCHEMA compose-v0.6(p0.5.29b)",
           "common_extra" not in o7 and block_of(p7) == [] and PROBE_WORDS["header"] not in p7 and CA.fields() == CA.BASE_FIELDS
-          and CA.common_types(o7) == CA.COMMON and CA.SCHEMA == o7["action_schema"] == "compose-v0.5" and CA.known_types() == CA.COMMON)
+          and CA.common_types(o7) == CA.COMMON and CA.SCHEMA == o7["action_schema"] == "compose-v0.6" and CA.known_types() == CA.COMMON)
 
 print("── ⑧ 말 파일·이름")
 buf = io.StringIO()

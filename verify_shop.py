@@ -233,17 +233,17 @@ w = brains._wire(obs, NAMES, compose=True)
 check("③ 장비점 곁: 가게 항목 하나(상품 g2~g5 · 사들이는 값 보물 6·단검 4·가죽 갑옷 6·장검 15·사슬 갑옷 22)",
       len(shop_n) == 1 and [g["tid"] for g in shop_n[0]["goods"]] == ["g2", "g3", "g4", "g5"]
       and [(x["name"], x["price"]) for x in shop_n[0]["buys"]] == [("보물", 6), ("단검", 4), ("가죽 갑옷", 6), ("장검", 15), ("사슬 갑옷", 22)], shop_n)
-check("③ 상품 대상 넷(값·가게 이름·물건 설명·다루는 규칙) · 프롬프트 줄 '[g4] 장검 (item, good) · 값 30골드 (장비점)' · 팔기 설명은 가게 항목에",
+check("③ 상품 대상 넷(값·가게 이름·물건 설명·다루는 규칙) · 프롬프트 줄 '[g4] 장검 (item, good) · 값 30골드 (장비점)' · 가게 항목 머리 '파는 것(buy)과 사들이는 값(sell)'(p0.5.29)",
       [t["id"] for t in goods_t] == ["g2", "g3", "g4", "g5"] and all(t.get("desc") and t.get("rule") for t in goods_t)
-      and "- [g4] 장검 (item, good) · 값 30골드 (장비점)" in w and "팔기: `target` 은 이 가게(f%d)" % EQ.id in w
+      and "- [g4] 장검 (item, good) · 값 30골드 (장비점)" in w and "- 장비점 f%d — 파는 것(buy)과 사들이는 값(sell):" % EQ.id in w
       and "  · [g2] 단검 — 8골드" in w and "사들이는 값: 보물 6골드" in w)
 far = next((x, y) for y in range(d.h) for x in range(d.w)
            if d.grid[y][x] == G.FLOOR and d.feature_at(x, y) is None and max(abs(x - EQ.x), abs(y - EQ.y)) == 3)
 put(b1, far)
 obs_far = d.view(b1, bots)
-check("③ 문턱 3칸 밖: 가게 항목·상품 대상·팔기 설명 없음",
+check("③ 문턱 3칸 밖: 가게 항목·상품 대상·가게 항목 줄 없음",
       not [n for n in obs_far.get("notices") or [] if n.get("kind") == "shop"] and not [t for t in obs_far["targets"] if t["kind"] == "good"]
-      and "팔기:" not in brains._wire(obs_far, NAMES, compose=True))
+      and "사들이는 값(sell)" not in brains._wire(obs_far, NAMES, compose=True))
 d_off, bots_off = town(on=False)
 check("③ 마을 생활을 끈 판: 가게가 없다(상품 0 · 가게 항목 0) — 묵기도 없다",
       IA.shops(d_off) == [] and IA.goods(d_off) == []
@@ -257,39 +257,40 @@ check("③ 상품 번호: 가게(피처 번호 순) × sells 순 — g1 = 주점
 print("── ④ 사기")
 put(b1, stand_by(d, GS, bots))
 b1["gold"], b1["potions"] = 5, 0
-r = act(d, b1, bots, {"type": "use", "target": "g6"})
+r = act(d, b1, bots, {"type": "buy", "target": "g6"})                # p0.5.29 사기 = buy(전엔 use)
 check("④ 골드 5로 물약(10) = too_poor — 지갑·소지 그대로 · 실패(resolution failed) · 문장 '값이 10골드인데 지닌 골드가 5다'",
       r["result"] == "too_poor" and r["price"] == 10 and r["gold"] == 5 and b1["gold"] == 5 and b1["potions"] == 0
       and r["resolution"]["status"] == "failed" and "값이 10골드인데 지닌 골드가 5다" in brains._last_prose(r), r)
 b1["gold"] = 23
-r = act(d, b1, bots, {"type": "use", "target": "g6"})
+r = act(d, b1, bots, {"type": "buy", "target": "g6"})
 check("④ 골드 23으로 물약 = bought — 골드 13 · 물약 1 · 문장 '잡화점에서 회복 물약을 샀다 — 10골드를 냈다(남은 골드 13)'",
-      r["result"] == "bought" and b1["gold"] == 13 and b1["potions"] == 1 and r["potions"] == 1 and r["effect_type"] == "interact"
+      r["result"] == "bought" and b1["gold"] == 13 and b1["potions"] == 1 and r["potions"] == 1 and r["effect_type"] == "interact" and r["type"] == "buy"
       and brains._last_prose(r).startswith("잡화점에서 회복 물약을 샀다 — 10골드를 냈다(남은 골드 13)"), r)
 b1["gold"] = 12
 r = act(d, b1, bots, {"type": "use", "target": "g6", "item": "i7", "amount": 1})
-check("④ 골드(i7)를 상품에 써도 산다 — 값은 가게가 정한다(적은 액수 1은 보지 않는다) · 골드 2 · 물약 2",
-      r["result"] == "bought" and b1["gold"] == 2 and b1["potions"] == 2, r)
+check("④ p0.5.29 골드(i7)를 상품에 써도(use) 사지 않는다 — no_effect(use_good) · 골드 12·물약 1 그대로 · buy 에는 item 칸이 없다(unexpected_item)",
+      r["result"] == "no_effect" and r.get("reason_code") == "use_good" and b1["gold"] == 12 and b1["potions"] == 1
+      and CA.parse({"type": "buy", "target": "g6", "item": "i7"}, d.view(b1, bots)) == (None, "unexpected_item"), r)
 put(b1, stand_by(d, EQ, bots))
 b1["weapon"], b1["gold"] = None, 40
-r = act(d, b1, bots, {"type": "use", "target": "g2"})
+r = act(d, b1, bots, {"type": "buy", "target": "g2"})
 check("④ 빈손에 단검(8) = 바로 든다(+1 · 손에서 태어난 번호) · 골드 32",
       r["result"] == "bought" and b1["weapon"]["name"] == "단검" and b1["weapon"]["bonus"] == 1 and b1["gold"] == 32 and r["slot"] == "weapon", r)
 dagger_id = b1["weapon"]["id"]
-r = act(d, b1, bots, {"type": "use", "target": "g4"})
+r = act(d, b1, bots, {"type": "buy", "target": "g4"})
 dropped = d.features.get(dagger_id)
 check("④ 단검을 든 채 장검(30) = 장검을 들고 단검은 같은 번호로 발밑에(바꿔 들기 문법) · 골드 2",
       r["result"] == "bought" and b1["weapon"]["name"] == "장검" and b1["gold"] == 2 and r.get("dropped") == "단검"
       and dropped is not None and (dropped.x, dropped.y) == (b1["x"], b1["y"]) and dropped.type == "weapon", r)
 b1["gold"] = 60
-r = act(d, b1, bots, {"type": "use", "target": "g2"})
+r = act(d, b1, bots, {"type": "buy", "target": "g2"})
 check("④ 발밑이 차 있는데(내려놓은 단검) 무기를 사면 no_room — 골드·손 그대로(원자적)",
       r["result"] == "no_room" and b1["gold"] == 60 and b1["weapon"]["name"] == "장검", r)
 put(b1, far)
 obs_f = d.view(b1, bots)
 r_far = d._interact(b1, "g2", bots)
 check("④ 3칸 밖: 상품이 대상이 아니다(조합형 invalid_target) · 메뉴형 interact g2 = too_far · 골드 그대로",
-      CA.parse({"type": "use", "target": "g2"}, obs_f)[1] == "invalid_target" and r_far["result"] == "too_far" and b1["gold"] == 60, r_far)
+      CA.parse({"type": "buy", "target": "g2"}, obs_f)[1] == "invalid_target" and r_far["result"] == "too_far" and b1["gold"] == 60, r_far)
 check("④ 묵은 참조(작정·자동 접근이 들고 다니는 g2)도 3칸 밖에선 실물이 아니다 — 2칸 안에선 실물",
       CA.entity(d, b1, "g2", bots, refs={"g2": {"kind": "good", "gid": "g2", "shop": "f%d" % EQ.id}}) is None
       and CA.entity(d, dict(b1, x=EQ.x, y=EQ.y + 2 if d.grid[EQ.y + 2][EQ.x] == G.FLOOR else EQ.y), "g2", bots,
@@ -322,7 +323,7 @@ for o in bots:
 put(b1, stand_by(d, GS, bots))
 put(b2, near(d, GS, bots, 1, 4, skip=[(b1["x"], b1["y"])]))
 b1["gold"] = 20
-act(d, b1, bots, {"type": "use", "target": "g6"})
+act(d, b1, bots, {"type": "buy", "target": "g6"})
 seen = [x for x in (b2.get("witnessed") or []) if x.get("kind") == "ally_use"]
 check("④ 곁의 사람은 '회복 물약을 샀다'를 본다 — 값·남은 지갑은 없다",
       seen and seen[-1].get("result") == "회복 물약을 샀다" and not any(k in seen[-1] for k in ("price", "gold")), seen)
@@ -331,27 +332,27 @@ check("④ 곁의 사람은 '회복 물약을 샀다'를 본다 — 값·남은 
 print("── ⑤ 팔기")
 put(b1, (EQ.x, EQ.y))                                 # 문턱 칸(발밑 — 문턱은 몸을 막지 않는다): ④ 에서 내려놓은 단검이 곁 칸을 차지하고 있다
 b1["bag"], b1["gold"] = 3, 0
-r = act(d, b1, bots, {"type": "use", "target": "f%d" % EQ.id, "item": "i8", "amount": 2})
+r = act(d, b1, bots, {"type": "sell", "target": "f%d" % EQ.id, "item": "i8", "amount": 2})   # p0.5.29 팔기 = sell(전엔 use + item)
 check("⑤ 장비점에 보물 2개(amount) = sold — +12 · 보물 1 · 문장 '장비점에 보물 2개를 팔았다 — 12골드를 받았다(지금 골드 12)'",
       r["result"] == "sold" and r["n"] == 2 and r["got"] == 12 and b1["gold"] == 12 and b1["bag"] == 1
       and brains._last_prose(r) == "장비점에 보물 2개를 팔았다 — 12골드를 받았다(지금 골드 12)", r)
-r = act(d, b1, bots, {"type": "use", "target": "f%d" % EQ.id, "item": "i8", "amount": 5})
+r = act(d, b1, bots, {"type": "sell", "target": "f%d" % EQ.id, "item": "i8", "amount": 5})
 check("⑤ 지닌 것(1)보다 많이(5) = not_enough — 보물·골드 그대로 · 실패", r["result"] == "not_enough" and r["have"] == 1 and b1["bag"] == 1
       and b1["gold"] == 12 and r["resolution"]["status"] == "failed", r)
-r = act(d, b1, bots, {"type": "use", "target": "f%d" % EQ.id, "item": "i7", "amount": 3})
+r = act(d, b1, bots, {"type": "sell", "target": "f%d" % EQ.id, "item": "i7", "amount": 3})
 check("⑤ 골드는 안 산다(no_deal — 그대로) · 문장 '이 가게는 골드를 사들이지 않는다'",
       r["result"] == "no_deal" and b1["gold"] == 12 and "이 가게는 골드를 사들이지 않는다" in brains._last_prose(r), r)
 b1["boons"] = 1
-r = act(d, b1, bots, {"type": "use", "target": "f%d" % EQ.id, "item": "i4"})
+r = act(d, b1, bots, {"type": "sell", "target": "f%d" % EQ.id, "item": "i4"})
 check("⑤ 축복의 물약도 안 산다(신의 몫 — no_deal, 그대로)", r["result"] == "no_deal" and b1["boons"] == 1, r)
 b1["weapon"] = {"id": d._alloc_fid(), "name": "장검", "bonus": 2, "worn": [b1["char"]]}
-r = act(d, b1, bots, {"type": "use", "target": "f%d" % EQ.id, "item": "i2"})
+r = act(d, b1, bots, {"type": "sell", "target": "f%d" % EQ.id, "item": "i2"})
 check("⑤ 장비점에 장검 = 파는 값의 절반 15 · 손이 빈다", r["result"] == "sold" and r["got"] == 15 and b1["weapon"] is None and b1["gold"] == 27, r)
 b1["potions"] = 2
-r = act(d, b1, bots, {"type": "use", "target": "f%d" % EQ.id, "item": "i1"})
+r = act(d, b1, bots, {"type": "sell", "target": "f%d" % EQ.id, "item": "i1"})
 check("⑤ 장비점은 물약을 안 산다(no_deal)", r["result"] == "no_deal" and b1["potions"] == 2, r)
 put(b1, (GS.x, GS.y))
-r = act(d, b1, bots, {"type": "use", "target": "f%d" % GS.id, "item": "i1", "amount": 2})
+r = act(d, b1, bots, {"type": "sell", "target": "f%d" % GS.id, "item": "i1", "amount": 2})
 check("⑤ 잡화점은 물약을 5(절반)에 산다 — 물약에 붙인 amount 는 버려져 한 병씩", r["result"] == "sold" and r["got"] == 5 and b1["potions"] == 1 and r["n"] == 1, r)
 tags = G.event_tags(r)
 check("⑤ 궤적 꼬리표(새 키 없음 · EVENT_KINDS 안) · 관전 요약 = 1인칭 문장 · D39 태그 '들러 봄'·'회복 물약 1개 팖'",
@@ -592,7 +593,7 @@ def scripted(obs, char="?"):
     if st["step"] == 1:
         if any(t.get("id") == "g6" for t in obs.get("targets") or []):
             st["step"] = 2
-            return {"type": "use", "target": "g6"}
+            return {"type": "buy", "target": "g6"}       # p0.5.29 사기 = buy
         f = feats.get("잡화점")
         return {"type": "goto", "target": f["id"]} if f else {"type": "wait"}
     return {"type": "wait"}

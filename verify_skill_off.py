@@ -22,7 +22,10 @@ master_plan §7.1). 등록부가 비어 관측의 다른 칸·행동·상태·�
 행동·상태·난수는 그대로다 — 그 칸만 되돌리면(needs_v0515) p0.5.13 해시와 세 시드 모두 일치한다. 새 해시는 p0.5.16 작업 트리 코드에서 뽑았다.
 **2026-10-17 p0.5.27 갱신**(시작 골드 5 → 10 — DECISIONS 10-17): 새 몸의 골드가 10 이다 — 봇 스냅샷·관측의 gold 칸과 소지품·대상 목록의 i7(골드) 줄 개수가 5 크다
 (이 판은 가게·의뢰가 없는 던전이라 골드가 움직이지 않는다). 행동·상태·난수는 그대로다 — 그 값만 5 줄이면(start_gold_v0525) p0.5.16 해시와 세 시드 모두 일치한다.
-새 해시는 p0.5.27 작업 트리 코드에서 뽑았다."""
+새 해시는 p0.5.27 작업 트리 코드에서 뽑았다.
+**2026-10-18 p0.5.29b 갱신**(동사 세트에 buy·sell — 관리자 결정: 세트가 바뀐 패치가 계약 판본을 올린다): 관측 계약 문자열 obs.action_schema 가
+compose-v0.5 → compose-v0.6. 이 판(가게 없는 던전·규칙 두뇌)의 관측 dict·행동·상태·난수는 그대로다(0.5.29 의 buy·sell 은 이 해시를 바꾸지 않았다) —
+그 문자열만 v0.5 로 되돌리면(schema_v05) p0.5.27 해시와 세 시드 모두 일치한다. 새 해시는 p0.5.29b 작업 트리 코드에서 뽑았다."""
 import hashlib
 import json
 import os
@@ -104,10 +107,16 @@ P0516_EXPECTED = {   # 2026-10-16 p0.5.16(욕구 틀 + 배고픔): 봇 스냅샷
     217: 'f6744ca2ecaa372c020fd5c8868a04c4f55e89aaead7fbd6c1977001f8be745e',
 }
 
-EXPECTED = {   # 2026-10-17 p0.5.27(시작 골드 5 → 10): 봇 스냅샷·관측의 gold · 소지품·대상 목록의 i7(골드) 개수
+P0527_EXPECTED = {   # 2026-10-17 p0.5.27(시작 골드 5 → 10): 봇 스냅샷·관측의 gold · 소지품·대상 목록의 i7(골드) 개수(p0.5.29b 회귀 비교용으로 보존)
     7: '7d9fc7bf503fcd3cfe34d32e70a10c5aa825853ebddd6f5422e8c37928f85399',
     37: '652101d2d2551512fe49e126f70221eb36a5be1f4d29b54587dec0026274609f',
     217: '2bbfbf029b8919af73c3b89814c7ab977daf721b91617575f0b3b986fd97a84e',
+}
+
+EXPECTED = {   # 2026-10-18 p0.5.29b: obs.action_schema compose-v0.5 → compose-v0.6 만(동사 세트에 buy·sell)
+    7: '3f9b6b06f48500d6cfe37990d8a9ded1542167d51fc5d28720402f3a79316b04',
+    37: '64a780074f345aa798391c4955b31aba15fdec0f120412f500a408e07a8b59bb',
+    217: 'b70c7c5267c1627768761a127d440958f7eed57606c28902842b8ca6fb968c77',
 }
 
 START_GOLD_P0516 = 5   # p0.5.27 전의 시작 골드(dungeon_gm.START_GOLD 가 10 이 되기 전)
@@ -169,6 +178,15 @@ def items_v055(value):
     return value
 
 
+def schema_v05(value):
+    """p0.5.29b 관측 계약 문자열만 옛 값(compose-v0.5)으로 되돌린 사본 — 그 밖의 바이트가 p0.5.27 기준선과 같은지 보는 데 쓴다."""
+    if isinstance(value, dict):
+        return {k: ('compose-v0.5' if k == 'action_schema' and v == 'compose-v0.6' else schema_v05(v)) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [schema_v05(v) for v in value]
+    return value
+
+
 def schema_v04(value):
     """p0.5.5 관측 계약 문자열만 옛 값으로 되돌린 사본 — 그 밖의 바이트가 t13c 기준선과 같은지 보는 데 쓴다."""
     if isinstance(value, dict):
@@ -183,7 +201,10 @@ if __name__ == '__main__':
         records = trace_records(seed)
         actual = digest(records)
         assert actual == EXPECTED[seed], (seed, actual, EXPECTED[seed])
-        gold5 = start_gold_v0525(records)
+        v05 = schema_v05(records)
+        p0527 = digest(v05)
+        assert p0527 == P0527_EXPECTED[seed], (seed, p0527, P0527_EXPECTED[seed])
+        gold5 = start_gold_v0525(v05)
         p0516 = digest(gold5)
         assert p0516 == P0516_EXPECTED[seed], (seed, p0516, P0516_EXPECTED[seed])
         p0513 = digest(needs_v0515(gold5))
@@ -195,5 +216,5 @@ if __name__ == '__main__':
         assert p055 == P055_EXPECTED[seed], (seed, p055, P055_EXPECTED[seed])
         old = digest(schema_v04(items_v055(nogold)))
         assert old == T13C_EXPECTED[seed], (seed, old, T13C_EXPECTED[seed])
-        print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치 · 시작 골드만 되돌리면 p0.5.16 · 욕구 칸까지 되돌리면 p0.5.13 · 골드 칸까지 되돌리면 p0.5.6 · 아이템 설명 칸까지 되돌리면 p0.5.5 · 관측 계약 문자열까지 되돌리면 t13c 기준선과 일치' % seed)
-    print('ALL PASS — verify_skill_off (3시드 × 80틱, 기준선 = 78fbe84 + D51 + D66 + t13c + p0.5.5 + p0.5.6 + p0.5.13 + p0.5.16 + p0.5.27 2026-10-17)')
+        print('  OK seed=%d: 기준선과 관측·결과·난수 상태 일치 · 관측 계약 문자열 v0.6 만 되돌리면 p0.5.27 · 시작 골드까지 되돌리면 p0.5.16 · 욕구 칸까지 되돌리면 p0.5.13 · 골드 칸까지 되돌리면 p0.5.6 · 아이템 설명 칸까지 되돌리면 p0.5.5 · 관측 계약 문자열 v0.5 까지 되돌리면 t13c 기준선과 일치' % seed)
+    print('ALL PASS — verify_skill_off (3시드 × 80틱, 기준선 = 78fbe84 + D51 + D66 + t13c + p0.5.5 + p0.5.6 + p0.5.13 + p0.5.16 + p0.5.27 + p0.5.29b 2026-10-18)')

@@ -287,6 +287,8 @@ def event_tags(rec, names=None):
         return [('start', '접근 시작', '%s %s' % (t, place_word(tgt, 'decide')))]
     if r == 'no_path' and rec.get('parent_action_id'):
         return [('misc', '접근 불가', place_word(tgt, 'decide'))]
+    if r == 'no_effect' and rec.get('reason_code') in CA.USE_CUT:   # p0.5.29 use 로 상품·가게+소지품을 씀(사고팔지 않는다) — 궤적 판의 에이전트는 이 꼬리표로 본다: 말 파일 문장 그대로
+        return [('misc', '변화 없음', CA.cut_line(rec))]
     if r == 'no_effect':
         return [('misc', '변화 없음', '%s %s' % (t, tgt))]
     if t in CA.COMMON_EXT and r in ('too_far', 'lost'):      # p0.5.5 등록부 동사의 라우터 결과(자동 접근 없음 — §6.3 경로 7). 그 밖의 결과는 동사 단계가 등록 ⚠️문구 임시
@@ -297,10 +299,12 @@ def event_tags(rec, names=None):
         return [('misc', '기타', '축복의 물약 없음')]
     if t == 'healed' or (t == 'use' and r == 'healed'):
         return [('heal', '회복', '%s +%d (HP %d)' % (tgt, rec.get('heal', 0), rec.get('hp', 0)))]
-    if t == 'use' and rec.get('effect_type'):
+    if rec.get('effect_type') and t != rec['effect_type']:   # 조합형 사물 기능 결과(type = 고른 동사 — use · p0.5.29 buy·sell) — 결과 어휘의 꼴(interact·goto)로 읽는다
         return event_tags({**rec, 'type': rec['effect_type']}, names)
     if t == 'use':
         return [('misc', '사용 실패', '%s (%s)' % (tgt, r))]
+    if CA.handler_of(t) in ('buy', 'sell'):                 # p0.5.29 사고팔기의 라우터 결과(대상 소실·닿지 않음·소지품 없음) ⚠️문구 임시
+        return [('misc', '헛손질', '%s %s (%s)' % (t, tgt, r))]
     if t == 'state':
         k = 'critical' if r == 'critical' else 'recovered'
         return [(k, '위급' if k == 'critical' else '위급 해제', 'HP %d/%d' % (rec.get('hp', 0), rec.get('maxhp', 0)))]

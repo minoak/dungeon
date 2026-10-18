@@ -137,9 +137,9 @@ def gid_of(d, name, shop=None):
 
 
 def buy(d, b, bots, name="식사", hunger=30, shop=None):
-    """배고픔을 맞춘 몸으로 상품을 산다(use g<n>)."""
+    """배고픔을 맞춘 몸으로 상품을 산다(buy g<n> — p0.5.29 전엔 use g<n>)."""
     b["needs"]["hunger"] = hunger
-    return act(d, b, bots, {"type": "use", "target": gid_of(d, name, shop)})
+    return act(d, b, bots, {"type": "buy", "target": gid_of(d, name, shop)})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -391,7 +391,7 @@ def stub_think(d, bots, inbox, on_error=None, **_kw):
             SCRIPT["wire"][d.turn] = brains._wire(o_, NAMES, compose=True)
             if SCRIPT["step"] < 5:
                 b["needs"]["hunger"] = 30
-                dec = {"type": "use", "target": gid_of(d, "식사"), "reason": "각본 %d" % SCRIPT["step"], "src": "haiku"}
+                dec = {"type": "buy", "target": gid_of(d, "식사"), "reason": "각본 %d" % SCRIPT["step"], "src": "haiku"}   # p0.5.29 사기는 buy
                 SCRIPT["buys"].append(d.turn)
                 SCRIPT["step"] += 1
         out[b["char"]] = dec
@@ -490,7 +490,7 @@ def stub_think2(d, bots, inbox, on_error=None, **_kw):
                 if k == 0:
                     b["needs"]["hunger"] = 30
                     d.view(b, bots)
-                    dec = {"type": "use", "target": gid_of(d, "식사"), "reason": "각본 식사", "src": "haiku"}
+                    dec = {"type": "buy", "target": gid_of(d, "식사"), "reason": "각본 식사", "src": "haiku"}
                 else:
                     ex = next(f for f in d.features.values() if f.type == "exit")
                     put(b, stand_by(d, ex, [o for o in bots if o is not b]))

@@ -576,33 +576,33 @@ check("⑤ 주점 곁: 상품 식사(%s) — 대상 줄에 취향 꼬리표 '식
 for o in botsH:
     o["witnessed"] = []
 put(bH, beside(dH, aH, botsH))
-rH = act(dH, aH, botsH, {"type": "use", "target": gm})
+rH = act(dH, aH, botsH, {"type": "buy", "target": gm})   # p0.5.29 사기는 buy(전엔 use)
 seenH = [x for x in (bH.get("witnessed") or []) if x.get("kind") == "ally_use" and x.get("char") == aH["char"]]
 check("⑤ 주점 식사 사기 = 그 자리에서 먹는다 — need_fill{via buy} · 골드 2 · 배고픔 40 → 100 · 문장 '주점에서 식사를 사 먹었다 — 3골드를 냈다(남은 골드 2)'(p0.5.18 간결) · 목격 '식사를 사 먹었다'",
       rH["result"] == "need_fill" and rH["via"] == "buy" and aH["gold"] == 2 and hun(aH) == 100 and rH["price"] == 3 and rH["gold"] == 2
       and brains._last_prose(rH) == "주점에서 식사를 사 먹었다 — 3골드를 냈다(남은 골드 2)" and seenH and seenH[-1].get("result") == "식사를 사 먹었다",
       (rH, brains._last_prose(rH), seenH))
 aH["gold"] = 10
-rH2 = act(dH, aH, botsH, {"type": "use", "target": gm})
+rH2 = act(dH, aH, botsH, {"type": "buy", "target": gm})
 check("⑤ 배가 부르면 사지 않는다 — need_none{why full, via buy} · 골드 그대로 10 · 실패 · 문장 '주점에서 식사를 사지 않았다 — 배가 부르다'(p0.5.18 간결)",
       rH2.get("result") == "need_none" and rH2.get("via") == "buy" and aH["gold"] == 10 and (rH2.get("resolution") or {}).get("status") == "failed"
       and brains._last_prose(rH2) == "주점에서 식사를 사지 않았다 — 배가 부르다", (rH2, brains._last_prose(rH2)))
 aH["gold"], aH["needs"]["hunger"] = 2, 30
-rH3 = act(dH, aH, botsH, {"type": "use", "target": gm})
+rH3 = act(dH, aH, botsH, {"type": "buy", "target": gm})
 check("⑤ 배고픈데 골드가 모자라면 too_poor(값 3 · 지닌 2) — 배고픔·골드 그대로",
       rH3["result"] == "too_poor" and aH["gold"] == 2 and hun(aH) == 30, rH3)
 put(aH, stand_by(dH, STALL, botsH))
 aH["gold"] = 1
-rH4 = act(dH, aH, botsH, {"type": "use", "target": ga})
+rH4 = act(dH, aH, botsH, {"type": "buy", "target": ga})
 check("⑤ 마지막 한 닢으로 햇사과(1) — 배고픔 30 → 50 · 골드 0", rH4["result"] == "need_fill" and hun(aH) == 50 and aH["gold"] == 0, rH4)
 put(aH, stand_by(dH, GS, botsH))
 aH["gold"], aH["rations"], aH["needs"]["hunger"] = 5, 0, 90
-rH5 = act(dH, aH, botsH, {"type": "use", "target": gr})
+rH5 = act(dH, aH, botsH, {"type": "buy", "target": gr})
 check("⑤ 잡화점 휴대식 사기 = 소지 +1(먹지 않는다 — 배가 불러도 산다) · 골드 3 · 문장 '잡화점에서 휴대식을 샀다 — 2골드를 냈다(남은 골드 3)'",
       rH5["result"] == "bought" and aH["rations"] == 1 and aH["gold"] == 3 and hun(aH) == 90
       and brains._last_prose(rH5).startswith("잡화점에서 휴대식을 샀다 — 2골드를 냈다(남은 골드 3)"), (rH5, brains._last_prose(rH5)))
 put(aH, (GS.x, GS.y))
-rH6 = act(dH, aH, botsH, {"type": "use", "target": "f%d" % GS.id, "item": "i9"})
+rH6 = act(dH, aH, botsH, {"type": "sell", "target": "f%d" % GS.id, "item": "i9"})   # p0.5.29 팔기는 sell(전엔 use + item)
 check("⑤ 휴대식 팔기 = 잡화점이 1(절반)에 되산다 · 소지 0", rH6["result"] == "sold" and rH6["got"] == 1 and aH["rations"] == 0 and aH["gold"] == 4, rH6)
 # 뒤지기 — 세계 시드·자리의 해시로 휴대식이 나오는 통
 dR, stR = G.Dungeon.from_ascii(["#########", "#1.....>#", "#########"], seed=3)
@@ -669,7 +669,7 @@ check("⑤ 취향 — 한 음식이 좋아함(고기)·싫어함(따뜻한 것)�
 put(aH, stand_by(dH, STALL, botsH))
 aH.update(gold=1, taste={"likes": [], "dislikes": ["과일"]}, moods=[])
 aH["needs"]["hunger"] = 30
-rH7 = act(dH, aH, botsH, {"type": "use", "target": ga})
+rH7 = act(dH, aH, botsH, {"type": "buy", "target": ga})
 check("⑤ 싫어하는 음식을 사 먹으면 결과 문장 '채소 좌판에서 햇사과를 사 먹었다 — 입에 맞지 않았다 · 1골드를 냈다(남은 골드 0)' · 꼬리표에도 '· 입에 맞지 않았다'",
       rH7["result"] == "need_fill" and rH7.get("mood") == "dislike"
       and brains._last_prose(aH["last"]) == "채소 좌판에서 햇사과를 사 먹었다 — 입에 맞지 않았다 · 1골드를 냈다(남은 골드 0)"

@@ -561,10 +561,12 @@ def act_summary(res):
         return '축복의 물약을 들이켰다 — %s +1 (지금 %d), 남은 %d병' % (G.STAT_KR.get(res.get('stat'), '?'), res.get('value', 0), res.get('boons', 0))
     if res.get('result') == 'no_boon':
         return '축복의 물약을 마시려 했지만 — 없다'
-    if t == 'use' and res.get('effect_type'):
+    if res.get('effect_type') and t != res['effect_type']:   # 조합형 사물 기능 결과(type = 고른 동사 — use · p0.5.29 buy·sell) — 결과 어휘의 꼴로 읽는다
         return act_summary({**res, 'type': res['effect_type']})
     if t == 'use':
         return '%s 사용 실패 — %s' % (res.get('target', '?'), res.get('result', '?'))
+    if G.CA.handler_of(t) in ('buy', 'sell'):              # p0.5.29 사고팔기의 라우터 결과(대상 소실·닿지 않음·소지품 없음)
+        return '%s %s 실패 — %s' % (t, res.get('target', '?'), res.get('result', '?'))
     if t == "goto":
         if res["result"] == "blocked" and res.get("allies"):   # D18: 동료發 대우회 — 멈춰 보고
             return "%s — 동료(%s)가 길목에 서 있어 크게 돌아야 함, 멈춰 보고" % (

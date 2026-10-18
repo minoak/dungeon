@@ -8,7 +8,8 @@ p0.5.5: 행동 말 파일(prompts/actions/common_extra.md — 관측 '추가 행
 p0.5.6: 아이템의 다루는 규칙(prompts/actions/item_rules.md)은 정의 읽기(ENT.read)가 아이템 type 과 대조한다 — 여기서는 밟은 양을 찍는다.
 p0.5.18: 기분 낱말(prompts/world/mood.md — '기분:' 줄의 좋다·좋지 않다·이유)도 정의 읽기가 칸을 대조한다 — 여기서는 밟은 양을 찍는다.
 p0.5.23: 위치 낱말(prompts/world/place.md — '현재 위치:' 줄)도 같다.
-p0.5.28: 동사 설명(prompts/world/verb/<동사>.md)은 위 합쳐 읽기에 든다 — 동사 세트(entities/verb_set.json)가 정의·처리기와 맞는지도 본다."""
+p0.5.28: 동사 설명(prompts/world/verb/<동사>.md)은 위 합쳐 읽기에 든다 — 동사 세트(entities/verb_set.json)가 정의·처리기와 맞는지도 본다.
+p0.5.29: 사고팔기 말(prompts/actions/trade.md)의 칸·중괄호 자리를 본다."""
 import glob
 import os
 import sys
@@ -43,7 +44,7 @@ def main():
              len(WD.action_words(ENT.ITEM_RULES)), "·".join(ENT.ITEM_TYPES)))
     print("기분 낱말 prompts/world/%s.md — 칸 %d개(%s)" % (ENT.MOOD_WORDS, len(WD.world_words(ENT.MOOD_WORDS)), "·".join(ENT.MOOD_WORD_KEYS)))   # p0.5.18 — 꼴은 ENT.read 가 이미 봤다
     print("위치 낱말 prompts/world/%s.md — 칸 %d개(%s)" % (ENT.PLACE_WORDS, len(WD.world_words(ENT.PLACE_WORDS)), "·".join(ENT.PLACE_WORD_KEYS)))   # p0.5.23 — 꼴은 ENT.read 가 이미 봤다
-    return check_verbs(defs) or check_actions()
+    return check_verbs(defs) or check_actions() or check_trade()
 
 
 def check_verbs(defs):
@@ -81,6 +82,26 @@ def check_actions():
         print("\n".join(problems))
         return 1
     print("행동 말 파일 %s — 칸 %d개(머리 1 · 등록부 동사 %d) — 등록부와 일치" % (rel, len(items), len(CA.COMMON_EXT)))
+    return 0
+
+
+def check_trade():
+    """p0.5.29 사고팔기 말(prompts/actions/trade.md — 관측 가게 줄 머리 · use 의 끊긴 길 결과 문장) — 칸 = composed_actions.TRADE_FILLS 셋 ·
+    중괄호는 그 칸의 자리만(composed_actions.trade_problems — 게임이 그 말을 읽을 때와 같은 검사)."""
+    import composed_actions as CA
+    rel = "prompts/actions/%s.md" % CA.TRADE_WORDS
+    try:
+        items = WD.action_words(CA.TRADE_WORDS)
+    except WD.WordsError as e:
+        print("문제(사고팔기 말):")
+        print(str(e))
+        return 1
+    problems = CA.trade_problems(items)
+    if problems:
+        print("문제 %d줄:" % len(problems))
+        print("\n".join(problems))
+        return 1
+    print("사고팔기 말 %s — 칸 %d개(%s) — 칸·자리 일치" % (rel, len(items), "·".join(CA.TRADE_FILLS)))
     return 0
 
 

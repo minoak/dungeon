@@ -870,10 +870,10 @@ trade = []
 if EQ12 is not None and GS12 is not None:
     put(s12, stand_by(d12s, EQ12, bots12s))
     s12["weapon"], s12["gold"], s12["bag"], s12["potions"] = None, 40, 2, 0
-    trade.append(act(d12s, s12, {"type": "use", "target": dag["gid"]}, bots12s))
-    trade.append(act(d12s, s12, {"type": "use", "target": "f%d" % EQ12.id, "item": "i8", "amount": 1}, bots12s))
+    trade.append(act(d12s, s12, {"type": "buy", "target": dag["gid"]}, bots12s))   # p0.5.29 사기 = buy · 팔기 = sell(전엔 둘 다 use)
+    trade.append(act(d12s, s12, {"type": "sell", "target": "f%d" % EQ12.id, "item": "i8", "amount": 1}, bots12s))
     put(s12, stand_by(d12s, GS12, bots12s))
-    trade.append(act(d12s, s12, {"type": "use", "target": pot["gid"]}, bots12s))
+    trade.append(act(d12s, s12, {"type": "buy", "target": pot["gid"]}, bots12s))
 check("⑫ 가게 거래는 등 돌림과 무관: 장비 상인·아이템 상인이 둘 다 등 돌린 몸이 장비점에서 단검 사기(bought) · 보물 팔기(sold) · 잡화점에서 물약 사기(bought) · 골드 40→32→38→28",
       [r_.get("result") for r_ in trade] == ["bought", "sold", "bought"] and s12["gold"] == 28 and (s12.get("weapon") or {}).get("name") == "단검"
       and s12["potions"] == 1 and s12["bag"] == 1 and not any(r_.get("talk") for r_ in trade) and set(s12["npc_away"]) == {"npc:" + GEAR, "npc:" + ITEMS},

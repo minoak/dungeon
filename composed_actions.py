@@ -13,10 +13,11 @@ import interactables as IA
 import skill_core as SK
 import skill_combat as SC
 
-SCHEMA = 'compose-v0.5'    # 관측 계약(obs.action_schema) — p0.5.5(master_plan §4.3·§7.1): 행동 등록부·'추가 행동' 블록·새 입력 칸 자리가 생긴 계약.
-                           #   ID 문법·대상 목록은 v0.4 그대로라 등록부가 빈 지금은 관측 꼴도 v0.4 와 같다(이 문자열만 다름 — verify_skill_off 기준선 이력).
-                           #   분석 도구·--rescore 는 이 값으로 옛(~p0.5.4) 기록과 새 기록을 가른다.
-PROFILE = 'compose-v0.5'   # 행동 계약(run_meta.compose_profile) — D48(2026-09-11): COMMON 에서 follow 제거
+SCHEMA = 'compose-v0.6'    # 관측 계약(obs.action_schema) — p0.5.5(master_plan §4.3·§7.1) compose-v0.5: 행동 등록부·'추가 행동' 블록·새 입력 칸 자리가 생긴 계약.
+                           #   p0.5.29b compose-v0.6: 동사 세트가 바뀌었다(buy·sell — 관측 COMMON 줄 11개 · 가게 줄). 관측 dict 의 꼴은 v0.5 그대로(이 문자열만 다름 — verify_skill_off 기준선 이력).
+                           #   읽는 쪽: freedom_bench 가 meta.json 에 적는다(이 값으로 갈래를 나누는 코드는 없다 — 기록을 보는 사람이 판본을 가른다).
+PROFILE = 'compose-v0.6'   # 행동 계약(run_meta.compose_profile) — D48(2026-09-11) compose-v0.5: COMMON 에서 follow 제거 ·
+                           #   p0.5.29b compose-v0.6: 세트에 buy·sell(사고팔기가 use 에서 나왔다 — use 로는 사고팔지 않는다). 세트가 바뀌는 패치가 올린다(STREAM_FORMAT).
 # D48 follow 폐지(파트너 결정 09-11) — 동행은 `goto b<char>`(보이는 동료에게 한 번 걷고, 곁에 닿으면 다시 판단)로만.
 # 엔진의 follow order(D18 A-5)는 메뉴형(비교용 옛 규칙)·구판 리플레이용으로 남는다 — 조합형 파서만 모르는 동사가 된다.
 # p0.5.28 동사 = 데이터(DECISIONS 10-18 동사 작업 순서 ①): 동사 정의는 entities/verb/<id>.json(설명은 말 파일 prompts/world/verb/<id>.md),
@@ -59,6 +60,11 @@ BASE_FIELDS = ('type', 'target', 'item', 'form', 'amount')   # amount = p0.5.13 
 FIELD_LEN = 40
 EXTRA_WORDS = 'common_extra'          # prompts/actions/<이것>.md — '추가 행동' 블록의 문장
 _EXTRA_LINES = None
+TRADE_WORDS = 'trade'                 # p0.5.29 prompts/actions/<이것>.md — 사고팔기의 말(관측 가게 줄 머리 · use 의 끊긴 길 결과 문장)
+TRADE_FILLS = {'shop': ('buy', 'sell'), 'use_good': ('verb', 'shop', 'what'), 'use_shop_item': ('verb', 'shop', 'what')}   # 칸 → 엔진이 채우는 자리
+USE_CUT = ('use_good', 'use_shop_item')   # p0.5.29 use 로는 사고팔지 않는다 — 상품에 use · 가게에 소지품을 들고 use 의 결과(no_effect)의 reason_code = 말 칸 이름
+_TRADE = None
+_FILL_RE = re.compile(r'\{([^{}]*)\}')
 ALIASES = ('interact', 'drink')       # 옛 동사 별칭(normalize·parse 가 use 로 바꾼다) — 파티 동사(PARTY)와 함께 세트의 동사 이름으로 못 쓴다
 
 
@@ -188,6 +194,58 @@ def _extra_words():
     return _EXTRA_LINES
 
 
+def trade_problems(items):
+    """p0.5.29 사고팔기 말(prompts/actions/trade.md)의 꼴 — 칸은 꼭 TRADE_FILLS 셋(빠진 칸·남는 칸) · 중괄호는 그 칸의 자리만(모르는 자리·짝 없는 중괄호)."""
+    rel = 'prompts/actions/%s.md' % TRADE_WORDS
+    out = ['%s: 칸 `%s` 가 없다(사고팔기 말 — %s)' % (rel, k, '·'.join(TRADE_FILLS)) for k in TRADE_FILLS if k not in items]
+    out += ['%s: 칸 `%s` 는 사고팔기 말이 아니다(composed_actions.TRADE_FILLS)' % (rel, k) for k in items if k not in TRADE_FILLS]
+    for k, v in items.items():
+        if k not in TRADE_FILLS:
+            continue
+        bad = [n for n in _FILL_RE.findall(v) if n not in TRADE_FILLS[k]]
+        if bad:
+            out.append('%s: `%s` 칸의 {%s} 는 모르는 자리다(쓸 수 있는 자리: %s)' % (rel, k, '}·{'.join(bad), ' '.join('{%s}' % n for n in TRADE_FILLS[k])))
+        rest = _FILL_RE.sub('', v)
+        if '{' in rest or '}' in rest:
+            out.append('%s: `%s` 칸에 짝이 맞지 않는 중괄호가 있다' % (rel, k))
+    return out
+
+
+def trade_words():
+    """사고팔기 말 → {칸: 문장}(한 번 읽어 둔다). 꼴이 틀리면 WordsError(정의 오류와 같은 급 — 관측·결과 문장을 지을 수 없다)."""
+    global _TRADE
+    if _TRADE is None:
+        import words as W
+        items = W.action_words(TRADE_WORDS)
+        problems = trade_problems(items)
+        if problems:
+            raise W.WordsError('\n'.join(problems))
+        _TRADE = items
+    return _TRADE
+
+
+def _fill(text, **vals):
+    return _FILL_RE.sub(lambda m: str(vals.get(m.group(1), m.group(0))), text)
+
+
+def verb_of(handler):
+    """처리기 열쇠 → 그 처리기를 쓰는 세트의 첫 동사 이름(관측 가게 줄의 {buy}·{sell}). 세트에 없으면 처리기 열쇠 그대로."""
+    return next((v for v in COMMON if VERBS[v]['handler'] == handler), handler)
+
+
+def shop_head():
+    """p0.5.29 관측 가게 줄의 머리 — '파는 것(buy)과 사들이는 값(sell)'(말 파일 trade.shop · 동사 이름은 세트에서)."""
+    return _fill(trade_words()['shop'], buy=verb_of('buy'), sell=verb_of('sell'))
+
+
+def cut_line(last):
+    """p0.5.29 use 의 끊긴 길(상품에 use · 가게에 소지품을 들고 use — 결과 no_effect, reason_code ∈ USE_CUT)의 1인칭 사실 문장(말 파일). 그 결과가 아니면 None."""
+    code = last.get('reason_code')
+    if last.get('result') != 'no_effect' or code not in USE_CUT:
+        return None
+    return _fill(trade_words()[code], verb=last.get('type') or '?', shop=last.get('shop') or '가게', what=last.get('what') or '?')
+
+
 def item_value(bot, slot):
     if slot in IA.COUNTED:                         # 몸의 정수로 세는 소지(물약·축복·골드·보물 — p0.5.13 골드·보물이 더해졌다)
         return bot.get(IA.COUNTED[slot], 0)
@@ -241,7 +299,7 @@ def observe(d, bot, bots, obs):
             targets.append({'id': tid, 'kind': 'quest', 'name': '의뢰 「%s」' % q.get('title', '?'),
                             'tags': ['object', 'quest'] + (['accepted'] if q.get('accepted') else []),
                             **{k: q[k] for k in ('goal', 'reward', 'client') if q.get(k)}})
-    for n in obs.get('notices') or []:               # p0.5.13 가게의 상품 — 문턱 SHOP_RANGE 칸 안에 섰을 때만 대상이 된다(use = 사기). 설명은 물건 설명·다루는 규칙 그대로
+    for n in obs.get('notices') or []:               # p0.5.13 가게의 상품 — 문턱 SHOP_RANGE 칸 안에 섰을 때만 대상이 된다(p0.5.29 buy = 사기). 설명은 물건 설명·다루는 규칙 그대로
         if n.get('kind') != 'shop':
             continue
         for g in n.get('goods') or []:
@@ -623,19 +681,18 @@ def _bond(d, bot, action, target, bots):
 def _use(d, bot, action, target, bots):
     rid = action.get('target')
     kind, xy, obj = target
+    if kind == 'good':                               # p0.5.29 동사 유일함 — 상품은 buy 로 산다. use 로는(소지품을 들었든 아니든) 사지 않는다(결과 = 사실 한 줄, 말 파일 trade.use_good)
+        g = IA.good(d, obj.get('gid')) or {}
+        f = d.features.get(g.get('fid'))
+        return _base(bot, action, 'no_effect', reason_code='use_good', what=g.get('name'), shop=f.name if f else None)
     item_id = action.get('item') or (rid if kind == 'item' else None)
     item = entity(d, bot, item_id, bots) if item_id else None
     if item_id:
         if not item or item[0] != 'item':
             return _base(bot, action, 'nothing', reason_code='item_not_owned')
-        if kind == 'feature' and IA.shop_at(d, obj) is not None:   # p0.5.13 팔기 — 가게에 소지품을 쓴다 = 판다(값은 가게가 정한다 · 사들이지 않으면 no_deal)
-            res = IA.sell(d, bot, obj, item[2]['slot'], action.get('amount'), bots, rid, item_id)
-            d._obj_tag(bot, obj, res)
-            return {**res, 'type': 'use', 'effect_type': 'interact'}
-        if kind == 'good' and item[2]['slot'] == 'gold':           # p0.5.13 골드를 상품에 쓴다 = 산다(값은 가게가 정한다 — 적은 액수는 보지 않는다)
-            res = d._interact(bot, rid, bots)
-            return {**res, 'type': 'use', 'effect_type': 'interact'}
-        if item[2]['slot'] == 'ration':                      # p0.5.16 휴대식 — 자기만 먹는다(남에게 넘기려면 give). 가게에 쓰면 위의 팔기
+        if kind == 'feature' and IA.shop_at(d, obj) is not None:   # p0.5.29 팔기는 sell — 가게에 소지품을 들고 use 해도 팔지 않는다(결과 = 사실 한 줄, 말 파일 trade.use_shop_item)
+            return _base(bot, action, 'no_effect', reason_code='use_shop_item', what=IA.item_name(bot, item[2]['slot']) or item[2]['slot'], shop=obj.name)
+        if item[2]['slot'] == 'ration':                      # p0.5.16 휴대식 — 자기만 먹는다(남에게 넘기려면 give)
             if not ((kind == 'item' and obj['slot'] == 'ration') or (kind == 'bot' and obj is bot)):
                 return _base(bot, action, 'no_effect', reason_code='no_item_effect')
             return d._eat_ration(bot, bots, base=_base(bot, action, 'nothing'), item_used=item_id)
@@ -673,10 +730,35 @@ def _use(d, bot, action, target, bots):
         if res.get('result') == 'nothing':
             return _base(bot, action, 'no_effect', reason_code='no_intrinsic_use')
         return {**res, 'type': 'use', 'effect_type': 'interact'}
-    if kind in ('quest', 'good'):                     # D69 의뢰 맡기 — 게시판 글의 '기능'은 맡는 것이다 · p0.5.13 상품의 기능은 사는 것이다
+    if kind == 'quest':                               # D69 의뢰 맡기 — 게시판 글의 '기능'은 맡는 것이다
         res = d._interact(bot, rid, bots)
         return {**res, 'type': 'use', 'effect_type': 'interact'}
     return _base(bot, action, 'no_effect', reason_code='no_intrinsic_use')
+
+
+def _buy(d, bot, action, target, bots):
+    """p0.5.29 사기 — 대상이 가게의 상품(g…)이면 그 가게에서 산다(IA.buy — 값·돈 부족·장비 바꿔 들기·그 자리에서 먹기 그대로).
+    결과 기록 type = 고른 동사(관리자 결정 10-18 — 로그에 에이전트가 고른 동사가 보이게) · effect_type = 결과 어휘의 꼴(interact)."""
+    kind, xy, obj = target
+    if kind != 'good':
+        return _base(bot, action, 'no_effect', reason_code='not_for_sale')
+    res = IA.buy(d, bot, action.get('target'), bots)
+    return {**res, 'type': action['type'], 'effect_type': 'interact'}
+
+
+def _sell(d, bot, action, target, bots):
+    """p0.5.29 팔기 — 대상이 가게면 소지품(item)을 판다(IA.sell — 값은 가게가 정한다 · 개수는 amount · 사들이지 않으면 no_deal).
+    결과 기록 type = 고른 동사 · effect_type = interact(_buy 와 같다)."""
+    rid, item_id = action.get('target'), action.get('item')
+    kind, xy, obj = target
+    item = entity(d, bot, item_id, bots) if item_id else None
+    if not item or item[0] != 'item':
+        return _base(bot, action, 'nothing', reason_code='item_not_owned')
+    if kind != 'feature' or IA.shop_at(d, obj) is None:
+        return _base(bot, action, 'no_effect', reason_code='not_a_shop')
+    res = IA.sell(d, bot, obj, item[2]['slot'], action.get('amount'), bots, rid, item_id)
+    d._obj_tag(bot, obj, res)
+    return {**res, 'type': action['type'], 'effect_type': 'interact'}
 
 
 def _wait(d, bot, action, target, bots):
@@ -688,6 +770,7 @@ def _rest(d, bot, action, target, bots):
 
 
 HANDLERS = {'goto': _goto, 'explore': _explore, 'search': _search, 'attack': _attack, 'use': _use,
+            'buy': _buy, 'sell': _sell,                                    # p0.5.29 사고팔기(전엔 use 의 갈래)
             'give': _give, 'bond': _bond, 'wait': _wait, 'rest': _rest}
 
 

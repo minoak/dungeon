@@ -132,7 +132,7 @@ GM(LLM 내레이터)도 이 진실의 한 소비자일 뿐, 스트림은 LLM 0�
 - 먹기(행동 결과 — `char` 가 있다): `need_fill{need, via:"eat"|"buy", what, src_key: 먹을 것 정의 id, tol: 100(내성 자리 — 아직 없다), before, after, mood?: like|plain|dislike}` ·
   `need_none{need, why:"full", what, src_key}`(배가 불러 들어가지 않는다 — 물건·돈 그대로 · resolution failed).
   휴대식 `use i9`(조합형 `type:"use"`, `rations`=남은 개수) · 메뉴형 `drink{item:"ration"}`(같은 결과, `type:"use"`) · 그 자리에서 먹는 음식(식사·햇사과 — 정의 type `food`)의 사기
-  `use g<n>`(`type:"use"`+`effect_type:"interact"`, `via:"buy"`, `price`, `gold`(남은 골드), `shop`, `shop_id`) — 배가 부르면 사지 않는다(`need_none{via:"buy", price, gold}` — 값을 보기 전에 몸이 거절) ·
+  `buy g<n>`(p0.5.29 — `type:"buy"`+`effect_type:"interact"` · 그 전엔 `use g<n>`·`type:"use"`, `via:"buy"`, `price`, `gold`(남은 골드), `shop`, `shop_id`) — 배가 부르면 사지 않는다(`need_none{via:"buy", price, gold}` — 값을 보기 전에 몸이 거절) ·
   배고픈데 모자라면 `too_poor`(p0.5.13 그대로). 휴대식 사기는 `bought{rations}`(먹지 않는다) · 팔기 `sold{rations}` · 건네기 `give{item:"ration"}` → `given{what:"휴대식", rations}` ·
   뒤지기 `rummaged{got:"ration", rations}`(통·궤짝·항아리 가중치 1).
 - 굶주림의 `no_regen`: `sat`·`drank`·`warmed`·`lodged` 가 `heal:0` + `no_regen: 욕구 id`(묵기는 몸 상태 소거·값은 그대로) · 쉬기는 HP 차단과 상태 회복이 따로다 —
@@ -357,12 +357,21 @@ compose는 `menu:false`와 `compose_profile`을 함께 기록한다. `legacy-v0.
 
 현재 `compose-v0.4`는 본 구현 행동 계약이다. 선택적 반응 지원 여부는 별도의 `reaction` 메타로 구별한다. `Dungeon.composed_actions=True`와 `auto_approach=True`를 함께 사용한다. 아래 legacy 설명은 과거 기록의 해석용이며 새 프로필에는 다음 계약을 적용한다.
 
-- COMMON: `goto/explore/search/attack/use/give/bond/wait/rest` — **`compose-v0.5`(2026-09-11 D48)부터 `follow` 없음**(`compose-v0.4` 판까지는 follow 포함 10종). `run_meta.compose_profile`이 행동 계약 판본이고 `obs.action_schema`는 관측 계약 판본이다 — D48 뒤에도 `compose-v0.4`를 유지하다가 **p0.5.5(2026-10-12)에 `compose-v0.5`로 한 번 올렸다**(행동 등록부·추가 행동 블록·새 입력 칸 자리, ID 문법 불변 — 아래 '행동 등록부'). 관측은 스트림에 실리지 않으므로(`DUNGEON_STREAM_OBS` opt-in 제외) 스트림 바이트는 그대로다. `goto` 의 사람 대상은 **추적**(D48 개정 — 아래 `goto` 행). 새 프롬프트는 `interact/drink`를 제시하지 않지만 파서는 `use` 별칭으로 호환한다.
+- COMMON: `goto/explore/search/attack/use/give/bond/wait/rest`(**`compose-v0.6`(p0.5.29b)부터 use 다음 `buy/sell` — 11종**, 아래 'buy · sell') — **`compose-v0.5`(2026-09-11 D48)부터 `follow` 없음**(`compose-v0.4` 판까지는 follow 포함 10종). `run_meta.compose_profile`이 행동 계약 판본이고 `obs.action_schema`는 관측 계약 판본이다 — D48 뒤에도 `compose-v0.4`를 유지하다가 **p0.5.5(2026-10-12)에 `compose-v0.5`로 한 번 올렸다**(행동 등록부·추가 행동 블록·새 입력 칸 자리, ID 문법 불변 — 아래 '행동 등록부'). 관측은 스트림에 실리지 않으므로(`DUNGEON_STREAM_OBS` opt-in 제외) 스트림 바이트는 그대로다. `goto` 의 사람 대상은 **추적**(D48 개정 — 아래 `goto` 행). 새 프롬프트는 `interact/drink`를 제시하지 않지만 파서는 `use` 별칭으로 호환한다.
 - **동사 세트(p0.5.28, 2026-10-18 — 스트림 불변)**: 위 COMMON 목록과 순서는 데이터다 — 세트 파일 `entities/verb_set.json` 하나가 판의 동사를 정하고, 동사마다
   정의 `entities/verb/<동사>.json`(처리기 열쇠 · 대상 required|optional · 기본 대상 · 기억 속 장소 · 소지품 · 몸짓 글자 수 · 자동 접근 · 열린 결말)와 설명(지침 행동 사전 줄 —
   `prompts/world/verb/<동사>.md`)이 있다. 결정·`resolution.type` 은 동사 이름 그대로다. 결과의 `type` 은 지금처럼 결과를 만든 쪽이 정한다 — 거르기·자동 접근
   (`lost`·`too_far`·`approaching`)과 처리기 안의 공통 결과는 동사 이름, 엔진 함수의 결과(건네기 `give` · 쓰기 `use` …)는 그 함수의 이름(지금 세트는 동사 = 처리기 이름이라
   0.5.27 과 바이트 같다). `compose_profile`·`action_schema` 는 그대로(`compose-v0.5`) — 세트가 바뀌는 패치가 올린다.
+- **buy · sell(p0.5.29, 2026-10-18 additive — 세트 11종: `goto/explore/search/attack/use/buy/sell/give/bond/wait/rest`)**: 사고팔기가 `use` 의 갈래에서 제 동사로 나왔다(아래 '골드와 가게').
+  두 동사의 결과 기록 `type` 은 **고른 동사 이름**이다(처리기 이름이 아니다 — 세트에서 이름을 바꾼 동사도 그 이름) · 쓰임 결과 어휘는 `effect_type:"interact"` 로 읽는다(그리는 쪽은
+  `type` 이 `effect_type` 과 다르면 `effect_type` 꼴로 읽는다 — 옛 `use`+`effect_type` 과 같은 규칙. 이 규칙은 파이썬의 셋(`G.event_tags`·`brains._last_prose`·`R.act_summary`)이고
+  관전 화면 TS·`viewer/index.html` 은 아직 `type:"use"` 일 때만 넘긴다).
+- **행동·관측 계약 `compose-v0.6`(p0.5.29b, 2026-10-18 — 관리자 결정: 동사 세트가 바뀐 패치가 올린다)**: `run_meta.compose_profile` 과 `obs.action_schema` 를 함께
+  `compose-v0.5` → `compose-v0.6` 으로 올렸다(세트 11종 · 관측 COMMON 줄 · 가게 줄 · use 로는 사고팔지 않는다). 관측 dict 의 꼴·스트림의 다른 칸은 그대로다
+  (관측 동봉 판 `DUNGEON_STREAM_OBS` 은 관측의 이 문자열만 다르다). 읽는 쪽: `tools/freedom_bench.py` 가 meta.json 에 `action_schema` 를 적는다 — 분석 도구
+  (`freedom_bench --rescore` · `tools/run_metrics.py` · `run_summary` · `tools/obs_metrics.py`)는 이 문자열로 갈래를 나누지 않고 결정·결과의 `type`·`result` 로 센다
+  (옛 기록엔 `buy`·`sell` 이 없다 — `run_metrics` 는 옛 `use`+`bought/sold` 줄과 새 `buy`/`sell` 줄을 같은 활동 이름으로 센다). 판본을 가르려면 `run_meta.compose_profile` 을 본다.
 - **행동 등록부(p0.5.5, 2026-10-12 additive)**: 상시 9개 옆의 공용 행동 등록부(`composed_actions.COMMON_EXT` — 단계마다 동사가 는다, 지금은 비어 있다). 노출 조건이 맞는 동사만 관측 `obs.common_extra`(동사 이름 목록, **있을 때만**)에 실리고 프롬프트의 COMMON 줄 아래 '추가 행동' 블록이 된다(문장은 `prompts/actions/common_extra.md`). 노출 밖이어도 등록된 동사는 파서가 받는다. 등록부 동사는 자동 접근하지 않는다 — 닿지 않으면 `result:too_far`, 못 보면 `lost`. 새 입력 칸(`loot/mode/request` 등)은 결과 머리·`then`·접근 대기에 그대로 실린다(없으면 없다). 칸 오류는 `invalid_<칸>`·`missing_<칸>`이고 `input_error_detail.field_values`(받는 값, 있을 때만)가 붙는다.
 - `self`는 파싱 때 `b<char>`로 정규화한다. way는 `w<관측번호>_<순번>`이며 관측마다 만료한다. 내부 경로를 가진 관측 참조이며 영구 개체가 아니다.
 - 소지품 `i1/i2/i3`은 **그 행위자의** 물약 묶음/착용 무기/착용 방어구 슬롯이다. 물약 한 병 단위의 영구 ID가 아니다. 실제 접수 시 장비 값을 보관하여 접근 중 교체된 장비를 대신 건네지 않는다.
@@ -418,18 +427,24 @@ v0.1은 방향 탐색과 현재 위치에서의 행동을 사용하므로 접근
 ## 골드와 가게 — 2026-10-15 p0.5.13 경제 1a additive (스위치 없음 — 골드는 모든 판, 가게·묵기 값은 정의에 그 부품이 있는 세계에서만)
 
 - 몸: `tick.bots[].gold`(정수, **늘 실린다** — 옛 판엔 없다) · `level.party[]` 도 같은 스냅샷이다. 새 몸(판 시작)은 `START_GOLD`(10)(p0.5.27 — 그 전엔 5)로 시작하고, 층 전이·원정·부활은 지닌 골드를 그대로 옮긴다(판을 넘지 않는다).
-- 가게 = 쓰임 kind `shop`(건물 정의의 `use{kind:'shop', sells[{item, price}], buys{type: price}}` — 마을 생활 판의 장비점·잡화점). `interact` 이벤트(조합형은 `type:"use"` + `effect_type:"interact"`)의 새 `result`, 공통 칸 `use_kind:"shop"` · `what`(사고판 물건 이름) · `shop`(가게 이름) · `shop_id`(`f<n>`):
+- 가게 = 쓰임 kind `shop`(건물 정의의 `use{kind:'shop', sells[{item, price}], buys{type: price}}` — 마을 생활 판의 장비점·잡화점). `interact` 이벤트(조합형은 p0.5.29 부터 사기 `type:"buy"` · 팔기 `type:"sell"` + `effect_type:"interact"` — 그 전엔 둘 다 `type:"use"`)의 새 `result`, 공통 칸 `use_kind:"shop"` · `what`(사고판 물건 이름) · `shop`(가게 이름) · `shop_id`(`f<n>`):
   `bought`{target:`g<n>`, price, gold(남은 골드), potions? | slot, bonus, dropped?, dropped_id?} · `sold`{item(`i…`), n, price(한 개 값), got, gold, bag?|potions?} ·
   `too_poor`{price, gold} · `no_deal`(이 가게는 그것을 사들이지 않는다) · `not_enough`{have, amount} · `no_room`{slot}(산 장비와 바꿔 들 때 들던 것을 내려놓을 발밑이 없다 — 산 것 없음).
   물건 없이 가게를 쓰면 `browsed`{wares["단검 8골드" …], buys["보물 6골드" …]}(구경 결과에 `buys` 가 붙은 꼴).
 - 묵기 값(`lodge` 의 `price`): `lodged` 에 `paid`·`gold` 가 붙는다(값 있는 숙소만) · 모자라면 `too_poor`{price, gold}(`use_kind:"lodge"`, `what` = 숙소 이름 — 몸·지갑 그대로).
-- 상품은 가게 문턱이 **보이고** 2칸 안일 때만 대상이다(벽 너머·다른 구역이면 없다 — p0513b). `use g<n>` 에 `item` 으로 골드(`i7`)를 붙여도 산다(값은 가게가 정한다).
+- 상품은 가게 문턱이 **보이고** 2칸 안일 때만 대상이다(벽 너머·다른 구역이면 없다 — p0513b).
+- p0.5.29 동사: 사기 = `buy g<n>`(`item` 칸 없음 — 붙이면 `unexpected_item` · 걷지 않는다) · 팔기 = `sell <가게 f…>` + `item`(소지품 꼭 · 보물은 `amount` · 멀면 자동 접근).
+  상품이 아닌 대상에 `buy` = `no_effect{reason_code:"not_for_sale"}` · 가게가 아닌 대상에 `sell` = `no_effect{reason_code:"not_a_shop"}` · 지니지 않은 소지품 = `nothing{reason_code:"item_not_owned"}`.
+  **`use` 로는 사고팔지 않는다**: `use g<n>`(`item` 이 있든 없든 — 0.5.28 까진 샀다) = `no_effect{reason_code:"use_good", what(상품), shop}` · `use <가게>` + `item`(0.5.28 까진 팔았다) =
+  `no_effect{reason_code:"use_shop_item", what(소지품), shop}` — 골드·소지품 그대로, 직전 결과 문장은 `prompts/actions/trade.md` 의 한 줄. 소지품 없이 `use <가게>` = 지금처럼 `browsed`.
+  메뉴형(`interact g<n>` 사기 · 팔기 없음)은 그대로다.
 - 상품 id `g<n>` = 가게(피처 번호 순) × 정의의 sells 순서(게시판 의뢰 `q<n>` 과 같은 꼴 — 상태 없음, 정의·피처에서 다시 센다). 산 장비는 손에서 태어난 개체(`id` 새 번호), 들던 것은 같은 번호로 발밑 피처가 된다(같은 틱 `features` 에 새 피처).
 - 사들이는 값: 정의의 `buys`(보물 6) · 그 가게가 파는 물건은 파는 값의 절반(내림). 흥정·재고·NPC 지갑 없음.
 - 건네기 `give`: `item` 에 `gold`·`treasure` 가 더해졌다 — 행동의 `amount`(골드 액수·보물 개수, 없으면 1)만큼 옮긴다. `given`{what:"골드 3"|"보물 2개", amount, gold?|bag?(건넨 쪽의 남은 것)} · `not_enough`{have, amount}. 받은 쪽 `received`{what, item, amount, gold?|bag?(받은 쪽의 것)}. 목격 `ally_give.what` 은 "골드"·"보물"(액수·개수 없음).
 - 의뢰 보상: 의뢰 정의의 `quest.gold` — 귀환 보고(`npc_report`) 때 완수했고 아직 보상을 받지 않은 의뢰의 골드가 **보고한 사람**에게 간다: `npc_report` 에 `reward`(합)·`paid[]`(의뢰 id)·`gold`(보고한 사람의 지금 골드). 장부 `quests.paid{id:{turn,by}}`(처음 보상이 나갈 때 생긴다 — 스트림 `end.quests` 에는 싣지 않는다). 의뢰의 `reward` 문자열은 이제 "<골드>골드"다.
 - 상인 선물: 장비 상인(단검)·아이템 상인(물약)의 선물(`npc_gift`)은 없어졌다 — 판매로 바뀌었다. 접수원 원정 물품·성직자 축복은 그대로.
 - 관측(모델 입력): '네 상태' 첫 줄 `골드 N` · 소지품 `i7`(골드)·`i8`(보물 — 있을 때만) · 가게 문턱 2칸 안이면 `notices[]` 의 `{kind:'shop', id, name, goods[{tid,name,type,price}], buys[{name,price}]}` 와 상품 대상 `g<n>`(`kind:"good"`, `price`, `shop`).
+  조합형 프롬프트의 가게 줄 머리는 p0.5.29 부터 `- 주점 f13 — 파는 것(buy)과 사들이는 값(sell):`(말 파일 `prompts/actions/trade.md` 의 `shop` — 동사 이름은 세트에서) — 그 전의 칸 설명('사기: 상품 ID 를 use · 팔기: …')은 없다.
 
 ## 파일 규칙
 - 위치: `state/stream.jsonl`. **실행 시작 때 truncate**(이전 판 기록은 사라진다 — 보존하려면 실행 후 복사). 예외 = 이어가기(D79, 2026-09-16):

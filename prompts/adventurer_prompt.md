@@ -27,14 +27,15 @@
 
 ## 행동 사전
 
-`target`은 관측에 나온 ID이고, `self`는 너 자신이다. `item`은 소지품 ID(`i...`)이며 <!--VERBS:item:와 -->에만 붙인다.
+`target`은 관측에 나온 ID이고, `self`는 너 자신이다. `item`은 소지품 ID(`i...`)이며 <!--VERBS:item:·-->에만 붙인다.
 
 COMMON
 <!-- p0.5.28 동사 줄은 동사 세트(entities/verb_set.json)의 순서대로 아래 VERBS 표식 자리에 들어간다 — 동사마다 "- `동사`: 설명" 한 줄이고,
      설명은 prompts/world/verb/<동사>.md 의 `verb.desc` 칸이다. 동사를 더하거나 빼려면 세트를 고친다. 표식(VERBS)은 지우지 않는다.
      문장 안의 VERBS:칸:잇는 말 표식(위 `item` 문장 · '네가 아는 세계'의 먼저 걸어가는 동사)에는 그 칸이 있는 세트 동사가 세트 순서대로
-     잇는 말로 이어져 들어간다(item = 소지품을 받는 동사 → use와 give · approach = 먼저 걸어가는 동사 → search·attack·use·give·bond).
-     목록 뒤의 조사(는 · 에만)는 글이다 — 세트를 바꿔 마지막 동사가 달라지면 조사를 맞춘다. -->
+     잇는 말로 이어져 들어간다(item = 소지품을 받는 동사 → use·sell·give · approach = 먼저 걸어가는 동사 → search·attack·use·sell·give·bond).
+     목록 뒤의 조사(는 · 에만)는 글이다 — 세트를 바꿔 마지막 동사가 달라지면 조사를 맞춘다.
+     p0.5.29: item 목록의 잇는 말을 '와 ' → '·' 로 바꿨다(동사가 셋이 되며 'use와 sell와 give' — 받침 따라 바뀌는 조사를 잇는 말로 쓰지 않는다). -->
 <!--VERBS-->
 
 매 판단에 제시되는 COMMON에서 행동 이름을 고른다. 대상과의 조합은 네가 정한다.

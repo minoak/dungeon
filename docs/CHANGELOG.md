@@ -1,5 +1,46 @@
 # 변경 기록
 
+## 2026-10-18 — p0.5.29 buy · sell 동사 — 사고팔기를 use 에서 떼어 냄
+
+근거: 실판(10-18 state/) 160틱 동안 식사를 산 횟수 0 — 사기·팔기가 둘 다 `use` 라 하이쿠가 `use f13 + item g1`(입력 오류 9)·`use f13`(구경 9)·`use f13 + item i7`(골드 팔기 6)만 되풀이.
+관측 가게 줄 "사기: 상품 ID 를 use"가 어느 칸인지 말하지 않았다. 민옥 결정 10-18 "심플하게 buy를 두는게 좋겠어 그러면 자연스럽게 sell이 생기니까". 원칙: 사실만 · 데이터 주도 · 기능 플래그 없음 ·
+프롬프트 짧게 · 동사 유일함(한 일엔 맞는 동사 하나).
+
+- **동사 둘**(0.5.28 구조 — 정의 + 말 파일 + 세트 한 줄, 처리기만 코드): `entities/verb/buy.json`(처리기 `buy` · 대상 꼭 · 소지품 칸 없음 · 걷지 않음 — 상품은 문턱 2칸 안에서만 대상) ·
+  `sell.json`(처리기 `sell` · 대상 꼭 · 소지품 꼭 · 자동 접근) · 설명 `prompts/world/verb/buy.md`·`sell.md`(⚠️임시) · 세트 순서 use 다음. 처리기 `CA._buy`·`_sell` 은 기존 `IA.buy`·`IA.sell`
+  을 그대로 부른다(값·돈 부족·장비 바꿔 들기·그 자리에서 먹기·no_deal·amount 그대로).
+- **결과 기록 type = 고른 동사**(관리자 결정 — 처리기 이름 아님) + `effect_type:"interact"`. 그리는 쪽 셋(`G.event_tags`·`brains._last_prose`·`R.act_summary`)은 `type` 이 `effect_type` 과
+  다르면 그 꼴로 읽는다(옛 `use`+`effect_type` 규칙의 일반화 — 옛 기록은 바이트 같은 문장) · buy·sell 의 라우터 결과(lost·nothing …)는 사실 문장·'헛손질' 꼬리표.
+- **use 로는 사고팔지 않는다**(동사 유일함): `use 상품`(소지품이 있든 없든) = `no_effect{use_good}` · `use 가게 + 소지품` = `no_effect{use_shop_item}` — 골드·소지품 그대로, 직전 결과 문장은
+  말 파일 `prompts/actions/trade.md` 한 줄(무엇을 하라는 말 없음 ⚠️임시). 소지품 없이 `use 가게` = 지금처럼 구경.
+- **관측 가게 줄**: "- 주점 f13 — 파는 것(buy)과 사들이는 값(sell):"(말 파일 `trade.shop` — 동사 이름은 세트에서 `CA.verb_of`) — 칸 설명을 뺐다. 메뉴형 줄 그대로.
+- **지침**: 행동 사전에 buy·sell 줄(세트에서) · 먼저 걸어가는 동사 search·attack·use·sell·give·bond · item 문장의 잇는 말 '와 ' → '·'(동사가 셋이 되며 'use와 sell와 give' — 받침 따라 바뀌는
+  조사를 잇는 말로 쓰지 않는다) → "use·sell·give에만". use 설명엔 거래 말이 없어 그대로.
+- 그대로: 메뉴형(`interact g<n>` 사기) · NPC 두뇌의 가게 사실 · 주점 주인의 돈 부족 말(결과 too_poor 그대로라 `R.too_poor_says` 무수정) · `compose_profile`·`action_schema`(compose-v0.5 — 관리자 판단 대기).
+- 관전 화면 TS(`game/src/text/evline.ts`)는 건드리지 않았다 — `t === 'use'` 일 때만 `effect_type` 으로 넘겨 `type:"buy"|"sell"` 사건은 '모르는 이벤트(이름만)'로 그려진다(보고).
+- `tools/check_words.py`(사고팔기 말 칸·자리) · `tools/run_metrics.py`(buy·sell 활동 이름) · STREAM_FORMAT · PATCH_NOTES · prompts/README.
+- 게이트: verify_trade(새, 34칸 0콜 — 동사·세트·말 · 지침·관측 문장 · buy 로 식사·물약·장비 · 돈 부족 → 주점 주인 말 그대로 · sell 로 보물·헌 장비 · 걸어가서 팔기 · 끊긴 use 길(결과 문장·
+  궤적 꼬리표 — 궤적 판의 에이전트는 꼬리표로 본다) · 결과 type(last·resolution · 관측 '그 결과:' 줄 · 이름 바꾼 시험 동사 purchase) · 러너 판(스트림·결정·events.log·결산) · 메뉴형·NPC 그대로 · 배선).
+  기존 게이트의 사고팔기 검사를 새 길로: verify_shop(④⑤ buy·sell · ③ 가게 줄 · ④ '골드를 상품에 써도 산다' → 'use 로는 사지 않는다' — 검사명 셋 고침) · verify_needs · verify_start_gold ·
+  verify_npc_talk ⑫(검사명 그대로) · verify_verbs(9개 세트를 못박던 다섯 칸 → 11개) · verify_action_system(소지품을 꼭 받는 동사 = 정의 · 11종).
+- 검증: 게이트 109/109(_run_gates.sh 108 + tools/check_words — 기준선 '후' p0529-after, 판 + 게이트 4조각 포그라운드 · 첫 산출에서 verify_npc_talk ⑫ FAIL(use 로 사고팔던 검사를 못 찾았다) →
+  새 길로 고치고 처음부터 다시 산출). 빨간불 39종(`ab_runs/p0529/redlight.py`, 로컬) 놓침 0 · 깨짐 0. 기준선(전 = p0528b-after — v0.5.28(9f6c246)과 바이트 같음, CHANGELOG 만 다름 ·
+  고친 파일마다 전 사본 = HEAD 블롭 · 후 = 이 작업 트리): **(나) 0** — 605건 37규칙(`ab_runs/baseline/p0529-rules.py`, 로컬): 판 셋 스트림은 1줄 run_meta 의 버전·지문(world·actions·지침)뿐 ·
+  조합형 판 둘의 프롬프트(52·92개)는 저마다 네 고침(먼저 걷는 동사 · item 목록 · buy·sell 줄 · 관측 COMMON 줄)만 · 메뉴형 판·스냅샷·로그 해시 같음 · 게이트(값 자리 = 각 사본 실측 —
+  verify_words·check_words 정의·말 파일·말 칸 +2 · verify_patch·verify_public 버전 · verify_start_gold 훑는 파일 408 → 414 · 검사명 고침 verify_verbs 5 · verify_shop 3 · verify_action_system 1(+ 조합 72 → 88) ·
+  새 verify_trade 출력 전체 일대일 — 가게 번호·상품 ID·말 파일 문장은 후 사본에서 마을을 지어 다시 잼). 반례 18건 + 생성 반례 19건 + 탐침 반례 8건 거부. 후 사본과 지금 작업 트리의 차이는 이 검증 기록뿐.
+- p0529b(관리자 결정 · Codex p0529r 필수 없음 · 권장 1): ① **행동·관측 계약 `compose-v0.6`** — 동사 세트가 바뀐 패치가 올린다(0.5.28 STREAM_FORMAT 규칙): `CA.PROFILE`(run_meta.compose_profile)·
+  `CA.SCHEMA`(obs.action_schema) 를 함께 v0.5 → v0.6. 관측 dict 꼴은 그대로(문자열만). 분석 도구는 이 문자열로 갈래를 나누지 않는다 — freedom_bench 는 meta 에 적기만 하고(--rescore 는 옛 meta 를
+  물려받아 지금 엔진으로 다시 굴린다) · run_metrics·run_summary·obs_metrics 는 결정·결과의 type·result 로 센다(run_metrics 는 옛 use+bought 와 새 buy+bought 를 같은 '사기'로) — STREAM_FORMAT 에 적음 ·
+  CA 주석의 '분석 도구·--rescore 가 이 값으로 가른다'는 사실과 달라 고침. 판본을 고정해 둔 게이트를 새 값으로: verify_action_system(D48 검사 이름 v0.6) · verify_common_registry ⑦(이름 — '상시 9개'도
+  '상시 동사(세트)'로) · verify_compose(값만) · verify_skill_off(EXPECTED 새 해시 · 옛 해시는 P0527_EXPECTED 로 보존 — schema_v05 로 문자열만 되돌리면 p0.5.27 해시와 세 시드 일치) · verify_combat_stream(같은 되돌림 사슬의 안쪽에 schema_v05 — 출력 그대로).
+  ② 리뷰 권장: verify_trade ⑥ 시험 세트에 vend(처리기 sell)를 더해 이름 바꾼 sell 의 결과(type vend · sold · 문장·꼬리표·관전 요약 · 관측 '그 결과:' 줄)와 지침 목록(먼저 걷는 동사·item)을 본다 ·
+  ⑨ 계약 판본 검사(CA · 결정 메타 · 관측 · 러너 판 run_meta · STREAM_FORMAT) — 34 → 36칸. STREAM_FORMAT 의 effect_type 규칙에 '파이썬 셋만 — 관전 TS·viewer/index.html 은 아직'을 적음.
+  재검증: 게이트 109/109(기준선 '후' p0529b-after, 판 + 게이트 4조각 포그라운드 · 첫 산출에서 verify_combat_stream FAIL(verify_skill_off 의 되돌림 사슬을 자기 식으로 다시 쓴다) → 고치고 처음부터 다시 산출).
+  빨간불 4종 더함(계약 v0.5 그대로 둘 · vend 기록 type 고정 · STREAM_FORMAT) 놓침 0 · 깨짐 0. 기준선(전 = p0528b-after): **(나) 0** — 753건 43규칙(`ab_runs/baseline/p0529b-rules.py`, 로컬):
+  p0529 의 605건 + 판 둘의 run_meta.compose_profile + 결정 관측의 action_schema 144건(그 문자열만 되돌리면 전 줄과 바이트 같음 · 되돌린 수 = 프롬프트 수 52·92) · 게이트 셋(action_system D48 이름 ·
+  common_registry ⑦ 이름 · skill_off 출력 = 각 사본 소스의 print 꼴). 반례 23건 + 생성 반례 23건 + 탐침 반례 11건 거부. 후 사본과 지금 작업 트리의 차이는 이 검증 기록뿐.
+
 ## 2026-10-18 — p0.5.28 동사를 데이터로 — 확장 가능한 기본 동사 구조(동작 변화 0)
 
 근거: DECISIONS 10-18(동사 원칙 · 동사 정리 · 동사 작업 순서 ① = 구조 패치). 설계 메모 `.orch/drafts/verbs_v0.md`. 원칙: 사실만·시스템 지시 없음 · 데이터 주도 · 기능 플래그 없음 · 프롬프트는 짧게.

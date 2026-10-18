@@ -1,0 +1,15 @@
+{
+  "id": "buy",
+  "name": "사기",
+  "kind": "verb",
+  "tags": [
+    "verb"
+  ],
+  "comps": {
+    "verb": {
+      "handler": "buy",
+      "target": "required",
+      "desc": "@prompts"
+    }
+  }
+}

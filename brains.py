@@ -1086,6 +1086,8 @@ def _last_prose(last, names=None):
         return "%s — %s 실행 거리까지 접근을 시작했다" % (_tgt_name(tgt, names), t)
     if r == "no_path" and last.get("parent_action_id"):
         return "%s에게 접근할 길이 없었다" % _tgt_name(tgt, names)
+    if r == 'no_effect' and last.get('reason_code') in G.CA.USE_CUT:   # p0.5.29 use 로 상품·가게+소지품을 씀(사고팔지 않는다) — 사실 한 줄(말 파일 trade)
+        return G.CA.cut_line(last)
     if r == 'no_effect':
         return '%s에 %s을(를) 시도했으나 변화가 없었다 (%s)' % (_tgt_name(tgt, names), t, last.get('reason_code', 'no_effect'))
     if r == 'lost' and t in ('goto', 'explore', 'follow', 'attack'):   # p0.5.4: 조합형 실행이 대상 ID 를 지금 못 찾음(CA.execute) — 옛 판은 결과 dict 통째 JSON 폴백이었다 ⚠️문구 임시
@@ -1100,12 +1102,16 @@ def _last_prose(last, names=None):
         return "축복의 물약을 마시려 했지만 — 가진 것이 없다"
     if t == 'healed' or (t == 'use' and r == 'healed'):
         return '%s — 물약으로 HP %d 회복 (HP %d)' % (_tgt_name(tgt, names) if tgt else '나', last.get('heal', 0), last.get('hp', 0))
-    if t == 'use' and last.get('effect_type'):
+    if last.get('effect_type') and t != last['effect_type']:   # 조합형 사물 기능 결과(type = 고른 동사 — use · p0.5.29 buy·sell) — 결과 어휘의 꼴(interact·goto)로 읽는다
         return _last_prose({**last, 'type': last['effect_type']}, names)
     if t == 'use':
         why = {'no_target': '대상이 더는 보이지 않는다', 'lost': '대상을 놓쳤다',
                'nothing': '요청한 소지품이 없다', 'too_far': '실행 거리에 닿지 못했다'}.get(r, str(r))
         return '%s 사용 실패 — %s' % (_tgt_name(tgt, names), why)
+    if G.CA.handler_of(t) in ('buy', 'sell'):   # p0.5.29 사고팔기의 라우터 결과(대상 소실·닿지 않음·소지품 없음) ⚠️문구 임시
+        why = {'no_target': '대상이 더는 보이지 않는다', 'lost': '그 대상을 지금 찾을 수 없었다(지금 보이는 대상에 없다)',
+               'nothing': '요청한 소지품이 없다', 'too_far': '실행 거리에 닿지 못했다'}.get(r, str(r))
+        return '%s에 %s을(를) 하려 했지만 — %s' % (_tgt_name(tgt, names), t, why)
     if t == "give":                       # D47 ② 건네기 — 자기 행동의 결과(사실만)
         if r == "given":
             tail = ((" (남은 물약 %d병)" % last.get("potions", 0)) if last.get("item") == "potion"
@@ -1794,9 +1800,8 @@ def _wire(obs, names=None, compose=False):
                          " 답하려면 응답 JSON 의 `oracle_reply` 필드, 선택, 120자)" % (where, n.get("text", "")))
         elif n.get("kind") == "overheard":           # D90(09-20) 들린 말 — 구역에 들어선 첫 관측에 한 번. 들린 사실만(누가 누구에게 한 말인지까지) ⚠️문구 임시
             L.append("- %s에 들어서며 들린 말(마을 사람들끼리 나누는 말이다 — 네게 한 말이 아니다): 「%s」" % (n.get("zone", "이곳"), n.get("text", "")))
-        elif n.get("kind") == "shop":                # p0.5.13 가게 — 문턱 근처에서만. 파는 것(상품 ID)·사들이는 값·사고파는 법(기능 설명 — 가게 곁에서만 붙는다). 살지·팔지는 캐릭터 몫 ⚠️문구 임시
-            L.append(("- %s %s — 사기: 상품 ID 를 use · 팔기: `target` 은 이 가게(%s), `item` 은 소지품 ID 로 use(값은 가게가 정한다):"
-                      % (n.get("name", "가게"), n.get("id", "?"), n.get("id", "?"))) if compose
+        elif n.get("kind") == "shop":                # p0.5.13 가게 — 문턱 근처에서만. 파는 것(상품 ID)·사들이는 값. 살지·팔지는 캐릭터 몫 ⚠️문구 임시
+            L.append(("- %s %s — %s:" % (n.get("name", "가게"), n.get("id", "?"), G.CA.shop_head())) if compose   # p0.5.29 사고파는 법은 동사(buy·sell)의 설명이 말한다 — 이 줄은 칸 설명 없이 동사 이름만(말 파일 trade.shop)
                      else "- %s %s — 파는 것과 사들이는 값(값은 가게가 정한다):" % (n.get("name", "가게"), n.get("id", "?")))   # 메뉴형은 사기가 메뉴 줄이다(팔기는 조합형만)
             for g in n.get("goods") or []:
                 L.append("  · [%s] %s — %d골드" % (g.get("tid", "?"), g.get("name", "?"), int(g.get("price") or 0)))

@@ -63,7 +63,7 @@ matrix = 0
 for rid in [t['id'] for t in obs['targets']]:
     for typ in CA.COMMON:
         d, bots, o = scene()
-        payload = {'type': typ, 'target': rid, **({'item': 'i1'} if typ == 'give' else {})}
+        payload = {'type': typ, 'target': rid, **({'item': 'i1'} if CA.VERBS[typ].get('item') == 'required' else {})}   # p0.5.29 소지품을 꼭 받는 동사(give·sell)
         action, error = CA.parse(payload, o)
         assert error is None, (payload, error)
         result = d.act(bots[0], action, bots)
@@ -77,12 +77,13 @@ check('행동 × 관측 대상 %d조합을 파싱·실행·표시' % matrix, mat
 
 # D48(2026-09-11) follow 폐지 — 조합형 COMMON 9종, follow 는 모르는 동사(invalid_type).
 # 관측 계약(action_schema)은 D48 때 v0.4 그대로였다가 p0.5.5(2026-10-12, 행동 등록부·추가 행동 블록 자리)에 v0.5 로 한 번 올렸다.
+# p0.5.29b(2026-10-18): 동사 세트가 바뀌어(buy·sell) 행동 계약·관측 계약을 함께 v0.6 으로 올렸다.
 d, bots, o = scene()
 _, err = CA.parse({'type': 'follow', 'target': 'b2'}, o)
 goto_b, goto_err = CA.parse({'type': 'goto', 'target': 'b2'}, o)
-check('D48: follow 는 COMMON 밖(invalid_type) · 9종 · 프로필 v0.5 · 관측 스키마 v0.5(p0.5.5) · 사람에게 goto 는 접수',
-      err == 'invalid_type' and 'follow' not in CA.COMMON and len(CA.COMMON) == 9
-      and CA.PROFILE == 'compose-v0.5' and CA.SCHEMA == 'compose-v0.5' and o.get('action_schema') == 'compose-v0.5'
+check('D48: follow 는 COMMON 밖(invalid_type) · 11종(p0.5.29 — 9종 + buy·sell) · 프로필 v0.6 · 관측 스키마 v0.6(p0.5.29b — 세트가 바뀌었다) · 사람에게 goto 는 접수',
+      err == 'invalid_type' and 'follow' not in CA.COMMON and len(CA.COMMON) == 11
+      and CA.PROFILE == 'compose-v0.6' and CA.SCHEMA == 'compose-v0.6' and o.get('action_schema') == 'compose-v0.6'
       and goto_err is None and goto_b == {'type': 'goto', 'target': 'b2'})
 
 for kind, rows in [('door', ['############', '#1..+..2..>#', '#...#......#', '############']),
@@ -93,7 +94,7 @@ for kind, rows in [('door', ['############', '#1..+..2..>#', '#...#......#', '##
             trap.hidden = False
         o = d.view(bots[0], bots)
         rid = next(t['id'] for t in o['targets'] if t['kind'] == kind)
-        a, r = run(d, bots, o, {'type': typ, 'target': rid, **({'item': 'i1'} if typ == 'give' else {})})
+        a, r = run(d, bots, o, {'type': typ, 'target': rid, **({'item': 'i1'} if CA.VERBS[typ].get('item') == 'required' else {})})
         if typ not in ('wait', 'rest'):
             events = finish(d, bots)
             r = events[-1] if events else r

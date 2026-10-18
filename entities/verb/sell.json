@@ -1,0 +1,17 @@
+{
+  "id": "sell",
+  "name": "팔기",
+  "kind": "verb",
+  "tags": [
+    "verb"
+  ],
+  "comps": {
+    "verb": {
+      "handler": "sell",
+      "target": "required",
+      "item": "required",
+      "approach": true,
+      "desc": "@prompts"
+    }
+  }
+}
